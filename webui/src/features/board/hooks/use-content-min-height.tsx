@@ -1,0 +1,74 @@
+import { useLayoutEffect, useRef, useState } from 'react'
+import { useUpdateNodeInternals } from '@xyflow/react'
+
+
+type UseContentMinHeightOptions = {
+  enabled?: boolean
+}
+
+/**
+ * Custom hook to manage and set the minimum height of a node based on its content.
+ * It uses a ResizeObserver to monitor changes in the content's height and updates
+ * the node's minHeight style property accordingly. It also notifies React Flow
+ * to update the node internals when the minHeight changes.
+ *
+ * @param nodeId - The ID of the node to manage.
+ * @param extra - Additional pixels to add to the content height for padding (default is 24).
+ * @param floor - Minimum height floor value (default is 100).
+ * @param scale - Divider used when content is visually scaled down in the node.
+ * @param options - Optional controls for enabling/disabling measurement work.
+ * @returns An object containing a ref to attach to the content element and the computed minimum height.
+ */
+export function useContentMinHeight(
+  nodeId: string,
+  extra = 0,
+  floor = 100,
+  scale = 1,
+  options: UseContentMinHeightOptions = {},
+) {
+  const { enabled = true } = options
+  const updateNodeInternals = useUpdateNodeInternals()
+  const contentRef = useRef<HTMLDivElement | null>(null)
+  const nodeRef = useRef<HTMLElement | null>(null)
+  const lastAppliedMinH = useRef<number | null>(null)
+  const [contentH, setContentH] = useState(0)
+
+  const computedMinH = Math.max(floor, Math.ceil(contentH / scale + extra))
+
+  // measure content
+  useLayoutEffect(() => {
+    if (!enabled) return
+    if (!contentRef.current) return
+    const ro = new ResizeObserver(([entry]) => {
+      setContentH(Math.ceil(entry.contentRect.height))
+    })
+    ro.observe(contentRef.current)
+    return () => ro.disconnect()
+  }, [enabled])
+
+  // set wrapper's minHeight imperatively + notify RF
+  useLayoutEffect(() => {
+    if (!enabled) return
+    const previousMinH = lastAppliedMinH.current
+    if (previousMinH !== null && Math.abs(previousMinH - computedMinH) < 2) return
+
+    if (!nodeRef.current) {
+      const sel = `.react-flow__node[data-id="${CSS?.escape ? CSS.escape(nodeId) : nodeId}"]`
+      nodeRef.current = document.querySelector<HTMLElement>(sel)
+    }
+    const el = nodeRef.current
+    if (el) el.style.minHeight = `${computedMinH}px`
+    lastAppliedMinH.current = computedMinH
+    updateNodeInternals(nodeId)
+  }, [enabled, nodeId, computedMinH, updateNodeInternals])
+
+  // clear stale inline minHeight when measurement is disabled
+  useLayoutEffect(() => {
+    if (enabled) return
+    nodeRef.current = null
+    lastAppliedMinH.current = null
+    updateNodeInternals(nodeId)
+  }, [enabled, nodeId, updateNodeInternals])
+
+  return { contentRef, computedMinH }
+}

@@ -1,0 +1,199 @@
+"""Tools API Router."""
+
+from typing import Annotated
+
+from fastapi import APIRouter, Body, Depends, Request, Response
+
+from topix.agents.datatypes.context import Context
+from topix.agents.drawify.drawify import DrawifyAgent, convert_drawify_output_to_notes_links
+from topix.agents.mindmap.mapify import MapifyAgent, convert_mapify_output_to_notes_links
+from topix.agents.mindmap.notify import NotifyAgent, convert_notify_output_to_notes_links
+from topix.agents.mindmap.quizify.quizify import QuizifyAgent
+from topix.agents.mindmap.schemify.schemify import SchemifyAgent, convert_schemify_output_to_notes_links
+from topix.agents.mindmap.summify.summify import SummifyAgent
+from topix.agents.run import AgentRunner
+from topix.agents.translate.translate import TranslateAgent
+from topix.api.datatypes.requests import ConvertToMindMapRequest, TranslateTextRequest, WebPagePreviewRequest
+from topix.api.utils.decorators import with_standard_response
+from topix.api.utils.rate_limit.dependency import rate_limiter
+from topix.api.utils.security import get_current_user_uid
+from topix.datatypes.note.note import Note
+from topix.datatypes.resource import RichText
+from topix.utils.web.preview import preview_webpage
+
+router = APIRouter(
+    prefix="/tools",
+    tags=["tools"],
+    responses={404: {"description": "Not found"}},
+)
+
+
+@router.post("/mindmaps:notify/", include_in_schema=False)
+@router.post("/mindmaps:notify")
+@with_standard_response
+async def notify(
+    response: Response,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    body: Annotated[ConvertToMindMapRequest, Body(description="Mindmap conversion data")],
+    _: Annotated[None, Depends(rate_limiter)],
+):
+    """Convert a mindmap to a graph."""
+    context = Context()
+    mapify_agent = NotifyAgent()
+    res = await AgentRunner.run(mapify_agent, body.answer, context=context)
+    notes, links = convert_notify_output_to_notes_links(res)
+
+    return {
+        "notes": [note.model_dump(exclude_none=True) for note in notes],
+        "links": [link.model_dump(exclude_none=True) for link in links]
+    }
+
+
+@router.post("/mindmaps:mapify/", include_in_schema=False)
+@router.post("/mindmaps:mapify")
+@with_standard_response
+async def mapify(
+    response: Response,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    body: Annotated[ConvertToMindMapRequest, Body(description="Mindmap conversion data")],
+    _: Annotated[None, Depends(rate_limiter)],
+):
+    """Convert a mindmap to a graph."""
+    context = Context()
+    mapify_agent = MapifyAgent()
+    res = await AgentRunner.run(mapify_agent, body.answer, context=context)
+    notes, links = convert_mapify_output_to_notes_links(res)
+
+    return {
+        "notes": [note.model_dump(exclude_none=True) for note in notes],
+        "links": [link.model_dump(exclude_none=True) for link in links]
+    }
+
+
+@router.post("/mindmaps:schemify/", include_in_schema=False)
+@router.post("/mindmaps:schemify")
+@with_standard_response
+async def schemify(
+    response: Response,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    body: Annotated[ConvertToMindMapRequest, Body(description="Mindmap conversion data")],
+    _: Annotated[None, Depends(rate_limiter)],
+):
+    """Convert a mindmap to a graph using Schemify."""
+    context = Context()
+    schemify_agent = SchemifyAgent()
+    res = await AgentRunner.run(schemify_agent, body.answer, context=context)
+    notes, links = convert_schemify_output_to_notes_links(res)
+
+    return {
+        "notes": [note.model_dump(exclude_none=True) for note in notes],
+        "links": [link.model_dump(exclude_none=True) for link in links]
+    }
+
+
+@router.post("/mindmaps:summify/", include_in_schema=False)
+@router.post("/mindmaps:summify")
+@with_standard_response
+async def summify(
+    response: Response,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    body: Annotated[ConvertToMindMapRequest, Body(description="Mindmap conversion data")],
+    _: Annotated[None, Depends(rate_limiter)],
+):
+    """Convert a mindmap to a graph using Summify."""
+    context = Context()
+    summify_agent = SummifyAgent()
+    res = await AgentRunner.run(summify_agent, body.answer, context=context)
+    notes, links = convert_schemify_output_to_notes_links(res)
+
+    return {
+        "notes": [note.model_dump(exclude_none=True) for note in notes],
+        "links": [link.model_dump(exclude_none=True) for link in links]
+    }
+
+
+@router.post("/mindmaps:quizify/", include_in_schema=False)
+@router.post("/mindmaps:quizify")
+@with_standard_response
+async def quizify(
+    response: Response,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    body: Annotated[ConvertToMindMapRequest, Body(description="Mindmap conversion data")],
+    _: Annotated[None, Depends(rate_limiter)],
+):
+    """Convert a mindmap to a quiz graph using Quizify."""
+    context = Context()
+    quizify_agent = QuizifyAgent()
+    res = await AgentRunner.run(quizify_agent, body.answer, context=context)
+    notes, links = convert_schemify_output_to_notes_links(res)
+
+    return {
+        "notes": [note.model_dump(exclude_none=True) for note in notes],
+        "links": [link.model_dump(exclude_none=True) for link in links]
+    }
+
+
+@router.post("/drawify/", include_in_schema=False)
+@router.post("/drawify")
+@with_standard_response
+async def drawify(
+    response: Response,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    body: Annotated[ConvertToMindMapRequest, Body(description="Drawify conversion data")],
+    _: Annotated[None, Depends(rate_limiter)],
+):
+    """Convert a text prompt to a drawn diagram graph."""
+    context = Context()
+    drawify_agent = DrawifyAgent()
+    res = await AgentRunner.run(drawify_agent, body.answer, context=context)
+    notes, links = convert_drawify_output_to_notes_links(res)
+
+    return {
+        "notes": [note.model_dump(exclude_none=True) for note in notes],
+        "links": [link.model_dump(exclude_none=True) for link in links]
+    }
+
+
+@router.post("/webpages/preview/", include_in_schema=False)
+@router.post("/webpages/preview")
+@with_standard_response
+async def link_preview(
+    response: Response,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    body: Annotated[WebPagePreviewRequest, Body(description="Webpage URL to preview")]
+):
+    """Fetch a preview of the webpage at the given URL."""
+    res = preview_webpage(body.url)
+    return res.model_dump(exclude_none=True)
+
+
+@router.post("/text:translate/", include_in_schema=False)
+@router.post("/text:translate")
+@with_standard_response
+async def translate_text(
+    response: Response,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    body: Annotated[TranslateTextRequest, Body(description="Text translation data")],
+    _: Annotated[None, Depends(rate_limiter)],
+):
+    """Translate a text into the target language and return notes/links."""
+    context = Context()
+    translate_agent = TranslateAgent(target_language=body.target_language)
+    res = await AgentRunner.run(translate_agent, body.text, context=context)
+
+    return {
+        "notes": [
+            Note(
+                label=RichText(markdown=res.text),
+            ).model_dump(exclude_none=True)
+        ],
+        "links": []
+    }

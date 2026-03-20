@@ -1,0 +1,334 @@
+import { cssVarToHex, hexToRgb, rgbToHsl } from "../../utils/color"
+
+export const ORIGINAL_TAILWIND_HEX: Record<string, Record<number, string>> = {
+  slate: { 50:"#f8fafc",100:"#f1f5f9",200:"#e2e8f0",300:"#cbd5e1",400:"#94a3b8",500:"#64748b",600:"#475569",700:"#334155",800:"#1e293b",900:"#0f172a",950:"#020617" },
+  gray:   { 50:"#f9fafb",100:"#f3f4f6",200:"#e5e7eb",300:"#d1d5db",400:"#9ca3af",500:"#6b7280",600:"#4b5563",700:"#374151",800:"#1f2937",900:"#111827",950:"#030712" },
+  stone:  { 50:"#fafaf9",100:"#f5f5f4",200:"#e7e5e4",300:"#d6d3d1",400:"#a8a29e",500:"#78716c",600:"#57534e",700:"#44403c",800:"#292524",900:"#1c1917",950:"#0c0a09" },
+  neutral:{ 50:"#fafafa",100:"#f5f5f5",200:"#e5e5e5",300:"#d4d4d4",400:"#a3a3a3",500:"#737373",600:"#525252",700:"#404040",800:"#262626",900:"#171717",950:"#0a0a0a" },
+  zinc:   { 50:"#fafafa",100:"#f4f4f5",200:"#e4e4e7",300:"#d4d4d8",400:"#a1a1aa",500:"#71717a",600:"#52525b",700:"#3f3f46",800:"#27272a",900:"#18181b",950:"#09090b" },
+  brown:  { 50:"#fdf8f5",100:"#f8f1ee",200:"#eaddd7",300:"#d2bab0",400:"#bb9b8c",500:"#a18072",600:"#8f6b55",700:"#75523f",800:"#5a3d2f",900:"#3f2a21",950:"#261610" },
+  red:    { 50:"#fef2f2",100:"#fee2e2",200:"#fecaca",300:"#fca5a5",400:"#f87171",500:"#ef4444",600:"#dc2626",700:"#b91c1c",800:"#991b1b",900:"#7f1d1d",950:"#450a0a" },
+  rose:   { 50:"#fff1f2",100:"#ffe4e6",200:"#fecdd3",300:"#fda4af",400:"#fb7185",500:"#f43f5e",600:"#e11d48",700:"#be123c",800:"#9f1239",900:"#881337",950:"#4c0519" },
+  pink:   { 50:"#fdf2f8",100:"#fce7f3",200:"#fbcfe8",300:"#f9a8d4",400:"#f472b6",500:"#ec4899",600:"#db2777",700:"#be185d",800:"#9d174d",900:"#831843",950:"#500724" },
+  fuchsia:{ 50:"#fdf4ff",100:"#fae8ff",200:"#f5d0fe",300:"#f0abfc",400:"#e879f9",500:"#d946ef",600:"#c026d3",700:"#a21caf",800:"#86198f",900:"#701a75",950:"#4a044e" },
+  violet: { 50:"#f5f3ff",100:"#ede9fe",200:"#ddd6fe",300:"#c4b5fd",400:"#a78bfa",500:"#8b5cf6",600:"#7c3aed",700:"#6d28d9",800:"#5b21b6",900:"#4c1d95",950:"#2e1065" },
+  purple: { 50:"#faf5ff",100:"#f3e8ff",200:"#e9d5ff",300:"#d8b4fe",400:"#c084fc",500:"#a855f7",600:"#9333ea",700:"#7e22ce",800:"#6b21a8",900:"#581c87",950:"#3b0764" },
+  indigo: { 50:"#eef2ff",100:"#e0e7ff",200:"#c7d2fe",300:"#a5b4fc",400:"#818cf8",500:"#6366f1",600:"#4f46e5",700:"#4338ca",800:"#3730a3",900:"#312e81",950:"#1e1b4b" },
+  blue:   { 50:"#eff6ff",100:"#dbeafe",200:"#bfdbfe",300:"#93c5fd",400:"#60a5fa",500:"#3b82f6",600:"#2563eb",700:"#1d4ed8",800:"#1e40af",900:"#1e3a8a",950:"#172554" },
+  sky:    { 50:"#f0f9ff",100:"#e0f2fe",200:"#bae6fd",300:"#7dd3fc",400:"#38bdf8",500:"#0ea5e9",600:"#0284c7",700:"#0369a1",800:"#075985",900:"#0c4a6e",950:"#082f49" },
+  cyan:   { 50:"#ecfeff",100:"#cffafe",200:"#a5f3fc",300:"#67e8f9",400:"#22d3ee",500:"#06b6d4",600:"#0891b2",700:"#0e7490",800:"#155e75",900:"#164e63",950:"#083344" },
+  teal:   { 50:"#f0fdfa",100:"#ccfbf1",200:"#99f6e4",300:"#5eead4",400:"#2dd4bf",500:"#14b8a6",600:"#0d9488",700:"#0f766e",800:"#115e59",900:"#134e4a",950:"#042f2e" },
+  emerald:{ 50:"#ecfdf5",100:"#d1fae5",200:"#a7f3d0",300:"#6ee7b7",400:"#34d399",500:"#10b981",600:"#059669",700:"#047857",800:"#065f46",900:"#064e3b",950:"#022c22" },
+  green:  { 50:"#f0fdf4",100:"#dcfce7",200:"#bbf7d0",300:"#86efac",400:"#4ade80",500:"#22c55e",600:"#16a34a",700:"#15803d",800:"#166534",900:"#14532d",950:"#052e16" },
+  lime:   { 50:"#f7fee7",100:"#ecfccb",200:"#d9f99d",300:"#bef264",400:"#a3e635",500:"#84cc16",600:"#65a30d",700:"#4d7c0f",800:"#3f6212",900:"#365314",950:"#1a2e05" },
+  yellow: { 50:"#fefce8",100:"#fef9c3",200:"#fef08a",300:"#fde047",400:"#facc15",500:"#eab308",600:"#ca8a04",700:"#a16207",800:"#854d0e",900:"#713f12",950:"#422006" },
+  amber:  { 50:"#fffbeb",100:"#fef3c7",200:"#fde68a",300:"#fcd34d",400:"#fbbf24",500:"#f59e0b",600:"#d97706",700:"#b45309",800:"#92400e",900:"#78350f",950:"#451a03" },
+  orange: { 50:"#fff7ed",100:"#ffedd5",200:"#fed7aa",300:"#fdba74",400:"#fb923c",500:"#f97316",600:"#ea580c",700:"#c2410c",800:"#9a3412",900:"#7c2d12",950:"#431407" },
+}
+
+export const TailwindShades = [50,100,200,300,400,500,600,700,800,900,950] as const
+
+export type TailwindShade = typeof TailwindShades[number]
+
+/**
+ * Normalize any CSS color or hex-like string to a 7-char base hex (#rrggbb)
+ *
+ * - Supports CSS custom properties by resolving with cssVarToHex
+ * - Accepts 3- or 6-digit hex and truncates longer values to 6 digits
+ *
+ * @param c - CSS color string or hex
+ * @returns Normalized '#rrggbb' or null if input is invalid
+ */
+export function toBaseHex(c?: string | null) {
+  if (!c) return null
+  const hex = cssVarToHex(c) ?? c
+  if (!hex || !hex.startsWith('#')) return null
+  const h = hex.slice(1).toLowerCase()
+  const base = h.length === 3 ? h.split('').map(x => x + x).join('') : h.slice(0, 6)
+  return '#' + base
+}
+
+const PAPER_REFERENCE_HEX = "#f7f1e8"
+
+const PAPER_REFERENCE_HSL = (() => {
+  const { r, g, b } = hexToRgb(PAPER_REFERENCE_HEX)
+  return rgbToHsl(r, g, b)
+})()
+
+const SHADE_INDEX = new Map(TailwindShades.map((shade, index) => [shade, index]))
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.max(min, Math.min(max, value))
+
+const mixHex = (a: string, b: string, amount: number) => {
+  const A = hexToRgb(a)
+  const B = hexToRgb(b)
+  const t = clamp(amount, 0, 1)
+  const toHex = (value: number) => Math.round(value).toString(16).padStart(2, "0")
+  return `#${
+    toHex(A.r * (1 - t) + B.r * t)
+  }${
+    toHex(A.g * (1 - t) + B.g * t)
+  }${
+    toHex(A.b * (1 - t) + B.b * t)
+  }`
+}
+
+const lerpAngle = (from: number, to: number, amount: number) => {
+  const delta = ((((to - from) % 360) + 540) % 360) - 180
+  return (from + delta * amount + 360) % 360
+}
+
+const hslToHex = (h: number, s: number, l: number) => {
+  const hue = ((h % 360) + 360) % 360
+  const sat = clamp(s, 0, 100) / 100
+  const light = clamp(l, 0, 100) / 100
+  const c = (1 - Math.abs(2 * light - 1)) * sat
+  const x = c * (1 - Math.abs(((hue / 60) % 2) - 1))
+  const m = light - c / 2
+  let r = 0
+  let g = 0
+  let b = 0
+
+  if (hue < 60) {
+    r = c
+    g = x
+  } else if (hue < 120) {
+    r = x
+    g = c
+  } else if (hue < 180) {
+    g = c
+    b = x
+  } else if (hue < 240) {
+    g = x
+    b = c
+  } else if (hue < 300) {
+    r = x
+    b = c
+  } else {
+    r = c
+    b = x
+  }
+
+  const toHex = (value: number) =>
+    Math.round((value + m) * 255)
+      .toString(16)
+      .padStart(2, "0")
+
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+
+/**
+ * Warms a Tailwind color toward a fixed paper anchor while preserving family identity.
+ */
+export const adaptTailwindColor = (
+  hex: string,
+  shade: TailwindShade,
+) => {
+  const base = toBaseHex(hex)
+  if (!base) return hex
+
+  const shadeIndex = SHADE_INDEX.get(shade) ?? 0
+  const shadeProgress = shadeIndex / (TailwindShades.length - 1)
+  const paperBlend = 0.28 - shadeProgress * 0.14
+  const huePull = 0.06 + (1 - shadeProgress) * 0.06
+  const saturationScale = 0.9 - (1 - shadeProgress) * 0.08
+
+  const mixed = mixHex(base, PAPER_REFERENCE_HEX, paperBlend)
+  const mixedRgb = hexToRgb(mixed)
+  const mixedHsl = rgbToHsl(mixedRgb.r, mixedRgb.g, mixedRgb.b)
+  const baseRgb = hexToRgb(base)
+  const baseHsl = rgbToHsl(baseRgb.r, baseRgb.g, baseRgb.b)
+
+  return hslToHex(
+    lerpAngle(mixedHsl.h, PAPER_REFERENCE_HSL.h, huePull),
+    clamp(mixedHsl.s * saturationScale, 6, 92),
+    clamp(baseHsl.l + (mixedHsl.l - baseHsl.l) * 0.18, 18, 96),
+  )
+}
+
+/**
+ * Builds the paper-adapted Tailwind palette from the original Tailwind colors.
+ */
+const buildTailwindHex = (): Record<string, Record<number, string>> =>
+  Object.fromEntries(
+    Object.entries(ORIGINAL_TAILWIND_HEX).map(([family, shades]) => [
+      family,
+      Object.fromEntries(
+        Object.entries(shades).map(([shade, hex]) => [
+          Number(shade),
+          adaptTailwindColor(hex, Number(shade) as TailwindShade),
+        ]),
+      ),
+    ]),
+  ) as Record<string, Record<number, string>>
+
+export const TAILWIND_HEX = buildTailwindHex()
+
+/**
+ * Build a palette for a given Tailwind shade across all supported families
+ *
+ * @param shade - Tailwind shade value (e.g., 200, 500)
+ * @returns Array of { name, hex } objects for families that define this shade
+ */
+export const buildPalette = (shade: TailwindShade) =>
+  Object.entries(TAILWIND_HEX).flatMap(([name, shades]) => {
+    const hex = shades[shade]
+    return hex ? [{ name, hex }] : []
+  })
+
+export const TAILWIND_50 = buildPalette(50)
+export const TAILWIND_200 = buildPalette(200)
+export const TAILWIND_300 = buildPalette(300)
+export const TAILWIND_400 = buildPalette(400)
+
+/**
+ * Resolve a hex value given a Tailwind family and shade
+ *
+ * @param family - Tailwind family name (e.g., 'blue', 'neutral')
+ * @param shade - Shade number to resolve
+ * @returns Hex string (e.g., '#3b82f6') or null if not found
+ */
+export const resolveFamilyShade = (family: string, shade: number) =>
+  TAILWIND_HEX[family]?.[shade] ?? null
+
+export const SHADE_STEPS = [50,100,200,300,400,500,600,700,800,900,950] as const
+export type Shade = typeof SHADE_STEPS[number]
+
+export type Family = {
+  id: string
+  key?: string
+  family?: string
+  transparent?: boolean
+  fixedHex?: string
+}
+
+export const FAMILIES: Family[] = [
+  { id: 'transparent', key: 'q', transparent: true },
+  { id: 'white', key: 'w', fixedHex: '#ffffff' },
+  { id: 'black', key: 'e', fixedHex: '#000000' },
+  { id: 'slate', key: 'r', family: 'slate' },
+  { id: 'gray', key: 'm', family: 'gray' },
+  { id: 'stone', key: 'y', family: 'stone' },
+  { id: 'neutral', key: 't', family: 'neutral' },
+  { id: 'zinc', key: 'n', family: 'zinc' },
+  { id: 'brown', key: 'h', family: 'brown' },
+  { id: 'red', key: 'b', family: 'red' },
+  { id: 'rose', key: 'u', family: 'rose' },
+  { id: 'pink', key: 'g', family: 'pink' },
+  { id: 'fuchsia', key: 'f', family: 'fuchsia' },
+  { id: 'violet', key: 'd', family: 'violet' },
+  { id: 'purple', key: 'l', family: 'purple' },
+  { id: 'indigo', key: 'p', family: 'indigo' },
+  { id: 'blue', key: 's', family: 'blue' },
+  { id: 'sky', key: 'o', family: 'sky' },
+  { id: 'cyan', key: 'x', family: 'cyan' },
+  { id: 'teal', key: 'a', family: 'teal' },
+  { id: 'emerald', key: 'i', family: 'emerald' },
+  { id: 'green', key: 'z', family: 'green' },
+  { id: 'lime', key: 'k', family: 'lime' },
+  { id: 'yellow', key: 'j', family: 'yellow' },
+  { id: 'amber', key: 'v', family: 'amber' },
+  { id: 'orange', key: 'c', family: 'orange' },
+]
+
+/* helpers */
+
+/**
+ * Compare two color strings for equality by normalizing to base hex
+ *
+ * @param a - First color string
+ * @param b - Second color string
+ * @returns true if both normalize to the same '#rrggbb', otherwise false
+ */
+export const isSameColor = (a?: string | null, b?: string | null) => {
+  const A = toBaseHex(a)
+  const B = toBaseHex(b)
+  return !!A && !!B && A === B
+}
+
+
+/**
+ * Determine whether a value should be treated as transparent
+ *
+ * - null/undefined values are considered transparent
+ * - If a CSS variable resolves to '#00000000' (8-digit hex with 0 alpha), it is transparent
+ *
+ * @param v - CSS color string or variable
+ * @returns true if transparent-like, otherwise false
+ */
+export const isTransparent = (v?: string | null) => {
+  if (v == null) return true
+  const hx = cssVarToHex(v)
+  return hx === '#00000000'
+}
+
+
+/**
+ * Find the Tailwind family and shade that exactly matches a given hex
+ *
+ * @param hex - Color to match (any hex-like value, 3- or 6-digit, with '#')
+ * @returns { family, shade } if an exact match exists, otherwise null
+ */
+export const findFamilyShadeFromHex = (hex: string | null): { family?: string, shade?: Shade } | null => {
+  const base = toBaseHex(hex)
+  if (!base) return null
+  for (const fam of Object.keys(TAILWIND_HEX)) {
+    for (const s of SHADE_STEPS) {
+      if (toBaseHex(TAILWIND_HEX[fam][s]) === base) {
+        return { family: fam, shade: s }
+      }
+    }
+  }
+  return null
+}
+
+
+/**
+ * Compute relative luminance (WCAG) for a given hex color
+ *
+ * Formula per WCAG 2.1 using sRGB → linear conversion
+ *
+ * @param hex - Hex color string ('#rgb' or '#rrggbb')
+ * @returns Relative luminance in [0, 1]
+ */
+export const getLuminance = (hex: string): number => {
+  const clean = hex.replace('#','')
+  const bigint = parseInt(clean.length === 3
+    ? clean.split('').map(c=>c+c).join('')
+    : clean, 16)
+  const r = (bigint >> 16) & 255
+  const g = (bigint >> 8) & 255
+  const b = bigint & 255
+  const srgb = [r,g,b].map(v => {
+    const c = v / 255
+    return c <= 0.03928 ? c/12.92 : Math.pow((c+0.055)/1.055, 2.4)
+  })
+  return 0.2126*srgb[0] + 0.7152*srgb[1] + 0.0722*srgb[2]
+}
+
+
+/**
+ * Pick a random Tailwind color for a given shade
+ *
+ * @param shade - The Tailwind shade to pick from (e.g., 200, 500)
+ * @param families - Optional whitelist of family names to restrict the random pick (e.g., ['blue','violet'])
+ * @returns An object { family, hex } for the chosen color, or null if none available
+ *
+ * @example
+ * const c = pickRandomColorOfShade(500)         // random among all families at 500
+ * const d = pickRandomColorOfShade(300, ['blue','teal']) // random among blue/teal at 300
+ */
+export const pickRandomColorOfShade = (
+  shade: TailwindShade,
+  families?: string[]
+): { family: string, hex: string } | null => {
+  const palette = buildPalette(shade)
+  const filtered = families && families.length > 0
+    ? palette.filter(p => families.includes(p.name))
+    : palette
+  if (filtered.length === 0) return null
+  const idx = Math.floor(Math.random() * filtered.length)
+  const choice = filtered[idx]
+  return { family: choice.name, hex: choice.hex }
+}

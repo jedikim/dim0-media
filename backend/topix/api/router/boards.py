@@ -1,0 +1,411 @@
+"""Graph API Router."""
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi.params import Body, Path
+
+from topix.agents.assistant.code import execute_python_code
+from topix.api.datatypes.requests import (
+    AddLinksRequest,
+    AddNotesRequest,
+    BoardVisibilityUpdateRequest,
+    GraphUpdateRequest,
+    LinkUpdateRequest,
+    NoteUpdateRequest,
+)
+from topix.api.utils.decorators import with_standard_response
+from topix.api.utils.security import (
+    get_current_user_uid,
+    verify_board_member,
+    verify_board_read_access,
+)
+from topix.api.utils.thumbnail import load_png_as_data_url, save_thumbnail
+from topix.datatypes.graph.graph import Graph
+from topix.datatypes.note.style import NodeType
+from topix.store.graph import GraphStore
+
+router = APIRouter(
+    prefix="/boards",
+    tags=["boards"],
+    responses={404: {"description": "Not found"}},
+)
+
+
+@router.put("/", include_in_schema=False)
+@router.put("")
+@with_standard_response
+async def create_graph(
+    response: Response,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_uid)]
+):
+    """Create a new graph for the user."""
+    store: GraphStore = request.app.graph_store
+
+    new_graph = Graph(user_uid=user_id)
+    await store.add_graph(graph=new_graph, user_uid=user_id)
+    return {"graph_id": new_graph.uid}
+
+
+@router.patch("/{graph_id}/", include_in_schema=False)
+@router.patch("/{graph_id}")
+@with_standard_response
+async def update_graph(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_member)],
+    body: Annotated[GraphUpdateRequest, Body(description="Graph update data")]
+):
+    """Update an existing graph by its ID."""
+    store: GraphStore = request.app.graph_store
+    return await store.update_graph(graph_uid=graph_id, data=body.data)
+
+
+@router.delete("/{graph_id}/", include_in_schema=False)
+@router.delete("/{graph_id}")
+@with_standard_response
+async def delete_graph(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_member)],
+):
+    """Delete a graph by its ID."""
+    store: GraphStore = request.app.graph_store
+
+    await store.delete_graph(graph_uid=graph_id, hard_delete=True)
+    return {"message": "Board deleted successfully"}
+
+
+@router.get("/{graph_id}/", include_in_schema=False)
+@router.get("/{graph_id}")
+@with_standard_response
+async def get_graph(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_read_access)],
+    root_id: Annotated[str | None, Query(description="Root node ID for subgraph (direct children only)")] = None,
+):
+    """Get a graph by its ID."""
+    store: GraphStore = request.app.graph_store
+
+    try:
+        graph = await store.get_graph(graph_uid=graph_id, root_id=root_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    if not graph:
+        raise HTTPException(status_code=404, detail="Graph not found")
+
+    if graph.thumbnail and graph.thumbnail.startswith("file://"):
+        graph.thumbnail = load_png_as_data_url(graph.thumbnail)
+
+    role = await store.get_graph_role(graph_uid=graph_id, user_uid=user_id)
+    can_edit = role in {"owner", "member"}
+
+    return {
+        "graph": graph.model_dump(exclude_none=True),
+        "can_edit": can_edit,
+    }
+
+
+@router.get("/", include_in_schema=False)
+@router.get("")
+@with_standard_response
+async def list_graphs(
+    response: Response,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_uid)]
+):
+    """List all graphs for the user."""
+    store: GraphStore = request.app.graph_store
+
+    graphs = await store.list_graphs(user_uid=user_id)
+
+    # Convert file:// URLs to data URLs
+    for graph in graphs:
+        if graph.thumbnail and graph.thumbnail.startswith("file://"):
+            graph.thumbnail = load_png_as_data_url(graph.thumbnail)
+
+    return {"graphs": [graph.model_dump(exclude_none=True) for graph in graphs]}
+
+
+@router.post("/{graph_id}/notes/", include_in_schema=False)
+@router.post("/{graph_id}/notes")
+@with_standard_response
+async def add_notes_to_graph(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_member)],
+    body: Annotated[AddNotesRequest, Body(description="Notes to add")]
+):
+    """Add notes to a graph."""
+    store: GraphStore = request.app.graph_store
+
+    notes = body.notes
+
+    for note in notes:
+        note.graph_uid = graph_id
+
+    if not notes:
+        return {"message": "Received empty note array."}
+
+    await store.add_notes(nodes=notes)
+    return {"message": "Notes added to board successfully"}
+
+
+@router.get("/{graph_id}/notes/{note_id}", include_in_schema=False)
+@router.get("/{graph_id}/notes/{note_id}")
+@with_standard_response
+async def get_note(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    note_id: Annotated[str, Path(description="Note ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_read_access)],
+):
+    """Get a note from a graph."""
+    store: GraphStore = request.app.graph_store
+
+    notes = await store.get_nodes(node_ids=[note_id])
+    if not notes:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    return {"note": notes[0].model_dump(exclude_none=True)}
+
+
+@router.post("/{graph_id}/notes/{note_id}:execute", include_in_schema=False)
+@router.post("/{graph_id}/notes/{note_id}:execute")
+@with_standard_response
+async def execute_note_code(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    note_id: Annotated[str, Path(description="Note ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_member)],
+):
+    """Execute Python code stored in a code sandbox note."""
+    store: GraphStore = request.app.graph_store
+
+    notes = await store.get_nodes(node_ids=[note_id])
+    if not notes:
+        raise HTTPException(status_code=404, detail="Note not found")
+
+    note = notes[0]
+    if note.graph_uid != graph_id:
+        raise HTTPException(status_code=404, detail="Note not found")
+    if note.style.type != NodeType.CODE_SANDBOX:
+        raise HTTPException(status_code=400, detail="Note is not a code sandbox")
+
+    code = note.content.markdown if note.content else ""
+    result = await execute_python_code(code)
+    return result.model_dump(exclude_none=True)
+
+
+@router.get("/{graph_id}/notes/{note_id}/path", include_in_schema=False)
+@router.get("/{graph_id}/notes/{note_id}/path")
+@with_standard_response
+async def get_note_path(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    note_id: Annotated[str, Path(description="Note ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_read_access)],
+):
+    """Get full path from root to a note."""
+    store: GraphStore = request.app.graph_store
+
+    path = await store.get_node_path(graph_uid=graph_id, node_id=note_id)
+    if not path:
+        raise HTTPException(status_code=404, detail="Note path not found")
+
+    return {"path": [node.model_dump(exclude_none=True) for node in path]}
+
+
+@router.patch("/{graph_id}/notes/{note_id}/", include_in_schema=False)
+@router.patch("/{graph_id}/notes/{note_id}")
+@with_standard_response
+async def update_note(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    note_id: Annotated[str, Path(description="Note ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_member)],
+    body: Annotated[NoteUpdateRequest, Body(description="Note update data")]
+):
+    """Update a note or document node in a graph."""
+    store: GraphStore = request.app.graph_store
+
+    updated_note = await store.patch_note(node_id=note_id, data=body.data, user_uid=user_id)
+    if updated_note is None:
+        raise HTTPException(status_code=404, detail="Note not found")
+    return {"message": "Note updated successfully"}
+
+
+@router.delete("/{graph_id}/notes/{note_id}/", include_in_schema=False)
+@router.delete("/{graph_id}/notes/{note_id}")
+@with_standard_response
+async def remove_note_from_graph(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    note_id: Annotated[str, Path(description="Note ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_member)],
+):
+    """Remove notes from a graph."""
+    store: GraphStore = request.app.graph_store
+
+    await store.delete_node(node_id=note_id, user_uid=user_id)
+    return {"message": "Note removed from board successfully"}
+
+
+@router.post("/{graph_id}/notes/{note_id}:restore-latest", include_in_schema=False)
+@router.post("/{graph_id}/notes/{note_id}:restore-latest")
+@with_standard_response
+async def restore_latest_note_revision(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    note_id: Annotated[str, Path(description="Note ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_member)],
+):
+    """Restore the latest saved note revision for a board note."""
+    store: GraphStore = request.app.graph_store
+
+    restored_note = await store.restore_latest_note_revision(node_id=note_id, user_uid=user_id)
+    if restored_note is None or restored_note.graph_uid != graph_id:
+        raise HTTPException(status_code=404, detail="Note revision not found")
+
+    return {"note": restored_note.model_dump(exclude_none=True)}
+
+
+@router.post("/{graph_id}/links/", include_in_schema=False)
+@router.post("/{graph_id}/links")
+@with_standard_response
+async def add_links_to_graph(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_member)],
+    body: Annotated[AddLinksRequest, Body(description="Links to add")]
+):
+    """Add links to a graph."""
+    store: GraphStore = request.app.graph_store
+
+    links = body.links
+    for link in links:
+        link.graph_uid = graph_id
+
+    if not links:
+        return {"message": "Received empty link array."}
+
+    await store.add_links(links=links)
+    return {"message": "Links added to board successfully."}
+
+
+@router.get("/{graph_id}/links/{link_id}", include_in_schema=False)
+@router.get("/{graph_id}/links/{link_id}")
+@with_standard_response
+async def get_link(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    link_id: Annotated[str, Path(description="Link ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_read_access)],
+):
+    """Get a link from a graph."""
+    store: GraphStore = request.app.graph_store
+
+    links = await store.get_links(link_ids=[link_id])
+    if not links:
+        raise HTTPException(status_code=404, detail="Link not found")
+
+    return {"link": links[0].model_dump(exclude_none=True)}
+
+
+@router.patch("/{graph_id}/links/{link_id}/", include_in_schema=False)
+@router.patch("/{graph_id}/links/{link_id}")
+@with_standard_response
+async def update_link(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    link_id: Annotated[str, Path(description="Link ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_member)],
+    body: Annotated[LinkUpdateRequest, Body(description="Link update data")]
+):
+    """Update a link in a graph."""
+    store: GraphStore = request.app.graph_store
+
+    await store.update_link(link_id=link_id, data=body.data)
+    return {"message": "Link updated successfully"}
+
+
+@router.delete("/{graph_id}/links/{link_id}/", include_in_schema=False)
+@router.delete("/{graph_id}/links/{link_id}")
+@with_standard_response
+async def remove_link_from_graph(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    link_id: Annotated[str, Path(description="Link ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_member)],
+):
+    """Remove links from a graph."""
+    store: GraphStore = request.app.graph_store
+
+    await store.delete_link(link_id=link_id)
+    return {"message": "Link removed from board successfully"}
+
+
+@router.post("/{graph_id}/thumbnail/", include_in_schema=False)
+@router.post("/{graph_id}/thumbnail")
+@with_standard_response
+async def save_graph_thumbnail(
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_member)],
+    file: UploadFile = File(...),
+):
+    """Save a thumbnail image for the graph."""
+    file_bytes = await file.read()
+    path = save_thumbnail(graph_id, file_bytes)
+    store: GraphStore = request.app.graph_store
+
+    await store.update_graph(graph_id, {"thumbnail": path})
+    return {"path": path}
+
+
+@router.patch("/{graph_id}/visibility/", include_in_schema=False)
+@router.patch("/{graph_id}/visibility")
+@with_standard_response
+async def update_graph_visibility(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_member)],
+    body: Annotated[BoardVisibilityUpdateRequest, Body(description="Board visibility update data")],
+):
+    """Update board visibility."""
+    store: GraphStore = request.app.graph_store
+    await store.update_graph(graph_uid=graph_id, data={"visibility": body.visibility})
+    return {"message": "Board visibility updated successfully"}

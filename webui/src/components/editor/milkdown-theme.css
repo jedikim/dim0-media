@@ -1,0 +1,292 @@
+/* milkdown-theme.css */
+.milkdown {
+  /* ===== Backgrounds / Surfaces ===== */
+  --crepe-color-background: var(--color-background);        /* app bg */
+  --crepe-color-surface: var(--color-card);                 /* cards/panels */
+  --crepe-color-surface-low: var(--color-popover);          /* lower/elevated surface */
+
+  /* ===== Text ===== */
+  --crepe-color-on-background: var(--color-foreground);     /* text on bg */
+  --crepe-color-on-surface: var(--color-card-foreground);   /* text on cards */
+  --crepe-color-on-surface-variant: var(--color-muted-foreground);
+
+  /* ===== Accents ===== */
+  --crepe-color-primary: var(--color-primary);
+  --crepe-color-secondary: var(--color-accent);
+  --crepe-color-on-secondary: var(--color-accent-foreground);
+
+  /* ===== UI / States ===== */
+  --crepe-color-outline: var(--color-muted-foreground);
+  --crepe-color-inverse: var(--color-foreground);           /* inverse bg */
+  --crepe-color-on-inverse: var(--color-background);        /* text on inverse */
+
+  /* Code & Errors */
+  --crepe-color-inline-code: var(--color-muted-foreground);/* inline code text */
+  --crepe-color-error: var(--color-destructive);
+
+  /* Interaction (pick closest tokens) */
+  --crepe-color-hover: var(--color-accent);                 /* hover bg */
+  --crepe-color-selected: var(--color-muted);               /* selection bg */
+  --crepe-color-inline-area: var(--color-input);            /* inline edit bg */
+
+  /* ===== Fonts ===== */
+  --crepe-font-title: var(--font-sans);
+  --crepe-font-default: var(--font-sans);
+  --crepe-font-code: var(--font-mono);
+
+  /* ===== Shadows ===== */
+  --crepe-shadow-1: var(--shadow-sm);
+  --crepe-shadow-2: var(--shadow-lg);
+
+  background: transparent !important;
+}
+
+/* Optional frame styling to match app's card UI */
+.milkdown .crepe-frame {
+  background: var(--crepe-color-surface);
+  border-color: var(--crepe-color-outline);
+  box-shadow: var(--crepe-shadow-1);
+}
+
+/* Inline code style */
+.milkdown code,
+.milkdown .crepe-inline-code {
+  color: var(--crepe-color-inline-code);
+}
+
+/* Text selection color */
+.milkdown ::selection {
+  background: var(--crepe-color-selected);
+}
+
+.milkdown .ProseMirror {
+  padding: 2rem 5.2rem !important;
+}
+
+@media (max-width: 1024px) {
+  .milkdown .ProseMirror {
+    padding: 2rem 4rem; /* reduce for tablets */
+  }
+}
+
+@media (max-width: 768px) {
+  .milkdown .ProseMirror {
+    padding: 1.5rem; /* tighter on mobile */
+  }
+}
+
+.milkdown .menu-groups {
+  height: 20vh;
+  scrollbar-width: thin; /* for Firefox */
+  scrollbar-color: rgba(0,0,0,.4) transparent; /* thumb, track */
+}
+
+.milkdown .menu-groups::-webkit-scrollbar {
+  width: 8px;            /* adjust width */
+}
+
+.milkdown .menu-groups::-webkit-scrollbar-track {
+  background: transparent; /* transparent track background */
+}
+
+.milkdown .menu-groups::-webkit-scrollbar-thumb {
+  background-color: rgba(0,0,0,.4); /* visible thumb */
+  border-radius: 4px;
+}
+
+.sheet-editor .milkdown {
+  background: transparent;
+
+  .ProseMirror {
+    padding: 1rem;
+  }
+}
+
+.sheet-editor .milkdown-slash-menu {
+  visibility: hidden;
+}
+
+/* ==========================================================================
+   Milkdown editor styles — consistent with your Streamdown MarkdownView
+   Scope: .milkdown
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Base text
+   -------------------------------------------------------------------------- */
+.milkdown .ProseMirror {
+  line-height: 1.75;
+  font-size: 1rem;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  min-width: 0;
+  background: transparent !important;
+}
+
+/* --------------------------------------------------------------------------
+   Headings
+   -------------------------------------------------------------------------- */
+.milkdown .ProseMirror h1,
+.milkdown .ProseMirror h2,
+.milkdown .ProseMirror h3,
+.milkdown .ProseMirror h4 {
+  font-family: var(--font-sans) !important;
+  font-weight: 600; /* semibold */
+  letter-spacing: -0.01em;
+  scroll-margin-top: 5rem;
+  margin-top: 1.25rem;
+}
+
+/* h1 → text-3xl */
+.milkdown .ProseMirror h1 {
+  margin-top: 1.25rem !important;
+  padding-bottom: 0.75rem !important;
+  font-size: 1.875rem !important; /* 3xl */
+  line-height: 1.45 !important;
+  border-bottom: none;
+  font-weight: 700 !important;
+}
+
+/* h2 → text-2xl */
+.milkdown .ProseMirror h2 {
+  margin-top: 1rem !important;
+  padding-bottom: 0.5rem !important;
+  font-size: 1.5rem !important; /* 2xl */
+  line-height: 1.4 !important;
+  font-weight: 600 !important;
+}
+
+/* h3 → text-xl */
+.milkdown .ProseMirror h3 {
+  margin-top: 1rem !important;
+  font-size: 1.25rem !important; /* xl */
+  line-height: 1.2 !important;
+  font-weight: 600 !important;
+}
+
+/* h4 → text-lg */
+.milkdown .ProseMirror h4 {
+  margin-top: 1rem !important;
+  font-size: 1.125rem !important; /* lg */
+  line-height: 1.2 !important;
+  font-weight: 600 !important;
+}
+
+/* --------------------------------------------------------------------------
+   Paragraphs
+   -------------------------------------------------------------------------- */
+
+
+/* --------------------------------------------------------------------------
+   Blockquote
+   -------------------------------------------------------------------------- */
+.milkdown blockquote {
+  margin: 1rem 0 0 0;
+  padding-left: 1.5rem;
+  border-left: 2px solid var(--border);
+  font-style: italic;
+  font-size: 1rem;
+}
+
+/* --------------------------------------------------------------------------
+   Lists
+   -------------------------------------------------------------------------- */
+.milkdown .ProseMirror ul,
+.milkdown .ProseMirror ol {
+  padding-left: 1.5rem;
+}
+.milkdown .ProseMirror ul { list-style: disc; }
+.milkdown .ProseMirror ol { list-style: decimal; }
+.milkdown .ProseMirror li {
+  margin-top: 0.5rem;
+  word-wrap: break-word;
+  min-width: 0;
+}
+.milkdown .ProseMirror li > ul,
+.milkdown .ProseMirror li > ol {
+  margin-top: 0.5rem;
+}
+
+/* --------------------------------------------------------------------------
+   Links
+   -------------------------------------------------------------------------- */
+.milkdown .ProseMirror a {
+  display: inline-block;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  color: var(--secondary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.milkdown .ProseMirror a:hover { background: var(--accent); }
+.milkdown .ProseMirror a:focus {
+  outline: 2px solid color-mix(in oklab, var(--accent) 60%, transparent);
+  outline-offset: 2px;
+}
+
+.milkdown .milkdown-link-preview > .link-preview {
+  height: auto !important;
+}
+
+/* --------------------------------------------------------------------------
+   Inline formatting
+   -------------------------------------------------------------------------- */
+.milkdown .ProseMirror b,
+.milkdown .ProseMirror strong { font-weight: 600; }
+.milkdown .ProseMirror em { font-style: italic; }
+.milkdown .ProseMirror del,
+.milkdown .ProseMirror s { text-decoration: line-through; }
+
+/* --------------------------------------------------------------------------
+   Images
+   -------------------------------------------------------------------------- */
+.milkdown .ProseMirror img {
+  display: block;
+  max-width: 100%;
+  height: auto !important;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
+
+/* --------------------------------------------------------------------------
+   Code blocks & inline code
+   -------------------------------------------------------------------------- */
+.milkdown .ProseMirror code:not(pre code) {
+  font-family: var(--font-mono) !important;
+  font-size: 0.9em;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: color-mix(in oklab, var(--card) 80%, transparent);
+}
+
+.milkdown .milkdown-code-block {
+    font-size: 0.75rem !important;
+    line-height: 1rem !important;
+    border-radius: 0.5rem;
+    background: var(--color-card);
+    .cm-line {
+      font-family: var(--font-mono) !important;
+    }
+}
+
+/* --------------------------------------------------------------------------
+   Math / KaTeX
+   -------------------------------------------------------------------------- */
+.milkdown .katex-display { margin: 1rem 0; }
+
+/* --------------------------------------------------------------------------
+   Figures & captions
+   -------------------------------------------------------------------------- */
+.milkdown figure { margin: 1rem 0; }
+.milkdown figcaption {
+  font-size: 0.875rem;
+  color: var(--muted-foreground);
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
+/* --------------------------------------------------------------------------
+   Cleanup edges
+   -------------------------------------------------------------------------- */

@@ -1,0 +1,130 @@
+import camelcaseKeys from "camelcase-keys"
+import type { ChatMessage, MessageRole } from "../types/chat"
+import { useQuery } from "@tanstack/react-query"
+import { apiFetch } from "@/api"
+import { normalizeReasoningSteps, type ReasoningStep, type ToolExecutionState, type ToolName } from "../types/stream"
+import type { ToolOutput } from "../types/tool-outputs"
+import { trimReasoningSteps } from "../utils/annotations"
+
+
+interface ListMessagesResponse {
+  data: {
+    messages: Array<{
+      id: string,
+      role: MessageRole,
+      content: {
+        markdown: string
+      },
+      created_at?: string,
+      updated_at?: string,
+      deleted_at?: string,
+      chat_uid: string,
+      properties: {
+        reasoning: {
+          type: "reasoning",
+          reasoning: Array<
+            | {
+              type: "reasoning_step"
+              id: string
+              reasoning: string
+              message: string
+              is_synthesis?: boolean
+            }
+            | {
+              type: "tool_call"
+              id: string
+              name: ToolName
+              thought: string
+              output: ToolOutput
+              state: ToolExecutionState
+              event_messages: string[]
+              arguments?: { input: unknown }
+            }
+          >
+        }
+        context?: {
+          type: "text"
+          text: string
+        }
+      }
+    }>
+  }
+}
+
+
+/**
+ * List messages in a chat by its ID.
+ *
+ * @param chatId - The ID of the chat to list messages from.
+ * @param userId - The ID of the user requesting the messages.
+ */
+export async function listMessages(
+  chatId: string,
+  userId: string
+): Promise<ChatMessage[]> {
+  const res = await apiFetch<ListMessagesResponse>({
+    path: `/chats/${chatId}/messages`,
+    method: "GET",
+    params: { user_id: userId },
+  })
+  return res.data.messages.map((message) => {
+    const normalized = camelcaseKeys(message, { deep: true }) as ChatMessage
+    if (normalized.properties?.reasoning?.reasoning) {
+      normalized.properties.reasoning = {
+        type: "reasoning",
+        reasoning: normalizeReasoningSteps(
+          normalized.properties.reasoning.reasoning as ReasoningStep[]
+        ),
+      }
+    }
+    return trimMessageAnnotations(normalized)
+  })
+}
+
+
+/**
+ * Custom hook to fetch messages for a chat.
+ *
+ * @param chatId - The ID of the chat whose messages are to be fetched.
+ * @param userId - The ID of the user requesting the messages.
+ *
+ * @returns A query object containing the list of messages.
+ */
+export const useListMessages = ({
+  chatId,
+  userId
+}: {
+  chatId: string,
+  userId: string
+}) => {
+  return useQuery<ChatMessage[]>({
+    queryKey: ["listMessages", chatId, userId],
+    queryFn: () => listMessages(chatId, userId),
+    enabled: !!chatId && !!userId,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    // keep current data visible if something triggers a fetch elsewhere
+    placeholderData: (prev) => prev,
+    staleTime: 1000 * 60 * 5 // 5 minutes
+  })
+}
+
+const trimMessageAnnotations = (message: ChatMessage): ChatMessage => {
+  const properties = message.properties
+  const reasoningWrapper = properties?.reasoning
+  const reasoning = reasoningWrapper?.reasoning
+  if (!properties || !reasoningWrapper || !reasoning) {
+    return message
+  }
+
+  return {
+    ...message,
+    properties: {
+      ...properties,
+      reasoning: {
+        ...reasoningWrapper,
+        reasoning: trimReasoningSteps(reasoning)
+      }
+    }
+  }
+}

@@ -1,0 +1,40 @@
+.react-flow__node {
+  background-color: transparent !important;
+  border: none !important;
+  padding: 0rem;
+  width: auto;
+  box-shadow: none;
+  &.draggable{
+    border: none;
+  }
+  &:hover {
+    box-shadow: none;
+  }
+  &.selected {
+    border: none !important;
+  }
+  &:focus {
+    border: none;
+  }
+  &:focus-visible {
+    border: none;
+    outline: none;
+  }
+  &.target {
+    border: none;
+  }
+}
+
+.react-flow__minimap-mask {
+    fill: var(--muted) !important;
+    opacity: 0.75 !important;
+}
+
+.react-flow__minimap-node {
+    fill: var(--primary) !important;
+}
+
+.react-flow__resize-control {
+    background-color: transparent !important;
+    border: none !important;
+}

@@ -1,0 +1,99 @@
+/**
+ * Represents a URL annotation.
+ */
+export interface UrlAnnotation {
+  type: "url"
+  url: string
+  title?: string
+  content?: string
+  favicon?: string
+  coverImage?: string
+  sourceDomain?: string
+  publishedAt?: string // ISO 8601 date string
+  tags?: string[]
+}
+
+export interface FileAnnotation {
+  type: "file"
+  fileType: string
+  filePath: string
+  fileId: string
+}
+
+export interface RefAnnotation {
+  type: "reference"
+  refId: string
+}
+
+export type Annotation = UrlAnnotation | FileAnnotation | RefAnnotation
+
+export interface WebSearchOutput {
+  type: "web_search"
+  answer: string
+  searchResults: UrlAnnotation[]
+}
+
+export interface MemorySearchOutput {
+  type: "memory_search"
+  answer: string
+  references: RefAnnotation[]
+}
+
+export interface CodeInterpreterOutput {
+  type: "code_interpreter"
+  status: "success" | "error" | "timeout"
+  stdout: string
+  stderr: string
+  durationMs: number
+}
+
+export interface CreateNoteOutput {
+  type: "create_note"
+  noteId: string
+  graphUid: string
+  label: string
+  noteType: string
+  parentId?: string | null
+}
+
+export interface EditNoteOutput {
+  type: "edit_note"
+  noteId: string
+  graphUid: string
+  label: string
+  noteType: string
+  parentId?: string | null
+}
+
+export interface WeatherWidgetOutput {
+  type: "display_weather_widget"
+  city: string
+}
+
+export interface StockWidgetOutput {
+  type: "display_stock_widget"
+  symbol: string
+}
+
+export interface ImageSearchWidgetOutput {
+  type: "display_image_search_widget"
+  query: string
+  images: string[]
+}
+
+export interface ImageGenerationOutput {
+  type: "image_generation"
+  imageUrls: string[]
+}
+
+export type ToolOutput =
+  | WebSearchOutput
+  | MemorySearchOutput
+  | CodeInterpreterOutput
+  | CreateNoteOutput
+  | EditNoteOutput
+  | WeatherWidgetOutput
+  | StockWidgetOutput
+  | ImageSearchWidgetOutput
+  | ImageGenerationOutput
+  | string
