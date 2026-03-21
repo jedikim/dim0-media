@@ -47,6 +47,10 @@ export function ColorGrid({
   const [internalShade, setInternalShade] = useState<Shade>(500)
 
   const shade: Shade = controlledShade ?? internalShade
+  const isCompact = variant === "compact"
+  const activeFamilyLabel = activeFamily.family
+    ? `${activeFamily.family.charAt(0).toUpperCase()}${activeFamily.family.slice(1)}`
+    : ""
 
   useEffect(() => {
     if (isTransparent(value)) {
@@ -110,7 +114,6 @@ export function ColorGrid({
   }
 
   const FamilyItem = ({ f }: { f: Family }) => {
-    const isCompact = variant === "compact"
     const colorHex = resolveEntryHexAtShade(f, shade)
     const selected = f.transparent
       ? isValueTransparent
@@ -205,12 +208,15 @@ export function ColorGrid({
           ))}
       </div>
 
-      {variant === "default" && activeFamily.family && (
+      {activeFamily.family && (
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">
-            Shades — {activeFamily.family}
+            {isCompact ? activeFamilyLabel : `Shades — ${activeFamilyLabel}`}
           </Label>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className={cn(
+            "flex flex-wrap items-center",
+            isCompact ? "gap-1" : "gap-2",
+          )}>
             {SHADE_STEPS.map((step, i) => {
               const hex = resolveFamilyShade(activeFamily.family!, step)
               const selected = !!hex && isSameColor(value, hex)
@@ -219,22 +225,17 @@ export function ColorGrid({
                 <KeySwatch
                   key={step}
                   color={hex}
-                  label={`⇧${i + 1}`}
+                  label={isCompact ? undefined : `⇧${i + 1}`}
                   selected={selected}
                   onClick={() => baseHex && pickShade(step)}
                   isDark={isDark}
-                  size="md"
+                  size={isCompact ? "dot" : "md"}
+                  hideLabel={isCompact}
                 />
               )
             })}
           </div>
         </div>
-      )}
-
-      {variant === "compact" && (
-        <p className="text-[11px] text-muted-foreground">
-          Right-click a color to view more shades.
-        </p>
       )}
     </div>
   )

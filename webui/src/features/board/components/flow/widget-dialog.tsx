@@ -95,7 +95,7 @@ export const WidgetDialog = memo(function WidgetDialog({
                 <WidgetIframe
                   html={html}
                   title="Widget"
-                  className="h-full w-full border-0 bg-white"
+                  className="h-full w-full border-0 bg-transparent"
                 />
               ) : (
                 <div className="flex h-full w-full items-center justify-center px-6 text-center text-sm text-muted-foreground">

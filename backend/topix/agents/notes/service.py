@@ -14,15 +14,15 @@ DEFAULT_NOTE_GAP = 80
 DEFAULT_CHILD_OFFSET_X = 40
 DEFAULT_CHILD_OFFSET_Y = 80
 DEFAULT_NOTE_COLORS_HEX = [
-    "#baa193",
-    "#ec9952",
-    "#e8bf2f",
-    "#ea80aa",
-    "#5dd271",
-    "#42c698",
-    "#eb8de5",
-    "#f08085",
-    "#76cbeb",
+    "#d2bfb4",
+    "#f1bd85",
+    "#eed25d",
+    "#f2b2cb",
+    "#95e4a1",
+    "#71deb2",
+    "#f1b8ec",
+    "#f5afb1",
+    "#a4def0",
 ]
 
 

@@ -7,7 +7,7 @@ import { useGraphStore } from '../../store/graph-store'
 import { HugeiconsIcon } from '@hugeicons/react'
 import { Delete02Icon, PaintBoardIcon, PinIcon, PinOffIcon } from '@hugeicons/core-free-icons'
 import clsx from 'clsx'
-import { TAILWIND_400 } from '../../lib/colors/tailwind'
+import { TAILWIND_300 } from '../../lib/colors/tailwind'
 import { formatDistanceToNow } from '../../utils/date'
 import { useTheme } from '@/components/theme-provider'
 import { darkModeDisplayHex } from '../../lib/colors/dark-variants'
@@ -147,7 +147,7 @@ export function LinearNoteCard({ node }: Props) {
             </PopoverTrigger>
             <PopoverContent align='start' className='w-auto p-2'>
               <div className='grid grid-cols-6 gap-2'>
-                {[{ name: 'white', hex: '#ffffff' }, ...TAILWIND_400].map(c => (
+                {[{ name: 'white', hex: '#ffffff' }, ...TAILWIND_300].map(c => (
                   <button
                     key={c.name}
                     className='h-6 w-6 rounded-md border border-border hover:brightness-95'

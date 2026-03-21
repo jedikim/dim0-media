@@ -6,7 +6,7 @@ import clsx from 'clsx'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 import { StickyNote } from '../notes/sticky-note'
-import { TAILWIND_400 } from '../../lib/colors/tailwind'
+import { TAILWIND_300 } from '../../lib/colors/tailwind'
 import { darkModeDisplayHex } from '../../lib/colors/dark-variants'
 import type { NoteWithPin } from './note-card'
 import { useGraphStore } from '../../store/graph-store'
@@ -28,7 +28,7 @@ type SheetNodeViewProps = {
   onOpenSticky: () => void
 }
 
-const COLOR_OPTIONS = [{ name: 'white', hex: '#ffffff' }, ...TAILWIND_400]
+const COLOR_OPTIONS = [{ name: 'white', hex: '#ffffff' }, ...TAILWIND_300]
 
 export const SheetNodeView = memo(function SheetNodeView({
   note,
@@ -162,7 +162,7 @@ export const SheetNodeView = memo(function SheetNodeView({
         <div
           className={clsx(
             'absolute top-0 inset-x-0 py-1 px-2 flex flex-row items-center gap-1 z-40 justify-end rounded-t-sm border-b border-foreground/50 transition-opacity',
-            'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto',
+            'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto bg-inherit',
             selected && 'opacity-100 pointer-events-auto',
           )}
         >
@@ -216,7 +216,7 @@ export const SheetNodeView = memo(function SheetNodeView({
         </div>
 
         <div
-          className='w-full overflow-y-auto scrollbar-thin cursor-pointer mt-7'
+          className='w-full overflow-y-auto scrollbar-thin cursor-pointer mt-8'
           style={{ minHeight: MIN_HEIGHT, maxHeight: MAX_HEIGHT, height: targetHeight }}
           onClick={onOpenSticky}
         >

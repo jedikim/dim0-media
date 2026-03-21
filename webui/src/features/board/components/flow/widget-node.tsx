@@ -130,7 +130,7 @@ export const WidgetNode = memo(function WidgetNode({
           <WidgetIframe
             html={html}
             title="Widget"
-            className="h-full w-full border-0 bg-white"
+            className="h-full w-full border-0 bg-transparent"
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
