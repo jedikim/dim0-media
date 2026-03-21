@@ -67,3 +67,11 @@ jobs:
       - name: Push release commit and tag
         if: steps.release_changes.outputs.has_changes == 'true'
         run: git push origin HEAD:main --follow-tags
+
+      - name: Create GitHub release
+        if: steps.release_changes.outputs.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(cat VERSION)"
+          gh release create "v${VERSION}" --generate-notes
