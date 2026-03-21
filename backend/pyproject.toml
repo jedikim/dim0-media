@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "topix"
-dynamic = ["version"]
+version = "0.0.1"
 description = "Learn - Note - Share with AI"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -49,14 +49,6 @@ dev = [
     "black>=25.1.0",
     "datasets>=3.6.0",
 ]
-
-[tool.commitizen]
-name = "cz_conventional_commits"
-tag_format = "$version"
-version_scheme = "semver2"
-version = "0.0.1"
-update_changelog_on_bump = true
-major_version_zero = true
 
 [tool.ruff]
 lint.select = [

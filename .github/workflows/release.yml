@@ -1,0 +1,69 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Semantic version bump to apply
+        required: true
+        default: minor
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+
+permissions:
+  contents: write
+  pull-requests: read
+
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Configure Git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version and sync manifests
+        run: |
+          uv run --with commitizen cz bump --increment "${{ inputs.bump }}" --yes
+          python3 scripts/sync_version.py
+
+      - name: Check for release changes
+        id: release_changes
+        run: |
+          if git diff --quiet; then
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit release artifacts
+        if: steps.release_changes.outputs.has_changes == 'true'
+        run: |
+          VERSION="$(cat VERSION)"
+          git add VERSION CHANGELOG.md backend/pyproject.toml webui/package.json webui/src-tauri/Cargo.toml
+          git commit -m "chore(repo): release v${VERSION}"
+
+      - name: Push release commit and tag
+        if: steps.release_changes.outputs.has_changes == 'true'
+        run: git push origin HEAD:main --follow-tags

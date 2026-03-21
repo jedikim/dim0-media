@@ -98,3 +98,16 @@ config: ## Show fully-resolved compose config (confirms env expansion)
 .PHONY: prune
 prune: ## Docker-wide cleanup (stopped containers, dangling images) - global
 	docker system prune -f
+
+.PHONY: version-sync
+version-sync: ## Sync VERSION into backend, webui, and tauri manifests
+	python3 scripts/sync_version.py
+
+.PHONY: version-check
+version-check: ## Check whether repo manifests match VERSION
+	python3 scripts/sync_version.py --check
+
+.PHONY: version-bump
+version-bump: ## Bump repo version with commitizen, then sync manifests
+	uv run --with commitizen cz bump
+	python3 scripts/sync_version.py
