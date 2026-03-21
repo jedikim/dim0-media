@@ -66,7 +66,10 @@ jobs:
 
       - name: Push release commit and tag
         if: steps.release_changes.outputs.has_changes == 'true'
-        run: git push origin HEAD:main --follow-tags
+        run: |
+          VERSION="$(cat VERSION)"
+          git push origin HEAD:main
+          git push origin "v${VERSION}"
 
       - name: Create GitHub release
         if: steps.release_changes.outputs.has_changes == 'true'
