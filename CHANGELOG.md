@@ -1,3 +1,9 @@
+## v0.1.5 (2026-03-22)
+
+### Feat
+
+- **webui**: show app version in sidebar (#7)
+
 ## v0.1.4 (2026-03-22)
 
 ### Fix
