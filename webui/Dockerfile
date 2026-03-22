@@ -3,7 +3,6 @@ FROM --platform=linux/amd64 node:25
 
 WORKDIR /app
 
-ENV NODE_ENV=production
 ENV NODE_OPTIONS=--max_old_space_size=4096
 
 # Install deps first for caching
