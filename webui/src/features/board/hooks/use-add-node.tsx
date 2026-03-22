@@ -44,6 +44,14 @@ export function useAddNoteNode() {
     const newNote = createDefaultNote({ boardId, nodeType })
     newNote.parentId = rootId
     newNote.style = applyDefaultNodeStyle(nodeType)
+    const maxListOrder = nodes.reduce((max, node) => {
+      const listOrder = node.data?.properties?.listOrder?.number
+      return Math.max(max, listOrder ?? 0)
+    }, 0)
+    newNote.properties.listOrder = {
+      type: 'number',
+      number: maxListOrder + 100,
+    }
 
     if (imageUrl) {
       newNote.properties.imageUrl = { type: 'image', image: { url: imageUrl } }

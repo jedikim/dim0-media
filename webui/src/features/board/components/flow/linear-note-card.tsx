@@ -110,7 +110,7 @@ export function LinearNoteCard({ node }: Props) {
   }, [boardCanEdit, isCodeSandbox, isWidget, node.id, openNodeSurface])
 
   const cardClass = clsx(
-    'transition rounded-lg relative bg-background overflow-hidden transition-all duration-200 group sticky-note-shadow paper-note-texture',
+    'transition rounded-lg relative bg-background overflow-hidden transition-all duration-200 group sticky-note-shadow paper-note-texture p-0.5',
     usesHostedSurface && boardCanEdit && 'cursor-pointer',
     isPinned
       ? 'ring-2 ring-secondary/60'
@@ -122,7 +122,7 @@ export function LinearNoteCard({ node }: Props) {
       {/* hover toolbar */}
       <div
         className='absolute top-0 inset-x-0 z-20 rounded-t-sm border-b border-foreground/30 pointer-events-none transition-opacity opacity-0 group-hover:opacity-100 group-hover:pointer-events-auto'
-        style={{ backgroundColor: color}}
+        style={{ backgroundColor: color }}
       >
         <div className='px-1.5 py-1 w-full h-full flex items-center justify-end gap-1'>
           <div className='flex flex-row items-center gap-2 px-1'>
@@ -184,7 +184,7 @@ export function LinearNoteCard({ node }: Props) {
 
       {/* content area */}
       <div
-        className='p-2 pt-8 min-h-[100px] max-h-[225px] overflow-x-hidden overflow-y-auto scrollbar-thin text-foreground relative z-10 space-y-1'
+        className='p-2 pt-8 min-h-[100px] max-h-[300px] overflow-x-hidden overflow-y-auto scrollbar-thin text-foreground relative z-10 space-y-1'
         onClick={() => {
           if (usesHostedSurface) {
             handleOpenSurface()
