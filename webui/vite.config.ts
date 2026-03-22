@@ -1,11 +1,20 @@
 import path from "path"
+import { readFileSync } from "fs"
 import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import { visualizer } from "rollup-plugin-visualizer"
 
+const packageJson = JSON.parse(
+  readFileSync(path.resolve(__dirname, "./package.json"), "utf8")
+) as { version?: string }
+const appVersion = packageJson.version ?? "0.0.0"
+
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(appVersion),
+  },
   plugins: [
     visualizer({
       filename: "dist/stats.html",

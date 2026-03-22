@@ -234,6 +234,9 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
                 </div>
               </SidebarMenuItem>
             </SidebarMenu>
+            <div className="px-2 w-full text-center text-[11px] text-muted-foreground">
+              v{__APP_VERSION__}
+            </div>
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
