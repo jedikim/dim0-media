@@ -2,8 +2,9 @@
 PROFILE ?= dev                 # dev | local
 ENVFILE ?= .env                # path to your env file (repo root by default)
 DIM0_VERSION ?= $(shell cat VERSION)
-COMPOSE := ENVFILE=$(ENVFILE) docker compose --env-file $(ENVFILE) -f build/docker-compose.yml
-COMPOSE_IMAGES := ENVFILE=$(ENVFILE) DIM0_VERSION=$(DIM0_VERSION) docker compose --env-file $(ENVFILE) -f build/docker-compose.images.yml
+COMPOSE := ENVFILE=$(ENVFILE) docker compose -p dim0-src --env-file $(ENVFILE) -f build/docker-compose.yml
+COMPOSE_IMAGES := ENVFILE=$(ENVFILE) DIM0_VERSION=$(DIM0_VERSION) docker compose -p dim0-images --env-file $(ENVFILE) -f build/docker-compose.images.yml
+DB_SERVICES := $(if $(filter prod,$(PROFILE)),postgres qdrant redis,postgres-$(PROFILE) qdrant-$(PROFILE) redis-$(PROFILE))
 
 # Allow: make VAR=value ...
 # Ex: make up PROFILE=local API_PORT=9090 API_HOST_PORT=9090 API_ORIGIN=http://localhost:9090
@@ -37,6 +38,10 @@ run: ## Run published images from Docker Hub using DIM0_VERSION
 .PHONY: down-run
 down-run: ## Stop published-image containers
 	$(COMPOSE_IMAGES) down --remove-orphans
+
+.PHONY: kill-run
+kill-run: ## Stop published-image containers and remove volumes
+	$(COMPOSE_IMAGES) down --volumes --remove-orphans
 
 .PHONY: rebuild
 rebuild: ## Rebuild without cache (no start)
@@ -98,11 +103,11 @@ up-webui: ## Start only webui (no deps): make up-webui SERVICE=webui-dev
 
 .PHONY: up-db
 up-db: ## Start only databases for $(PROFILE)
-	$(COMPOSE) --profile $(PROFILE) up -d postgres-$(PROFILE) qdrant-$(PROFILE) redis-$(PROFILE)
+	$(COMPOSE) --profile $(PROFILE) up -d $(DB_SERVICES)
 
 .PHONY: down-db
 down-db: ## Stop DBs for $(PROFILE)
-	$(COMPOSE) --profile $(PROFILE) stop postgres-$(PROFILE) qdrant-$(PROFILE) redis-$(PROFILE)
+	$(COMPOSE) --profile $(PROFILE) stop $(DB_SERVICES)
 
 # -------- Diagnostics --------
 .PHONY: config
