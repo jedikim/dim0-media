@@ -1,3 +1,9 @@
+## v0.1.6 (2026-03-22)
+
+### Feat
+
+- **build**: improve and add dockerization action (#8)
+
 ## v0.1.5 (2026-03-22)
 
 ### Feat
