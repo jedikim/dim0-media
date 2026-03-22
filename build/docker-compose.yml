@@ -214,10 +214,10 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
-      args:
-        ENVFILE: ${ENVFILE:-.env}
     container_name: backend-local
     profiles: ["local"]
+    volumes:
+      - ../${ENVFILE:-.env}:/.env:ro
     environment:
       DOPPLER_TOKEN: ${DOPPLER_TOKEN}
       API_HOST: 0.0.0.0
@@ -257,10 +257,10 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
-      args:
-        ENVFILE: ${ENVFILE:-.env}
     container_name: backend-dev
     profiles: ["dev"]
+    volumes:
+      - ../${ENVFILE:-.env}:/.env:ro
     environment:
       DOPPLER_TOKEN: ${DOPPLER_TOKEN}
       API_HOST: 0.0.0.0
@@ -298,10 +298,10 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
-      args:
-        ENVFILE: ${ENVFILE:-.env}
     container_name: backend-test
     profiles: ["test"]
+    volumes:
+      - ../${ENVFILE:-.env}:/.env:ro
     environment:
       DOPPLER_TOKEN: ${DOPPLER_TOKEN}
       API_HOST: 0.0.0.0
@@ -338,10 +338,10 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
-      args:
-        ENVFILE: ${ENVFILE:-.env}
     container_name: backend-staging
     profiles: ["staging"]
+    volumes:
+      - ../${ENVFILE:-.env}:/.env:ro
     environment:
       DOPPLER_TOKEN: ${DOPPLER_TOKEN}
       API_HOST: 0.0.0.0
@@ -378,10 +378,10 @@ services:
     build:
       context: ..
       dockerfile: backend/Dockerfile
-      args:
-        ENVFILE: ${ENVFILE:-.env}
     container_name: backend-prod
     profiles: ["prod"]
+    volumes:
+      - ../${ENVFILE:-.env}:/.env:ro
     environment:
       DOPPLER_TOKEN: ${DOPPLER_TOKEN}
       API_HOST: 0.0.0.0

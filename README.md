@@ -272,6 +272,48 @@ This repo includes two GitHub Actions workflows:
 The PR workflow runs `make version-check`.
 The release workflow runs on manual dispatch from `main`, bumps the version with Commitizen, syncs all manifests, commits the release artifacts, and pushes the Git tag.
 
+## 🐳 Docker Images
+
+This repo can publish public Docker Hub images for self-hosting:
+
+- `winlp4ever/dim0-backend`
+- `winlp4ever/dim0-webui`
+
+The Docker publish workflow is defined in:
+
+- `.github/workflows/docker-publish.yml`
+
+It can run in two modes:
+
+- automatically when a GitHub Release is published
+- manually from GitHub Actions with an optional version override
+
+Required repository secrets:
+
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN`
+
+Example pulls:
+
+```bash
+docker pull winlp4ever/dim0-backend:0.1.5
+docker pull winlp4ever/dim0-webui:0.1.5
+```
+
+You can also run the published images locally with the repo Makefile:
+
+```bash
+make pull
+make run
+```
+
+By default these commands use the version from the repo-root `VERSION` file.
+You can override it when needed:
+
+```bash
+make run DIM0_VERSION=0.1.5 ENVFILE=.env.local
+```
+
 ## 🧰 Tech Stack
 
 * **Backend:** Python, uv, python-dotenv, FastAPI (or your framework)
