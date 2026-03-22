@@ -1,1 +1,1 @@
-"""Top-level package for Topix."""
+"""Top-level package for Dim0."""

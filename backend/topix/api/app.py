@@ -102,7 +102,7 @@ async def main(args) -> tuple[FastAPI, int]:
 
 
 if __name__ == "__main__":
-    args = ArgumentParser(description="Run the Topix application.")
+    args = ArgumentParser(description="Run the Dim0 application.")
     args.add_argument(
         "--stage",
         default=StageEnum.LOCAL,
@@ -126,6 +126,6 @@ if __name__ == "__main__":
     app, port = asyncio.run(main(args))
 
     host = "0.0.0.0"
-    logger.info(f"Starting Topix API on {host}:{port}...")
+    logger.info(f"Starting Dim0 API on {host}:{port}...")
 
     uvicorn.run(app, host=host, port=port, log_level="info")

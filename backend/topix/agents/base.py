@@ -1,4 +1,4 @@
-"""Base class for agent managers in the Topix application."""
+"""Base class for agent managers in the Dim0 application."""
 
 import logging
 

@@ -28,7 +28,7 @@ from topix.agents.deep_research import DeepResearch
 from topix.agents.sessions import AssistantSession
 from topix.cli.utils import Renderer, SessionRun, StepRun
 
-# --------- Topix agent imports ----------
+# --------- Dim0 agent imports ----------
 from topix.setup import setup
 from topix.store.chat import ChatStore
 from topix.utils.common import gen_uid
@@ -426,7 +426,7 @@ async def main_async(
     """Run main async app."""
     global stop_requested, agent_task
 
-    # One-time Topix setup & assistant manager
+    # One-time Dim0 setup & assistant manager
     await setup("local")
     chat_store = ChatStore()
 

@@ -1,4 +1,4 @@
-# 🧩 Topix — Fullstack App (Backend + Frontend)
+# 🧩 Dim0 — Fullstack App (Backend + Frontend)
 
 Python backend + React (Vite) frontend.
 Both services share a single **root** `.env` for configuration.
@@ -30,27 +30,42 @@ API_PORT=8081
 APP_PORT=5175
 
 API_ORIGIN=http://localhost:${API_PORT}
-VITE_TOPIX_URL=${API_ORIGIN}
 
-OPENAI_API_KEY= # make sure you set this value
+VITE_API_URL=${API_ORIGIN}
+
+# model providers API keys
+# make sure you set at least the key for OpenAI
+OPENAI_API_KEY=
 GEMINI_API_KEY=
 ANTHROPIC_API_KEY=
 MISTRAL_API_KEY=
-OPENROUTER_API_KEY= # set this to activate non-OpenAI models, but you still need OPENAI_API_KEY for some functionalities
-LINKUP_API_KEY= # set this for minimum web search functionality
-TAVILY_API_KEY= # set this for web search and web navigation functionalities
+OPENROUTER_API_KEY=
+# for code execution
+DAYTONA_API_KEY=
+DAYTONA_API_URL=
+DAYTONA_TARGET=
+# for websearch
+# one of the keys for image search should be set
+LINKUP_API_KEY=
+TAVILY_API_KEY=
 PERPLEXITY_API_KEY=
+# for unsplash image search
 UNSPLASH_ACCESS_KEY=
+# for web image search
+SERPER_API_KEY=
 
 POSTGRES_HOST=
-POSTGRES_PORT=5432 # please set the correct port you have set for Postgres
+POSTGRES_PORT=5432
 QDRANT_HOST=
-QDRANT_PORT=6333 # please set the correct port you have set for Qdrant
+QDRANT_PORT=6333
 REDIS_HOST=
-REDIS_PORT=
+REDIS_PORT=6379
+REDIS_PASSWORD=
 
-JWT_SECRET_KEY= # required for JWT authentication; if not set, a random key will be generated at startup
+# For backend API JWT authentication
+JWT_SECRET_KEY=
 
+# Enable or disable tracing and logging
 OPENAI_AGENTS_DISABLE_TRACING=
 OPENAI_AGENTS_DONT_LOG_MODEL_DATA=
 OPENAI_AGENTS_DONT_LOG_TOOL_DATA=
@@ -227,7 +242,7 @@ project-root/
 
 ## 🔖 Versioning
 
-Topix uses one shared semantic version for the whole product.
+Dim0 uses one shared semantic version for the whole product.
 The source of truth is the repo-root `VERSION` file, and release tooling syncs that version into:
 
 - `backend/pyproject.toml`

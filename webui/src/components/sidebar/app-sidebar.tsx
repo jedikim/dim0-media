@@ -122,8 +122,8 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
                   className="h-auto py-2"
                   onClick={() => navigate({ to: "/" })}
                 >
-                  <img src="/dim0.svg" alt="Topix Home" className="h-7 w-7 shrink-0" />
-                  <span className="font-medium">Topix</span>
+                  <img src="/dim0.svg" alt="Dim0 Home" className="h-7 w-7 shrink-0" />
+                  <span className="font-medium">Dim0</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

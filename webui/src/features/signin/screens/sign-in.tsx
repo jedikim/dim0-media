@@ -107,7 +107,7 @@ export function SigninPage() {
       <Card className="bg-card text-card-foreground border border-border shadow-xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl flex flex-col items-center justify-center gap-2">
-            <img src="/dim0.svg" alt="Topix Logo" className="h-12 w-12 aspect-square object-contain" />
+            <img src="/dim0.svg" alt="Dim0 Logo" className="h-12 w-12 aspect-square object-contain" />
             <span className="text-muted-foreground">Welcome back!</span>
           </CardTitle>
           <CardDescription className="text-muted-foreground">
