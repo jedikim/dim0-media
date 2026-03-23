@@ -54,7 +54,7 @@ export const ReasoningStepRow = ({
             />
           </button>
           {viewMore && (
-            <div className='mt-2 text-muted-foreground rounded-lg border border-border p-2 bg-sidebar shadow-sm'>
+            <div className='mt-2 text-muted-foreground/80 rounded-lg border border-border p-2 bg-sidebar border-dashed [&_p]:!text-sm [&_li]:!text-sm italic'>
               <MarkdownView content={step.reasoning} />
             </div>
           )}

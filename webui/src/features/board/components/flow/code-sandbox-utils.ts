@@ -40,10 +40,3 @@ export function highlightPython(code: string) {
   return hljs.highlight(code || " ", { language: "python" }).value
 }
 
-
-/**
- * Normalize code while preserving user-authored line content.
- */
-export function normalizeCode(code: string) {
-  return code.replace(/\n+$/g, "")
-}

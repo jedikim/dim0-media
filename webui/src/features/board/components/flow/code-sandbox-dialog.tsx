@@ -13,7 +13,6 @@ import type { Note } from "../../types/note"
 import { CodeArea } from "./code-area"
 import {
   EMPTY_CODE_EXECUTION_RESULT,
-  normalizeCode,
   ROSE_PINE_DARK,
   ROSE_PINE_LIGHT,
 } from "./code-sandbox-utils"
@@ -49,12 +48,11 @@ export const CodeSandboxDialog = memo(function CodeSandboxDialog({
   const saveDraft = useCallback((code: string) => {
     if (!note) return
 
-    const normalizedCode = normalizeCode(code)
     updateNodeByIdPersist(note.id, (node) => ({
       ...node,
       data: {
         ...node.data,
-        content: { markdown: normalizedCode },
+        content: { markdown: code },
         properties: {
           ...node.data.properties,
           programmingLanguage: { type: "text", text: "python" },
@@ -82,17 +80,12 @@ export const CodeSandboxDialog = memo(function CodeSandboxDialog({
   const handleExecute = useCallback(async () => {
     if (!note?.graphUid || isExecuting) return
 
-    const normalizedCode = normalizeCode(codeDraft)
-    if (normalizedCode !== codeDraft) {
-      setCodeDraft(normalizedCode)
-    }
-
     setIsExecuting(true)
     try {
-      saveDraft(normalizedCode)
+      saveDraft(codeDraft)
 
       await updateNote(note.graphUid, note.id, {
-        content: { markdown: normalizedCode },
+        content: { markdown: codeDraft },
         properties: {
           programmingLanguage: { type: "text", text: "python" },
         } as Note["properties"],

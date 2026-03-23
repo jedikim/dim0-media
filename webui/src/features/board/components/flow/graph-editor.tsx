@@ -114,10 +114,10 @@ function EmptyGraphHint({ isMobile }: EmptyGraphHintProps) {
           className="h-auto w-full max-w-[520px]"
           shadowColor="color-mix(in oklab, var(--accent-foreground) 10%, transparent)"
           cardColor="var(--accent)"
-          strokeColor="color-mix(in oklab, var(--accent-foreground) 90%, transparent)"
+          strokeColor="color-mix(in oklab, var(--accent-foreground) 40%, transparent)"
           aria-hidden="true"
         />
-        <p className="mt-4 max-w-[32rem] text-balance text-lg leading-relaxed text-sidebar-foreground/75">
+        <p className="mt-4 max-w-[32rem] text-balance text-lg leading-relaxed text-sidebar-foreground/50">
           Start adding components and open assistant from{" "}
           <span className="font-semibold text-sidebar-foreground">{assistantLocationLabel}</span>
         </p>

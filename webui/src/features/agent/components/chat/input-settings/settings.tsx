@@ -1,5 +1,4 @@
 import { useListAvailableServices } from "@/features/agent/api/list-available-services"
-import { DeepResearchChoiceMenu } from "./deep-research"
 import { MessageBoardContextChoiceMenu } from "./message-board-context"
 import { ToolsMenu } from "./tools-menu"
 
@@ -22,7 +21,6 @@ export const InputSettings = ({
   return (
     <>
       <ToolsMenu memorySearchAvailable={memorySearchAvailable} />
-      <DeepResearchChoiceMenu />
       {showBoardContextOption && <MessageBoardContextChoiceMenu />}
     </>
   )

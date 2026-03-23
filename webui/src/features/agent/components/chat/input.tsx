@@ -14,6 +14,7 @@ import { ChatUrl } from '@/routes'
 import { useDescribeChat } from '../../api/describe-chat'
 import type { SendMessageRequestPayload } from '../../api/types'
 import { WelcomeMessage } from './welcome-message'
+import { StarterPromptPills } from './starter-prompts'
 import { InputSettings } from './input-settings/settings'
 import { useGraphStore } from '@/features/board/store/graph-store'
 import { useShallow } from 'zustand/shallow'
@@ -170,6 +171,19 @@ export const InputBar = ({
     await proceedSend(input, false)
   }
 
+  /**
+   * Send a predefined starter prompt through the normal first-message flow.
+   */
+  const handleStarterPromptSelect = async (prompt: string) => {
+    if (isStreaming) return
+    if (useDeepResearch) {
+      setInput(prompt)
+      setShowDRDialog(true)
+      return
+    }
+    await proceedSend(prompt, false)
+  }
+
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -190,7 +204,7 @@ export const InputBar = ({
   }
 
   const commandIconClass = clsx(
-    'ml-auto',
+    'ml-auto !p-2 !size-8',
     isStreaming ? 'cursor-not-allowed' : 'cursor-pointer'
   )
 
@@ -203,41 +217,40 @@ export const InputBar = ({
         'absolute inset-x-0 p-2 pb-0 sm:pb-0 sm:p-4 z-20 gap-12',
         chatId ? 'bottom-0' : 'bottom-1/2 transform translate-y-1/2'
       )
-      : 'w-full mt-auto gap-4 px-4 pb-4'
+      : clsx(
+        'w-full gap-4 px-4 pb-4',
+        chatId ? 'mt-auto' : 'flex-1 justify-center'
+      )
   )
 
   const inboxClass = clsx(
-    'rounded-2xl relative flex flex-row items-center space-y-1 items-stretch text-card-foreground text-base p-2 border transition-colors transition-shadow',
+    'rounded-2xl relative flex flex-col text-card-foreground text-base p-2 border transition-colors transition-shadow',
     chatId ? 'bg-accent backdrop-blur-lg supports-[backdrop-filter]:bg-accent/70 dark:border dark:border-border/50 shadow-lg' :
       'bg-accent text-base shadow-xl',
     'border-transparent hover:border-border/70 focus-within:border-border/70'
   )
+  const showStarterPrompts = !chatId && !isStreaming && Boolean(attachedBoardId)
 
   return (
     <div className={className}>
-      {isFloating && !chatId && <WelcomeMessage />}
+      {!chatId && (
+        <WelcomeMessage
+          afterContent={showStarterPrompts ? <StarterPromptPills onSelect={handleStarterPromptSelect} /> : undefined}
+        />
+      )}
 
       <div className={clsx(
         "flex flex-col space-y-2 w-full items-center justify-center",
         isFloating ? '' : 'max-w-[900px] mx-auto'
       )}>
         <div className="relative w-full max-w-[800px] mx-auto">
-          <div className="absolute -top-9 left-0 transform flex flex-row items-center gap-1">
-            <InputSettings
-              showBoardContextOption={enableSelectionContext}
-              memorySearchAvailable={memorySearchAvailable}
-            />
-          </div>
-
-          <div
-            className={inboxClass}
-          >
-            <div className="flex-1 p-2 flex items-center justify-center">
+          <div className={inboxClass}>
+            <div className="flex-1 p-2">
               <TextareaAutosize
                 onKeyDown={handleKeyDown}
                 onChange={(e) => setInput(e.target.value)}
                 value={input}
-                minRows={2}
+                minRows={1}
                 maxRows={15}
                 placeholder="Ask anything..."
                 className="w-full h-full resize-none border-none outline-none bg-transparent text-base"
@@ -245,7 +258,14 @@ export const InputBar = ({
               />
             </div>
 
-            <div className="flex items-center justify-center">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-1">
+                <InputSettings
+                  showBoardContextOption={enableSelectionContext}
+                  memorySearchAvailable={memorySearchAvailable}
+                />
+              </div>
+
               <SendButton
                 loadingStatus={isStreaming ? 'loading' : 'loaded'}
                 disabled={isStreaming}

@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { ChatAdd01Icon, Clock02Icon, Message02Icon, PlusSignIcon } from "@hugeicons/core-free-icons"
-import { ThemedWelcome } from "./chat/welcome-message"
 import { useNavigate, useParams, useRouterState } from "@tanstack/react-router"
 import { useAppStore } from "@/store"
 
@@ -244,7 +243,8 @@ const ChatBody = ({
       </div>
 
       <div className={cn(
-        "flex-1 w-full min-h-0",
+        "w-full min-h-0",
+        chatId ? "flex-1" : "flex-none",
         showHistoricalChats ? "flex flex-col items-center" : "flex flex-col"
       )}>
         {chatId ? (
@@ -255,16 +255,7 @@ const ChatBody = ({
               </div>
             </div>
           </div>
-        ) : (
-          showHistoricalChats && (
-            <div className="flex flex-1 w-full items-center justify-center text-sm text-muted-foreground px-4 text-center">
-              <ThemedWelcome
-                name="Panda"
-                message={"Select a chat from history or start a new conversation below."}
-              />
-            </div>
-          )
-        )}
+        ) : null}
       </div>
 
       <InputBar
