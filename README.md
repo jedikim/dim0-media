@@ -6,14 +6,28 @@
 
 Dim0 (read "dee-moh") is an agent-native thinking canvas where notes, documents, code, widgets, and AI agents work together on one board.
 
+Built for researchers, founders, developers, and visual thinkers who want AI, notes, and structure in one workspace.
+
 <p align="center">
   ❤️ If you like Dim0, consider giving this repo a star to support the project.
 </p>
 
 ![Dim0 app screenshot](docs/images/app-screenshot.png)
+*Canvas workspace: notes, agent outputs, and structure living on the same board.*
 
-**Website:** https://dim0.net  
+![Dim0 code, widget, and mindmap examples](docs/images/code-widget-mindmap.png)
+*Generated artifacts: code, widgets, and mind maps created directly inside the canvas.*
+
+**Website:** https://dim0.net
 **App:** https://app.dim0.net
+
+## Try Dim0
+
+If you are visiting Dim0 for the first time, start here:
+
+- Visit the website to understand the product: https://dim0.net
+- Open the hosted app to try it directly: https://app.dim0.net
+- Use the local setup below only if you want to self-host or contribute
 
 ## What It Is
 
@@ -21,17 +35,23 @@ Dim0 is built around a simple idea: the canvas should be the primary interface f
 
 Instead of splitting work across docs, whiteboards, chat tools, code editors, and dashboards, Dim0 brings them together on one continuous surface.
 
+## How It Works
+
+1. Start with an idea and add notes directly on the canvas
+2. Chat with the agent to explore, search, and find interesting information
+3. Save useful outputs back onto the board as notes
+4. Keep editing and arranging everything directly on the canvas
+5. Turn strong ideas into mind maps, schemas, or visual widgets
+6. Frame the important parts and present directly from the board
+
 ## What You Can Do
 
-- Think spatially with shapes, notes, and connected graph nodes
-- Turn notes into visual structure with AI
-- Create folder nodes to organize your work hierarchically across the board
+- Think spatially with notes, shapes, and connected graph nodes
+- Work with a board-aware AI agent that can search, reason, and write back onto the canvas
 - Upload documents and keep their context attached to the board
-- Run code inside nodes
-- Generate live HTML/JS widgets on the canvas
-- Create frame nodes to group and highlight important parts of the board
+- Turn ideas into mind maps, schemas, and live HTML/JS widgets
+- Create nested boards to organize work hierarchically
 - Present directly from the canvas by walking through frames
-- Work with a board-aware AI agent that can search, reason, and write directly back onto the board
 
 ## Why It's Different
 
@@ -78,7 +98,7 @@ This repository contains the full Dim0 product stack:
 
 ### Environment Setup
 
-Before running Dim0, create a root `.env` from `.env.sample` and add your keys:
+Before running Dim0, create a root `.env` from `.env.sample` and review the variables there:
 
 ```bash
 cp .env.sample .env
@@ -154,48 +174,10 @@ The frontend uses `APP_PORT` from `.env` and defaults to `5175`.
 
 ## 🔑 Environment Variables
 
-The root `.env.sample` includes the main configuration surface:
+The root `.env.sample` is the source of truth for available configuration.
+It includes app ports and origins, model provider keys, search and image provider keys, local service settings, and backend auth and tracing options.
 
-```bash
-DOPPLER_TOKEN=
-
-API_PORT=8081
-APP_PORT=5175
-
-API_ORIGIN=http://localhost:${API_PORT}
-
-VITE_API_URL=${API_ORIGIN}
-
-OPENAI_API_KEY=
-GEMINI_API_KEY=
-ANTHROPIC_API_KEY=
-MISTRAL_API_KEY=
-OPENROUTER_API_KEY=
-
-DAYTONA_API_KEY=
-DAYTONA_API_URL=
-DAYTONA_TARGET=
-
-LINKUP_API_KEY=
-TAVILY_API_KEY=
-PERPLEXITY_API_KEY=
-UNSPLASH_ACCESS_KEY=
-SERPER_API_KEY=
-
-POSTGRES_HOST=
-POSTGRES_PORT=5432
-QDRANT_HOST=
-QDRANT_PORT=6333
-REDIS_HOST=
-REDIS_PORT=6379
-REDIS_PASSWORD=
-
-JWT_SECRET_KEY=
-
-OPENAI_AGENTS_DISABLE_TRACING=
-OPENAI_AGENTS_DONT_LOG_MODEL_DATA=
-OPENAI_AGENTS_DONT_LOG_TOOL_DATA=
-```
+Use it as a checklist when setting up your local environment.
 
 ## 🐳 Docker and Deployment
 
