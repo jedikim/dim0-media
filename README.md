@@ -4,7 +4,7 @@
 
 <h1 align="center">Dim0 - The Thinking Canvas</h1>
 
-Dim0 is an agent-native thinking canvas where notes, documents, code, widgets, and AI agents work together on one board.
+Dim0 (read "dee-moh") is an agent-native thinking canvas where notes, documents, code, widgets, and AI agents work together on one board.
 
 <p align="center">
   ❤️ If you like Dim0, consider giving this repo a star to support the project.
@@ -25,9 +25,12 @@ Instead of splitting work across docs, whiteboards, chat tools, code editors, an
 
 - Think spatially with shapes, notes, and connected graph nodes
 - Turn notes into visual structure with AI
+- Create folder nodes to organize your work hierarchically across the board
 - Upload documents and keep their context attached to the board
 - Run code inside nodes
 - Generate live HTML/JS widgets on the canvas
+- Create frame nodes to group and highlight important parts of the board
+- Present directly from the canvas by walking through frames
 - Work with a board-aware AI agent that can search, reason, and write directly back onto the board
 
 ## Why It's Different
@@ -42,6 +45,7 @@ Knowledge becomes fragmented.
 Important work disappears into chat history.
 
 Dim0 is different: it is built as an agent-native canvas from the start.
+The board is not just where work happens. It is also where you present it.
 
 The agent is not just a chatbot. It can:
 
@@ -64,7 +68,7 @@ This repository contains the full Dim0 product stack:
 - `webui/`: React frontend for the canvas, chat, and board UX
 - `build/`: Docker Compose and build-related assets
 
-## Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 
@@ -148,7 +152,7 @@ npm run dev
 
 The frontend uses `APP_PORT` from `.env` and defaults to `5175`.
 
-## Environment Variables
+## 🔑 Environment Variables
 
 The root `.env.sample` includes the main configuration surface:
 
@@ -193,7 +197,7 @@ OPENAI_AGENTS_DONT_LOG_MODEL_DATA=
 OPENAI_AGENTS_DONT_LOG_TOOL_DATA=
 ```
 
-## Docker and Deployment
+## 🐳 Docker and Deployment
 
 Deployment and local services are managed through Docker Compose with Makefile shortcuts.
 
@@ -264,7 +268,7 @@ make down-run
 make kill-run
 ```
 
-## Versioning and Releases
+## 🏷️ Versioning and Releases
 
 Dim0 uses one shared semantic version for the whole product. The source of truth is the repo-root `VERSION` file, and release tooling syncs that version into:
 
@@ -284,13 +288,13 @@ make version-bump
 
 The repository also includes GitHub Actions workflows for version checks, releases, and Docker publishing.
 
-## Troubleshooting
+## 🛠️ Troubleshooting
 
 - If the frontend cannot reach the API, check `VITE_API_URL` in `.env`
 - If ports are already in use, change `API_PORT` or `APP_PORT`
 - If env changes are not applied, restart the backend and frontend after editing `.env`
 - Use `make config` to inspect the fully resolved Compose configuration
 
-## License
+## 📄 License
 
 This repository is available under the MIT License.

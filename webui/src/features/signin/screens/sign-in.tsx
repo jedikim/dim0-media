@@ -49,7 +49,7 @@ export function SigninPage() {
       navigate({ to: "/verify-email", replace: true })
       return
     }
-    navigate({ to: "/chats", replace: true })
+    navigate({ to: "/", replace: true })
   }, [navigate, queryClient, setEmailVerificationEnabled, setEmailVerified, setUserEmail, setUserId, setUserPlan])
 
   const localSigninMutation = useMutation({

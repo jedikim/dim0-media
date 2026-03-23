@@ -13,7 +13,7 @@ import { useGraphStore } from '../../store/graph-store'
 
 const RESUME_DELAY = 180
 const MIN_HEIGHT = 320
-const MAX_HEIGHT = 500
+const MAX_HEIGHT = 320
 
 type SheetNodeViewProps = {
   note: NoteWithPin

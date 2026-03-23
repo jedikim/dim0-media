@@ -35,7 +35,7 @@ export function VerifyEmailPage() {
       setEmailVerificationEnabled(true)
       setEmailVerified(true)
       setInfoMessage("Email verified successfully. Redirecting...")
-      navigate({ to: "/chats", replace: true })
+      navigate({ to: "/", replace: true })
     },
     onError: () => {
       setInfoMessage("Verification link is invalid or expired.")
@@ -48,7 +48,7 @@ export function VerifyEmailPage() {
       setEmailVerificationEnabled(status.enabled)
       setEmailVerified(status.verified)
       if (!status.enabled || status.verified) {
-        navigate({ to: "/chats", replace: true })
+        navigate({ to: "/", replace: true })
         return
       }
       setInfoMessage("Email is still not verified yet.")

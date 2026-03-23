@@ -29,7 +29,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { SubscriptionsMenuItem } from './subscription'
 import { ModeToggle } from '@/components/mode-toggle'
 import { HomeMenuItem } from './home'
 import { useCheckEleInView } from '@/hooks/use-check-ele-in-view'
@@ -137,7 +136,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
               <SidebarGroupContent>
                 <SidebarMenu>
                   <HomeMenuItem />
-                  <SubscriptionsMenuItem />
+                  {/* <SubscriptionsMenuItem /> */}
                   <DashboardMenuItem />
                   <NewBoardItem />
                   {boardItems}

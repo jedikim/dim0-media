@@ -45,10 +45,8 @@ export const convertNoteToNode = (note: Note | Document): NoteNode => {
   }
 
   const type = note.style.type
-  const isSheet = type === 'sheet'
-
-  const width = !isSheet ? size.width : undefined
-  const height = !isSheet ? size.height : undefined
+  const width = size.width
+  const height = size.height
 
   const roughSeed = uuidToNumber(noteId)
 

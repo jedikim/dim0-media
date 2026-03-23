@@ -105,6 +105,9 @@ export const DocumentUploadDialog = ({
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
             />
             <p className="text-xs text-muted-foreground">PDF files only.</p>
+            <p className="text-xs text-muted-foreground">
+              Document must stay within both limits: 30 pages max and 5 MB max.
+            </p>
           </div>
           <div className="flex justify-end gap-2">
             <Button
