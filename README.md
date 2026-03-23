@@ -1,27 +1,156 @@
-# 🧩 Dim0 — Fullstack App (Backend + Frontend)
+<p align="center">
+  <img src="docs/images/dim0-icon.png" alt="Dim0 icon" width="96" />
+</p>
 
-Python backend + React (Vite) frontend.
-Both services share a single **root** `.env` for configuration.
+<h1 align="center">Dim0 - The Thinking Canvas</h1>
 
----
+Dim0 is an agent-native thinking canvas where notes, documents, code, widgets, and AI agents work together on one board.
 
-## 📦 Prerequisites
+<p align="center">
+  ❤️ If you like Dim0, consider giving this repo a star to support the project.
+</p>
 
-- **Node.js** (LTS recommended)
-- **uv** (Python dependency manager)
-- **Docker + Docker Compose** (optional, recommended for DB/dev/prod)
+![Dim0 app screenshot](docs/images/app-screenshot.png)
 
----
+**Website:** https://dim0.net  
+**App:** https://app.dim0.net
 
-## ⚙️ Environment Setup
+## What It Is
 
-Copy the sample file and edit values as needed:
+Dim0 is built around a simple idea: the canvas should be the primary interface for thinking with AI, not a chat sidebar.
+
+Instead of splitting work across docs, whiteboards, chat tools, code editors, and dashboards, Dim0 brings them together on one continuous surface.
+
+## What You Can Do
+
+- Think spatially with shapes, notes, and connected graph nodes
+- Turn notes into visual structure with AI
+- Upload documents and keep their context attached to the board
+- Run code inside nodes
+- Generate live HTML/JS widgets on the canvas
+- Work with a board-aware AI agent that can search, reason, and write directly back onto the board
+
+## Why It's Different
+
+Most tools add AI as a layer on top of an existing product.
+AI feels like an add-on, not a native part of the workflow.
+
+Other tools put everything into chat.
+Over time, context gets buried across too many conversations.
+
+Knowledge becomes fragmented.
+Important work disappears into chat history.
+
+Dim0 is different: it is built as an agent-native canvas from the start.
+
+The agent is not just a chatbot. It can:
+
+- Read live board context
+- Reason in multiple steps
+- Use tools in parallel
+- Search the web
+- Execute code
+- Create and edit nodes directly on the board
+
+## Core Idea
+
+**Your thoughts, your notes, your agents. One canvas.**
+
+## Monorepo Structure
+
+This repository contains the full Dim0 product stack:
+
+- `backend/`: API, agent logic, prompts, model integrations, persistence
+- `webui/`: React frontend for the canvas, chat, and board UX
+- `build/`: Docker Compose and build-related assets
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js (LTS recommended)
+- `uv` for Python dependency management
+- Docker + Docker Compose (optional, recommended for local services)
+
+### Environment Setup
+
+Before running Dim0, create a root `.env` from `.env.sample` and add your keys:
 
 ```bash
 cp .env.sample .env
-````
+```
 
-`.env.sample` (defaults):
+For now, please provide at least:
+
+- `OPENAI_API_KEY`
+- `MISTRAL_API_KEY`
+- `OPENROUTER_API_KEY`
+- `LINKUP_API_KEY`
+
+This gives the product a reliable minimum setup today.
+We will keep simplifying this more and more.
+
+Important notes:
+
+- Both backend and frontend read the root `.env`
+- Only variables prefixed with `VITE_` are exposed to the frontend
+
+### Run Published Images
+
+Pull and start the published stack:
+
+```bash
+make pull
+make run
+```
+
+Open `http://localhost:3000`.
+
+Stop it:
+
+```bash
+make down-run
+```
+
+Stop it and remove volumes:
+
+```bash
+make kill-run
+```
+
+### Local Development
+
+If you want to run the source code locally instead of the published images, use the steps below.
+
+#### Start Local Databases
+
+```bash
+make up-db
+```
+
+#### Run the Backend
+
+```bash
+cd backend
+uv sync
+uv run python -m topix.api.app
+```
+
+The backend uses `API_PORT` from `.env` and defaults to `8081`.
+
+#### Run the Frontend
+
+```bash
+cd webui
+npm install
+npm run dev
+```
+
+The frontend uses `APP_PORT` from `.env` and defaults to `5175`.
+
+## Environment Variables
+
+The root `.env.sample` includes the main configuration surface:
 
 ```bash
 DOPPLER_TOKEN=
@@ -33,25 +162,20 @@ API_ORIGIN=http://localhost:${API_PORT}
 
 VITE_API_URL=${API_ORIGIN}
 
-# model providers API keys
-# make sure you set at least the key for OpenAI
 OPENAI_API_KEY=
 GEMINI_API_KEY=
 ANTHROPIC_API_KEY=
 MISTRAL_API_KEY=
 OPENROUTER_API_KEY=
-# for code execution
+
 DAYTONA_API_KEY=
 DAYTONA_API_URL=
 DAYTONA_TARGET=
-# for websearch
-# one of the keys for image search should be set
+
 LINKUP_API_KEY=
 TAVILY_API_KEY=
 PERPLEXITY_API_KEY=
-# for unsplash image search
 UNSPLASH_ACCESS_KEY=
-# for web image search
 SERPER_API_KEY=
 
 POSTGRES_HOST=
@@ -62,188 +186,87 @@ REDIS_HOST=
 REDIS_PORT=6379
 REDIS_PASSWORD=
 
-# For backend API JWT authentication
 JWT_SECRET_KEY=
 
-# Enable or disable tracing and logging
 OPENAI_AGENTS_DISABLE_TRACING=
 OPENAI_AGENTS_DONT_LOG_MODEL_DATA=
 OPENAI_AGENTS_DONT_LOG_TOOL_DATA=
 ```
 
-> Only variables prefixed with `VITE_` are exposed to the **frontend**.
-> Both backend and frontend read the **root** `.env` automatically.
-> To have a minimal working app, please set at least `OPENAI_API_KEY` (to enable OpenAI LLMs and text embedding model), `LINKUP_API_KEY` or `TAVILY_API_KEY` for web search, and `JWT_SECRET_KEY` for jwt authentication.
-> In production you can set the `OPENAI_AGENTS_DISABLE_TRACING`, `OPENAI_AGENTS_DONT_LOG_MODEL_DATA`, `OPENAI_AGENTS_DONT_LOG_TOOL_DATA`, this will reduce loggings and disable tracing.
+## Docker and Deployment
 
----
+Deployment and local services are managed through Docker Compose with Makefile shortcuts.
 
-## 🧠 Development
+### Core Commands
 
-### 0) Start databases (first time / whenever you need DBs)
+| Command | What it does |
+| --- | --- |
+| `make up` | Build if needed and start all services |
+| `make up-build` | Rebuild images, then start all services |
+| `make build` | Build images only |
+| `make rebuild` | Rebuild images without cache |
+| `make down` | Stop and remove containers |
+| `make kill` | Stop and remove containers, images, and volumes |
 
-```bash
-make up-db
-```
+### Service and Debug Commands
 
-### 1) Backend
+| Command | What it does |
+| --- | --- |
+| `make ps` | Show service status |
+| `make logs` | Tail logs for all services |
+| `make logs-s SERVICE=backend-dev` | Tail logs for one service |
+| `make up-s SERVICE=backend-dev` | Start one service |
+| `make build-s SERVICE=webui-dev` | Build one service |
+| `make restart-s SERVICE=backend-dev` | Rebuild and restart one service |
+| `make exec SERVICE=backend-dev CMD="bash"` | Open a shell in a service |
 
-```bash
-cd backend
-uv sync
-uv run python -m topix.api.app
-```
+### Database Shortcuts
 
-* Uses `API_PORT` from `.env` (default **8081**) — **no `--port` flag needed**.
-* Temporary override:
+| Command | What it does |
+| --- | --- |
+| `make up-db` | Start only database services |
+| `make down-db` | Stop only database services |
 
-  ```bash
-  API_PORT=9000 uv run python -m topix.api.app
-  ```
+### Useful Overrides
 
-### 2) Frontend
-
-```bash
-cd webui
-npm install
-npm run dev
-```
-
-* Runs on `APP_PORT` from `.env` (default **5175**).
-* Connects to backend via `VITE_TOPIX_URL`.
-
-Open: [http://localhost:5175](http://localhost:5175)
-
----
-
-## 🚀 Production (Frontend)
-
-Build & preview locally:
-
-```bash
-cd webui
-npm run build
-npx serve dist/
-```
-
-Served on port **3000** by default.
-
----
-
-## ☁️ Deployment & Containers
-
-Deployment and local services are managed via **Docker Compose** with **Makefile** shortcuts.
-
-### Profiles & Settings
-
-* `PROFILE` controls the compose profile: `dev` (default) or `local`.
-* `ENVFILE` controls which env file is passed to compose (default `.env`).
-
-Override on the fly:
+You can override the compose profile and env file at invocation time:
 
 ```bash
 make up PROFILE=local ENVFILE=.env
 ```
 
-### Core lifecycle
-
-| Command         | What it does                                                          |
-| --------------- | --------------------------------------------------------------------- |
-| `make up`       | Build (if needed) + start **all** services for the selected `PROFILE` |
-| `make up-build` | Force rebuild images, then start all services                         |
-| `make build`    | (Re)build images only                                                 |
-| `make rebuild`  | Rebuild images **without cache**                                      |
-| `make down`     | Stop & remove containers (keeps images & volumes)                     |
-| `make kill`     | Stop & remove containers, **images & volumes** (**wipes DB data**)    |
-
-### Visibility & debugging
-
-| Command                           | What it does                                        |
-| --------------------------------- | --------------------------------------------------- |
-| `make ps`                         | Show status of containers for the current `PROFILE` |
-| `make logs`                       | Tail logs of all services                           |
-| `make logs-s SERVICE=backend-dev` | Tail logs of a single service                       |
-
-### Service-level controls
-
-| Command                                    | Example                                |
-| ------------------------------------------ | -------------------------------------- |
-| `make up-s SERVICE=backend-dev`            | Start one service (inherits `PROFILE`) |
-| `make build-s SERVICE=webui-dev`           | Build one service                      |
-| `make restart-s SERVICE=backend-dev`       | Rebuild & restart one service          |
-| `make exec SERVICE=backend-dev CMD="bash"` | Exec into a service shell              |
-
-### Handy shortcuts
-
-| Command        | What it does                              |
-| -------------- | ----------------------------------------- |
-| `make up-db`   | Start only DBs (`postgres-*`, `qdrant-*`) |
-| `make down-db` | Stop only DBs                             |
-
-### Diagnostics & cleanup
-
-| Command       | What it does                                              |
-| ------------- | --------------------------------------------------------- |
-| `make config` | Print fully-resolved compose config (after env expansion) |
-| `make prune`  | Docker-wide cleanup of stopped/unused resources           |
-
-### Deploy the full stack
+You can also override ports and origins for quick tests:
 
 ```bash
-make up
+make up PROFILE=dev API_PORT=9090 API_HOST_PORT=9090 API_ORIGIN=http://localhost:9090
 ```
 
-Stop everything:
+## Docker Images
+
+This repo can publish public Docker Hub images for self-hosting:
+
+- `winlp4ever/dim0-backend`
+- `winlp4ever/dim0-webui`
+
+Example:
 
 ```bash
-make down
+docker pull winlp4ever/dim0-backend:0.1.5
+docker pull winlp4ever/dim0-webui:0.1.5
 ```
 
-> You can also override ports/URLs at invocation (useful for quick tests):
->
-> ```bash
-> make up PROFILE=dev API_PORT=9090 API_HOST_PORT=9090 API_ORIGIN=http://localhost:9090
-> ```
+You can also run the published images locally:
 
----
-
-## 🧩 Project Structure
-
-```
-project-root/
-├─ .env                # shared env (copy from .env.sample)
-├─ .env.sample
-├─ Makefile            # docker-compose shortcuts
-├─ build/
-│  └─ docker-compose.yml
-├─ backend/
-│  └─ topix/api/app.py (module entrypoint)
-└─ webui/
-   ├─ vite.config.ts
-   └─ src/
+```bash
+make pull
+make run
+make down-run
+make kill-run
 ```
 
----
+## Versioning and Releases
 
-## 💡 Tips
-
-* After editing `.env`, **restart** dev servers to apply changes.
-* In frontend code, read variables via `import.meta.env.*` (e.g. `import.meta.env.VITE_TOPIX_URL`).
-* For one-shot local overrides, set env inline (e.g. `APP_PORT=3001 npm run dev`).
-* Need a single command to boot everything for dev? Use:
-
-  ```bash
-  make up-db && (cd backend && uv run python -m topix.api.app) & (cd webui && npm run dev)
-  ```
-
-  *(or add a dedicated `make dev` target if you prefer)*
-
----
-
-## 🔖 Versioning
-
-Dim0 uses one shared semantic version for the whole product.
-The source of truth is the repo-root `VERSION` file, and release tooling syncs that version into:
+Dim0 uses one shared semantic version for the whole product. The source of truth is the repo-root `VERSION` file, and release tooling syncs that version into:
 
 - `backend/pyproject.toml`
 - `webui/package.json`
@@ -251,106 +274,23 @@ The source of truth is the repo-root `VERSION` file, and release tooling syncs t
 
 Version bumps use Commitizen with Conventional Commits.
 
-Check that manifests match `VERSION`:
+Useful commands:
 
 ```bash
 make version-check
-```
-
-Sync manifests from `VERSION`:
-
-```bash
 make version-sync
-```
-
-Bump the next semantic version and sync manifests:
-
-```bash
 make version-bump
 ```
 
-The `version-bump` target uses `uv` to run Commitizen, so no global `cz` install is required.
+The repository also includes GitHub Actions workflows for version checks, releases, and Docker publishing.
 
-### GitHub Flow
+## Troubleshooting
 
-The recommended rule set is:
+- If the frontend cannot reach the API, check `VITE_API_URL` in `.env`
+- If ports are already in use, change `API_PORT` or `APP_PORT`
+- If env changes are not applied, restart the backend and frontend after editing `.env`
+- Use `make config` to inspect the fully resolved Compose configuration
 
-- every pull request targeting `main` must pass version sync checks
-- releases happen only from `main`
-- releases are triggered manually with a chosen semantic bump: `patch`, `minor`, or `major`
+## License
 
-This repo includes two GitHub Actions workflows:
-
-- `.github/workflows/version-check.yml`
-- `.github/workflows/release.yml`
-
-The PR workflow runs `make version-check`.
-The release workflow runs on manual dispatch from `main`, bumps the version with Commitizen, syncs all manifests, commits the release artifacts, and pushes the Git tag.
-
-## 🐳 Docker Images
-
-This repo can publish public Docker Hub images for self-hosting:
-
-- `winlp4ever/dim0-backend`
-- `winlp4ever/dim0-webui`
-
-The Docker publish workflow is defined in:
-
-- `.github/workflows/docker-publish.yml`
-
-It can run in two modes:
-
-- automatically when a GitHub Release is published
-- manually from GitHub Actions with an optional version override
-
-Required repository secrets:
-
-- `DOCKERHUB_USERNAME`
-- `DOCKERHUB_TOKEN`
-
-Example pulls:
-
-```bash
-docker pull winlp4ever/dim0-backend:0.1.5
-docker pull winlp4ever/dim0-webui:0.1.5
-```
-
-You can also run the published images locally with the repo Makefile:
-
-```bash
-make pull
-make run
-```
-
-By default these commands use the version from the repo-root `VERSION` file.
-You can override it when needed:
-
-```bash
-make run DIM0_VERSION=0.1.5 ENVFILE=.env.local
-```
-
-## 🧰 Tech Stack
-
-* **Backend:** Python, uv, python-dotenv, FastAPI (or your framework)
-* **Frontend:** React, Vite
-* **Infra:** Docker Compose, Makefile helpers
-* **DBs:** Postgres, Qdrant (via Compose)
-
----
-
-## 🆘 Troubleshooting
-
-* **Frontend can’t reach API:** check `VITE_TOPIX_URL` in `.env` and browser console.
-* **Ports already in use:** change `API_PORT` / `APP_PORT` in `.env` or stop conflicting processes.
-* **Env not applied:** ensure you edited the **root** `.env` and restarted services; try `make config` to confirm env expansion.
-
----
-
-## 📄 Ongoing updates on new features and integrations
-
-We are actively adding new features to the project. Stay tuned here for the latest updates:
-* 🔜 Coming soon - Integrate your documents to your projects, and query the agent on them.
-* 🔜 Coming soon - Modify your graphs with an build-in AI agent
-* 🔜 Work in progress - Improve Newsfeed, choose the tone and the recency of articles inside the agents.
-* 🔜 Work in progress - Personnal finance tools in your dashboard.
-* 🔜 TODO - Integrate olama, to self host the models.
+This repository is available under the MIT License.
