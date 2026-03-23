@@ -112,7 +112,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
   )
 
   return (
-    <Sidebar variant="inset" collapsible="offcanvas">
+    <Sidebar variant="sidebar" collapsible="offcanvas">
       <SidebarContent className="w-[calc(var(--sidebar-width)-theme(spacing.2)*2)] h-full flex flex-col overflow-hidden">
         <SidebarGroup className="shrink-0">
           <SidebarGroupContent>

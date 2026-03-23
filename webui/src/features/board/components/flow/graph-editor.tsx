@@ -46,6 +46,8 @@ import { useCenterAroundParam } from '../../hooks/use-center-around'
 import { useBoardShortcuts } from '../../hooks/use-board-shortcuts'
 import { PresentationControls } from './presentation-controls'
 import { useTheme } from '@/components/theme-provider'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { StackedCardsIllustration } from '@/components/illustrations/stacked-cards-illustration'
 import { darkModeDisplayHex } from '../../lib/colors/dark-variants'
 import { applyBackgroundAlpha, type BoardBackgroundTexture } from '../../utils/board-background'
 
@@ -93,6 +95,50 @@ const drawableNodeTypes: NodeType[] = [
 const isDrawableNodeType = (nodeType: NodeType) => drawableNodeTypes.includes(nodeType)
 
 type ViewMode = 'graph' | 'linear'
+
+type EmptyGraphHintProps = {
+  isMobile: boolean
+}
+
+
+/**
+ * Show a centered empty-state illustration with a short onboarding hint.
+ */
+function EmptyGraphHint({ isMobile }: EmptyGraphHintProps) {
+  const assistantLocationLabel = isMobile ? "right bar" : "top bar"
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6 py-10">
+      <div className="flex w-full max-w-[760px] flex-col items-center rounded-xl bg-sidebar px-8 py-10 text-center">
+        <StackedCardsIllustration
+          className="h-auto w-full max-w-[520px]"
+          shadowColor="color-mix(in oklab, var(--accent-foreground) 10%, transparent)"
+          cardColor="var(--accent)"
+          strokeColor="color-mix(in oklab, var(--accent-foreground) 90%, transparent)"
+          aria-hidden="true"
+        />
+        <p className="mt-4 max-w-[32rem] text-balance text-lg leading-relaxed text-sidebar-foreground/75">
+          Start adding components and open assistant from{" "}
+          <span className="font-semibold text-sidebar-foreground">{assistantLocationLabel}</span>
+        </p>
+      </div>
+    </div>
+  )
+}
+
+
+/**
+ * Show a persistent zoom hint at the bottom center of the graph area.
+ */
+function GraphZoomHint() {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
+      <p className="text-center text-xs leading-relaxed text-sidebar-foreground/60">
+        Use Ctrl + mouse scroll or Ctrl + / Ctrl - to zoom in and out
+      </p>
+    </div>
+  )
+}
 
 type GraphViewProps = {
   nodes: NoteNode[]
@@ -198,6 +244,7 @@ function LinearView() {
  */
 export default function GraphEditor() {
   const [viewMode, setViewMode] = useState<ViewMode>('graph')
+  const isMobile = useIsMobile()
 
   const enableSelection = useGraphStore(state => state.isSelectMode)
   const setEnableSelection = useGraphStore(state => state.setIsSelectMode)
@@ -244,6 +291,7 @@ export default function GraphEditor() {
   const canUndo = useGraphStore(state => state.historyPast.length > 0)
   const canRedo = useGraphStore(state => state.historyFuture.length > 0)
   const zoom = useGraphStore(state => state.zoom ?? 1)
+  const isEmptyGraph = nodes.length === 0 && edges.length === 0
 
   const isResizingNode = useGraphStore(state => state.isResizingNode)
   const isDragging = useGraphStore(state => state.isDragging)
@@ -656,6 +704,10 @@ export default function GraphEditor() {
           <GraphContextMenu nodes={nodes} setNodesPersist={setNodesPersist}>
             {({ onPaneContextMenu, onNodeContextMenu }) => (
               <>
+                {isEmptyGraph && !presentationMode && (
+                  <EmptyGraphHint isMobile={isMobile} />
+                )}
+
                 <GraphView
                   nodes={nodes}
                   edges={edgesForRender}
@@ -747,6 +799,8 @@ export default function GraphEditor() {
           disableNext={!canNext}
         />
       )}
+
+      {viewMode === 'graph' && !presentationMode && <GraphZoomHint />}
 
       <NodeSurfaceHost />
     </div>

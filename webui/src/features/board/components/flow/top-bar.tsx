@@ -19,13 +19,14 @@ import {
   LeftToRightListBulletIcon,
   Note02Icon,
   MoreHorizontalIcon,
+  ShapesIcon,
   SquareIcon,
   Share08Icon,
   Tag01Icon,
   TextIcon,
 } from '@hugeicons/core-free-icons'
 import { BotMessageSquare, ChevronDown, Cloud, Code2, Layers, Sparkles } from 'lucide-react'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -95,12 +96,33 @@ export const TopBar = memo(function TopBar({
   const [isUpdatingSharing, setIsUpdatingSharing] = useState(false)
   const [shareError, setShareError] = useState<string | null>(null)
 
-  const shapeOptions: { nodeType: NodeType; label: string; icon: React.ReactNode }[] = [
-    { nodeType: 'rectangle', label: 'Rectangle', icon: <HugeiconsIcon icon={SquareIcon} className='size-4 shrink-0' strokeWidth={2} /> },
+  /**
+   * Render tooltip content with an optional keyboard shortcut hint.
+   */
+  const renderTooltipContent = (label: string, shortcut?: string) => (
+    <TooltipContent side='bottom' sideOffset={10}>
+      <div className='flex items-center gap-2'>
+        <span>{label}</span>
+        {shortcut ? <span className='text-[10px] uppercase tracking-widest text-muted-foreground'>{shortcut}</span> : null}
+      </div>
+    </TooltipContent>
+  )
+
+  /**
+   * Render a compact keyboard hint badge in the corner of an icon button.
+   */
+  const renderButtonShortcut = (shortcut: string) => (
+    <span className='pointer-events-none absolute -bottom-1 -right-1 px-0 text-[9px] font-semibold leading-none text-muted-foreground/80'>
+      {shortcut}
+    </span>
+  )
+
+  const shapeOptions: { nodeType: NodeType; label: string; icon: React.ReactNode; shortcut?: string }[] = [
+    { nodeType: 'rectangle', label: 'Rectangle', icon: <HugeiconsIcon icon={SquareIcon} className='size-4 shrink-0' strokeWidth={2} />, shortcut: 'R' },
     { nodeType: 'layered-rectangle', label: 'Layered card', icon: <Layers className='w-4 h-4 shrink-0' /> },
-    { nodeType: 'ellipse', label: 'Ellipse', icon: <HugeiconsIcon icon={CircleIcon} className='size-4 shrink-0' strokeWidth={2} /> },
-    { nodeType: 'diamond', label: 'Diamond', icon: <HugeiconsIcon icon={DiamondIcon} className='size-4 shrink-0' strokeWidth={2} /> },
-    { nodeType: 'soft-diamond', label: 'Double diamond', icon: <HugeiconsIcon icon={DiamondIcon} className='size-4 shrink-0' strokeWidth={2} /> },
+    { nodeType: 'ellipse', label: 'Ellipse', icon: <HugeiconsIcon icon={CircleIcon} className='size-4 shrink-0' strokeWidth={2} />, shortcut: 'O' },
+    { nodeType: 'diamond', label: 'Diamond', icon: <HugeiconsIcon icon={DiamondIcon} className='size-4 shrink-0' strokeWidth={2} />, shortcut: 'D' },
+    { nodeType: 'soft-diamond', label: 'Double diamond', icon: <HugeiconsIcon icon={DiamondIcon} className='size-4 shrink-0' strokeWidth={2} />, shortcut: 'D' },
     { nodeType: 'layered-diamond', label: 'Layered diamond', icon: <Layers className='w-4 h-4 shrink-0' /> },
     { nodeType: 'layered-circle', label: 'Layered circle', icon: <HugeiconsIcon icon={CircleIcon} className='size-4 shrink-0' strokeWidth={2} /> },
     { nodeType: 'tag', label: 'Tag', icon: <HugeiconsIcon icon={LabelIcon} className='size-4 shrink-0' strokeWidth={2} /> },
@@ -184,22 +206,28 @@ export const TopBar = memo(function TopBar({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant={null} size='icon' onClick={() => setEnableSelection(!enableSelection)} className={enableSelection ? normalButtonClass : activeButtonClass} aria-label='Pan mode'>
-                <HugeiconsIcon
-                  icon={enableSelection ? Hold01Icon : Hold02Icon}
-                  className='size-4 shrink-0'
-                  strokeWidth={2}
-                />
+                <div className='relative'>
+                  <HugeiconsIcon
+                    icon={enableSelection ? Hold01Icon : Hold02Icon}
+                    className='size-4 shrink-0'
+                    strokeWidth={2}
+                  />
+                  {renderButtonShortcut('P')}
+                </div>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side='bottom' sideOffset={10}>{tooltipCopy.pan}</TooltipContent>
+            {renderTooltipContent(tooltipCopy.pan, 'P')}
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant={null} size='icon' onClick={() => setEnableSelection(!enableSelection)} className={enableSelection ? activeButtonClass : normalButtonClass} aria-label='Selection mode'>
-                <HugeiconsIcon icon={Cursor02Icon} className='size-4 shrink-0' strokeWidth={2} />
+                <div className='relative'>
+                  <HugeiconsIcon icon={Cursor02Icon} className='size-4 shrink-0' strokeWidth={2} />
+                  {renderButtonShortcut('V')}
+                </div>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side='bottom' sideOffset={10}>{tooltipCopy.select}</TooltipContent>
+            {renderTooltipContent(tooltipCopy.select, 'V')}
           </Tooltip>
 
           <Separator orientation="vertical" className='md:!h-6 hidden md:block' />
@@ -210,19 +238,21 @@ export const TopBar = memo(function TopBar({
                 <DropdownMenuTrigger asChild>
                   <Button variant={null} className={normalButtonClass} size='icon' aria-label='Add shape'>
                     <div className='flex flex-col items-center gap-0.5 relative'>
-                      <HugeiconsIcon icon={SquareIcon} className='size-4 shrink-0' strokeWidth={2} />
+                      <HugeiconsIcon icon={GeometricShapes01Icon} className='size-4 shrink-0' strokeWidth={2} />
+                      {renderButtonShortcut('S')}
                       <ChevronDown className='absolute inset-x-0 -bottom-3.5 w-3 h-3 text-muted-foreground' />
                     </div>
                   </Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
-              <TooltipContent side='bottom' sideOffset={10}>{tooltipCopy.shape}</TooltipContent>
+              {renderTooltipContent(tooltipCopy.shape, 'S')}
             </Tooltip>
             <DropdownMenuContent align='center' side='bottom' sideOffset={8} className='min-w-[180px]'>
               {shapeOptions.map(option => (
                 <DropdownMenuItem key={option.nodeType} onSelect={() => onAddNode({ nodeType: option.nodeType })} className='gap-2 text-sm'>
                   {option.icon}
                   <span>{option.label}</span>
+                  {option.shortcut ? <DropdownMenuShortcut>{option.shortcut}</DropdownMenuShortcut> : null}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -231,19 +261,25 @@ export const TopBar = memo(function TopBar({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant={null} className={normalButtonClass} size='icon' onClick={onAddLine} aria-label='Add connector'>
-                <HugeiconsIcon icon={ArrowMoveDownRightIcon} className='size-4 shrink-0' strokeWidth={2} />
+                <div className='relative'>
+                  <HugeiconsIcon icon={ArrowMoveDownRightIcon} className='size-4 shrink-0' strokeWidth={2} />
+                  {renderButtonShortcut('A')}
+                </div>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side='bottom' sideOffset={10}>{tooltipCopy.connector}</TooltipContent>
+            {renderTooltipContent(tooltipCopy.connector, 'A')}
           </Tooltip>
 
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant={null} className={normalButtonClass} size='icon' onClick={() => onAddNode({ nodeType: 'text' })} aria-label='Add point text'>
-                <HugeiconsIcon icon={TextIcon} className='size-4 shrink-0' strokeWidth={2} />
+                <div className='relative'>
+                  <HugeiconsIcon icon={TextIcon} className='size-4 shrink-0' strokeWidth={2} />
+                  {renderButtonShortcut('T')}
+                </div>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side='bottom' sideOffset={10}>{tooltipCopy.text}</TooltipContent>
+            {renderTooltipContent(tooltipCopy.text, 'T')}
           </Tooltip>
 
           <Tooltip>
@@ -255,10 +291,13 @@ export const TopBar = memo(function TopBar({
                 onClick={() => onAddNode({ nodeType: 'sheet' })}
                 aria-label='Add sticky note'
               >
-                <HugeiconsIcon icon={Note02Icon} className='size-4 shrink-0' strokeWidth={2} />
+                <div className='relative'>
+                  <HugeiconsIcon icon={Note02Icon} className='size-4 shrink-0' strokeWidth={2} />
+                  {renderButtonShortcut('N')}
+                </div>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side='bottom' sideOffset={10}>{tooltipCopy.note}</TooltipContent>
+            {renderTooltipContent(tooltipCopy.note, 'N')}
           </Tooltip>
 
           <Separator orientation="vertical" className='md:!h-6 hidden md:block' />
@@ -273,10 +312,13 @@ export const TopBar = memo(function TopBar({
                 aria-label='Open assistant'
                 disabled={!boardId}
               >
-                <BotMessageSquare className='size-4 shrink-0 text-sidebar-icon-4' strokeWidth={2} />
+                <div className='relative'>
+                  <BotMessageSquare className='size-4 shrink-0 text-sidebar-icon-4' strokeWidth={2} />
+                  {renderButtonShortcut('C')}
+                </div>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side='bottom' sideOffset={10}>{tooltipCopy.assistant}</TooltipContent>
+            {renderTooltipContent(tooltipCopy.assistant, 'C')}
           </Tooltip>
 
           <Separator orientation="vertical" className='md:!h-6 hidden md:block' />
@@ -291,10 +333,13 @@ export const TopBar = memo(function TopBar({
                 aria-label='Slides'
                 disabled={!boardId}
               >
-                <HugeiconsIcon icon={BitcoinPresentationIcon} className='size-4 shrink-0' strokeWidth={2} />
+                <div className='relative'>
+                  <HugeiconsIcon icon={BitcoinPresentationIcon} className='size-4 shrink-0' strokeWidth={2} />
+                  {renderButtonShortcut('M')}
+                </div>
               </Button>
             </TooltipTrigger>
-            <TooltipContent side='bottom' sideOffset={10}>{tooltipCopy.slides}</TooltipContent>
+            {renderTooltipContent(tooltipCopy.slides, 'M')}
           </Tooltip>
 
           <DropdownMenu>
@@ -310,12 +355,14 @@ export const TopBar = memo(function TopBar({
             </Tooltip>
             <DropdownMenuContent align='end' side='bottom' sideOffset={8} className='min-w-[190px]'>
               <DropdownMenuItem onSelect={() => setOpenIconSearch(true)} className='gap-2 text-sm'>
-                <HugeiconsIcon icon={GeometricShapes01Icon} className='size-4 shrink-0' strokeWidth={2} />
+                <HugeiconsIcon icon={ShapesIcon} className='size-4 shrink-0' strokeWidth={2} />
                 <span>Icons</span>
+                <DropdownMenuShortcut>G</DropdownMenuShortcut>
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setOpenImageSearch(true)} className='gap-2 text-sm'>
                 <HugeiconsIcon icon={Image02Icon} className='size-4 shrink-0' strokeWidth={2} />
                 <span>Images</span>
+                <DropdownMenuShortcut>I</DropdownMenuShortcut>
               </DropdownMenuItem>
               <DropdownMenuItem
                 onSelect={() => {
@@ -334,6 +381,7 @@ export const TopBar = memo(function TopBar({
               <DropdownMenuItem onSelect={() => onAddNode({ nodeType: 'code-sandbox' })} className='gap-2 text-sm'>
                 <Code2 className='size-4 shrink-0' strokeWidth={2} />
                 <span>Code sandbox</span>
+                <DropdownMenuShortcut>Y</DropdownMenuShortcut>
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => onAddNode({ nodeType: 'widget' })} className='gap-2 text-sm'>
                 <HugeiconsIcon icon={Layout01Icon} className='size-4 shrink-0' strokeWidth={2} />
@@ -342,6 +390,7 @@ export const TopBar = memo(function TopBar({
               <DropdownMenuItem onSelect={() => setOpenAiSpark(true)} className='gap-2 text-sm' disabled={!boardId}>
                 <Sparkles className='size-4 shrink-0 text-secondary' strokeWidth={2} />
                 <span>AI actions</span>
+                <DropdownMenuShortcut>B</DropdownMenuShortcut>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
