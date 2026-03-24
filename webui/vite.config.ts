@@ -9,6 +9,9 @@ const packageJson = JSON.parse(
   readFileSync(path.resolve(__dirname, "./package.json"), "utf8")
 ) as { version?: string }
 const appVersion = packageJson.version ?? "0.0.0"
+const allowedHosts = [
+  "app.dim0.net",
+]
 
 
 export default defineConfig({
@@ -66,6 +69,13 @@ export default defineConfig({
     },
   },
   server: {
+    allowedHosts,
+    host: "0.0.0.0",
+    port: Number(process.env.APP_PORT) || 5173,
+  },
+  preview: {
+    allowedHosts,
+    host: "0.0.0.0",
     port: Number(process.env.APP_PORT) || 5173,
   },
 })
