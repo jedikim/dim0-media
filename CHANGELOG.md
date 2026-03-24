@@ -1,3 +1,9 @@
+## v0.1.19 (2026-03-24)
+
+### Fix
+
+- **build**: fix backend docker runtime (#20)
+
 ## v0.1.18 (2026-03-24)
 
 ### Fix
