@@ -12,15 +12,12 @@ ENV PATH="/root/.local/bin:${PATH}"
 
 WORKDIR /app
 
-COPY backend/pyproject.toml /app/
-
-# install project + deps into system site-packages
-RUN uv pip install --system .
-
-# copy the rest of the backend source
 COPY backend/ /app/
 
-# expose typical ports (compose will map the actual one via env)
-EXPOSE 8000 8080 8081 80
+# install the backend from the committed lockfile for deterministic builds
+RUN uv sync --frozen --no-dev
 
-CMD ["python", "-m", "topix.api.app"]
+# expose typical ports (compose will map the actual one via env)
+EXPOSE 8000 8080 8081 8888 80
+
+CMD ["/app/.venv/bin/python", "-m", "topix.api.app"]
