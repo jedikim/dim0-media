@@ -1,3 +1,9 @@
+## v0.1.18 (2026-03-24)
+
+### Fix
+
+- **backend**: use uv lock in docker build (#19)
+
 ## v0.1.17 (2026-03-24)
 
 ### Fix
