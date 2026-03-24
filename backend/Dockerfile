@@ -16,6 +16,7 @@ COPY backend/ /app/
 
 # install the backend from the committed lockfile for deterministic builds
 RUN uv sync --frozen --no-dev
+ENV PATH="/app/.venv/bin:${PATH}"
 
 # expose typical ports (compose will map the actual one via env)
 EXPOSE 8000 8080 8081 8888 80

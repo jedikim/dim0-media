@@ -50,7 +50,7 @@ services:
 
   backend:
     image: winlp4ever/dim0-backend:${DIM0_VERSION:?DIM0_VERSION is required}
-    container_name: topix-backend
+    container_name: dim0-backend
     volumes:
       - ../${ENVFILE:-.env}:/.env:ro
     environment:
@@ -73,9 +73,9 @@ services:
 
   webui:
     image: winlp4ever/dim0-webui:${DIM0_VERSION:?DIM0_VERSION is required}
-    container_name: topix-webui
+    container_name: dim0-webui
     environment:
-      API_ORIGIN: ${API_ORIGIN:-http://localhost:${API_PORT:-8081}}
+      API_ORIGIN: ${API_ORIGIN:-http://localhost:${API_PORT:-8888}}
       VITE_BILLING_ENABLED: ${VITE_BILLING_ENABLED:-false}
     depends_on:
       - backend
