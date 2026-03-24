@@ -4,81 +4,64 @@
 
 <h1 align="center">Dim0 - The Thinking Canvas</h1>
 
-Dim0 (read "dee-moh") is an agent-native thinking canvas where notes, documents, code, widgets, and AI agents work together on one board.
-
-Built for researchers, founders, developers, and visual thinkers who want AI, notes, and structure in one workspace.
+<p align="center">
+  An agent-native canvas where notes, documents, code, widgets, and AI work together on one board.
+</p>
 
 <p align="center">
-  ❤️ If you like Dim0, consider giving this repo a star to support the project.
+  <a href="https://dim0.net">Website</a> · <a href="https://app.dim0.net">Live App</a> · MIT License
 </p>
 
 ![Dim0 app screenshot](docs/images/app-screenshot.png)
-*Canvas workspace: notes, agent outputs, and structure living on the same board.*
+*Canvas workspace: notes, agent outputs, and structure on the same board.*
 
 ![Dim0 code, widget, and mindmap examples](docs/images/code-widget-mindmap.png)
 *Generated artifacts: code, widgets, and mind maps created directly inside the canvas.*
 
-**Website:** https://dim0.net
-**App:** https://app.dim0.net
+## What Dim0 Is
 
-## Try Dim0
+Dim0 is built around one architectural bet: **the canvas, not the chat, should be the primary interface for thinking with AI.**
 
-If you are visiting Dim0 for the first time, start here:
-
-- Visit the website to understand the product: https://dim0.net
-- Open the hosted app to try it directly: https://app.dim0.net
-- Use the local setup below only if you want to self-host or contribute
-
-## What It Is
-
-Dim0 is built around a simple idea: the canvas should be the primary interface for thinking with AI, not a chat sidebar.
-
-Instead of splitting work across docs, whiteboards, chat tools, code editors, and dashboards, Dim0 brings them together on one continuous surface.
-
-## How It Works
-
-1. Start with an idea and add notes directly on the canvas
-2. Chat with the agent to explore, search, and find interesting information
-3. Save useful outputs back onto the board as notes
-4. Keep editing and arranging everything directly on the canvas
-5. Turn strong ideas into mind maps, schemas, or visual widgets
-6. Frame the important parts and present directly from the board
-
-## What You Can Do
-
-- Think spatially with notes, shapes, and connected graph nodes
-- Work with a board-aware AI agent that can search, reason, and write back onto the canvas
-- Upload documents and keep their context attached to the board
-- Turn ideas into mind maps, schemas, and live HTML/JS widgets
-- Create nested boards to organize work hierarchically
-- Present directly from the canvas by walking through frames
-
-## Why It's Different
-
-Most tools add AI as a layer on top of an existing product.
-AI feels like an add-on, not a native part of the workflow.
-
-Other tools put everything into chat.
-Over time, context gets buried across too many conversations.
-
-Knowledge becomes fragmented.
-Important work disappears into chat history.
-
-Dim0 is different: it is built as an agent-native canvas from the start.
-The board is not just where work happens. It is also where you present it.
+Most tools bolt AI onto an existing product as a sidebar. Dim0 is built the other way around: the board is designed for an agent that can read context, use tools, and write results directly back into the workspace.
 
 The agent is not just a chatbot. It can:
 
-- Read live board context
-- Reason in multiple steps
-- Use tools in parallel
-- Search the web
-- Execute code
-- Create and edit nodes directly on the board
+- Read live board context and selected nodes
+- Reason across multiple steps with tool use
+- Search the web and execute code
+- Create and edit notes directly on the board
+- Generate widgets and visual outputs inside the canvas
 
-## Core Idea
+## Node Types
 
-**Your thoughts, your notes, your agents. One canvas.**
+Everything on the board is a node. Dim0 supports:
+
+- Shape nodes for diagrams and spatial structure
+- Rich text notes for writing and editing inside the board
+- Code sandbox nodes for writing and running code
+- Widget nodes for embedded HTML/JS outputs
+- Document nodes for uploaded files and retrieval context
+- Nested boards for hierarchical organization
+- Frame-based presentation directly from the canvas
+
+## Agent Layer
+
+The assistant layer is built on the OpenAI Agents SDK and board-aware tools. It can work with:
+
+- Board context from the current graph and selected nodes
+- Note creation and editing tools
+- Web search and fetch tools
+- Code execution via Daytona-backed sandboxes
+- Widget and visual output generation
+- Semantic storage and retrieval backed by Qdrant
+
+Model support includes OpenAI, Anthropic, Google Gemini, Mistral, Moonshot, DeepSeek, Qwen, and Z.ai.
+
+## Try It
+
+- **Hosted app:** https://app.dim0.net
+- **Website:** https://dim0.net
+- **Self-host:** follow the setup below
 
 ## Monorepo Structure
 
@@ -88,7 +71,7 @@ This repository contains the full Dim0 product stack:
 - `webui/`: React frontend for the canvas, chat, and board UX
 - `build/`: Docker Compose and build-related assets
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -104,15 +87,14 @@ Before running Dim0, create a root `.env` from `.env.sample` and review the vari
 cp .env.sample .env
 ```
 
-For now, please provide at least:
+At minimum, set:
 
 - `OPENAI_API_KEY`
 - `MISTRAL_API_KEY`
 - `OPENROUTER_API_KEY`
 - `LINKUP_API_KEY`
 
-This gives the product a reliable minimum setup today.
-We will keep simplifying this more and more.
+Additional providers and tools can be enabled through the rest of `.env.sample`.
 
 Important notes:
 
@@ -172,14 +154,14 @@ npm run dev
 
 The frontend uses `APP_PORT` from `.env` and defaults to `5175`.
 
-## 🔑 Environment Variables
+## Environment Variables
 
 The root `.env.sample` is the source of truth for available configuration.
 It includes app ports and origins, model provider keys, search and image provider keys, local service settings, and backend auth and tracing options.
 
 Use it as a checklist when setting up your local environment.
 
-## 🐳 Docker and Deployment
+## Docker and Deployment
 
 Deployment and local services are managed through Docker Compose with Makefile shortcuts.
 
@@ -250,7 +232,7 @@ make down-run
 make kill-run
 ```
 
-## 🏷️ Versioning and Releases
+## Versioning
 
 Dim0 uses one shared semantic version for the whole product. The source of truth is the repo-root `VERSION` file, and release tooling syncs that version into:
 
@@ -270,13 +252,15 @@ make version-bump
 
 The repository also includes GitHub Actions workflows for version checks, releases, and Docker publishing.
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 - If the frontend cannot reach the API, check `VITE_API_URL` in `.env`
 - If ports are already in use, change `API_PORT` or `APP_PORT`
 - If env changes are not applied, restart the backend and frontend after editing `.env`
 - Use `make config` to inspect the fully resolved Compose configuration
 
-## 📄 License
+## License
 
 This repository is available under the MIT License.
+
+<p align="center">If Dim0 is useful to you, a GitHub star helps others find it.</p>
