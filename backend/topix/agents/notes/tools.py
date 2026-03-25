@@ -7,9 +7,10 @@ from agents import FunctionTool, RunContextWrapper
 from topix.agents.datatypes.context import Context
 from topix.agents.datatypes.outputs import CreateNoteOutput, EditNoteOutput
 from topix.agents.datatypes.tools import AgentToolName
-from topix.agents.notes.service import build_note
+from topix.agents.notes.service import build_note, get_default_note_size
 from topix.agents.tool_handler import ToolHandler
 from topix.datatypes.note.style import NodeType
+from topix.datatypes.property import SizeProperty
 from topix.store.graph import GraphStore
 
 
@@ -80,6 +81,7 @@ def create_edit_note_tool(
     ) -> EditNoteOutput:
         """Edit a note already present in the current board scope.
 
+        Only provide the fields that should change. Do not resend unchanged label or content.
         Keep content short and concise, with only light markdown when helpful.
         If the user wants the note to become a code note or runnable snippet, set `note_type` to `code-sandbox` and store the code in `content`.
         If the user wants the note to become a sticky note or post-it, set `note_type` to `sheet`.
@@ -107,6 +109,11 @@ def create_edit_note_tool(
             patch["content"] = {"markdown": content}
         if note_type is not None:
             patch.setdefault("style", {})["type"] = note_type
+            if note_type != existing_note.style.type and note_type == NodeType.SHEET:
+                width, height = get_default_note_size(note_type)
+                patch.setdefault("properties", {})["node_size"] = SizeProperty(
+                    size=SizeProperty.Size(width=width, height=height)
+                ).model_dump()
 
         if not patch:
             raise ValueError("Provide at least one field to edit.")

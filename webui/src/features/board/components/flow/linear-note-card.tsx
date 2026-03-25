@@ -121,7 +121,7 @@ export function LinearNoteCard({ node }: Props) {
     <div className={cardClass} style={{ backgroundColor: color }}>
       {/* hover toolbar */}
       <div
-        className='absolute top-0 inset-x-0 z-20 rounded-t-sm border-b border-foreground/30 pointer-events-none transition-opacity opacity-0 group-hover:opacity-100 group-hover:pointer-events-auto'
+        className='absolute top-0 inset-x-0 z-20 rounded-t-sm border-b border-foreground/60 pointer-events-none transition-opacity opacity-0 group-hover:opacity-100 group-hover:pointer-events-auto'
         style={{ backgroundColor: color }}
       >
         <div className='px-1.5 py-1 w-full h-full flex items-center justify-end gap-1'>
@@ -137,7 +137,7 @@ export function LinearNoteCard({ node }: Props) {
           <Popover>
             <PopoverTrigger asChild>
               <button
-                className='p-1 text-foreground/60 hover:text-foreground transition-colors'
+                className='p-1 text-foreground/80 hover:text-foreground transition-colors'
                 aria-label='Change background color'
                 title='Change background color'
                 onClick={e => e.stopPropagation()}
@@ -161,7 +161,7 @@ export function LinearNoteCard({ node }: Props) {
             </PopoverContent>
           </Popover>
           <button
-            className='p-1 text-foreground/60 hover:text-foreground transition-colors'
+            className='p-1 text-foreground/80 hover:text-foreground transition-colors'
             onClick={onTogglePin}
             aria-label='Toggle pin'
             title='Pin/Unpin'
@@ -172,7 +172,7 @@ export function LinearNoteCard({ node }: Props) {
             }
           </button>
           <button
-            className='p-1 text-foreground/60 hover:text-destructive transition-colors'
+            className='p-1 text-foreground/80 hover:text-destructive transition-colors'
             onClick={onDelete}
             aria-label='Delete note'
             title='Delete'

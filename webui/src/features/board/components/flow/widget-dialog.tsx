@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useState } from "react"
 
-import { Cancel01Icon, Layout01Icon } from "@hugeicons/core-free-icons"
+import { Cancel01Icon, Download04Icon, Layout01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
 import { Button } from "@/components/ui/button"
@@ -58,6 +58,30 @@ export const WidgetDialog = memo(function WidgetDialog({
     }
   }, [closeNodeSurface])
 
+  /**
+   * Download the current widget HTML as a local .html file.
+   */
+  const handleDownloadHtml = useCallback(() => {
+    const html = htmlDraft
+    if (!html.trim()) return
+
+    const safeBaseName = (note?.label?.markdown || "widget")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "widget"
+
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `${safeBaseName}.html`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }, [htmlDraft, note?.label?.markdown])
+
   if (!note) return null
 
   const html = htmlDraft.trim()
@@ -74,9 +98,21 @@ export const WidgetDialog = memo(function WidgetDialog({
             <HugeiconsIcon icon={Layout01Icon} className="size-4 shrink-0" strokeWidth={2} />
             <span className="truncate text-sm font-semibold">Widget</span>
           </div>
-          <Button variant="ghost" size="icon-sm" onClick={() => handleOpenChange(false)} title="Close" aria-label="Close">
-            <HugeiconsIcon icon={Cancel01Icon} className="size-4" strokeWidth={2} />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={handleDownloadHtml}
+              title="Download HTML"
+              aria-label="Download HTML"
+              disabled={!html}
+            >
+              <HugeiconsIcon icon={Download04Icon} className="size-4" strokeWidth={2} />
+            </Button>
+            <Button variant="ghost" size="icon-sm" onClick={() => handleOpenChange(false)} title="Close" aria-label="Close">
+              <HugeiconsIcon icon={Cancel01Icon} className="size-4" strokeWidth={2} />
+            </Button>
+          </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="min-h-0 flex-1 gap-0">

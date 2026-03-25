@@ -161,7 +161,7 @@ export const SheetNodeView = memo(function SheetNodeView({
       >
         <div
           className={clsx(
-            'absolute top-0 inset-x-0 py-1 px-2 flex flex-row items-center gap-1 z-40 justify-end rounded-t-sm border-b border-foreground/50 transition-opacity',
+            'absolute top-0 inset-x-0 py-1 px-2 flex flex-row items-center gap-1 z-40 justify-end rounded-t-sm border-b border-foreground/60 transition-opacity',
             'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto bg-inherit',
             selected && 'opacity-100 pointer-events-auto',
           )}
@@ -169,7 +169,7 @@ export const SheetNodeView = memo(function SheetNodeView({
           <Popover>
             <PopoverTrigger asChild>
               <button
-                className='p-1 text-foreground/60 hover:text-foreground transition-colors'
+                className='p-1 text-foreground/80 hover:text-foreground transition-colors'
                 onClick={e => e.stopPropagation()}
                 aria-label='Background color'
                 title='Background color'
@@ -194,7 +194,7 @@ export const SheetNodeView = memo(function SheetNodeView({
           </Popover>
 
           <button
-            className='p-1 text-foreground/60 hover:text-foreground transition-colors'
+            className='p-1 text-foreground/80 hover:text-foreground transition-colors'
             onClick={onTogglePin}
             aria-label='Toggle pin'
             title='Pin/Unpin'
@@ -206,7 +206,7 @@ export const SheetNodeView = memo(function SheetNodeView({
           </button>
 
           <button
-            className='p-1 text-foreground/60 hover:text-destructive transition-colors'
+            className='p-1 text-foreground/80 hover:text-destructive transition-colors'
             onClick={onDelete}
             aria-label='Delete note'
             title='Delete'
@@ -241,7 +241,7 @@ export const SheetNodeView = memo(function SheetNodeView({
               )}
             </div>
           ) : (
-            <div ref={contentRef}>
+            <div ref={contentRef} className='md:p-4 p-2'>
               <StickyNote content={note.content?.markdown || ''} />
             </div>
           )}

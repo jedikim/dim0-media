@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react"
-import { Cancel01Icon, LinkSquare02Icon } from "@hugeicons/core-free-icons"
+import { Cancel01Icon, Download04Icon, LinkSquare02Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { useNavigate } from "@tanstack/react-router"
 
@@ -91,6 +91,30 @@ export const SheetNodeDialog = memo(function SheetNodeDialog({
     navigate({ to: SheetUrl, params: { id: note.graphUid, noteId: note.id } })
   }, [navigate, note?.graphUid, note?.id])
 
+  /**
+   * Download the current sheet markdown as a local .md file.
+   */
+  const handleDownloadMarkdown = useCallback(() => {
+    const markdown = note?.content?.markdown || ""
+    if (!markdown.trim()) return
+
+    const safeBaseName = (note?.label?.markdown || "sheet")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "sheet"
+
+    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `${safeBaseName}.md`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+  }, [note?.content?.markdown, note?.label?.markdown])
+
   if (!note) return null
 
   const displayTitle = note.label?.markdown?.trim() || "Untitled note"
@@ -132,6 +156,16 @@ export const SheetNodeDialog = memo(function SheetNodeDialog({
             <DialogTitle className="sr-only">Sheet</DialogTitle>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={handleDownloadMarkdown}
+              title="Download markdown"
+              aria-label="Download markdown"
+              disabled={!note.content?.markdown?.trim()}
+            >
+              <HugeiconsIcon icon={Download04Icon} className="size-4" strokeWidth={2} />
+            </Button>
             <Button variant="ghost" size="icon-sm" onClick={handleOpenFullView} title="Open full view" aria-label="Open full view">
               <HugeiconsIcon icon={LinkSquare02Icon} className="size-4" strokeWidth={2} />
             </Button>

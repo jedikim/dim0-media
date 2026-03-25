@@ -132,7 +132,7 @@ function EmptyGraphHint({ isMobile }: EmptyGraphHintProps) {
  */
 function GraphZoomHint() {
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4">
+    <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4 hidden md:block">
       <p className="text-center text-xs leading-relaxed text-sidebar-foreground/60">
         Use Ctrl + mouse scroll or Ctrl + / Ctrl - to zoom in and out
       </p>

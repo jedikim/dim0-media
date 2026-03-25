@@ -2,8 +2,10 @@
 PROFILE ?= dev                 # dev | local
 ENVFILE ?= .env                # path to your env file (repo root by default)
 DIM0_VERSION ?= $(shell cat VERSION)
-COMPOSE := ENVFILE=$(ENVFILE) docker compose -p dim0-src --env-file $(ENVFILE) -f build/docker-compose.yml
-COMPOSE_IMAGES := ENVFILE=$(ENVFILE) DIM0_VERSION=$(DIM0_VERSION) docker compose -p dim0-images --env-file $(ENVFILE) -f build/docker-compose.images.yml
+COMPOSE_BASE := docker compose -p dim0-src -f build/docker-compose.yml
+COMPOSE := ENVFILE=$(ENVFILE) $(COMPOSE_BASE) --env-file $(ENVFILE)
+COMPOSE_IMAGES_BASE := docker compose -p dim0-images -f build/docker-compose.images.yml
+COMPOSE_IMAGES := ENVFILE=$(ENVFILE) DIM0_VERSION=$(DIM0_VERSION) $(COMPOSE_IMAGES_BASE) --env-file $(ENVFILE)
 DB_SERVICES := $(if $(filter prod,$(PROFILE)),postgres qdrant redis,postgres-$(PROFILE) qdrant-$(PROFILE) redis-$(PROFILE))
 
 # Allow: make VAR=value ...
@@ -29,7 +31,7 @@ build: ## Just (re)build images (no start)
 
 .PHONY: pull
 pull: ## Pull published backend and webui images for DIM0_VERSION
-	$(COMPOSE_IMAGES) pull backend webui
+	DIM0_VERSION=$(DIM0_VERSION) $(COMPOSE_IMAGES_BASE) pull backend webui
 
 .PHONY: run
 run: ## Run published images from Docker Hub using DIM0_VERSION
@@ -37,11 +39,15 @@ run: ## Run published images from Docker Hub using DIM0_VERSION
 
 .PHONY: down-run
 down-run: ## Stop published-image containers
-	$(COMPOSE_IMAGES) down --remove-orphans
+	DIM0_VERSION=$(DIM0_VERSION) $(COMPOSE_IMAGES_BASE) down --remove-orphans
 
 .PHONY: kill-run
 kill-run: ## Stop published-image containers and remove volumes
-	$(COMPOSE_IMAGES) down --volumes --remove-orphans
+	DIM0_VERSION=$(DIM0_VERSION) $(COMPOSE_IMAGES_BASE) down --volumes --remove-orphans
+
+.PHONY: logs-run
+logs-run: ## Tail logs for published-image services: make logs-run [SERVICE=backend]
+	DIM0_VERSION=$(DIM0_VERSION) $(COMPOSE_IMAGES_BASE) logs -f --tail=200 $(SERVICE)
 
 .PHONY: rebuild
 rebuild: ## Rebuild without cache (no start)
