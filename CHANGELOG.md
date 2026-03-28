@@ -1,3 +1,9 @@
+## v0.1.21 (2026-03-28)
+
+### Fix
+
+- *****: fix svg and google connect issues (#23)
+
 ## v0.1.20 (2026-03-25)
 
 ### Fix
