@@ -46,6 +46,8 @@ type SimplifiedRectOverlayProps = {
   strokeStyle?: StrokeStyle
   strokeWidth?: number
   visualInset: number
+  widthPx?: number
+  heightPx?: number
 }
 
 const SimplifiedRectOverlay = memo(function SimplifiedRectOverlay({
@@ -54,7 +56,9 @@ const SimplifiedRectOverlay = memo(function SimplifiedRectOverlay({
   stroke,
   strokeStyle,
   strokeWidth,
-  visualInset
+  visualInset,
+  widthPx,
+  heightPx
 }: SimplifiedRectOverlayProps) {
   const roundedClass = rounded === 'rounded-2xl' ? 'rounded-[16px]' : 'rounded-none'
   const hasStroke = stroke && stroke !== 'transparent' && (strokeWidth ?? 1) > 0
@@ -63,8 +67,13 @@ const SimplifiedRectOverlay = memo(function SimplifiedRectOverlay({
   const dashArray = strokeLineDash ? strokeLineDash.join(' ') : undefined
   const borderInset = Math.max(0, visualInset)
   const halfStroke = (strokeWidth ?? 1) / 2
-  const sizeCalc = `calc(100% - ${(borderInset + halfStroke) * 2}px)`
+  const shapeInset = borderInset + halfStroke
+  const svgWidth = Math.max(1, widthPx ?? 1)
+  const svgHeight = Math.max(1, heightPx ?? 1)
+  const rectWidth = Math.max(0, svgWidth - shapeInset * 2)
+  const rectHeight = Math.max(0, svgHeight - shapeInset * 2)
   const radius = rounded === 'rounded-2xl' ? 16 : 0
+  const cornerRadius = Math.max(0, Math.min(radius, rectWidth / 2, rectHeight / 2))
 
   if (useSvgDash) {
     return (
@@ -77,14 +86,16 @@ const SimplifiedRectOverlay = memo(function SimplifiedRectOverlay({
           width: 'calc(100% - 0.375rem)',
           height: 'calc(100% - 0.375rem)',
         }}
+        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+        preserveAspectRatio="none"
       >
         <rect
-          x={borderInset + halfStroke}
-          y={borderInset + halfStroke}
-          width={sizeCalc}
-          height={sizeCalc}
-          rx={radius}
-          ry={radius}
+          x={shapeInset}
+          y={shapeInset}
+          width={rectWidth}
+          height={rectHeight}
+          rx={cornerRadius}
+          ry={cornerRadius}
           fill={fill || 'transparent'}
           stroke={stroke || 'transparent'}
           strokeWidth={strokeWidth ?? 1}
@@ -408,6 +419,8 @@ export const RoughRect: React.FC<RoughRectProps> = ({
           strokeStyle={strokeStyle}
           strokeWidth={strokeWidth}
           visualInset={visualInset}
+          widthPx={widthPx}
+          heightPx={heightPx}
         />
         <div className='relative z-20 w-full h-full'>
           {children}

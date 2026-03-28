@@ -353,7 +353,7 @@ export const NodeCard = memo(function NodeCard({
           onDoubleClick={handleLabelDoubleClick}
           onPointerDown={stopDragging}
         >
-          <WidgetNode note={note} dragging={dragging} />
+          <WidgetNode note={note} selected={selected} dragging={dragging} />
         </LabelContainer>
       )
     }

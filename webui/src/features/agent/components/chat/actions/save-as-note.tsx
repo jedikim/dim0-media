@@ -203,6 +203,11 @@ export const SaveAsNote = ({
 
   const label = type === "notify" ? "Notify" : type === "mapify" ? "Mapify" : "Schemify"
   const icon = type === "notify" ? NotebookIcon : type === "mapify" ? GitForkIcon : ChartBubbleIcon
+  const actionLabel = type === "notify"
+    ? "Convert current answer to a sticky note"
+    : type === "mapify"
+    ? "Convert current answer to a mind map"
+    : "Convert current answer to a schema"
 
   const buttonClass = clsx(
     "transition-all text-xs text-muted-foreground hover:text-foreground flex flex-row items-center gap-2 p-1 rounded-md",
@@ -220,8 +225,8 @@ export const SaveAsNote = ({
           <DropdownMenuTrigger asChild>
             <button
               className={buttonClass}
-              aria-label={label}
-              title={label}
+              aria-label={actionLabel}
+              title={actionLabel}
             >
               {iconCpn}
               <span>{label}</span>
@@ -246,6 +251,8 @@ export const SaveAsNote = ({
             <button
               className={buttonClass}
               onClick={() => launchGeneration(boardId)}
+              aria-label={actionLabel}
+              title={actionLabel}
             >
               {iconCpn}
               <span>{label}</span>

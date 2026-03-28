@@ -9,6 +9,7 @@ import { toast } from "sonner"
  */
 export const CopyAnswer = ({ answer }: { answer: string }) => {
   const [copied, setCopied] = useState(false)
+  const actionLabel = "Copy current answer to the clipboard"
 
   const handleCopy = () => {
     navigator.clipboard.writeText(answer).then(() => {
@@ -24,6 +25,8 @@ export const CopyAnswer = ({ answer }: { answer: string }) => {
     <button
       className="transition-all text-xs text-muted-foreground hover:text-foreground flex flex-row items-center gap-2 p-1 rounded-md"
       onClick={handleCopy}
+      aria-label={actionLabel}
+      title={actionLabel}
     >
       <HugeiconsIcon icon={icon} className='size-4 shrink-0' strokeWidth={2} />
       <span>Copy</span>

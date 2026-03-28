@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useState } from "react"
 import type { Viewport } from "@xyflow/react"
+import clsx from "clsx"
 
 import { DragDropIcon, Layout01Icon, Maximize01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -13,6 +14,7 @@ import { WidgetIframe } from "./widget-iframe"
 
 type WidgetNodeProps = {
   note: Note
+  selected?: boolean
   dragging?: boolean
 }
 
@@ -57,6 +59,7 @@ const isNoteInViewport = (
  */
 export const WidgetNode = memo(function WidgetNode({
   note,
+  selected = false,
   dragging,
 }: WidgetNodeProps) {
   const { resolvedTheme } = useTheme()
@@ -95,6 +98,7 @@ export const WidgetNode = memo(function WidgetNode({
     [note, rendererSize, viewport],
   )
   const suspendPreview = Boolean(isMoving || dragging || !isVisibleInViewport)
+  const canInteractInline = selected && !suspendPreview
 
   return (
     <div
@@ -125,7 +129,12 @@ export const WidgetNode = memo(function WidgetNode({
         )}
       </div>
 
-      <div className="nodrag h-full w-full overflow-hidden rounded-xl border border-border/50 bg-background">
+      <div
+        className={clsx(
+          "nodrag h-full w-full overflow-hidden rounded-xl border border-border/50 bg-background",
+          canInteractInline ? "pointer-events-auto" : "pointer-events-none",
+        )}
+      >
         {html && !suspendPreview ? (
           <WidgetIframe
             html={html}

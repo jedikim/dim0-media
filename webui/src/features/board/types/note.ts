@@ -159,14 +159,18 @@ export const createDefaultNote = ({
     createdAt: new Date().toISOString(),
     graphUid: boardId,
     style: { ...createDefaultStyle({ type: nodeType }) },
-    minWidth: nodeType === 'folder'
+    minWidth: nodeType === 'sheet'
+      ? DEFAULT_STICKY_NOTE_WIDTH
+      : nodeType === 'folder'
       ? DEFAULT_FOLDER_WIDTH
       : nodeType === 'code-sandbox'
       ? DEFAULT_CODE_SANDBOX_WIDTH
       : nodeType === 'widget'
       ? DEFAULT_WIDGET_WIDTH
       : DEFAULT_NOTE_WIDTH,
-    minHeight: nodeType === 'folder'
+    minHeight: nodeType === 'sheet'
+      ? DEFAULT_STICKY_NOTE_HEIGHT
+      : nodeType === 'folder'
       ? DEFAULT_FOLDER_HEIGHT
       : nodeType === 'code-sandbox'
       ? DEFAULT_CODE_SANDBOX_HEIGHT

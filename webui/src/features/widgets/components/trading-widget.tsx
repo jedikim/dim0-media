@@ -89,7 +89,7 @@ export default function TradingWidget({
   }
 
   return (
-    <div className='bg-sidebar rounded-xl p-4 md:p-5 shadow-md w-full'>
+    <div className='bg-sidebar rounded-xl p-4 md:p-5 shadow-sm w-full'>
       <div className='flex items-start justify-between gap-3'>
         <div className='space-y-1'>
           <div className='text-[11px] md:text-xs uppercase tracking-wide text-accent-foreground font-medium'>

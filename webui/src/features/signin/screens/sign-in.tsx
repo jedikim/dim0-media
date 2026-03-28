@@ -26,6 +26,8 @@ export function SigninPage() {
   const setEmailVerificationEnabled = useAppStore(s => s.setEmailVerificationEnabled)
   const setEmailVerified = useAppStore(s => s.setEmailVerified)
   const googleButtonRef = React.useRef<HTMLDivElement | null>(null)
+  const renderedGoogleClientIdRef = React.useRef<string | null>(null)
+  const renderingGoogleClientIdRef = React.useRef<string | null>(null)
 
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
@@ -70,11 +72,15 @@ export function SigninPage() {
   React.useEffect(() => {
     const authMethods = authMethodsQuery.data
     const target = googleButtonRef.current
-    if (!authMethods?.google || !authMethods.google_client_id || !target) return
+    const clientId = authMethods?.google_client_id
+    if (!authMethods?.google || !clientId || !target) return
+    if (renderedGoogleClientIdRef.current === clientId || renderingGoogleClientIdRef.current === clientId) return
 
     let cancelled = false
+    renderingGoogleClientIdRef.current = clientId
+
     renderGoogleSigninButton({
-      clientId: authMethods.google_client_id,
+      clientId,
       element: target,
       onCredential: response => {
         if (cancelled) return
@@ -84,15 +90,22 @@ export function SigninPage() {
         }
         googleSigninMutation.mutate(response.credential)
       },
+    }).then(() => {
+      if (cancelled) return
+      renderedGoogleClientIdRef.current = clientId
     }).catch(error => {
       if (cancelled) return
       setGoogleError((error as Error).message || "Unable to load Google sign in")
+    }).finally(() => {
+      if (renderingGoogleClientIdRef.current === clientId) {
+        renderingGoogleClientIdRef.current = null
+      }
     })
 
     return () => {
       cancelled = true
     }
-  }, [authMethodsQuery.data, googleSigninMutation])
+  }, [authMethodsQuery.data?.google, authMethodsQuery.data?.google_client_id])
 
   const authMethods = authMethodsQuery.data
   const showLocalSignin = authMethods?.local ?? true

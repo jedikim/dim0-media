@@ -15,8 +15,10 @@ import { ShapeChrome } from './shape-chrome'
 import { getShapeContentScale } from '../../utils/shape-content-scale'
 import { Grip } from 'lucide-react'
 import { FolderNode } from './folder-node'
+import { DEFAULT_STICKY_NOTE_HEIGHT, DEFAULT_STICKY_NOTE_WIDTH } from '../../types/note'
 
 const CONNECTOR_GAP = 0
+const SHEET_INNER_HEIGHT = 352
 type ResizeHandle = {
   pos: ControlPosition
   className: string
@@ -87,7 +89,7 @@ const NodeStatusOverlay = memo(function NodeStatusOverlay({
     return <div className='absolute inset-1 border border-secondary pointer-events-none rounded z-10' />
   }
   if (selected && nodeType === 'sheet') {
-    return <div className='absolute inset-0 border-2 border-secondary pointer-events-none z-10 rounded-md' />
+    return <div className='absolute inset-0 border-2 border-secondary pointer-events-none z-10 rounded-xl' />
   }
   if (!selected && isNew) {
     return <div className='absolute inset-0 border-2 border-dashed border-secondary pointer-events-none rounded z-10' />
@@ -139,11 +141,20 @@ function NodeViewBase({ id, data, selected, width, height, dragging }: NodeProps
   const persistedWidth = data.properties.nodeSize?.size?.width
   const liveHeight = typeof height === 'number' && Number.isFinite(height) ? height : undefined
   const liveWidth = typeof width === 'number' && Number.isFinite(width) ? width : undefined
-  const currentNodeHeight = liveHeight ?? persistedHeight
-  const currentNodeWidth = liveWidth ?? persistedWidth
+  // Sticky notes use a fixed visual frame. Keep the outer node box pinned to the
+  // canonical sticky dimensions so edge attachment math does not drift based on
+  // remeasurement deeper in the render tree.
+  const currentNodeHeight = nodeType === 'sheet'
+    ? DEFAULT_STICKY_NOTE_HEIGHT
+    : liveHeight ?? persistedHeight
+  const currentNodeWidth = nodeType === 'sheet'
+    ? DEFAULT_STICKY_NOTE_WIDTH
+    : liveWidth ?? persistedWidth
 
   const baseMinH = isVisualNode
     ? 50
+    : nodeType === 'sheet'
+    ? SHEET_INNER_HEIGHT
     : shouldMeasureMinHeight
     ? computedMinH
     : Math.max(20, currentNodeHeight ?? 20)
@@ -156,7 +167,7 @@ function NodeViewBase({ id, data, selected, width, height, dragging }: NodeProps
     nodeType !== 'widget' && 'drag-handle',
   )
   const rounded = data.style.roundness > 0 ? 'rounded-2xl' : 'none'
-  const frameClass = clsx('rounded-lg', isPinned && 'ring-2 ring-secondary')
+  const frameClass = clsx('rounded-xl', isPinned && 'ring-2 ring-secondary')
 
   const backgroundColor = isDark ? darkModeDisplayHex(data.style.backgroundColor) || undefined : data.style.backgroundColor
   const strokeColor = isDark ? darkModeDisplayHex(data.style.strokeColor) || undefined : data.style.strokeColor
@@ -210,7 +221,13 @@ function NodeViewBase({ id, data, selected, width, height, dragging }: NodeProps
 
   if (nodeType === 'sheet') {
     return (
-      <div className='border-none relative p-1 bg-transparent overflow-visible w-full h-full'>
+      <div
+        className='border-none relative p-1 bg-transparent overflow-visible'
+        style={{
+          width: currentNodeWidth,
+          height: currentNodeHeight,
+        }}
+      >
         <ShapeChrome
           type={nodeType}
           minHeight={computedMinH}

@@ -153,7 +153,7 @@ export const SheetNodeView = memo(function SheetNodeView({
     <div className='group w-full h-full'>
       <div
         className={clsx(
-          'relative w-full h-full rounded-lg overflow-hidden paper-note-texture',
+          'relative w-full h-full rounded-xl overflow-hidden paper-note-texture',
           isPinned && 'ring-2 ring-secondary border-secondary',
           !suspendContent && 'sticky-note-shadow',
         )}
@@ -162,8 +162,8 @@ export const SheetNodeView = memo(function SheetNodeView({
         <div
           className={clsx(
             'absolute top-0 inset-x-0 py-1 px-2 flex flex-row items-center gap-1 z-40 justify-end rounded-t-sm border-b border-foreground/60 transition-opacity',
-            'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto bg-inherit',
-            selected && 'opacity-100 pointer-events-auto',
+            'pointer-events-none group-hover:pointer-events-auto bg-inherit',
+            selected && 'pointer-events-auto',
           )}
         >
           <Popover>

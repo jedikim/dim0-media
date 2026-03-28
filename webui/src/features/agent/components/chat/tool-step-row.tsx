@@ -106,16 +106,26 @@ const ToolStepWidgetView = ({
   }
 
   return (
-    <div className='w-full flex flex-col gap-3 pt-1'>
-      {attachment.imageFilename && <ImageGenView filename={attachment.imageFilename} />}
+    <div className='w-full min-w-0 overflow-hidden flex flex-col gap-3 pt-1'>
+      {attachment.imageFilename && (
+        <div className='w-full min-w-0 overflow-hidden p-1'>
+          <ImageGenView filename={attachment.imageFilename} />
+        </div>
+      )}
       {attachment.imageUrls && attachment.imageUrls.length > 0 && (
-        <ImageSearchStrip images={attachment.imageUrls} />
+        <div className='w-full min-w-0 overflow-hidden p-1'>
+          <ImageSearchStrip images={attachment.imageUrls} />
+        </div>
       )}
       {attachment.weatherCities && attachment.weatherCities.length > 0 && (
-        <WeatherCard cities={attachment.weatherCities} />
+        <div className='w-full min-w-0 overflow-hidden p-1'>
+          <WeatherCard cities={attachment.weatherCities} />
+        </div>
       )}
       {attachment.tradingSymbols && attachment.tradingSymbols.length > 0 && (
-        <TradingCard symbols={attachment.tradingSymbols} initialRange='1d' />
+        <div className='w-full min-w-0 overflow-hidden p-1'>
+          <TradingCard symbols={attachment.tradingSymbols} initialRange='1d' />
+        </div>
       )}
     </div>
   )
@@ -164,7 +174,7 @@ export const ToolStepRow = ({
   }
 
   const isLoading = isStreaming && step.state === "started"
-  const messageClass = "transition-all w-full h-auto min-h-2 p-2 rounded-xl"
+  const messageClass = "transition-all w-full h-auto min-h-2 min-w-0 overflow-x-hidden overflow-y-auto scrollbar-thin p-2 rounded-xl"
   const spanMessageClass = "text-sm text-card-foreground whitespace-pre-line"
   const stepIcon = ToolNameIcon[step.name]
   const successIcon = stepIcon || Tick01Icon
@@ -205,7 +215,7 @@ export const ToolStepRow = ({
           )}
         </div>
       </div>
-      <div className='relative flex-1 flex flex-col items-start rounded-lg text-sm max-w-[94%]'>
+      <div className='relative flex-1 min-w-0 flex flex-col items-start rounded-lg text-sm max-w-[94%]'>
         <div className={messageClass}>
           <div className='flex flex-col gap-2'>
             <div>

@@ -122,7 +122,7 @@ export function WeatherWidget(props: WeatherWidgetProps) {
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className='relative rounded-xl p-4 sm:p-5 shadow-md
+      className='relative rounded-xl p-4 sm:p-5 shadow-sm
                  bg-sidebar/60 backdrop-blur-md text-card-foreground
                  w-full flex flex-col gap-4 overflow-hidden'
     >
@@ -196,7 +196,7 @@ export function WeatherWidget(props: WeatherWidgetProps) {
                 border: '1px solid var(--border)',
                 fontSize: 12,
                 backgroundColor: 'var(--background)',
-                boxShadow: 'var(--shadow-md)',
+                boxShadow: 'var(--shadow-sm)',
               }}
               labelFormatter={(l) => formatTimeLabel(l)}
               formatter={(v: number) => [prettyTemp(v as number, unit), '']}

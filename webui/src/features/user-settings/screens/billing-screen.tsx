@@ -145,7 +145,7 @@ export function BillingScreen() {
   const plusPriceLabel = useMemo(() => {
     const rawAmount = billingPublicConfig?.plus_price?.unit_amount
     const rawCurrency = billingPublicConfig?.plus_price?.currency
-    if (typeof rawAmount !== "number" || !rawCurrency) return "€12"
+    if (typeof rawAmount !== "number" || !rawCurrency) return "€11.99"
     return new Intl.NumberFormat(undefined, {
       style: "currency",
       currency: rawCurrency.toUpperCase(),

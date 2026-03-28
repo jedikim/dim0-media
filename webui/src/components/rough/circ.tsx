@@ -41,6 +41,8 @@ type SimplifiedCircleOverlayProps = {
   strokeStyle?: StrokeStyle
   strokeWidth?: number
   visualInset: number
+  widthPx?: number
+  heightPx?: number
 }
 
 const SimplifiedCircleOverlay = memo(function SimplifiedCircleOverlay({
@@ -48,15 +50,19 @@ const SimplifiedCircleOverlay = memo(function SimplifiedCircleOverlay({
   stroke,
   strokeStyle,
   strokeWidth,
-  visualInset
+  visualInset,
+  widthPx,
+  heightPx
 }: SimplifiedCircleOverlayProps) {
   const hasStroke = stroke && stroke !== 'transparent' && (strokeWidth ?? 1) > 0
   const useSvgDash = hasStroke && (strokeStyle === 'dashed' || strokeStyle === 'dotted')
   const { strokeLineDash, lineCap } = mapStrokeStyle(strokeStyle, strokeWidth)
   const dashArray = strokeLineDash ? strokeLineDash.join(' ') : undefined
-  const viewBoxSize = 100
+  const viewBoxWidth = Math.max(1, widthPx ?? 1)
+  const viewBoxHeight = Math.max(1, heightPx ?? 1)
   const inset = 1
-  const radius = viewBoxSize / 2 - inset
+  const rx = Math.max(0, viewBoxWidth / 2 - inset)
+  const ry = Math.max(0, viewBoxHeight / 2 - inset)
 
   return (
     <svg
@@ -68,14 +74,14 @@ const SimplifiedCircleOverlay = memo(function SimplifiedCircleOverlay({
         width: 'calc(100% - 0.375rem)',
         height: 'calc(100% - 0.375rem)',
       }}
-      viewBox={`0 0 ${viewBoxSize} ${viewBoxSize}`}
+      viewBox={`0 0 ${viewBoxWidth} ${viewBoxHeight}`}
       preserveAspectRatio="none"
     >
       <ellipse
-        cx={viewBoxSize / 2}
-        cy={viewBoxSize / 2}
-        rx={radius}
-        ry={radius}
+        cx={viewBoxWidth / 2}
+        cy={viewBoxHeight / 2}
+        rx={rx}
+        ry={ry}
         fill={fill || 'transparent'}
         stroke={stroke || 'transparent'}
         strokeWidth={strokeWidth ?? 1}
@@ -360,6 +366,8 @@ export const RoughCircle: React.FC<RoughShapeProps> = ({
           strokeStyle={strokeStyle}
           strokeWidth={strokeWidth}
           visualInset={visualInset}
+          widthPx={widthPx}
+          heightPx={heightPx}
         />
         <div className='relative z-20 w-full h-full'>
           {children}
