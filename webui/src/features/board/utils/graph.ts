@@ -2,7 +2,12 @@ import { uuidToNumber } from "@/lib/common"
 import type { LinkEdge, NoteNode } from "../types/flow"
 import { createDefaultLinkProperties, type Link } from "../types/link"
 import type { Document } from "../types/document"
-import { createDefaultNoteProperties, type Note } from "../types/note"
+import {
+  createDefaultNoteProperties,
+  DEFAULT_STICKY_NOTE_HEIGHT,
+  DEFAULT_STICKY_NOTE_WIDTH,
+  type Note,
+} from "../types/note"
 import { createDefaultLinkStyle } from "../types/style"
 import { nodeCenter } from "./point-attach"
 import { POINT_NODE_SIZE } from "../components/flow/point-node"
@@ -206,8 +211,17 @@ export const convertNodeToNote = (node: NoteNode): Note | Document | null => {
     note.properties = note.properties || (note.type === "note"
       ? createDefaultNoteProperties({ type: note.style.type })
       : note.properties)
+
+    /**
+     * Sheets use a fixed canonical outer box so persisted geometry stays
+     * stable across reloads and attached edge math does not drift.
+     */
+    const size = note.type === "note" && note.style.type === "sheet"
+      ? { width: DEFAULT_STICKY_NOTE_WIDTH, height: DEFAULT_STICKY_NOTE_HEIGHT }
+      : { width: node.measured.width || 100, height: node.measured.height || 100 }
+
     note.properties.nodeSize = {
-      size: { width: node.measured.width || 100, height: node.measured.height || 100 },
+      size,
       type: "size",
     }
   }
