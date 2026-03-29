@@ -23,6 +23,7 @@ import { NotFoundPage } from "@/components/not-found"
 import { SettingsScreen } from "@/features/user-settings/screens/settings-screen"
 import { BillingScreen } from "@/features/user-settings/screens/billing-screen"
 import { VerifyEmailPage } from "@/features/signin/screens/verify-email"
+import { InstallScreen } from "@/features/install/screens/install-screen"
 
 
 export const rootRoute = createRootRoute({
@@ -188,6 +189,14 @@ const settingsBillingRoute = createRoute({
   component: BillingScreen,
 })
 
+export const InstallUrl = "/install"
+const installRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: InstallUrl,
+  beforeLoad: requireVerifiedAuth,
+  component: InstallScreen,
+})
+
 const routeTree = rootRoute.addChildren([
   signinRoute,
   signupRoute,
@@ -204,6 +213,7 @@ const routeTree = rootRoute.addChildren([
   newsfeedDetailRoute,
   settingsRoute,
   settingsBillingRoute,
+  installRoute,
 ])
 
 export const router = createRouter({ routeTree })

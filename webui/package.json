@@ -73,6 +73,7 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "roughjs": "^4.6.6",
+    "simple-icons": "^16.14.0",
     "snakecase-keys": "^9.0.2",
     "sonner": "^2.0.7",
     "streamdown": "^2.1.0",
@@ -102,6 +103,7 @@
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.35.1",
     "unified": "^11.0.5",
-    "vite": "^7.0.6"
+    "vite": "^7.0.6",
+    "vite-plugin-pwa": "^1.2.0"
   }
 }

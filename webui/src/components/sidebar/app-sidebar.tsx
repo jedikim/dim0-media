@@ -20,7 +20,7 @@ import { BoardItem, DashboardMenuItem, NewBoardItem } from './board'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Chat } from '@/features/agent/types/chat'
 import { HugeiconsIcon } from '@hugeicons/react'
-import { Award04Icon, Clock02Icon, LogoutSquareIcon, MinusSignIcon, PlusSignIcon, UserIcon } from '@hugeicons/core-free-icons'
+import { Award04Icon, Clock02Icon, Download04Icon, LogoutSquareIcon, MinusSignIcon, PlusSignIcon, UserIcon } from '@hugeicons/core-free-icons'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -112,18 +112,30 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
 
   return (
     <Sidebar variant="sidebar" collapsible="offcanvas">
-      <SidebarContent className="w-[calc(var(--sidebar-width)-theme(spacing.2)*2)] h-full flex flex-col overflow-hidden">
+      <SidebarContent className="w-full h-full flex flex-col overflow-hidden">
         <SidebarGroup className="shrink-0">
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton
-                  className="h-auto py-2"
-                  onClick={() => navigate({ to: "/" })}
-                >
-                  <img src="/dim0.svg" alt="Dim0 Home" className="h-7 w-7 shrink-0" />
-                  <span className="font-medium">Dim0</span>
-                </SidebarMenuButton>
+                <div className="flex items-center gap-2">
+                  <SidebarMenuButton
+                    className="h-auto py-2 min-w-0 flex-1"
+                    onClick={() => navigate({ to: "/" })}
+                  >
+                    <img src="/dim0.svg" alt="Dim0 Home" className="h-7 w-7 shrink-0" />
+                    <span className="font-medium">Dim0</span>
+                  </SidebarMenuButton>
+
+                  <button
+                    type="button"
+                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                    onClick={() => navigate({ to: "/install" })}
+                    aria-label="Install app"
+                    title="Install app"
+                  >
+                    <HugeiconsIcon icon={Download04Icon} className="size-4" strokeWidth={2} />
+                  </button>
+                </div>
               </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
