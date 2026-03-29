@@ -1,3 +1,9 @@
+## v0.1.23 (2026-03-29)
+
+### Fix
+
+- **backend**: allow note tool outputs without labels (#25)
+
 ## v0.1.22 (2026-03-29)
 
 ### Feat
