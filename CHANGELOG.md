@@ -1,3 +1,9 @@
+## v0.1.24 (2026-03-29)
+
+### Fix
+
+- **board**: persist canonical sheet size (#26)
+
 ## v0.1.23 (2026-03-29)
 
 ### Fix
