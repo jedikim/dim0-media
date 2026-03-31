@@ -48,6 +48,7 @@ services:
     - deepseek-chat-v3.1
     - glm-4.7
     - qwen3.5-plus-02-15
+    - qwen3.6-plus
     - kimi-k2-thinking
 
   search:

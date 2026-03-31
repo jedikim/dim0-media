@@ -27,6 +27,7 @@ export const LlmModels = [
   "openrouter/deepseek/deepseek-chat-v3.1",
   "openrouter/z-ai/glm-4.7",
   "openrouter/qwen/qwen3.5-plus-02-15",
+  "openrouter/qwen/qwen3.6-plus-preview:free",
   "openrouter/moonshotai/kimi-k2-thinking"
 ] as const
 
@@ -59,6 +60,7 @@ export const LlmName: Record<LlmModel, string> = {
   "openrouter/deepseek/deepseek-chat-v3.1": "DeepSeek Chat",
   "openrouter/z-ai/glm-4.7": "GLM-4.7",
   "openrouter/qwen/qwen3.5-plus-02-15": "Qwen 3.5 Plus",
+  "openrouter/qwen/qwen3.6-plus-preview:free": "Qwen 3.6 Plus Preview",
   "openrouter/moonshotai/kimi-k2-thinking": "Kimi K2 Thinking"
 }
 
@@ -89,6 +91,7 @@ export const LlmDescription: Record<LlmModel, string> = {
   "openrouter/deepseek/deepseek-chat-v3.1": "High-performance open-source model with advanced reasoning and adaptability",
   "openrouter/z-ai/glm-4.7": "Fast general-purpose model from Z.ai with strong reasoning and coding ability",
   "openrouter/qwen/qwen3.5-plus-02-15": "Versatile Qwen model tuned for strong multilingual reasoning and tool use",
+  "openrouter/qwen/qwen3.6-plus-preview:free": "Preview of Qwen 3.6 with stronger reasoning, agentic behavior, and coding performance",
   "openrouter/moonshotai/kimi-k2-thinking": "Innovative model focused on creative problem-solving and dynamic thinking"
 }
 
@@ -124,6 +127,7 @@ export const LlmBadge: Record<LlmModel, LlmTier> = {
   "openrouter/deepseek/deepseek-chat-v3.1": "Balanced",
   "openrouter/z-ai/glm-4.7": "Balanced",
   "openrouter/qwen/qwen3.5-plus-02-15": "Balanced",
+  "openrouter/qwen/qwen3.6-plus-preview:free": "Balanced",
   "openrouter/moonshotai/kimi-k2-thinking": "Balanced"
 }
 
@@ -167,6 +171,7 @@ export const LlmFamilyMap: Record<LlmModel, LlmFamily> = {
   "openrouter/deepseek/deepseek-chat-v3.1": "deepseek",
   "openrouter/z-ai/glm-4.7": "z-ai",
   "openrouter/qwen/qwen3.5-plus-02-15": "qwen",
+  "openrouter/qwen/qwen3.6-plus-preview:free": "qwen",
   "openrouter/moonshotai/kimi-k2-thinking": "moonshotai"
 }
 

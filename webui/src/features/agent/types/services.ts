@@ -65,6 +65,7 @@ export const defaultServices: () => Services = () => ({
     // { name: "openrouter/deepseek/deepseek-chat-v3.1", available: false, provider: "openrouter" },
     { name: "openrouter/z-ai/glm-4.7", available: false, provider: "openrouter" },
     { name: "openrouter/qwen/qwen3.5-plus-02-15", available: false, provider: "openrouter" },
+    // { name: "openrouter/qwen/qwen3.6-plus-preview:free", available: false, provider: "openrouter" },
     { name: "openrouter/moonshotai/kimi-k2-thinking", available: false, provider: "openrouter" },
   ],
   search: [

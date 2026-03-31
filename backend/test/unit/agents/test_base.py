@@ -6,8 +6,8 @@ from agents.extensions.models.litellm_model import LitellmModel
 from topix.agents.base import BaseAgent
 
 
-def test_adjust_model_settings_uses_agent_name_for_openai_prompt_cache_key():
-    """OpenAI string models should bucket prompt caching by agent name."""
+def test_adjust_model_settings_enables_openai_prompt_cache_retention():
+    """OpenAI string models should enable 24h prompt cache retention."""
     agent = BaseAgent.__new__(BaseAgent)
     agent.name = "planner_agent"
 
@@ -16,9 +16,11 @@ def test_adjust_model_settings_uses_agent_name_for_openai_prompt_cache_key():
         ModelSettings(extra_args={"existing": "value"}),
     )
 
+    assert settings.extra_body == {
+        "prompt_cache_retention": "24h",
+    }
     assert settings.extra_args == {
         "existing": "value",
-        "prompt_cache_key": "planner_agent",
     }
 
 

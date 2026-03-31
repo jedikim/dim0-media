@@ -148,7 +148,13 @@ qwen3.5-plus-02-15:
   model: qwen3.5-plus-02-15
   openrouter_model: qwen/qwen3.5-plus-02-15
   provider: qwen
-  tier: lite
+  tier: pro
+
+qwen3.6-plus:
+  model: qwen3.6-plus-preview:free
+  openrouter_model: qwen/qwen3.6-plus-preview:free
+  provider: qwen
+  tier: pro
 
 # Moonshot Models
 kimi-k2-thinking:

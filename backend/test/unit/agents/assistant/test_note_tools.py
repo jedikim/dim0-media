@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from unittest.mock import AsyncMock
+from unittest.mock import ANY, AsyncMock
 
 import pytest
 
@@ -45,8 +45,8 @@ async def test_build_note_uses_frontend_aligned_defaults() -> None:
 
     assert note.graph_uid == "graph-1"
     assert note.style.type == NodeType.SHEET
-    assert note.properties.node_size.size.width == 300
-    assert note.properties.node_size.size.height == 300
+    assert note.properties.node_size.size.width == 368
+    assert note.properties.node_size.size.height == 360
     assert note.properties.node_position.position.x == 0
     assert note.properties.node_position.position.y == 0
 
@@ -125,6 +125,16 @@ async def test_edit_note_tool_updates_only_requested_fields() -> None:
         {
             "label": {"markdown": "After"},
             "style": {"type": NodeType.SHEET},
+            "properties": {
+                "node_size": {
+                    "id": ANY,
+                    "type": "size",
+                    "size": {
+                        "width": 368.0,
+                        "height": 360.0,
+                    },
+                },
+            },
         },
     )
 

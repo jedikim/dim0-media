@@ -24,7 +24,15 @@ type PointPair = {
  */
 export const convertNoteToNode = (note: Note | Document): NoteNode => {
   const position = note.properties?.nodePosition?.position || { x: 0, y: 0 }
-  const size = note.properties?.nodeSize?.size || { width: 300, height: 100 }
+  const fallbackSize = { width: 300, height: 100 }
+  // Sheets keep a canonical outer frame so load/save/render all use identical geometry.
+  const size = note.type === "note" && note.style.type === "sheet"
+    ? { width: DEFAULT_STICKY_NOTE_WIDTH, height: DEFAULT_STICKY_NOTE_HEIGHT }
+    : note.properties?.nodeSize?.size || (
+      note.type === "note"
+        ? createDefaultNoteProperties({ type: note.style.type }).nodeSize.size ?? fallbackSize
+        : fallbackSize
+    )
   const zIndex =
     note.type === "note" ? note.properties?.nodeZIndex?.number || 0 : 0
 

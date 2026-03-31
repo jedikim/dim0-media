@@ -486,6 +486,7 @@ MODEL_DICT = {
     "claude-sonnet-4.6": "openrouter/anthropic/claude-sonnet-4.6",
     "glm-4.7": "openrouter/z-ai/glm-4.7",
     "qwen3.5-plus-02-15": "openrouter/qwen/qwen3.5-plus-02-15",
+    "qwen3.6-plus": "openrouter/qwen/qwen3.6-plus-preview:free",
 }
 
 
@@ -518,6 +519,7 @@ def _select_options() -> tuple[Literal["assistant", "deep_research"], str, str]:
             "claude-sonnet-4.6",
             "glm-4.7",
             "qwen3.5-plus-02-15",
+            "qwen3.6-plus-preview:free",
         ],
         qmark="?",
         style=questionary.Style(
