@@ -1,3 +1,9 @@
+## v0.1.26 (2026-03-31)
+
+### Feat
+
+- *****: integrate qwen 3.6 plus preview + minor bug fixes + openai prompt caching (#28)
+
 ## v0.1.25 (2026-03-30)
 
 ## v0.1.24 (2026-03-29)
