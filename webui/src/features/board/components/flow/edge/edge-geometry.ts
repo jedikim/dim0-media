@@ -27,7 +27,7 @@ export function barbPaths(size: number, tipFactor: number, baseFactor: number): 
   const bottomY = size * 0.95
   const midY = size / 2
 
-  const p1 = `M ${baseX} ${topY} L ${tipX} ${midY}`
+  const p1 = `M ${baseX} ${midY} L ${tipX} ${midY} L ${baseX} ${topY}`
   const p2 = `M ${tipX} ${midY} L ${baseX} ${bottomY}`
 
   return { p1, p2 }

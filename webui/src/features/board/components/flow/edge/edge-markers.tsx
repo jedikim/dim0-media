@@ -11,7 +11,7 @@ import {
 } from './edge-geometry'
 
 export const BASE_HEAD_SIZE = 10
-export const HEAD_SCALE = 1.5
+export const HEAD_SCALE = 1.8
 export const TIP_FACTOR = 0.95
 export const BASE_X_FACTOR = 0.25
 export const BASE_THICKNESS_BOOST = 1.1
@@ -46,14 +46,20 @@ function renderMarker(
 ) {
   if (kind === 'none') return null
 
-  const headSize = BASE_HEAD_SIZE * HEAD_SCALE
+  const headScale = kind === 'barb' ? HEAD_SCALE * 1.15 : HEAD_SCALE
+  const headSize = BASE_HEAD_SIZE * headScale
   const headStrokeWidth = Math.max(1, strokeWidth)
-  const viewBox = `0 0 ${headSize} ${headSize}`
+  const markerPadding = Math.max(2, headStrokeWidth * 0.9)
+  const markerBoxSize = headSize + markerPadding * 2
+  const viewBox = `${-markerPadding} ${-markerPadding} ${markerBoxSize} ${markerBoxSize}`
+  const refX = kind === 'barb'
+    ? headSize * (BASE_X_FACTOR - 0.08)
+    : headSize * BASE_X_FACTOR
   const refProps = {
-    refX: `${headSize * BASE_X_FACTOR}`,
+    refX: `${refX}`,
     refY: `${headSize / 2}`,
-    markerWidth: headSize,
-    markerHeight: headSize,
+    markerWidth: markerBoxSize,
+    markerHeight: markerBoxSize,
     markerUnits: 'userSpaceOnUse' as const,
     orient: markerOrient(orient),
   }

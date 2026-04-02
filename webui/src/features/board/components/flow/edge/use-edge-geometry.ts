@@ -53,6 +53,31 @@ type Params = {
   storedBendPoint: Point | null
 }
 
+
+/**
+ * Picks a default bend point that feels more like a concept-map branch than a neutral spline.
+ */
+function getDefaultMindMapBendPoint(sourceCenter: Point, targetCenter: Point): Point {
+  const dx = targetCenter.x - sourceCenter.x
+  const dy = targetCenter.y - sourceCenter.y
+
+  const midX = (sourceCenter.x + targetCenter.x) / 2
+  const midY = (sourceCenter.y + targetCenter.y) / 2
+
+  const horizontalDirection = dx >= 0 ? 1 : -1
+  const verticalRelation = dy >= 0 ? 1 : -1
+  const verticalBendDirection = horizontalDirection === verticalRelation ? 1 : -1
+
+  const verticalOffset = Math.min(220, Math.max(28, Math.abs(dx) * 0.18))
+  const horizontalNudge = Math.min(90, Math.max(0, Math.abs(dy) * 0.12))
+
+  return {
+    x: midX + horizontalDirection * horizontalNudge,
+    y: midY + verticalBendDirection * verticalOffset,
+  }
+}
+
+
 export function useEdgeGeometry({
   sourceGeom,
   targetGeom,
@@ -132,18 +157,7 @@ export function useEdgeGeometry({
   const fallbackBendPoint: Point | null = useMemo(() => {
     if (!isBezierPath) return null
     if (!sourceCenter || !targetCenter) return null
-    const midX = (sourceCenter.x + targetCenter.x) / 2
-    const midY = (sourceCenter.y + targetCenter.y) / 2
-    const dx = targetCenter.x - sourceCenter.x
-    const dy = targetCenter.y - sourceCenter.y
-    const len = Math.hypot(dx, dy) || 1
-    const normalX = -dy / len
-    const normalY = dx / len
-    const offset = Math.min(240, Math.max(16, len * 0.16))
-    return {
-      x: midX + normalX * offset,
-      y: midY + normalY * offset
-    }
+    return getDefaultMindMapBendPoint(sourceCenter, targetCenter)
   }, [isBezierPath, sourceCenter, targetCenter])
 
   const geometryResult = useMemo(() => {
