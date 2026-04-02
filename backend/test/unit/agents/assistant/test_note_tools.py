@@ -74,6 +74,34 @@ async def test_build_widget_note_uses_widget_defaults() -> None:
 
 
 @pytest.mark.asyncio
+async def test_build_inscribed_shapes_use_larger_square_defaults() -> None:
+    """Ellipse and diamond families should start from roomier square defaults."""
+    graph_store = DummyGraphStore()
+
+    ellipse_note = await build_note(
+        graph_store=graph_store,
+        graph_uid="graph-1",
+        content="Ellipse",
+        label="Ellipse",
+        note_type=NodeType.ELLIPSE,
+        parent_id=None,
+    )
+    diamond_note = await build_note(
+        graph_store=graph_store,
+        graph_uid="graph-1",
+        content="Diamond",
+        label="Diamond",
+        note_type=NodeType.DIAMOND,
+        parent_id=None,
+    )
+
+    assert ellipse_note.properties.node_size.size.width == 320
+    assert ellipse_note.properties.node_size.size.height == 320
+    assert diamond_note.properties.node_size.size.width == 340
+    assert diamond_note.properties.node_size.size.height == 340
+
+
+@pytest.mark.asyncio
 async def test_write_note_tool_creates_note_in_root_scope_by_default() -> None:
     """Write note should create a note in the current root folder when note_id is omitted."""
     graph_store = DummyGraphStore()

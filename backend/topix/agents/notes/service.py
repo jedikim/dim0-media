@@ -75,7 +75,15 @@ def get_default_note_size(note_type: NodeType) -> tuple[int, int]:
         return 320, 320
     if note_type == NodeType.WIDGET:
         return 360, 260
-    return 400, 400
+    if note_type == NodeType.ELLIPSE:
+        return 320, 320
+    if note_type == NodeType.LAYERED_CIRCLE:
+        return 320, 320
+    if note_type in {NodeType.DIAMOND, NodeType.SOFT_DIAMOND, NodeType.LAYERED_DIAMOND}:
+        return 340, 340
+    if note_type == NodeType.RECTANGLE:
+        return 320, 180
+    return 320, 180
 
 
 async def compute_note_position(

@@ -74,7 +74,7 @@ def convert_mapify_output_to_notes_links(
             content=RichText(markdown=theme.description),
         )
         note.label = RichText(markdown=theme.label)
-        note.style.type = NodeType.RECTANGLE
+        note.style.type = NodeType.LAYERED_CIRCLE if parent is None else NodeType.RECTANGLE
         notes.append(note)
 
         if parent:

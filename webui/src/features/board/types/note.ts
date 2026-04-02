@@ -63,8 +63,12 @@ export interface Note extends Record<string, unknown> {
 }
 
 
-export const DEFAULT_NOTE_WIDTH = 50
-export const DEFAULT_NOTE_HEIGHT = 50
+export const DEFAULT_RECTANGLE_NOTE_WIDTH = 320
+export const DEFAULT_RECTANGLE_NOTE_HEIGHT = 180
+export const DEFAULT_ELLIPSE_NOTE_WIDTH = 320
+export const DEFAULT_ELLIPSE_NOTE_HEIGHT = 320
+export const DEFAULT_DIAMOND_NOTE_WIDTH = 340
+export const DEFAULT_DIAMOND_NOTE_HEIGHT = 340
 
 export const DEFAULT_TEXT_NOTE_WIDTH = 150
 export const DEFAULT_TEXT_NOTE_HEIGHT = 20
@@ -88,19 +92,23 @@ export const DEFAULT_WIDGET_HEIGHT = 260
  * @returns Default properties for a note.
  */
 export const createDefaultNoteProperties = ({ type = 'rectangle' }: { type?: NodeType }): NoteProperties => {
-  const defaultSize = type === 'sheet' ?
-    { width: DEFAULT_STICKY_NOTE_WIDTH, height: DEFAULT_STICKY_NOTE_HEIGHT }
-    : type === 'text' ?
-    { width: DEFAULT_TEXT_NOTE_WIDTH, height: DEFAULT_TEXT_NOTE_HEIGHT }
-    : type === 'slide' ?
-    { width: DEFAULT_SLIDE_WIDTH, height: DEFAULT_SLIDE_HEIGHT }
-    : type === 'folder' ?
-    { width: DEFAULT_FOLDER_WIDTH, height: DEFAULT_FOLDER_HEIGHT }
-    : type === 'code-sandbox' ?
-    { width: DEFAULT_CODE_SANDBOX_WIDTH, height: DEFAULT_CODE_SANDBOX_HEIGHT }
-    : type === 'widget' ?
-    { width: DEFAULT_WIDGET_WIDTH, height: DEFAULT_WIDGET_HEIGHT }
-    : { width: DEFAULT_NOTE_WIDTH, height: DEFAULT_NOTE_HEIGHT }
+  const defaultSize = type === 'sheet'
+    ? { width: DEFAULT_STICKY_NOTE_WIDTH, height: DEFAULT_STICKY_NOTE_HEIGHT }
+    : type === 'text'
+    ? { width: DEFAULT_TEXT_NOTE_WIDTH, height: DEFAULT_TEXT_NOTE_HEIGHT }
+    : type === 'slide'
+    ? { width: DEFAULT_SLIDE_WIDTH, height: DEFAULT_SLIDE_HEIGHT }
+    : type === 'folder'
+    ? { width: DEFAULT_FOLDER_WIDTH, height: DEFAULT_FOLDER_HEIGHT }
+    : type === 'code-sandbox'
+    ? { width: DEFAULT_CODE_SANDBOX_WIDTH, height: DEFAULT_CODE_SANDBOX_HEIGHT }
+    : type === 'widget'
+    ? { width: DEFAULT_WIDGET_WIDTH, height: DEFAULT_WIDGET_HEIGHT }
+    : type === 'ellipse' || type === 'layered-circle'
+    ? { width: DEFAULT_ELLIPSE_NOTE_WIDTH, height: DEFAULT_ELLIPSE_NOTE_HEIGHT }
+    : type === 'diamond' || type === 'soft-diamond' || type === 'layered-diamond'
+    ? { width: DEFAULT_DIAMOND_NOTE_WIDTH, height: DEFAULT_DIAMOND_NOTE_HEIGHT }
+    : { width: DEFAULT_RECTANGLE_NOTE_WIDTH, height: DEFAULT_RECTANGLE_NOTE_HEIGHT }
 
   return {
     nodePosition: {
@@ -167,7 +175,11 @@ export const createDefaultNote = ({
       ? DEFAULT_CODE_SANDBOX_WIDTH
       : nodeType === 'widget'
       ? DEFAULT_WIDGET_WIDTH
-      : DEFAULT_NOTE_WIDTH,
+      : nodeType === 'ellipse' || nodeType === 'layered-circle'
+      ? DEFAULT_ELLIPSE_NOTE_WIDTH
+      : nodeType === 'diamond' || nodeType === 'soft-diamond' || nodeType === 'layered-diamond'
+      ? DEFAULT_DIAMOND_NOTE_WIDTH
+      : DEFAULT_RECTANGLE_NOTE_WIDTH,
     minHeight: nodeType === 'sheet'
       ? DEFAULT_STICKY_NOTE_HEIGHT
       : nodeType === 'folder'
@@ -176,7 +188,11 @@ export const createDefaultNote = ({
       ? DEFAULT_CODE_SANDBOX_HEIGHT
       : nodeType === 'widget'
       ? DEFAULT_WIDGET_HEIGHT
-      : DEFAULT_NOTE_HEIGHT,
+      : nodeType === 'ellipse' || nodeType === 'layered-circle'
+      ? DEFAULT_ELLIPSE_NOTE_HEIGHT
+      : nodeType === 'diamond' || nodeType === 'soft-diamond' || nodeType === 'layered-diamond'
+      ? DEFAULT_DIAMOND_NOTE_HEIGHT
+      : DEFAULT_RECTANGLE_NOTE_HEIGHT,
     properties: createDefaultNoteProperties({ type: nodeType }),
     roughSeed
   }

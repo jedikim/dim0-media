@@ -99,7 +99,7 @@ export const WidgetNode = memo(function WidgetNode({
 
   return (
     <div
-      className="relative w-full h-full overflow-hidden rounded-3xl border border-border/60 bg-card p-2 text-left shadow-sm"
+      className="relative w-full h-full overflow-hidden rounded-3xl border border-border border-dashed bg-background p-2 text-left"
     >
       <div className="absolute right-2 top-2 z-20 flex items-center gap-1">
         <div

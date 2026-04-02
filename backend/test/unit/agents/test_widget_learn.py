@@ -22,4 +22,5 @@ async def test_learn_generate_html_widget_returns_widget_note_guidance() -> None
     assert "visual explainer" in prompt
     assert "Chart.js" in prompt
     assert "system-ui" in prompt
-    assert "rose-pine" in prompt
+    assert "var(--background)" in prompt
+    assert "light and dark themes" in prompt
