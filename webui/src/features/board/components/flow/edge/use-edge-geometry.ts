@@ -60,6 +60,7 @@ type Params = {
 function getDefaultMindMapBendPoint(sourceCenter: Point, targetCenter: Point): Point {
   const dx = targetCenter.x - sourceCenter.x
   const dy = targetCenter.y - sourceCenter.y
+  const len = Math.hypot(dx, dy) || 1
 
   const midX = (sourceCenter.x + targetCenter.x) / 2
   const midY = (sourceCenter.y + targetCenter.y) / 2
@@ -68,11 +69,10 @@ function getDefaultMindMapBendPoint(sourceCenter: Point, targetCenter: Point): P
   const verticalRelation = dy >= 0 ? 1 : -1
   const verticalBendDirection = horizontalDirection === verticalRelation ? 1 : -1
 
-  const verticalOffset = Math.min(220, Math.max(28, Math.abs(dx) * 0.18))
-  const horizontalNudge = Math.min(90, Math.max(0, Math.abs(dy) * 0.12))
+  const verticalOffset = Math.min(320, Math.max(34, len * 0.24))
 
   return {
-    x: midX + horizontalDirection * horizontalNudge,
+    x: midX,
     y: midY + verticalBendDirection * verticalOffset,
   }
 }
