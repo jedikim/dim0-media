@@ -1,3 +1,9 @@
+## v0.1.27 (2026-04-02)
+
+### Feat
+
+- **board**: add write tool and revamp agent front-end (#29)
+
 ## v0.1.26 (2026-03-31)
 
 ### Feat
