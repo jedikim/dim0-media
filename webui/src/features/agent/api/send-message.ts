@@ -14,7 +14,7 @@ import { useGraphStore } from "@/features/board/store/graph-store"
 import { getBoardNote } from "@/features/board/api/get-board"
 import { convertNoteToNode } from "@/features/board/utils/graph"
 import type { NoteNode } from "@/features/board/types/flow"
-import type { CreateNoteOutput, EditNoteOutput } from "../types/tool-outputs"
+import type { CreateNoteOutput, EditNoteOutput, WriteNoteOutput } from "../types/tool-outputs"
 import { isReasoningTextStep, isToolCallStep, normalizeReasoningSteps } from "../types/stream"
 
 
@@ -219,7 +219,12 @@ export const useSendMessage = () => {
                 const note = await getBoardNote(activeBoardId, output.noteId)
                 const fetchedNode = convertNoteToNode(note)
                 setNodesPersist((prevNodes) =>
-                  applyRemoteNoteNode(prevNodes, fetchedNode, output.type === "create_note"),
+                  applyRemoteNoteNode(
+                    prevNodes,
+                    fetchedNode,
+                    output.type === "create_note"
+                      || (output.type === "write_note" && output.action === "created")
+                  ),
                 { persist: false })
               } catch (error) {
                 console.error("Failed to apply remote note update locally:", error)
@@ -293,14 +298,14 @@ const sanitizeToolOutput = (output: ToolOutput): ToolOutput => {
   }
 }
 
-const collectNoteToolOutputs = (steps: ReasoningStep[]): Array<CreateNoteOutput | EditNoteOutput> =>
+const collectNoteToolOutputs = (steps: ReasoningStep[]): Array<WriteNoteOutput | CreateNoteOutput | EditNoteOutput> =>
   steps.flatMap((step) => {
     if (!isToolCallStep(step)) return []
     if (
-      (step.name === "create_note" || step.name === "edit_note") &&
+      (step.name === "write_note" || step.name === "create_note" || step.name === "edit_note") &&
       typeof step.output !== "string"
     ) {
-      return [step.output as CreateNoteOutput | EditNoteOutput]
+      return [step.output as WriteNoteOutput | CreateNoteOutput | EditNoteOutput]
     }
     return []
   })

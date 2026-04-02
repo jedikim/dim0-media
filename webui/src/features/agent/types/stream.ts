@@ -102,6 +102,7 @@ export type ToolName =
   | "web_search"
   | "memory_search"
   | "code_interpreter"
+  | "write_note"
   | "create_note"
   | "edit_note"
   | "outline_generator"
@@ -123,6 +124,7 @@ export const ToolNameDescription: Record<ToolName, string> = {
   web_search: "Search the web",
   memory_search: "Search memory",
   code_interpreter: "Interpret code",
+  write_note: "Write note",
   create_note: "Create note",
   edit_note: "Edit note",
   outline_generator: "Generate outline",
@@ -149,6 +151,7 @@ export const ToolNameIcon: Record<string, IconSvgElement> = {
   synthesizer: NoteIcon,
   navigate: AiBrowserIcon,
   code_interpreter: SourceCodeIcon,
+  write_note: NoteAddIcon,
   create_note: NoteAddIcon,
   edit_note: NoteEditIcon,
   image_description: AiImageIcon,

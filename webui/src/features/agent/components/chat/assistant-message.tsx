@@ -2,8 +2,11 @@ import { ReasoningStepsView } from "./reasoning-steps"
 import type { ChatMessage } from "../../types/chat"
 import { ResponseActions } from "./actions/response-actions"
 import { useMemo } from "react"
-import { isReasoningTextStep } from "../../types/stream"
+import { isReasoningTextStep, type ReasoningStep, type ReasoningTextStep } from "../../types/stream"
 import { SourcesView } from "./sources-view"
+
+
+const EMPTY_STEPS: ReasoningStep[] = []
 
 
 /**
@@ -14,11 +17,11 @@ export const AssistantMessage = ({
 }: {
   message: ChatMessage
 }) => {
-  const steps = message.properties?.reasoning?.reasoning || []
+  const steps: ReasoningStep[] = message.properties.reasoning?.reasoning ?? EMPTY_STEPS
   const resp = { steps, sentAt: message.sentAt, isDeepResearch: message.isDeepResearch }
 
   const responseMarkdown = useMemo(
-    () => steps.filter(isReasoningTextStep).map((step) => step.message).join(""),
+    () => steps.filter(isReasoningTextStep).map((step: ReasoningTextStep) => step.message).join(""),
     [steps]
   )
 

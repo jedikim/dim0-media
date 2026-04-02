@@ -88,14 +88,16 @@ const HistoryList = ({
                     key={chat.uid}
                     onSelect={() => onSelectChat(chat.uid)}
                     className={cn(
-                      "flex flex-col items-start gap-0.5",
+                      "flex w-full max-w-full min-w-0 flex-col items-start gap-0.5",
                       isActive && "bg-accent/40"
                     )}
                   >
-                    <span className="text-sm font-medium truncate">{chat.label || "Untitled chat"}</span>
-                    {subtitle && (
-                      <span className="text-xs text-muted-foreground">{subtitle}</span>
-                    )}
+                    <span className="w-full truncate text-sm font-medium">{chat.label || "Untitled chat"}</span>
+                    {
+                      subtitle && (
+                        <span className="w-full truncate text-xs text-muted-foreground">{subtitle}</span>
+                      )
+                    }
                   </DropdownMenuItem>
                 )
               })

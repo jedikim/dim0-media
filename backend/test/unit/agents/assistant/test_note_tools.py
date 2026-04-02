@@ -12,7 +12,10 @@ from agents import RunContextWrapper
 
 from topix.agents.datatypes.context import Context
 from topix.agents.notes.service import build_note, get_default_note_size
-from topix.agents.notes.tools import create_create_note_tool, create_edit_note_tool
+from topix.agents.notes.tools import (
+    create_edit_note_tool,
+    create_write_note_tool,
+)
 from topix.datatypes.note.note import Note
 from topix.datatypes.note.style import NodeType
 from topix.datatypes.resource import RichText
@@ -71,17 +74,18 @@ async def test_build_widget_note_uses_widget_defaults() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_note_tool_uses_root_scope_by_default() -> None:
-    """Create note should default to the current root folder when parent_id is omitted."""
+async def test_write_note_tool_creates_note_in_root_scope_by_default() -> None:
+    """Write note should create a note in the current root folder when note_id is omitted."""
     graph_store = DummyGraphStore()
-    tool = create_create_note_tool(graph_store, "graph-1", root_id="folder-1")
+    tool = create_write_note_tool(graph_store, "graph-1", root_id="folder-1")
 
     result = await tool.on_invoke_tool(
         RunContextWrapper(Context()),
         json.dumps({"content": "New note content", "label": "New note"}),
     )
 
-    assert result.type == "create_note"
+    assert result.type == "write_note"
+    assert result.action == "created"
     assert result.graph_uid == "graph-1"
     assert result.parent_id == "folder-1"
     assert result.note_type == NodeType.RECTANGLE
@@ -95,8 +99,8 @@ async def test_create_note_tool_uses_root_scope_by_default() -> None:
 
 
 @pytest.mark.asyncio
-async def test_edit_note_tool_updates_only_requested_fields() -> None:
-    """Edit note should patch the scoped note using the safe graph-store helper."""
+async def test_write_note_tool_rewrites_existing_note() -> None:
+    """Write note should fully rewrite the authored fields of an existing note."""
     graph_store = DummyGraphStore()
     existing_note = Note(
         id="note-1",
@@ -106,24 +110,34 @@ async def test_edit_note_tool_updates_only_requested_fields() -> None:
     )
     updated_note = existing_note.model_copy(deep=True)
     updated_note.label = RichText(markdown="After")
+    updated_note.content = RichText(markdown="New")
     updated_note.style.type = NodeType.SHEET
 
     graph_store.get_nodes.return_value = [existing_note]
     graph_store.patch_note.return_value = updated_note
 
-    tool = create_edit_note_tool(graph_store, "graph-1")
+    tool = create_write_note_tool(graph_store, "graph-1")
     result = await tool.on_invoke_tool(
         RunContextWrapper(Context()),
-        json.dumps({"note_id": "note-1", "label": "After", "note_type": "sheet"}),
+        json.dumps(
+            {
+                "note_id": "note-1",
+                "content": "New",
+                "label": "After",
+                "note_type": "sheet",
+            }
+        ),
     )
 
-    assert result.type == "edit_note"
+    assert result.type == "write_note"
+    assert result.action == "rewritten"
     assert result.note_id == "note-1"
     assert result.note_type == NodeType.SHEET
     graph_store.patch_note.assert_awaited_once_with(
         "note-1",
         {
             "label": {"markdown": "After"},
+            "content": {"markdown": "New"},
             "style": {"type": NodeType.SHEET},
             "properties": {
                 "node_size": {
@@ -140,11 +154,45 @@ async def test_edit_note_tool_updates_only_requested_fields() -> None:
 
 
 @pytest.mark.asyncio
-async def test_create_note_tool_schema_hides_parent_scope_args() -> None:
-    """Create note tool should not expose internal board-scope args."""
-    tool = create_create_note_tool(DummyGraphStore(), "graph-1", root_id="folder-1")
+async def test_edit_note_tool_updates_only_requested_field() -> None:
+    """Edit note should patch only the targeted text field."""
+    graph_store = DummyGraphStore()
+    existing_note = Note(
+        id="note-1",
+        graph_uid="graph-1",
+        label=RichText(markdown="Before"),
+        content=RichText(markdown="Old"),
+    )
+    updated_note = existing_note.model_copy(deep=True)
+    updated_note.label = RichText(markdown="After")
+
+    graph_store.get_nodes.return_value = [existing_note]
+    graph_store.patch_note.return_value = updated_note
+
+    tool = create_edit_note_tool(graph_store, "graph-1")
+    result = await tool.on_invoke_tool(
+        RunContextWrapper(Context()),
+        json.dumps({"note_id": "note-1", "field": "label", "old": "Before", "new": "After"}),
+    )
+
+    assert result.type == "edit_note"
+    assert result.note_id == "note-1"
+    assert result.note_type == NodeType.RECTANGLE
+    graph_store.patch_note.assert_awaited_once_with(
+        "note-1",
+        {
+            "label": {"markdown": "After"},
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_write_note_tool_schema_hides_parent_scope_args() -> None:
+    """Write note tool should not expose internal board-scope args."""
+    tool = create_write_note_tool(DummyGraphStore(), "graph-1", root_id="folder-1")
 
     assert "parent_id" not in tool.params_json_schema["properties"]
+    assert "note_id" in tool.params_json_schema["properties"]
     assert "content" in tool.params_json_schema["properties"]
     assert "label" in tool.params_json_schema["properties"]
     assert "content" in tool.params_json_schema.get("required", [])
@@ -156,6 +204,9 @@ async def test_edit_note_tool_schema_hides_parent_scope_args() -> None:
     tool = create_edit_note_tool(DummyGraphStore(), "graph-1")
 
     assert "parent_id" not in tool.params_json_schema["properties"]
+    assert "field" in tool.params_json_schema["properties"]
+    assert "old" in tool.params_json_schema["properties"]
+    assert "new" in tool.params_json_schema["properties"]
 
 
 @pytest.mark.asyncio
@@ -168,8 +219,30 @@ async def test_edit_note_tool_rejects_cross_board_notes() -> None:
 
     result = await tool.on_invoke_tool(
         RunContextWrapper(Context()),
-        json.dumps({"note_id": "note-1", "label": "Nope"}),
+        json.dumps({"note_id": "note-1", "field": "label", "old": "", "new": "Nope"}),
     )
 
     assert isinstance(result, str)
     assert "does not belong to the current board scope" in result
+
+
+@pytest.mark.asyncio
+async def test_edit_note_tool_rejects_stale_old_value() -> None:
+    """Edit note should fail safely when the note changed since it was read."""
+    graph_store = DummyGraphStore()
+    graph_store.get_nodes.return_value = [
+        Note(
+            id="note-1",
+            graph_uid="graph-1",
+            content=RichText(markdown="Current"),
+        )
+    ]
+
+    tool = create_edit_note_tool(graph_store, "graph-1")
+    result = await tool.on_invoke_tool(
+        RunContextWrapper(Context()),
+        json.dumps({"note_id": "note-1", "field": "content", "old": "Old", "new": "After"}),
+    )
+
+    assert isinstance(result, str)
+    assert "changed since it was read" in result

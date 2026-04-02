@@ -1,8 +1,9 @@
 import { useMemo, useState, type ReactNode } from "react"
+import { Link } from "@tanstack/react-router"
 import type { ToolCallStep } from "../../types/stream"
 import { ToolNameIcon } from "../../types/stream"
 import { extractStepDescription, getWebSearchUrls } from "../../utils/stream/build"
-import type { CodeInterpreterOutput, CreateNoteOutput, EditNoteOutput } from "../../types/tool-outputs"
+import type { CodeInterpreterOutput, CreateNoteOutput, EditNoteOutput, WriteNoteOutput } from "../../types/tool-outputs"
 import type { ToolStepWidgetAttachment } from "./tool-step-widgets"
 import { HugeiconsIcon } from "@hugeicons/react"
 import { IdeaIcon, Search01Icon, Tick01Icon } from "@hugeicons/core-free-icons"
@@ -13,6 +14,9 @@ import { WeatherCard } from "@/features/widgets/components/weather-card"
 import TradingCard from "@/features/widgets/components/trading-card"
 import ImageSearchStrip from "@/features/widgets/components/image-card"
 import { ImageGenView } from "./image-gen-view"
+import { NoteWidgetPreview } from "./note-widget-preview"
+import { useChat } from "../../hooks/chat-context"
+import { ArrowUpRightIcon } from "lucide-react"
 
 
 /**
@@ -76,14 +80,30 @@ const CodeInterpreterResult = ({
  */
 const NoteToolResult = ({
   output,
+  chatId,
 }: {
-  output: CreateNoteOutput | EditNoteOutput
+  output: CreateNoteOutput | EditNoteOutput | WriteNoteOutput
+  chatId?: string
 }) => {
   const typeLabel = output.noteType.replace(/-/g, " ")
+  const boardId = output.graphUid
+  const noteId = output.noteId
 
   return (
     <div className='w-full rounded-lg border border-border bg-sidebar-accent/40 p-3'>
-      <div className='text-xs font-medium text-muted-foreground'>note</div>
+      <div className='flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground'>
+        <span>note</span>
+        <Link
+          to='/boards/$id'
+          params={{ id: boardId }}
+          search={{ center_around: noteId, current_chat_id: chatId || undefined }}
+          className='inline-flex items-center gap-1 rounded-md p-1 transition-colors hover:bg-background/70 hover:text-foreground'
+          title='Open on board'
+          aria-label='Open on board'
+        >
+          <ArrowUpRightIcon className='size-3.5' />
+        </Link>
+      </div>
       <div className='mt-1 text-sm text-card-foreground whitespace-pre-line'>
         <span className='font-medium'>{output.label || "Untitled note"}</span>
         {` • ${typeLabel}`}
@@ -107,6 +127,15 @@ const ToolStepWidgetView = ({
 
   return (
     <div className='w-full min-w-0 overflow-hidden flex flex-col gap-3 pt-1'>
+      {attachment.noteWidget && (
+        <div className='w-full min-w-0 overflow-hidden p-1'>
+          <NoteWidgetPreview
+            boardId={attachment.noteWidget.boardId}
+            noteId={attachment.noteWidget.noteId}
+            pending={attachment.noteWidget.pending}
+          />
+        </div>
+      )}
       {attachment.imageFilename && (
         <div className='w-full min-w-0 overflow-hidden p-1'>
           <ImageGenView filename={attachment.imageFilename} />
@@ -144,6 +173,7 @@ export const ToolStepRow = ({
   isStreaming?: boolean
   attachment?: ToolStepWidgetAttachment
 }) => {
+  const { chatId } = useChat()
   const [viewMore, setViewMore] = useState(false)
   const [isInputCopied, setIsInputCopied] = useState(false)
 
@@ -155,10 +185,10 @@ export const ToolStepRow = ({
     ? step.output as CodeInterpreterOutput
     : null
   const noteToolOutput = (
-    (step.name === "create_note" || step.name === "edit_note") &&
+    (step.name === "write_note" || step.name === "create_note" || step.name === "edit_note") &&
     typeof step.output !== "string"
   )
-    ? step.output as CreateNoteOutput | EditNoteOutput
+    ? step.output as WriteNoteOutput | CreateNoteOutput | EditNoteOutput
     : null
 
   const sources = useMemo(() => {
@@ -174,7 +204,7 @@ export const ToolStepRow = ({
   }
 
   const isLoading = isStreaming && step.state === "started"
-  const messageClass = "transition-all w-full h-auto min-h-2 min-w-0 overflow-x-hidden overflow-y-auto scrollbar-thin p-2 rounded-xl"
+  const messageClass = "transition-all w-full h-auto min-h-2 min-w-0 overflow-x-hidden overflow-y-auto scrollbar-thin py-2 rounded-xl"
   const spanMessageClass = "text-sm text-card-foreground whitespace-pre-line"
   const stepIcon = ToolNameIcon[step.name]
   const successIcon = stepIcon || Tick01Icon
@@ -259,7 +289,7 @@ export const ToolStepRow = ({
               <CodeInterpreterResult output={codeInterpreterOutput} />
             )}
             {canExpand && viewMore && noteToolOutput && (
-              <NoteToolResult output={noteToolOutput} />
+              <NoteToolResult output={noteToolOutput} chatId={chatId} />
             )}
             {canExpand && viewMore && sources.length > 0 && (
               <div className='w-full flex flex-row flex-wrap items-start gap-1 mt-2'>
@@ -274,7 +304,7 @@ export const ToolStepRow = ({
                 Show less
               </button>
             )}
-            {!isStreaming && <ToolStepWidgetView attachment={attachment} />}
+            <ToolStepWidgetView attachment={attachment} />
           </div>
         </div>
       </div>

@@ -1,10 +1,16 @@
 import type { ReasoningStep, ToolCallStep } from "../../types/stream"
 import type {
+  CreateNoteOutput,
+  EditNoteOutput,
   ImageGenerationOutput,
   ImageSearchWidgetOutput,
   StockWidgetOutput,
   WeatherWidgetOutput,
+  WriteNoteOutput,
 } from "../../types/tool-outputs"
+
+
+type NoteToolOutput = CreateNoteOutput | EditNoteOutput | WriteNoteOutput
 
 
 export interface ToolStepWidgetAttachment {
@@ -12,6 +18,11 @@ export interface ToolStepWidgetAttachment {
   tradingSymbols?: string[]
   imageUrls?: string[]
   imageFilename?: string
+  noteWidget?: {
+    boardId: string
+    noteId: string
+    pending: boolean
+  }
 }
 
 
@@ -52,6 +63,16 @@ const hasImageGenerationOutput = (
 
 
 /**
+ * Checks whether a tool step carries a note-tool output.
+ */
+const hasNoteToolOutput = (
+  step: ToolCallStep
+): step is ToolCallStep & { output: NoteToolOutput } =>
+  typeof step.output !== "string" &&
+  (step.output.type === "write_note" || step.output.type === "create_note" || step.output.type === "edit_note")
+
+
+/**
  * Builds widget attachments keyed by the last step index of each widget family.
  */
 export const buildToolStepWidgetAttachments = (
@@ -59,10 +80,6 @@ export const buildToolStepWidgetAttachments = (
   isStreaming: boolean
 ) => {
   const attachments = new Map<number, ToolStepWidgetAttachment>()
-
-  if (isStreaming) {
-    return attachments
-  }
 
   let lastWeatherIndex = -1
   let lastStockIndex = -1
@@ -73,25 +90,26 @@ export const buildToolStepWidgetAttachments = (
   const tradingSymbols: string[] = []
   const imageUrls: string[] = []
   let imageFilename: string | undefined
+  const lastNoteStepById = new Map<string, { index: number, boardId: string, noteType: string }>()
 
   steps.forEach((step, index) => {
     if (step.type !== "tool_call") return
 
-    if (hasWeatherWidgetOutput(step)) {
+    if (!isStreaming && hasWeatherWidgetOutput(step)) {
       lastWeatherIndex = index
       if (!weatherCities.includes(step.output.city)) {
         weatherCities.push(step.output.city)
       }
     }
 
-    if (hasStockWidgetOutput(step)) {
+    if (!isStreaming && hasStockWidgetOutput(step)) {
       lastStockIndex = index
       if (!tradingSymbols.includes(step.output.symbol)) {
         tradingSymbols.push(step.output.symbol)
       }
     }
 
-    if (hasImageSearchWidgetOutput(step)) {
+    if (!isStreaming && hasImageSearchWidgetOutput(step)) {
       lastImageSearchIndex = index
       step.output.images.forEach((url) => {
         if (!imageUrls.includes(url)) {
@@ -100,10 +118,19 @@ export const buildToolStepWidgetAttachments = (
       })
     }
 
-    if (hasImageGenerationOutput(step)) {
+    if (!isStreaming && hasImageGenerationOutput(step)) {
       lastImageGenerationIndex = index
       imageFilename = step.output.imageUrls[0] || imageFilename
     }
+
+    if (!hasNoteToolOutput(step)) return
+    if (!step.output.noteId || !step.output.graphUid) return
+
+    lastNoteStepById.set(step.output.noteId, {
+      index,
+      boardId: step.output.graphUid,
+      noteType: step.output.noteType,
+    })
   })
 
   if (lastWeatherIndex >= 0 && weatherCities.length > 0) {
@@ -133,6 +160,19 @@ export const buildToolStepWidgetAttachments = (
       imageFilename,
     })
   }
+
+  lastNoteStepById.forEach(({ index, boardId, noteType }, noteId) => {
+    if (noteType !== "widget") return
+
+    attachments.set(index, {
+      ...(attachments.get(index) || {}),
+      noteWidget: {
+        boardId,
+        noteId,
+        pending: isStreaming,
+      },
+    })
+  })
 
   return attachments
 }

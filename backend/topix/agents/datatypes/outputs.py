@@ -183,6 +183,21 @@ class CreateNoteOutput(BaseModel):
     ] = None
 
 
+class WriteNoteOutput(BaseModel):
+    """Output from write note tool."""
+
+    type: Literal["write_note"] = "write_note"
+    action: Literal["created", "rewritten"]
+    note_id: Annotated[str, "The unique id of the created or rewritten note."]
+    graph_uid: Annotated[str, "The board id where the note belongs."]
+    label: Annotated[str | None, "Optional short title stored separately from the note body."] = None
+    note_type: Annotated[NodeType, "The final node type used for the note."]
+    parent_id: Annotated[
+        str | None,
+        "The folder/root note id used as the note parent, if any."
+    ] = None
+
+
 class EditNoteOutput(BaseModel):
     """Output from edit note tool."""
 
@@ -237,6 +252,7 @@ class ImageGenerationOutput(BaseModel):
 type ToolOutput = Union[
     str,
     CodeInterpreterOutput,
+    WriteNoteOutput,
     CreateNoteOutput,
     EditNoteOutput,
     WebSearchOutput,

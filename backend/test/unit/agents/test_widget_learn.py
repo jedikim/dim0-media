@@ -15,7 +15,7 @@ async def test_learn_generate_html_widget_returns_widget_note_guidance() -> None
     """Widget learning tool should return prompt guidance for widget notes."""
     prompt = await learn_generate_html_widget(RunContextWrapper(Context()))
 
-    assert "create_note" in prompt
+    assert "write_note" in prompt
     assert "note_type" in prompt
     assert "widget" in prompt
     assert "iframe" in prompt

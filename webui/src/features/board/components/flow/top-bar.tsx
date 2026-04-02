@@ -137,8 +137,8 @@ export const TopBar = memo(function TopBar({
     select: 'Selection mode',
     note: 'Sticky note',
     folder: isAtMaxFolderDepth
-      ? `Max folder depth reached (${maxFolderDepth})`
-      : 'Folder',
+      ? `Max Sub-board depth reached (${maxFolderDepth})`
+      : 'Sub-board',
     document: documentUploadLimited ? FREE_PLAN_DOCUMENT_LIMIT_TOOLTIP : 'Upload document',
     shape: 'Shapes',
     connector: 'Connector',
@@ -372,7 +372,7 @@ export const TopBar = memo(function TopBar({
                 className={clsx('gap-2 text-sm', isAtMaxFolderDepth && 'opacity-50')}
               >
                 <HugeiconsIcon icon={FolderAddIcon} className='size-4 shrink-0' strokeWidth={2} />
-                <span>Folder</span>
+                <span>Sub-board</span>
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setOpenDocumentUpload(true)} className='gap-2 text-sm' disabled={!boardId || documentUploadLimited}>
                 <HugeiconsIcon icon={GoogleDocIcon} className='size-4 shrink-0' strokeWidth={2} />

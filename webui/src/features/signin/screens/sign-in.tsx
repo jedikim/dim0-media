@@ -105,7 +105,7 @@ export function SigninPage() {
     return () => {
       cancelled = true
     }
-  }, [authMethodsQuery.data?.google, authMethodsQuery.data?.google_client_id])
+  }, [authMethodsQuery.data, googleSigninMutation])
 
   const authMethods = authMethodsQuery.data
   const showLocalSignin = authMethods?.local ?? true

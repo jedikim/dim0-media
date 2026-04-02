@@ -48,7 +48,7 @@ export const useChatStore = create<ChatStore>((set) => ({
     "web_search",
     "memory_search",
     "code_interpreter",
-    "create_note",
+    "write_note",
     "edit_note",
     "navigate",
     "image_generation",
@@ -98,7 +98,7 @@ export const useChatStore = create<ChatStore>((set) => ({
     // init with default available tools
     const enabledTools: ToolName[] = [
       "memory_search",
-      "create_note",
+      "write_note",
       "edit_note",
       "display_stock_widget",
       "display_weather_widget",

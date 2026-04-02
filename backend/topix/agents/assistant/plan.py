@@ -17,7 +17,7 @@ from topix.agents.datatypes.model_enum import ModelEnum
 from topix.agents.datatypes.tools import AgentToolName
 from topix.agents.image.gen import generate_image_tool
 from topix.agents.memory.search import create_memory_search_tool
-from topix.agents.notes.tools import create_create_note_tool, create_edit_note_tool
+from topix.agents.notes.tools import create_edit_note_tool, create_write_note_tool
 from topix.agents.websearch.fetch import fetch_url_content_tool
 from topix.agents.websearch.handler import WebSearchHandler
 from topix.agents.widgets.finance import display_stock_widget_tool
@@ -81,7 +81,7 @@ class Plan(BaseAgent):
             tools.append(run_code_tool)
 
         if graph_store is not None and graph_uid is not None:
-            tools.append(create_create_note_tool(graph_store, graph_uid, root_id=root_id))
+            tools.append(create_write_note_tool(graph_store, graph_uid, root_id=root_id))
             tools.append(create_edit_note_tool(graph_store, graph_uid))
 
         if config.navigate:

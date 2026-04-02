@@ -4,6 +4,7 @@ import { simpleTransform } from "./transform"
 import type {
   CreateNoteOutput,
   EditNoteOutput,
+  WriteNoteOutput,
   WebSearchOutput,
   MemorySearchOutput,
   ToolOutput,
@@ -54,6 +55,17 @@ const makeToolOutput = (acc: StepAccum): ToolOutput => {
       stdout: "",
       stderr: "",
       durationMs: 0
+    }
+  }
+  if (acc.name === "write_note") {
+    return {
+      type: "write_note",
+      action: "created",
+      noteId: "",
+      graphUid: "",
+      label: "",
+      noteType: "rectangle",
+      parentId: null,
     }
   }
   if (acc.name === "create_note") {
@@ -360,6 +372,23 @@ export function extractStepDescription(step: ReasoningStep): { reasoning: string
     return {
       reasoning: step.thought || "",
       message: "",
+      title: getToolTitle(step.name),
+      input
+    }
+  }
+
+  if (step.name === "write_note" && typeof step.output !== "string") {
+    const output = step.output as WriteNoteOutput
+    const typeLabel = output.noteType.replace(/-/g, " ")
+    return {
+      reasoning: step.thought || "",
+      message: output.action === "created"
+        ? output.label
+          ? `Created ${typeLabel} note "${output.label}".`
+          : `Created ${typeLabel} note.`
+        : output.label
+        ? `Rewrote ${typeLabel} note "${output.label}".`
+        : `Rewrote ${typeLabel} note.`,
       title: getToolTitle(step.name),
       input
     }

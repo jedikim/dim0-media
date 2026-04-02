@@ -51,7 +51,17 @@ export interface CreateNoteOutput {
   type: "create_note"
   noteId: string
   graphUid: string
-  label: string
+  label: string | null
+  noteType: string
+  parentId?: string | null
+}
+
+export interface WriteNoteOutput {
+  type: "write_note"
+  action: "created" | "rewritten"
+  noteId: string
+  graphUid: string
+  label: string | null
   noteType: string
   parentId?: string | null
 }
@@ -60,7 +70,7 @@ export interface EditNoteOutput {
   type: "edit_note"
   noteId: string
   graphUid: string
-  label: string
+  label: string | null
   noteType: string
   parentId?: string | null
 }
@@ -90,6 +100,7 @@ export type ToolOutput =
   | WebSearchOutput
   | MemorySearchOutput
   | CodeInterpreterOutput
+  | WriteNoteOutput
   | CreateNoteOutput
   | EditNoteOutput
   | WeatherWidgetOutput

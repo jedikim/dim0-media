@@ -155,8 +155,9 @@ class ToolHandler:
                 output = await func(wrapper, *args, **kwargs)
             except Exception as e:
                 raise ValueError(
-                    f"Function call failed: {e}. \
-                    The first argument of a function must be a RunContextWrapper."
+                    f"Function call failed: {e}. "
+                    "Pay attention that the first argument of a function must be a RunContextWrapper, "
+                    "though it's not necessarily the cause of the error. Please check the error message for details."
                 )
             await cls.log_output(context, tool_name, tool_id, input, output)
             return output

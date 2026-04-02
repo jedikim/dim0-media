@@ -4,7 +4,6 @@ import clsx from "clsx"
 
 import { DragDropIcon, Layout01Icon, Maximize01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
-import { useTheme } from "@/components/theme-provider"
 import { useShallow } from "zustand/react/shallow"
 
 import { useGraphStore } from "../../store/graph-store"
@@ -62,8 +61,6 @@ export const WidgetNode = memo(function WidgetNode({
   selected = false,
   dragging,
 }: WidgetNodeProps) {
-  const { resolvedTheme } = useTheme()
-  const isDark = resolvedTheme === "dark"
   const [rendererSize, setRendererSize] = useState<{ width: number; height: number } | null>(null)
   const { boardId, rootId, graphViewports, isMoving, boardCanEdit } = useGraphStore(useShallow((state) => ({
     boardId: state.boardId,
@@ -149,17 +146,8 @@ export const WidgetNode = memo(function WidgetNode({
         )}
       </div>
       {suspendPreview && (
-        <div
-          className="nodrag absolute inset-0 flex items-center justify-center"
-          style={{ backgroundColor: isDark ? "rgba(31,29,46,0.62)" : "rgba(255,250,243,0.72)" }}
-        >
-          <div
-            className="rounded-full px-3 py-1 text-base font-medium"
-            style={{
-              color: isDark ? "#908caa" : "#797593",
-              backgroundColor: isDark ? "rgba(64,61,82,0.72)" : "rgba(223,218,217,0.8)",
-            }}
-          >
+        <div className="nodrag absolute inset-0 flex items-center justify-center bg-card/75 backdrop-blur-[1px]">
+          <div className="rounded-full border border-border/70 bg-card px-3 py-1 text-base font-medium text-muted-foreground shadow-sm">
             {isMoving || dragging ? "Moving widget..." : "Widget preview paused"}
           </div>
         </div>

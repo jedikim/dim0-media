@@ -64,7 +64,7 @@ class SendMessageRequest(BaseModel):
         AgentToolName.WEB_SEARCH,
         AgentToolName.MEMORY_SEARCH,
         AgentToolName.CODE_INTERPRETER,
-        AgentToolName.CREATE_NOTE,
+        AgentToolName.WRITE_NOTE,
         AgentToolName.EDIT_NOTE,
         AgentToolName.NAVIGATE,
         AgentToolName.IMAGE_GENERATION,

@@ -11,6 +11,7 @@ class AgentToolName(StrEnum):
     MEMORY_SEARCH = "memory_search"
     WEB_SEARCH = "web_search"
     CODE_INTERPRETER = "code_interpreter"
+    WRITE_NOTE = "write_note"
     CREATE_NOTE = "create_note"
     EDIT_NOTE = "edit_note"
 
@@ -48,8 +49,11 @@ tool_descriptions = {
     AgentToolName.MEMORY_SEARCH: "Search the memory",
     AgentToolName.WEB_SEARCH: "Search the web",
     AgentToolName.CODE_INTERPRETER: "Run code",
+    AgentToolName.WRITE_NOTE: (
+        "Create a new note or fully rewrite an existing note using label, content, and note type"
+    ),
     AgentToolName.CREATE_NOTE: "Create a new note using content as the main body and label only as an optional title",
-    AgentToolName.EDIT_NOTE: "Edit an existing note, mainly by updating its content and optionally its title",
+    AgentToolName.EDIT_NOTE: "Apply a targeted text edit to a note field using note_id, field, old, and new",
     AgentToolName.RAW_MESSAGE: "Reasoning message",
     AgentToolName.NAVIGATE: "Navigate the web",
     AgentToolName.OUTLINE_GENERATOR: "Generate an outline for research",

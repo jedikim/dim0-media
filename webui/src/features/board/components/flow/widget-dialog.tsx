@@ -11,6 +11,7 @@ import { useTheme } from "@/components/theme-provider"
 import { useGraphStore } from "../../store/graph-store"
 import { CodeArea } from "./code-area"
 import { WidgetIframe } from "./widget-iframe"
+import { buildWidgetDocument } from "./widget-document"
 
 
 type WidgetDialogProps = {
@@ -71,7 +72,8 @@ export const WidgetDialog = memo(function WidgetDialog({
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "") || "widget"
 
-    const blob = new Blob([html], { type: "text/html;charset=utf-8" })
+    const fullHtml = buildWidgetDocument(html, note?.label?.markdown || "Widget")
+    const blob = new Blob([fullHtml], { type: "text/html;charset=utf-8" })
     const url = URL.createObjectURL(blob)
     const link = document.createElement("a")
     link.href = url
@@ -149,12 +151,10 @@ export const WidgetDialog = memo(function WidgetDialog({
                 textColor="var(--foreground)"
                 onChange={setHtmlDraft}
                 language="html"
-                placeholder={`<!doctype html>
-<html>
-  <body>
-    <h1>Hello widget</h1>
-  </body>
-</html>`}
+                placeholder={`<section style="padding:24px;">
+  <h1>Hello widget</h1>
+  <p>Use var(--card), var(--foreground), var(--border), var(--radius), and var(--shadow-sm).</p>
+</section>`}
               />
             </div>
           </div>

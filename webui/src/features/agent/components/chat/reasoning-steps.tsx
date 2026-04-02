@@ -28,6 +28,9 @@ type TimelineItem =
   }
 
 
+const EMPTY_STEPS: AgentResponse["steps"] = []
+
+
 /**
  * Renders the collapsed header for a repeated same-tool block.
  */
@@ -113,21 +116,19 @@ export interface ReasoningStepsViewProps {
  * Renders the assistant process as one ordered merged list.
  */
 export const ReasoningStepsView = ({ isStreaming, response }: ReasoningStepsViewProps) => {
-  if (!response) {
-    return null
-  }
+  const steps = response?.steps ?? EMPTY_STEPS
 
   const widgetAttachments = useMemo(
-    () => buildToolStepWidgetAttachments(response.steps, isStreaming),
-    [isStreaming, response.steps]
+    () => buildToolStepWidgetAttachments(steps, isStreaming),
+    [isStreaming, steps]
   )
 
   const timelineItems = useMemo<TimelineItem[]>(() => {
     const items: TimelineItem[] = []
 
     let index = 0
-    while (index < response.steps.length) {
-      const step = response.steps[index]
+    while (index < steps.length) {
+      const step = steps[index]
 
       if (isReasoningTextStep(step)) {
         items.push({
@@ -142,12 +143,12 @@ export const ReasoningStepsView = ({ isStreaming, response }: ReasoningStepsView
       const hidden: Array<{ step: ToolCallStep, index: number }> = []
       let end = index
 
-      while (end + 1 < response.steps.length) {
-        const nextStep = response.steps[end + 1]
+      while (end + 1 < steps.length) {
+        const nextStep = steps[end + 1]
         if (!isToolCallStep(nextStep) || nextStep.name !== step.name) {
           break
         }
-        hidden.push({ step: response.steps[end] as ToolCallStep, index: end })
+        hidden.push({ step: steps[end] as ToolCallStep, index: end })
         end += 1
       }
 
@@ -157,7 +158,7 @@ export const ReasoningStepsView = ({ isStreaming, response }: ReasoningStepsView
           key: `${step.id}-block`,
           hidden,
           visible: {
-            step: response.steps[end] as ToolCallStep,
+            step: steps[end] as ToolCallStep,
             index: end,
           },
         })
@@ -174,7 +175,11 @@ export const ReasoningStepsView = ({ isStreaming, response }: ReasoningStepsView
     }
 
     return items
-  }, [response.steps])
+  }, [steps])
+
+  if (!response) {
+    return null
+  }
 
   return (
     <div className='w-full flex flex-col items-start'>
