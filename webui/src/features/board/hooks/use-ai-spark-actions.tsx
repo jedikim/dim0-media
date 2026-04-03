@@ -158,7 +158,13 @@ export const useAiSparkActions = () => {
         await storeMindMap({ boardId, notes, links, useAnchors, preserveStyle: true, layout: false })
       } else {
         const answer = `Request: ${request}\n---\nInput Text:\n${contextText.trim()}`
-        const toolType = actionKey === "quizify" ? "quizify" : "summify"
+        const toolType = actionKey === "mapify"
+          ? "mapify"
+          : actionKey === "schemify"
+            ? "schemify"
+            : actionKey === "quizify"
+              ? "quizify"
+              : "summify"
         await convertToMindMapAsync({ boardId, answer, toolType, useAnchors })
       }
       window.clearInterval(timer)
