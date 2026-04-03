@@ -1,3 +1,9 @@
+## v0.1.31 (2026-04-03)
+
+### Fix
+
+- **board**: route ai spark mapify actions correctly (#33)
+
 ## v0.1.30 (2026-04-02)
 
 ## v0.1.29 (2026-04-02)
