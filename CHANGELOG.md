@@ -1,3 +1,9 @@
+## v0.1.33 (2026-04-04)
+
+### Fix
+
+- *****: fix sub-board redirection in agent note tools and copy cut cross-board and sub-board (#35)
+
 ## v0.1.32 (2026-04-04)
 
 ### Perf
