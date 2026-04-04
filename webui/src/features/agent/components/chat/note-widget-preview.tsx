@@ -1,8 +1,10 @@
-import { Link } from "@tanstack/react-router"
+import { Link, useSearch } from "@tanstack/react-router"
 import { ArrowUpRightIcon, LoaderCircleIcon, TriangleAlertIcon } from "lucide-react"
 
 import { useGetNote } from "@/features/board/api/get-note"
 import { WidgetIframe } from "@/features/board/components/flow/widget-iframe"
+import { BoardUrl } from "@/routes"
+import { useChat } from "../../hooks/chat-context"
 
 type NoteWidgetPreviewProps = {
   boardId: string
@@ -19,6 +21,12 @@ export const NoteWidgetPreview = ({
   noteId,
   pending = false,
 }: NoteWidgetPreviewProps) => {
+  const { chatId } = useChat()
+  const { rootId } = useSearch({
+    from: BoardUrl,
+    select: (s: { root_id?: string }) => ({ rootId: s.root_id }),
+    shouldThrow: false,
+  }) ?? {}
   const { data: note, isLoading, isError } = useGetNote({
     boardId,
     noteId,
@@ -54,7 +62,11 @@ export const NoteWidgetPreview = ({
         <Link
           to='/boards/$id'
           params={{ id: boardId }}
-          search={{ center_around: noteId }}
+          search={{
+            center_around: noteId,
+            current_chat_id: chatId || undefined,
+            root_id: rootId || undefined,
+          }}
           className='inline-flex items-center gap-1 text-xs font-medium text-secondary hover:underline'
         >
           Open on board

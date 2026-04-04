@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useGraphStore } from '../store/graph-store'
 import { convertNoteToNode } from '../utils/graph'
 import { useAppStore } from '@/store'
@@ -7,6 +7,13 @@ import type { NoteNode, LinkEdge } from '../types/flow'
 import type { Link } from '../types/link'
 import { generateUuid } from '@/lib/common'
 import { useShallow } from 'zustand/shallow'
+import {
+  clearBoardClipboard,
+  loadBoardClipboard,
+  saveBoardClipboard,
+  type BoardClipboardMode,
+  type BoardClipboardPayload,
+} from '../utils/clipboard'
 
 type CopyPasteOptions = {
   /**
@@ -32,6 +39,12 @@ type Jitter = { dx: number, dy: number }
 
 const isFolderNode = (node: NoteNode) => node.data?.style?.type === 'folder'
 
+type SelectedClipboardData = {
+  notes: Note[]
+  pointNodes: NoteNode[]
+  edges: LinkEdge[]
+}
+
 export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
   const { jitterMax = 30, shortcuts = true, isCopyableNode } = opts
 
@@ -43,11 +56,6 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
   const edges = useGraphStore(useShallow(state => state.edges))
   const setNodesPersist = useGraphStore(state => state.setNodesPersist)
   const setEdgesPersist = useGraphStore(state => state.setEdgesPersist)
-
-  // clipboard: notes + point nodes + edges that connect those nodes
-  const copiedNotesRef = useRef<Note[] | null>(null)
-  const copiedPointNodesRef = useRef<NoteNode[] | null>(null)
-  const copiedEdgesRef = useRef<LinkEdge[] | null>(null)
 
   const randJitter = useCallback(() => {
     const r = Math.random() * 2 - 1
@@ -61,15 +69,12 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
   }, [nodes, isCopyableNode])
 
   /**
-   * Copies currently selected note nodes + connecting edges into an in-memory buffer
+   * Collects the currently selected copyable graph payload.
    */
-  const copySelected = useCallback(() => {
+  const collectSelectedClipboardData = useCallback((): SelectedClipboardData | null => {
     const selectedNodes = getSelectedNoteNodes()
     if (!selectedNodes.length) {
-      copiedNotesRef.current = null
-      copiedPointNodesRef.current = null
-      copiedEdgesRef.current = null
-      return
+      return null
     }
 
     const selectedIds = new Set(selectedNodes.map(n => n.id))
@@ -92,10 +97,7 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
     )
 
     if (!notes.length && !pointNodes.length) {
-      copiedNotesRef.current = null
-      copiedPointNodesRef.current = null
-      copiedEdgesRef.current = null
-      return
+      return null
     }
 
     // copy edges whose source & target are both in the selected node set
@@ -103,10 +105,60 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
       e => selectedIds.has(e.source) && selectedIds.has(e.target),
     )
 
-    copiedNotesRef.current = notes
-    copiedPointNodesRef.current = pointNodes
-    copiedEdgesRef.current = connectingEdges
+    return {
+      notes,
+      pointNodes,
+      edges: connectingEdges,
+    }
   }, [getSelectedNoteNodes, edges, nodes])
+
+  /**
+   * Persists the selected clipboard payload or clears older clipboard content.
+   */
+  const persistSelection = useCallback((mode: BoardClipboardMode) => {
+    const selection = collectSelectedClipboardData()
+    if (!selection) {
+      clearBoardClipboard()
+      return null
+    }
+
+    const payload: BoardClipboardPayload = {
+      version: 1,
+      mode,
+      copiedAt: new Date().toISOString(),
+      sourceBoardId: boardId,
+      sourceRootId: rootId,
+      notes: selection.notes,
+      pointNodes: selection.pointNodes,
+      edges: selection.edges,
+    }
+    saveBoardClipboard(payload)
+    return payload
+  }, [boardId, collectSelectedClipboardData, rootId])
+
+  /**
+   * Copies currently selected note nodes + connecting edges into persisted clipboard state.
+   */
+  const copySelected = useCallback(() => {
+    persistSelection('copy')
+  }, [persistSelection])
+
+  /**
+   * Cuts the current selection immediately and persists it for later paste.
+   */
+  const cutSelected = useCallback(() => {
+    const payload = persistSelection('cut')
+    if (!payload) return
+
+    const removedNodeIds = new Set([
+      ...payload.notes.map((note) => note.id),
+      ...payload.pointNodes.map((node) => node.id),
+    ])
+    const removedEdgeIds = new Set(payload.edges.map((edge) => edge.id))
+
+    setNodesPersist(curr => curr.filter(node => !removedNodeIds.has(node.id)))
+    setEdgesPersist(curr => curr.filter(edge => !removedEdgeIds.has(edge.id)))
+  }, [persistSelection, setEdgesPersist, setNodesPersist])
 
   /**
    * Returns a cloned note with a shared offset applied
@@ -127,6 +179,7 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
     const cloned: Note = {
       ...note,
       id: generateUuid(),
+      graphUid: boardId ?? note.graphUid,
       parentId: rootId,
       properties: {
         ...note.properties,
@@ -148,7 +201,7 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
     }
 
     return cloned
-  }, [rootId])
+  }, [boardId, rootId])
 
   const computeSelectionCenter = useCallback((notes: Note[], pointNodes: NoteNode[]) => {
     let minX = Number.POSITIVE_INFINITY
@@ -185,9 +238,10 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
    */
   const pasteCopied = useCallback(async () => {
     if (!boardId || !userId) return
-    const copiedNotes = copiedNotesRef.current
-    const copiedPointNodes = copiedPointNodesRef.current
-    const copiedEdges = copiedEdgesRef.current
+    const clipboard = loadBoardClipboard()
+    const copiedNotes = clipboard?.notes ?? null
+    const copiedPointNodes = clipboard?.pointNodes ?? null
+    const copiedEdges = clipboard?.edges ?? null
 
     if ((!copiedNotes || !copiedNotes.length) && (!copiedPointNodes || !copiedPointNodes.length)) return
 
@@ -251,6 +305,7 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
     const clonedPointNodes: NoteNode[] = pointNodes.map((node) => {
       const newId = idMap.get(node.id)
       if (!newId) return node
+      const attachedToNodeId = (node.data as { attachedToNodeId?: string }).attachedToNodeId
       return {
         ...node,
         id: newId,
@@ -262,6 +317,7 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
         selected: true,
         data: {
           ...node.data,
+          attachedToNodeId: attachedToNodeId ? idMap.get(attachedToNodeId) ?? attachedToNodeId : undefined,
           endpointActive: true,
         },
       }
@@ -339,6 +395,10 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
         return [...cleared, ...newEdges]
       })
     }
+
+    if (clipboard?.mode === 'cut') {
+      clearBoardClipboard()
+    }
   }, [
     boardId,
     userId,
@@ -371,6 +431,13 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
         return
       }
 
+      // cut
+      if (mod && e.key.toLowerCase() === 'x') {
+        e.preventDefault()
+        cutSelected()
+        return
+      }
+
       // paste: prefer V, also support B
       if (mod && (e.key.toLowerCase() === 'v' || e.key.toLowerCase() === 'b')) {
         e.preventDefault()
@@ -393,7 +460,7 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
       document.removeEventListener('keydown', onKeyDown, listenerOptions)
       document.removeEventListener('paste', onPaste, listenerOptions)
     }
-  }, [shortcuts, copySelected, pasteCopied])
+  }, [shortcuts, copySelected, cutSelected, pasteCopied])
 
   return {
     /**
@@ -401,13 +468,19 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
      */
     copySelected,
     /**
+     * Cuts the current selection into the persisted clipboard and removes it immediately.
+     */
+    cutSelected,
+    /**
      * Pastes buffered nodes + edges as new elements, applying a shared jitter per paste
      */
     pasteCopied,
     /**
      * Returns true if there is anything in the copy buffer
      */
-    hasCopied: () =>
-      !!copiedNotesRef.current?.length || !!copiedEdgesRef.current?.length,
+    hasCopied: () => {
+      const clipboard = loadBoardClipboard()
+      return !!clipboard?.notes.length || !!clipboard?.edges.length || !!clipboard?.pointNodes.length
+    },
   }
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react"
-import { Link } from "@tanstack/react-router"
+import { Link, useSearch } from "@tanstack/react-router"
 import type { ToolCallStep } from "../../types/stream"
 import { ToolNameIcon } from "../../types/stream"
 import { extractStepDescription, getWebSearchUrls } from "../../utils/stream/build"
@@ -17,6 +17,7 @@ import { ImageGenView } from "./image-gen-view"
 import { NoteWidgetPreview } from "./note-widget-preview"
 import { useChat } from "../../hooks/chat-context"
 import { ArrowUpRightIcon } from "lucide-react"
+import { BoardUrl } from "@/routes"
 
 
 /**
@@ -81,9 +82,11 @@ const CodeInterpreterResult = ({
 const NoteToolResult = ({
   output,
   chatId,
+  rootId,
 }: {
   output: CreateNoteOutput | EditNoteOutput | WriteNoteOutput
   chatId?: string
+  rootId?: string
 }) => {
   const typeLabel = output.noteType.replace(/-/g, " ")
   const boardId = output.graphUid
@@ -96,7 +99,11 @@ const NoteToolResult = ({
         <Link
           to='/boards/$id'
           params={{ id: boardId }}
-          search={{ center_around: noteId, current_chat_id: chatId || undefined }}
+          search={{
+            center_around: noteId,
+            current_chat_id: chatId || undefined,
+            root_id: rootId || undefined,
+          }}
           className='inline-flex items-center gap-1 rounded-md p-1 transition-colors hover:bg-background/70 hover:text-foreground'
           title='Open on board'
           aria-label='Open on board'
@@ -174,6 +181,11 @@ export const ToolStepRow = ({
   attachment?: ToolStepWidgetAttachment
 }) => {
   const { chatId } = useChat()
+  const { rootId } = useSearch({
+    from: BoardUrl,
+    select: (s: { root_id?: string }) => ({ rootId: s.root_id }),
+    shouldThrow: false,
+  }) ?? {}
   const [viewMore, setViewMore] = useState(false)
   const [isInputCopied, setIsInputCopied] = useState(false)
 
@@ -289,7 +301,7 @@ export const ToolStepRow = ({
               <CodeInterpreterResult output={codeInterpreterOutput} />
             )}
             {canExpand && viewMore && noteToolOutput && (
-              <NoteToolResult output={noteToolOutput} chatId={chatId} />
+              <NoteToolResult output={noteToolOutput} chatId={chatId} rootId={rootId} />
             )}
             {canExpand && viewMore && sources.length > 0 && (
               <div className='w-full flex flex-row flex-wrap items-start gap-1 mt-2'>
