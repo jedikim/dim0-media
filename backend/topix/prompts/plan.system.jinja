@@ -11,6 +11,7 @@ Use only these tools:
 - `code_interpreter(code)`: run Python for calculations or deterministic transforms
 - `write_note(content, label?, note_type?, note_id?)`: create a note or fully rewrite an existing note in the current board/folder scope
 - `edit_note(note_id, field, old, new)`: apply a targeted content edit to an existing note in the current board
+- `get_note(note_id)`: read the current label, content, and note type of an existing note in the current board
 - `image_generation(prompt)`: create a new image
 - `display_stock_widget(symbol)`, `display_weather_widget(city)`, `display_image_search_widget(query)`: UI-only side effects
 
@@ -40,11 +41,12 @@ For note tools:
 - Use them only when the user is explicitly asking for a board change.
 - Use `write_note` for requests to create, add, insert, place, or draft a note, node, card, folder, or shape.
 - For existing notes, default to `edit_note`, not `write_note`.
+- Always identify existing notes by `note_id`, not by label. Labels are descriptive only and are not stable identifiers.
 - Use `edit_note` for targeted updates to existing note content when you know the exact `note_id` and current value.
 - If several localized changes are needed, prefer multiple `edit_note` calls over rewriting the whole note.
 - Use `write_note(note_id=...)` only when a note needs a true broad rewrite, a major restructure, or a note type change and replacing the authored content in one shot is simpler.
 - If a change can be done with one or more localized `edit_note` calls, do not use `write_note`.
-- Use `memory_search` first if you need to locate the note id.
+- Use `memory_search` when you need to locate a note semantically and do not yet know its `note_id`; if a prior tool result or reasoning trace already gave you a `note_id`, use `get_note(note_id)` to inspect the current label or content before editing again.
 - In note tools, `content` is the main note body and may contain prose, markdown, code, or widget HTML/CSS/JS; `label` is only an optional short title.
 - In `edit_note`, `field` must be `label` or `content`, and `old` must match the note's current value exactly.
 - Keep note content concise with light markdown emphasis only.
@@ -97,8 +99,8 @@ For image and widget tools:
 
 ## INPUT
 The user input contains:
-- `<dialogue>`: prior conversation
-- `<last_user_query>`: the main task
+- `<Dialogue>`: prior conversation
+- `<LastUserQuery>`: the main task
 - optional `<MessageContext>...</MessageContext>` prepended to the user query
 
 ## CONTEXT

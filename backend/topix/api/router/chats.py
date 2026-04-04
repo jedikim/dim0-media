@@ -191,6 +191,7 @@ async def send_message(
                 for tool in enabled_tools
                 if tool not in {
                     "memory_search",
+                    "get_note",
                     "write_note",
                     "edit_note",
                     "learn_generate_html_widget",

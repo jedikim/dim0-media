@@ -75,6 +75,17 @@ export interface EditNoteOutput {
   parentId?: string | null
 }
 
+
+export interface GetNoteOutput {
+  type: "get_note"
+  noteId: string
+  graphUid: string
+  label: string | null
+  content: string
+  noteType: string
+  parentId?: string | null
+}
+
 export interface WeatherWidgetOutput {
   type: "display_weather_widget"
   city: string
@@ -103,6 +114,7 @@ export type ToolOutput =
   | WriteNoteOutput
   | CreateNoteOutput
   | EditNoteOutput
+  | GetNoteOutput
   | WeatherWidgetOutput
   | StockWidgetOutput
   | ImageSearchWidgetOutput

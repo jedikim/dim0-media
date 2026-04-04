@@ -14,6 +14,7 @@ import {
   SearchList01Icon,
   SourceCodeIcon,
   ThermometerWarmIcon,
+  ViewIcon,
 } from "@hugeicons/core-free-icons"
 
 
@@ -105,6 +106,7 @@ export type ToolName =
   | "write_note"
   | "create_note"
   | "edit_note"
+  | "get_note"
   | "outline_generator"
   | "web_collector"
   | "synthesizer"
@@ -127,6 +129,7 @@ export const ToolNameDescription: Record<ToolName, string> = {
   write_note: "Write note",
   create_note: "Create note",
   edit_note: "Edit note",
+  get_note: "Read note",
   outline_generator: "Generate outline",
   web_collector: "Collect web content",
   synthesizer: "Synthesize response",
@@ -154,6 +157,7 @@ export const ToolNameIcon: Record<string, IconSvgElement> = {
   write_note: NoteAddIcon,
   create_note: NoteAddIcon,
   edit_note: NoteEditIcon,
+  get_note: ViewIcon,
   image_description: AiImageIcon,
   topic_illustrator: AiImageIcon,
   image_generation: AiImageIcon,

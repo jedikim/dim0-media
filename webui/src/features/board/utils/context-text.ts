@@ -1,9 +1,11 @@
 import type { NoteNode } from "../types/flow"
 
 type NoteLike = {
+  id?: string
   label?: { markdown?: string }
   content?: { markdown?: string }
   properties?: { summary?: { text?: string } }
+  style?: { type?: string }
 }
 
 /**
@@ -12,10 +14,9 @@ type NoteLike = {
 const trimOrEmpty = (value?: string) => (value ?? "").trim()
 
 /**
- * Pick the most useful textual representation of a node.
- * Prefers label + content, then label, then summary, then content.
+ * Pick the most useful plain-text content for a node.
  */
-const pickNodeText = (node: NoteNode) => {
+const buildPlainNodeText = (node: NoteNode) => {
   const data = node.data as NoteLike | undefined
   const label = trimOrEmpty(data?.label?.markdown)
   const content = trimOrEmpty(data?.content?.markdown)
@@ -31,23 +32,43 @@ const pickNodeText = (node: NoteNode) => {
 }
 
 /**
- * Build a plain-text context payload from a node list.
- * Each entry is prefixed with "node content:" and separated by a blank line
- * unless `skipPrefix` is true.
+ * Build a structured note block with ids and note types for agent context.
+ */
+const buildStructuredNoteBlock = (node: NoteNode) => {
+  const data = node.data as NoteLike | undefined
+  const noteId = trimOrEmpty(data?.id || node.id)
+  const noteType = trimOrEmpty(data?.style?.type)
+  const plainText = buildPlainNodeText(node)
+  const lines = [
+    "<SelectedNote>",
+    noteId ? `NoteId: ${noteId}` : "",
+    noteType ? `NoteType: ${noteType}` : "",
+  ]
+
+  if (plainText.startsWith("Title: ")) {
+    lines.push(...plainText.split("\n"))
+  } else if (plainText) {
+    lines.push(`Content: ${plainText}`)
+  }
+
+  lines.push("</SelectedNote>")
+  return lines.filter(Boolean).join("\n")
+}
+
+/**
+ * Build a structured context payload from a node list.
+ * Each selected note is represented as its own compact tagged block.
  */
 export const buildContextTextFromNodes = (
   nodes: NoteNode[],
   options: { skipPrefix?: boolean } = {}
 ) => {
   const { skipPrefix = false } = options
-  const lines = nodes
+  const blocks = nodes
     .filter((node) => (node.data as { kind?: string } | undefined)?.kind !== "point")
-    .map((node) => pickNodeText(node))
+    .map((node) => (skipPrefix ? buildPlainNodeText(node) : buildStructuredNoteBlock(node)))
     .filter((text) => text.length > 0)
 
-  if (lines.length === 0) return ""
-  if (skipPrefix) {
-    return lines.join("\n\n")
-  }
-  return lines.map((line) => `node content: ${line}`).join("\n\n")
+  if (blocks.length === 0) return ""
+  return blocks.join("\n\n")
 }

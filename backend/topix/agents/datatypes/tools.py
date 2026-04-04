@@ -14,6 +14,7 @@ class AgentToolName(StrEnum):
     WRITE_NOTE = "write_note"
     CREATE_NOTE = "create_note"
     EDIT_NOTE = "edit_note"
+    GET_NOTE = "get_note"
 
     NAVIGATE = "navigate"
 
@@ -54,6 +55,7 @@ tool_descriptions = {
     ),
     AgentToolName.CREATE_NOTE: "Create a new note using content as the main body and label only as an optional title",
     AgentToolName.EDIT_NOTE: "Apply a targeted text edit to a note field using note_id, field, old, and new",
+    AgentToolName.GET_NOTE: "Read an existing note by note_id to inspect its current label, content, and note type",
     AgentToolName.RAW_MESSAGE: "Reasoning message",
     AgentToolName.NAVIGATE: "Navigate the web",
     AgentToolName.OUTLINE_GENERATOR: "Generate an outline for research",

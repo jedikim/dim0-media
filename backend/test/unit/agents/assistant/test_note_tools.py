@@ -14,6 +14,7 @@ from topix.agents.datatypes.context import Context
 from topix.agents.notes.service import build_note, get_default_note_size
 from topix.agents.notes.tools import (
     create_edit_note_tool,
+    create_get_note_tool,
     create_write_note_tool,
 )
 from topix.datatypes.note.note import Note
@@ -274,3 +275,50 @@ async def test_edit_note_tool_rejects_stale_old_value() -> None:
 
     assert isinstance(result, str)
     assert "changed since it was read" in result
+
+
+@pytest.mark.asyncio
+async def test_get_note_tool_returns_current_note_metadata_and_content() -> None:
+    """Get note should return the current label, content, type, and parent metadata."""
+    graph_store = DummyGraphStore()
+    graph_store.get_nodes.return_value = [
+        Note(
+            id="note-1",
+            graph_uid="graph-1",
+            parent_id="folder-1",
+            label=RichText(markdown="Roadmap"),
+            content=RichText(markdown="Current plan"),
+            style={"type": NodeType.SHEET},
+        )
+    ]
+
+    tool = create_get_note_tool(graph_store, "graph-1")
+    result = await tool.on_invoke_tool(
+        RunContextWrapper(Context()),
+        json.dumps({"note_id": "note-1"}),
+    )
+
+    assert result.type == "get_note"
+    assert result.note_id == "note-1"
+    assert result.graph_uid == "graph-1"
+    assert result.parent_id == "folder-1"
+    assert result.label == "Roadmap"
+    assert result.content == "Current plan"
+    assert result.note_type == NodeType.SHEET
+
+
+@pytest.mark.asyncio
+async def test_get_note_tool_rejects_cross_board_notes() -> None:
+    """Get note should fail when the note does not belong to the scoped board."""
+    graph_store = DummyGraphStore()
+    graph_store.get_nodes.return_value = [Note(id="note-1", graph_uid="graph-2")]
+
+    tool = create_get_note_tool(graph_store, "graph-1")
+
+    result = await tool.on_invoke_tool(
+        RunContextWrapper(Context()),
+        json.dumps({"note_id": "note-1"}),
+    )
+
+    assert isinstance(result, str)
+    assert "does not belong to the current board scope" in result

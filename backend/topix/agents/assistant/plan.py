@@ -17,7 +17,7 @@ from topix.agents.datatypes.model_enum import ModelEnum
 from topix.agents.datatypes.tools import AgentToolName
 from topix.agents.image.gen import generate_image_tool
 from topix.agents.memory.search import create_memory_search_tool
-from topix.agents.notes.tools import create_edit_note_tool, create_write_note_tool
+from topix.agents.notes.tools import create_edit_note_tool, create_get_note_tool, create_write_note_tool
 from topix.agents.websearch.fetch import fetch_url_content_tool
 from topix.agents.websearch.handler import WebSearchHandler
 from topix.agents.widgets.finance import display_stock_widget_tool
@@ -83,6 +83,7 @@ class Plan(BaseAgent):
         if graph_store is not None and graph_uid is not None:
             tools.append(create_write_note_tool(graph_store, graph_uid, root_id=root_id))
             tools.append(create_edit_note_tool(graph_store, graph_uid))
+            tools.append(create_get_note_tool(graph_store, graph_uid))
 
         if config.navigate:
             tools.append(fetch_url_content_tool)
@@ -100,7 +101,7 @@ class Plan(BaseAgent):
     def _format_message(self, message: dict[str, str]) -> str:
         role = message["role"]
         content = message["content"]
-        return f"<message role='{role}'>\n<![CDATA[\n{content}\n]]>\n</message>"
+        return f"<Message role='{role}'>\n<![CDATA[\n{content}\n]]>\n</Message>"
 
     async def _input_formatter(self, context: ReasoningContext, input: list[dict[str, str]]) -> str:
         # update context with memory search filters from tool if available

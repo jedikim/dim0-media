@@ -82,7 +82,7 @@ export const InputBar = ({
     if (!enableSelectionContext || !enableMessageBoardContextSelection || selectedNodeCount === 0) {
       return undefined
     }
-    const contextText = buildContextTextFromNodes(selectedNodes, { skipPrefix: true }).trim()
+    const contextText = buildContextTextFromNodes(selectedNodes).trim()
     if (!contextText) {
       return undefined
     }

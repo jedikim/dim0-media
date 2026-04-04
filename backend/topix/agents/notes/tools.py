@@ -7,7 +7,7 @@ from typing import Literal
 from agents import FunctionTool, RunContextWrapper
 
 from topix.agents.datatypes.context import Context
-from topix.agents.datatypes.outputs import CreateNoteOutput, EditNoteOutput, WriteNoteOutput
+from topix.agents.datatypes.outputs import CreateNoteOutput, EditNoteOutput, GetNoteOutput, WriteNoteOutput
 from topix.agents.datatypes.tools import AgentToolName
 from topix.agents.notes.service import build_note, get_default_note_size
 from topix.agents.tool_handler import ToolHandler
@@ -36,8 +36,9 @@ def create_write_note_tool(
         markdown, code, or widget source. Omit `note_id` to create a new note. Provide
         `note_id` only when you intend to fully rewrite the authored fields of an existing note,
         perform a major restructure, or change the note type. For localized updates to an
-        existing note, use `edit_note` instead. If the user asks for a sticky note or post-it,
-        use `note_type="sheet"`.
+        existing note, use `edit_note` instead. Always identify an existing note by `note_id`,
+        never by label, because labels are descriptive and may change. If the user asks for a
+        sticky note or post-it, use `note_type="sheet"`.
 
         Args:
             content (str): The complete note body after this write, such as prose, markdown, code, or widget source.
@@ -177,7 +178,8 @@ def create_edit_note_tool(
         Use this as the default tool for localized changes to an existing note, including prose,
         markdown, code, or widget source. Multiple `edit_note` calls are preferred when several
         small updates are needed. Pass the exact current value in `old` so the update can fail
-        safely if the note has changed since you last saw it.
+        safely if the note has changed since you last saw it. Always identify the target note by
+        `note_id`, never by label, because labels are descriptive and may change.
 
         Args:
             note_id (str): Exact id of the note to update.
@@ -223,5 +225,49 @@ def create_edit_note_tool(
     return ToolHandler.convert_func_to_tool(
         edit_note,
         tool_name=AgentToolName.EDIT_NOTE,
+        tool_description=None,
+    )
+
+
+def create_get_note_tool(
+    graph_store: GraphStore,
+    graph_uid: str,
+) -> FunctionTool:
+    """Build a get-note tool bound to the current board scope."""
+
+    async def get_note(
+        _wrapper: RunContextWrapper[Context],
+        note_id: str,
+    ) -> GetNoteOutput:
+        """Read the current content and metadata of an existing note by exact note id.
+
+        Use this tool when you already know a note id and need to inspect the note again
+        before editing or rewriting it. Always identify existing notes by `note_id`, not by
+        label, because labels are descriptive and may be duplicated or changed.
+
+        Args:
+            note_id (str): Exact id of the note to fetch.
+
+        """
+        existing_notes = await graph_store.get_nodes([note_id])
+        if not existing_notes:
+            raise ValueError(f"Note {note_id} was not found.")
+
+        note = existing_notes[0]
+        if note.graph_uid != graph_uid:
+            raise ValueError("Note does not belong to the current board scope.")
+
+        return GetNoteOutput(
+            note_id=note.id,
+            graph_uid=note.graph_uid,
+            label=note.label.markdown if note.label else None,
+            content=note.content.markdown if note.content else "",
+            note_type=note.style.type,
+            parent_id=note.parent_id,
+        )
+
+    return ToolHandler.convert_func_to_tool(
+        get_note,
+        tool_name=AgentToolName.GET_NOTE,
         tool_description=None,
     )

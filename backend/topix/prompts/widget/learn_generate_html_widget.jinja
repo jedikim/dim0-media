@@ -39,6 +39,7 @@ Rules:
   - `var(--radius)`
   - `var(--shadow-sm)`
   - `var(--shadow-md)`
+- In this app theme, `var(--secondary)` is often a stronger colored fill rather than a very soft neutral surface, so use it intentionally.
 - Prefer `system-ui` for the main font family unless the design strongly needs something else.
 - Make the design work in both light and dark themes without changing the HTML.
 - Prefer a broad outer background using `var(--background)` and avoid an outer border by default. Use filled surfaces like `var(--card)` or borders only for intentional inner panels, cards, or callouts.
@@ -48,7 +49,7 @@ Rules:
 - Prefer low padding and small gaps by default; only use larger spacing when it clearly improves readability.
 - Avoid external dependencies unless they are truly necessary.
 - Prefer plain HTML, CSS, and small vanilla JavaScript.
-- If a chart is the clearest visual form, `Chart.js` is a good option.
+- If the user asks for charts, `Chart.js` is a good option. If the user asks for a slide-style presentation, `Reveal.js` is a good option. When such a CDN library is truly needed, you may include external `<script src="..."></script>` or `<link rel="stylesheet" href="...">` lines; the frontend will move those imports into the document head.
 - Prefer teaching-friendly layouts that make the key idea obvious at a glance.
 - Use motion only when it meaningfully improves understanding.
 - Make the widget readable on both compact and larger note sizes.

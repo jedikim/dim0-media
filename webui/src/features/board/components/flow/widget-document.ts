@@ -226,6 +226,21 @@ const extractBodyMarkup = (html: string) => {
 
 
 /**
+ * Extracts external asset tags that should live in the document head.
+ */
+const extractHeadAssets = (html: string) => {
+  const assetPattern = /<(script\b[^>]*\bsrc\s*=\s*["'][^"']+["'][^>]*>\s*<\/script>|link\b[^>]*\brel\s*=\s*["']stylesheet["'][^>]*>)/gi
+  const assets = html.match(assetPattern) ?? []
+  const bodyMarkup = html.replace(assetPattern, "").trim()
+
+  return {
+    assets,
+    bodyMarkup,
+  }
+}
+
+
+/**
  * Reads the current app theme tokens so widgets stay aligned with the active theme.
  */
 export const getWidgetThemeTokens = (): WidgetThemeTokens => {
@@ -263,7 +278,7 @@ export const buildWidgetDocument = (
     return html
   }
 
-  const bodyMarkup = extractBodyMarkup(html)
+  const { assets, bodyMarkup } = extractHeadAssets(extractBodyMarkup(html))
   const tokens = getWidgetThemeTokens()
   const tokenStyle = renderThemeTokenBlock(tokens)
   const escapedTitle = title
@@ -284,6 +299,7 @@ export const buildWidgetDocument = (
       renderThemeTokenBlock(DEFAULT_WIDGET_TOKENS),
       tokenStyle
     )}
+    ${assets.join("\n    ")}
   </head>
   <body>
     ${bodyMarkup}

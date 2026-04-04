@@ -53,7 +53,7 @@ class Message(Resource):
         if not steps:
             return ""
 
-        steps_str = " -> ".join(
+        steps_str = "\n\n".join(
             step.to_compact_step_description()
             for step in steps
             if step.to_compact_step_description()

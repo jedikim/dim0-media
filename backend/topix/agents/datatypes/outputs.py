@@ -27,12 +27,20 @@ class DisplayWeatherWidgetOutput(BaseModel):
         "like 'Manhattan, New York, USA'."
     ]
 
+    def to_compact_repr(self) -> str:
+        """Return a short history-safe summary for the widget request."""
+        return f"weather for {self.city}".strip()
+
 
 class DisplayStockWidgetOutput(BaseModel):
     """Display Stock Widget Output."""
 
     type: Literal["display_stock_widget"] = "display_stock_widget"
     symbol: Annotated[str, "The stock ticker symbol, e.g. AAPL for Apple Inc."]
+
+    def to_compact_repr(self) -> str:
+        """Return a short history-safe summary for the widget request."""
+        return f"stock for {self.symbol}".strip()
 
 
 class DisplayImageSearchWidgetOutput(BaseModel):
@@ -47,6 +55,10 @@ class DisplayImageSearchWidgetOutput(BaseModel):
         list[str],
         "List of image URLs returned from the image search. Should be left empty. This will be populated by the frontend."
     ] = []
+
+    def to_compact_repr(self) -> str:
+        """Return a short history-safe summary for the widget request."""
+        return f'image search "{self.query}"'.strip()
 
 
 class NewsfeedArticle(BaseModel):
@@ -73,6 +85,11 @@ class NewsfeedOutput(BaseModel):
 
     sections: list[NewsfeedSection]
 
+    def to_compact_repr(self) -> str:
+        """Return the number of sections and articles produced."""
+        article_count = sum(len(section.articles) for section in self.sections)
+        return f"{len(self.sections)} sections, {article_count} articles"
+
 
 class TopicTracker(BaseModel):
     """Topic data model."""
@@ -82,6 +99,14 @@ class TopicTracker(BaseModel):
     keywords: list[str]
     seed_sources: list[str]
 
+    def to_compact_repr(self) -> str:
+        """Return the tracked topic metadata in compact form."""
+        return (
+            f"{len(self.sub_topics)} subtopics, "
+            f"{len(self.keywords)} keywords, "
+            f"{len(self.seed_sources)} sources"
+        )
+
 
 class MapifyTheme(BaseModel):
     """Theme."""
@@ -90,6 +115,10 @@ class MapifyTheme(BaseModel):
     description: str
     subthemes: list[MapifyTheme] = []
 
+    def to_compact_repr(self) -> str:
+        """Return the root label and subtheme count."""
+        return f'"{self.label}" with {len(self.subthemes)} subthemes'
+
 
 class NotifyOutput(BaseModel):
     """Notify Output."""
@@ -97,11 +126,19 @@ class NotifyOutput(BaseModel):
     title: str
     content: str
 
+    def to_compact_repr(self) -> str:
+        """Return the generated notification title."""
+        return f'title "{self.title}"'.strip()
+
 
 class TranslateOutput(BaseModel):
     """Translate Output."""
 
     text: str
+
+    def to_compact_repr(self) -> str:
+        """Return a short summary of the translated payload."""
+        return f"translated {len(self.text)} chars"
 
 
 class ImageDescriptionOutput(BaseModel):
@@ -111,6 +148,10 @@ class ImageDescriptionOutput(BaseModel):
     image_type: str
     image_summary: str
 
+    def to_compact_repr(self) -> str:
+        """Return the described image type and title."""
+        return f'{self.image_type}: "{self.image_title}"'
+
 
 class TopicIllustratorOutput(BaseModel):
     """Output of the topic illustrator agent."""
@@ -118,6 +159,10 @@ class TopicIllustratorOutput(BaseModel):
     image_url: str
     image_title: str
     image_description: str
+
+    def to_compact_repr(self) -> str:
+        """Return the generated illustration title."""
+        return f'illustration "{self.image_title}"'
 
 
 class WebSearchOutput(BaseModel):
@@ -146,6 +191,12 @@ class WebSearchOutput(BaseModel):
             """The final output of the Websearch Agent."""
             return self.answer
 
+    def to_compact_repr(self) -> str:
+        """Return a short summary of the answer or source count."""
+        if self.answer:
+            return f"answered with {len(self.search_results)} sources"
+        return f"{len(self.search_results)} search results"
+
 
 class CodeInterpreterOutput(BaseModel):
     """Output from code interpreter tool."""
@@ -168,6 +219,10 @@ class CodeInterpreterOutput(BaseModel):
 
         return result
 
+    def to_compact_repr(self) -> str:
+        """Return execution status with runtime."""
+        return f"{self.status} in {self.duration_ms}ms"
+
 
 class CreateNoteOutput(BaseModel):
     """Output from create note tool."""
@@ -181,6 +236,11 @@ class CreateNoteOutput(BaseModel):
         str | None,
         "The folder/root note id used as the created note parent, if any."
     ] = None
+
+    def to_compact_repr(self) -> str:
+        """Return the created note metadata in a compact, history-safe form."""
+        label = f' "{self.label}"' if self.label else ""
+        return f'created {self.note_type} note_id="{self.note_id}"{label}'
 
 
 class WriteNoteOutput(BaseModel):
@@ -197,6 +257,11 @@ class WriteNoteOutput(BaseModel):
         "The folder/root note id used as the note parent, if any."
     ] = None
 
+    def to_compact_repr(self) -> str:
+        """Return the write action metadata in a compact, history-safe form."""
+        label = f' "{self.label}"' if self.label else ""
+        return f'{self.action} {self.note_type} note_id="{self.note_id}"{label}'
+
 
 class EditNoteOutput(BaseModel):
     """Output from edit note tool."""
@@ -210,6 +275,31 @@ class EditNoteOutput(BaseModel):
         str | None,
         "The parent folder/root note id after the edit, if any."
     ] = None
+
+    def to_compact_repr(self) -> str:
+        """Return the edited note metadata in a compact, history-safe form."""
+        label = f' "{self.label}"' if self.label else ""
+        return f'edited {self.note_type} note_id="{self.note_id}"{label}'
+
+
+class GetNoteOutput(BaseModel):
+    """Output from get note tool."""
+
+    type: Literal["get_note"] = "get_note"
+    note_id: Annotated[str, "The unique id of the fetched note."]
+    graph_uid: Annotated[str, "The board id where the note belongs."]
+    label: Annotated[str | None, "Optional short title currently stored on the note."] = None
+    content: Annotated[str, "The current markdown body of the note."]
+    note_type: Annotated[NodeType, "The current node type of the note."]
+    parent_id: Annotated[
+        str | None,
+        "The current parent folder/root note id, if any."
+    ] = None
+
+    def to_compact_repr(self) -> str:
+        """Return the fetched note metadata in a compact, history-safe form."""
+        label = f' "{self.label}"' if self.label else ""
+        return f'read {self.note_type} note_id="{self.note_id}"{label}'
 
 
 class MemorySearchOutput(BaseModel):
@@ -241,12 +331,22 @@ class MemorySearchOutput(BaseModel):
                 )
         return formatted
 
+    def to_compact_repr(self) -> str:
+        """Return whether an answer or references were found."""
+        if self.answer:
+            return f"answered with {len(self.references)} references"
+        return f"{len(self.references)} references"
+
 
 class ImageGenerationOutput(BaseModel):
     """Output from image generation tool."""
 
     type: Literal["image_generation"] = "image_generation"
     image_urls: list[str] = []
+
+    def to_compact_repr(self) -> str:
+        """Return the number of generated images."""
+        return f"{len(self.image_urls)} images"
 
 
 type ToolOutput = Union[
@@ -255,6 +355,7 @@ type ToolOutput = Union[
     WriteNoteOutput,
     CreateNoteOutput,
     EditNoteOutput,
+    GetNoteOutput,
     WebSearchOutput,
     MemorySearchOutput,
     NotifyOutput,
