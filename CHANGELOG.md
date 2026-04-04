@@ -1,3 +1,9 @@
+## v0.1.32 (2026-04-04)
+
+### Perf
+
+- **agent**: improve history messages context handling (#34)
+
 ## v0.1.31 (2026-04-03)
 
 ### Fix
