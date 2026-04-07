@@ -1,3 +1,9 @@
+## v0.1.35 (2026-04-07)
+
+### Feat
+
+- **webui**: add legal consent copy to auth screens (#37)
+
 ## v0.1.34 (2026-04-07)
 
 ## v0.1.33 (2026-04-04)
