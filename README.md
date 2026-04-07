@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://dim0.net">Website</a> · <a href="https://app.dim0.net">Live App</a> · MIT License
+  <a href="https://dim0.net">Website</a> · <a href="https://app.dim0.net">Live App</a> · <a href="https://www.dim0.net/demo.mp4">Watch Demo</a> · MIT License
 </p>
 
 <p align="center">
