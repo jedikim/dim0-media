@@ -17,6 +17,7 @@ import { Loader2 } from "lucide-react"
 import { PasswordInput } from "../components/password-input"
 import { renderGoogleSigninButton } from "../lib/google-connect"
 
+/** Renders the sign-in screen and routes successful authentication into the app. */
 export function SigninPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -234,6 +235,28 @@ export function SigninPage() {
                 {(authMethodsQuery.error as Error).message || "Unable to load sign-in methods"}
               </p>
             ) : null}
+
+            <p className="text-center text-xs text-muted-foreground">
+              By signing in, you agree to our{" "}
+              <a
+                href="https://www.dim0.net/terms"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                Terms
+              </a>{" "}
+              and{" "}
+              <a
+                href="https://www.dim0.net/privacy"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                Privacy Policy
+              </a>
+              .
+            </p>
 
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">

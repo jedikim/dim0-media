@@ -18,6 +18,7 @@ import { PasswordInput } from "../components/password-input"
 import { PasswordStrengthMeter } from "../components/password-strength-meter"
 import { getPasswordStrength } from "../lib/password-strength"
 
+/** Renders the sign-up screen and creates a new account after validation passes. */
 export function SignupPage() {
   const navigate = useNavigate()
   const setUserId = useAppStore(s => s.setUserId)
@@ -176,6 +177,28 @@ export function SignupPage() {
                 "Create account"
               )}
             </Button>
+
+            <p className="text-center text-xs text-muted-foreground">
+              By creating an account, you agree to our{" "}
+              <a
+                href="https://www.dim0.net/terms"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                Terms
+              </a>{" "}
+              and{" "}
+              <a
+                href="https://www.dim0.net/privacy"
+                target="_blank"
+                rel="noreferrer"
+                className="underline underline-offset-2"
+              >
+                Privacy Policy
+              </a>
+              .
+            </p>
 
             <Separator />
 
