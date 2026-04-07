@@ -5,24 +5,32 @@
 <h1 align="center">Dim0 - The Thinking Canvas</h1>
 
 <p align="center">
-  An agent-native canvas where notes, documents, code, widgets, and AI work together on one board.
+  An agent-native canvas where notes, code, charts, visual explainers, widgets, documents and AI work together on one board.
+</p>
+
+<p align="center">
+  For the ones who think in **connections**, not bullet points.
 </p>
 
 <p align="center">
   <a href="https://dim0.net">Website</a> · <a href="https://app.dim0.net">Live App</a> · MIT License
 </p>
 
+<p align="center">
+  Star ★ if Dim0 is useful to you. It helps others find the project.
+</p>
+
 ![Dim0 app screenshot](docs/images/app-screenshot.png)
 *Canvas workspace: notes, agent outputs, and structure on the same board.*
 
 ![Dim0 code, widget, and mindmap examples](docs/images/code-widget-mindmap.png)
-*Generated artifacts: code, widgets, and mind maps created directly inside the canvas.*
+*Generated artifacts: code, charts, visual explainers, interactive widgets, and mind maps created directly inside the canvas.*
 
 ## What Dim0 Is
 
 Dim0 is built around one architectural bet: **the canvas, not the chat, should be the primary interface for thinking with AI.**
 
-Most tools bolt AI onto an existing product as a sidebar. Dim0 is built the other way around: the board is designed for an agent that can read context, use tools, and write results directly back into the workspace.
+Most tools bolt AI onto an existing product as a sidebar. Dim0 is built the other way around: the board is a powerful workspace in its own right, with notes, code, widgets, nested boards, presentation frames, and documents living side by side, and it is built for an agent that can read context, use tools, and write results directly back into that workspace.
 
 The agent is not just a chatbot. It can:
 
@@ -39,7 +47,7 @@ Everything on the board is a node. Dim0 supports:
 - Shape nodes for diagrams and spatial structure
 - Rich text notes for writing and editing inside the board
 - Code sandbox nodes for writing and running code
-- Widget nodes for embedded HTML/JS outputs
+- Widget nodes for embedded HTML/JS outputs like charts, visual explainers, and interactive tools
 - Document nodes for uploaded files and retrieval context
 - Nested boards for hierarchical organization
 - Frame-based presentation directly from the canvas
@@ -262,5 +270,3 @@ The repository also includes GitHub Actions workflows for version checks, releas
 ## License
 
 This repository is available under the MIT License.
-
-<p align="center">If Dim0 is useful to you, a GitHub star helps others find it.</p>
