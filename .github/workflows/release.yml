@@ -78,3 +78,22 @@ jobs:
         run: |
           VERSION="$(cat VERSION)"
           gh release create "v${VERSION}" --generate-notes
+
+      - name: Save version for downstream jobs
+        id: version
+        if: steps.release_changes.outputs.has_changes == 'true'
+        run: echo "version=$(cat VERSION)" >> "$GITHUB_OUTPUT"
+
+    outputs:
+      has_changes: ${{ steps.release_changes.outputs.has_changes }}
+      version: ${{ steps.version.outputs.version }}
+
+  docker:
+    needs: release
+    if: needs.release.outputs.has_changes == 'true'
+    uses: ./.github/workflows/docker-publish.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+      ref: refs/tags/v${{ needs.release.outputs.version }}
+      push_latest: true
+    secrets: inherit
