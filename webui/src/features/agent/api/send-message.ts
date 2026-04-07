@@ -17,6 +17,47 @@ import type { NoteNode } from "@/features/board/types/flow"
 import type { CreateNoteOutput, EditNoteOutput, WriteNoteOutput } from "../types/tool-outputs"
 import { isReasoningTextStep, isToolCallStep, normalizeReasoningSteps } from "../types/stream"
 
+export class SendMessageError extends Error {
+  status: number
+  retryAfter?: number
+
+  /**
+   * Represents a failed streaming chat send with optional retry metadata.
+   */
+  constructor(message: string, status: number, retryAfter?: number) {
+    super(message)
+    this.name = "SendMessageError"
+    this.status = status
+    this.retryAfter = retryAfter
+  }
+}
+
+
+/**
+ * Reads a failed streaming response into a user-facing error.
+ */
+async function readSendMessageError(response: Response): Promise<SendMessageError> {
+  const retryAfterHeader = response.headers.get("Retry-After")
+  const retryAfter = retryAfterHeader ? Number(retryAfterHeader) : undefined
+
+  let message = `sendMessage failed: ${response.status} ${response.statusText}`
+  try {
+    const text = await response.text()
+    if (text) {
+      try {
+        const parsed = JSON.parse(text) as { detail?: string, data?: { message?: string } }
+        message = parsed.detail || parsed.data?.message || text
+      } catch {
+        message = text
+      }
+    }
+  } catch {
+    // Keep the default fallback when the body cannot be read.
+  }
+
+  return new SendMessageError(message, response.status, Number.isFinite(retryAfter) ? retryAfter : undefined)
+}
+
 
 /**
  * Send a message to the AI assistant.
@@ -53,8 +94,7 @@ export async function* sendMessage(
   })
 
   if (!response.ok) {
-    // If refresh failed, fetchWithAuthRaw may have redirected; this protects the generator
-    throw new Error(`sendMessage failed: ${response.status} ${response.statusText}`)
+    throw await readSendMessageError(response)
   }
 
   // hand off to your streaming parser (SSE/NDJSON/etc.)

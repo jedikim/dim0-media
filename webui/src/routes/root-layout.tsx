@@ -76,7 +76,7 @@ export function RootLayout() {
                   <div className="relative flex-1 min-w-0">
                     <Outlet />
                   </div>
-                  <Toaster position="top-right" toastOptions={{ style: { borderRadius: 'var(--radius-xl)' } }} />
+                  <Toaster position="top-right" closeButton toastOptions={{ style: { borderRadius: 'var(--radius-xl)' } }} />
                 </div>
               </SidebarInset>
             </SidebarProvider>
@@ -89,6 +89,7 @@ export function RootLayout() {
 
               <Toaster
                 position="top-right"
+                closeButton
                 toastOptions={{ style: { borderRadius: 'var(--radius-xl)' } }}
               />
             </div>

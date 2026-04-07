@@ -1,7 +1,7 @@
 import { useMemo, useState, type KeyboardEvent } from 'react'
 import clsx from 'clsx'
 import { useChatStore } from '../../store/chat-store'
-import { useSendMessage } from '../../api/send-message'
+import { SendMessageError, useSendMessage } from '../../api/send-message'
 import { generateUuid, trimText } from '@/lib/common'
 import { useAppStore } from '@/store'
 import { SendButton } from './send-button'
@@ -10,7 +10,7 @@ import { useChat } from '../../hooks/chat-context'
 import { useCreateChat } from '../../api/create-chat'
 import { useUpdateChat } from '../../api/update-chat'
 import { useNavigate, useRouterState, useParams } from '@tanstack/react-router'
-import { ChatUrl } from '@/routes'
+import { ChatUrl, SettingsBillingUrl } from '@/routes'
 import { useDescribeChat } from '../../api/describe-chat'
 import type { SendMessageRequestPayload } from '../../api/types'
 import { WelcomeMessage } from './welcome-message'
@@ -25,6 +25,9 @@ import { buildContextTextFromNodes } from '@/features/board/utils/context-text'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { toast } from 'sonner'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { Alert02Icon } from '@hugeicons/core-free-icons'
 
 export interface InputBarProps {
   attachedBoardId?: string
@@ -36,6 +39,39 @@ export interface InputBarProps {
 
 const EMPTY_SELECTED_NODES: NoteNode[] = []
 const MAX_MESSAGE_CONTEXT_CHARS = 12000
+
+/**
+ * Formats a Retry-After duration into a short user-facing hint.
+ */
+const formatRetryAfter = (retryAfter?: number) => {
+  if (!retryAfter || retryAfter <= 0) return null
+  if (retryAfter < 60) return `Try again in ${retryAfter}s.`
+  const minutes = Math.ceil(retryAfter / 60)
+  return `Try again in ${minutes} min.`
+}
+
+/**
+ * Builds a friendlier quota description for long-lived limit toasts.
+ */
+const buildLimitDescription = ({
+  userPlan,
+  retryAfter,
+}: {
+  userPlan: "free" | "plus"
+  retryAfter?: number
+}) => {
+  const resetHint = retryAfter && retryAfter >= 60 * 60 * 8
+    ? "It should reset automatically tomorrow."
+    : retryAfter && retryAfter >= 60 * 60
+      ? "It should reset automatically later today."
+      : formatRetryAfter(retryAfter) ?? "It should reset automatically soon."
+
+  if (userPlan === "free") {
+    return `We’re a small indie project running on a very tight budget, so the free tier is capped for now. ${resetHint} If you need more room, please consider self-hosting or upgrading to Plus.`
+  }
+
+  return `We’re a small indie project running on a very tight budget, so usage is still capped for now. ${resetHint} If you need more room, you can also self-host or review the available plans.`
+}
 
 /**
  * Input bar with Deep Research confirmation using ONLY `input` state.
@@ -53,6 +89,7 @@ export const InputBar = ({
   const { chatId, setChatId } = useChat()
 
   const userId = useAppStore((state) => state.userId)
+  const userPlan = useAppStore((state) => state.userPlan)
 
   const llmModel = useChatStore((state) => state.llmModel)
   const isStreaming = useChatStore((state) => state.isStreaming)
@@ -92,6 +129,10 @@ export const InputBar = ({
   // Deep Research dialog state
   const [showDRDialog, setShowDRDialog] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [limitDialogCopy, setLimitDialogCopy] = useState<{
+    title: string
+    description: string
+  } | null>(null)
 
   const { createChatAsync } = useCreateChat()
   const { updateChatAsync } = useUpdateChat()
@@ -155,7 +196,20 @@ export const InputBar = ({
     // reset deep research toggle after sending
     setUseDeepResearch(false)
 
-    await sendMessageAsync({ payload, userId, chatId: id })
+    try {
+      await sendMessageAsync({ payload, userId, chatId: id })
+    } catch (error) {
+      if (error instanceof SendMessageError && error.status === 429) {
+        setLimitDialogCopy({
+          title: "You’ve reached your AI request limit for now.",
+          description: buildLimitDescription({ userPlan, retryAfter: error.retryAfter }),
+        })
+      } else {
+        const message = error instanceof Error ? error.message : "Could not send message."
+        toast.error(message)
+      }
+      throw error
+    }
 
     if (createNewChat) {
       void describeChatAsync({ chatId: id, userId }).catch(() => {})
@@ -311,6 +365,36 @@ export const InputBar = ({
             </Button>
             <Button onClick={confirmDeepResearch} disabled={isSubmitting || !input.trim()}>
               {isSubmitting ? 'Starting…' : 'Start Deep Research'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={limitDialogCopy !== null} onOpenChange={(open) => {
+        if (!open) setLimitDialogCopy(null)
+      }}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HugeiconsIcon icon={Alert02Icon} className="size-5 shrink-0 text-secondary" strokeWidth={2} />
+              <span>{limitDialogCopy?.title}</span>
+            </DialogTitle>
+            <DialogDescription className="text-sm leading-7 text-foreground/80">
+              {limitDialogCopy?.description}
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="gap-2 sm:gap-3">
+            <Button variant="ghost" onClick={() => setLimitDialogCopy(null)}>
+              Close
+            </Button>
+            <Button
+              onClick={() => {
+                setLimitDialogCopy(null)
+                navigate({ to: SettingsBillingUrl })
+              }}
+            >
+              Upgrade
             </Button>
           </DialogFooter>
         </DialogContent>
