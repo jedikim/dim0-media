@@ -256,6 +256,8 @@ export const convertEdgeToLink = (edge: LinkEdge): Link => {
     throw new Error("convertEdgeToLink: missing graphUid on edge")
   }
 
+  const parentId = (edge.data as Link | undefined)?.parentId
+
   return {
     id: edge.id,
     source: edge.source,
@@ -268,6 +270,7 @@ export const convertEdgeToLink = (edge: LinkEdge): Link => {
     deletedAt: edge.data?.deletedAt,
     style: edge.data?.style || createDefaultLinkStyle(),
     graphUid,
+    parentId,
     label: edge.data?.label
   }
 }

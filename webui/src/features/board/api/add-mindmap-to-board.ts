@@ -101,6 +101,11 @@ export const useAddMindMapToBoard = () => {
         mindMapNodes.forEach(node => {
           node.data.parentId = rootId
         })
+        mindMapEdges.forEach(edge => {
+          if (!edge.data) return
+          edge.data.graphUid = boardId
+          edge.data.parentId = rootId
+        })
 
         // mark as new (frontend only)
         mindMapNodes.forEach(n => { n.data.isNew = true })
@@ -175,6 +180,14 @@ export const useAddMindMapToBoard = () => {
             target: endId,
             sourceHandle: 'point',
             targetHandle: 'point',
+            data: edge.data
+              ? {
+                  ...edge.data,
+                  id: edgeId,
+                  graphUid: boardId,
+                  parentId: rootId,
+                }
+              : edge.data,
           })
         }
         mindMapEdges.forEach(attachPointPair)

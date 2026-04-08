@@ -337,6 +337,7 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
             source: newSource,
             target: newTarget,
             graphUid: boardId,
+            parentId: rootId,
             createdAt: new Date().toISOString(),
             updatedAt: undefined,
             deletedAt: undefined,
@@ -401,6 +402,7 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
     }
   }, [
     boardId,
+    rootId,
     userId,
     randJitter,
     cloneNoteWithOffset,

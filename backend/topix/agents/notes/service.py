@@ -61,7 +61,7 @@ def build_default_note_style(note_type: NodeType) -> Style:
     return style
 
 
-def get_default_note_size(note_type: NodeType) -> tuple[int, int]:
+def get_default_note_size(note_type: NodeType) -> tuple[int, int]:  # noqa: C901
     """Mirror the frontend default note sizes for the supported node types."""
     if note_type == NodeType.SHEET:
         return 368, 360

@@ -6,6 +6,7 @@ import pytest_asyncio
 from topix.datatypes.graph.graph import Graph
 from topix.datatypes.note.link import Link
 from topix.datatypes.note.note import Note
+from topix.datatypes.property import PositionProperty
 from topix.datatypes.resource import RichText
 from topix.datatypes.user import User
 from topix.store.graph import GraphStore
@@ -167,6 +168,172 @@ async def test_graph_visibility_defaults_and_updates(config, init_collection):
         updated_graph = await store.get_graph(graph.uid)
         assert updated_graph is not None
         assert updated_graph.visibility == "public"
+    finally:
+        await store.delete_graph(graph.uid, hard_delete=True)
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_graph_keeps_links_with_free_endpoints(config, init_collection):
+    """Test graph loading keeps links that rely on persisted free endpoints."""
+    store = GraphStore()
+    await store.open()
+    user_uid = "root"
+
+    try:
+        graph = Graph(label="Free Endpoint Graph")
+        await store.add_graph(graph, user_uid=user_uid)
+
+        node = Note(
+            label=RichText(markdown="Anchored Node"),
+            graph_uid=graph.uid,
+        )
+        await store.add_notes([node])
+
+        floating_link = Link(
+            source="floating-start",
+            target="floating-end",
+            graph_uid=graph.uid,
+            properties={
+                "start_point": PositionProperty(
+                    position=PositionProperty.Position(x=10, y=20),
+                ),
+                "end_point": PositionProperty(
+                    position=PositionProperty.Position(x=120, y=160),
+                ),
+            },
+        )
+        partial_link = Link(
+            source=node.id,
+            target="floating-target",
+            graph_uid=graph.uid,
+            properties={
+                "end_point": PositionProperty(
+                    position=PositionProperty.Position(x=240, y=280),
+                ),
+            },
+        )
+        await store.add_links([floating_link, partial_link])
+
+        graph_with_data = await store.get_graph(graph.uid)
+
+        assert {edge.id for edge in graph_with_data.edges} >= {
+            floating_link.id,
+            partial_link.id,
+        }
+    finally:
+        await store.delete_graph(graph.uid, hard_delete=True)
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_update_link_merges_partial_payload(config, init_collection):
+    """Test link updates merge into the stored link instead of replacing it."""
+    store = GraphStore()
+    await store.open()
+    user_uid = "root"
+
+    try:
+        graph = Graph(label="Update Link Graph")
+        await store.add_graph(graph, user_uid=user_uid)
+
+        node1 = Note(
+            label=RichText(markdown="Node 1"),
+            graph_uid=graph.uid,
+        )
+        node2 = Note(
+            label=RichText(markdown="Node 2"),
+            graph_uid=graph.uid,
+        )
+        await store.add_notes([node1, node2])
+
+        link = Link(
+            source=node1.id,
+            target=node2.id,
+            graph_uid=graph.uid,
+            properties={
+                "start_point": PositionProperty(
+                    position=PositionProperty.Position(x=30, y=40),
+                ),
+                "end_point": PositionProperty(
+                    position=PositionProperty.Position(x=130, y=140),
+                ),
+            },
+        )
+        await store.add_links([link])
+
+        await store.update_link(
+            link_id=link.id,
+            data={
+                "parent_id": node1.id,
+            },
+        )
+
+        updated_link = (await store.get_links([link.id]))[0]
+        assert updated_link.parent_id == node1.id
+        assert updated_link.source == node1.id
+        assert updated_link.target == node2.id
+        assert updated_link.graph_uid == graph.uid
+        assert updated_link.properties.start_point is not None
+        assert updated_link.properties.end_point is not None
+    finally:
+        await store.delete_graph(graph.uid, hard_delete=True)
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_graph_filters_links_by_parent_scope(config, init_collection):
+    """Test graph loading scopes links by their parent_id in nested boards."""
+    store = GraphStore()
+    await store.open()
+    user_uid = "root"
+
+    try:
+        graph = Graph(label="Scoped Link Graph")
+        await store.add_graph(graph, user_uid=user_uid)
+
+        folder = Note(
+            label=RichText(markdown="Folder"),
+            graph_uid=graph.uid,
+        )
+        child = Note(
+            label=RichText(markdown="Child"),
+            graph_uid=graph.uid,
+            parent_id=folder.id,
+        )
+        await store.add_notes([folder, child])
+
+        root_link = Link(
+            source="root-start",
+            target="root-end",
+            graph_uid=graph.uid,
+            properties={
+                "start_point": PositionProperty(
+                    position=PositionProperty.Position(x=20, y=30),
+                ),
+                "end_point": PositionProperty(
+                    position=PositionProperty.Position(x=80, y=90),
+                ),
+            },
+        )
+        nested_link = Link(
+            source=child.id,
+            target="nested-end",
+            graph_uid=graph.uid,
+            parent_id=folder.id,
+            properties={
+                "end_point": PositionProperty(
+                    position=PositionProperty.Position(x=180, y=210),
+                ),
+            },
+        )
+        await store.add_links([root_link, nested_link])
+
+        root_graph = await store.get_graph(graph.uid)
+        nested_graph = await store.get_graph(graph.uid, root_id=folder.id)
+
+        assert {edge.id for edge in root_graph.edges} == {root_link.id}
+        assert {edge.id for edge in nested_graph.edges} == {nested_link.id}
     finally:
         await store.delete_graph(graph.uid, hard_delete=True)
         await store.close()

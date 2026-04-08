@@ -31,3 +31,4 @@ class Link(Resource):
     style: LinkStyle = Field(default_factory=LinkStyle)
 
     graph_uid: str | None = None
+    parent_id: str | None = None

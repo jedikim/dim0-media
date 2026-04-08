@@ -10,6 +10,7 @@ type Point = { x: number; y: number }
 export function usePlaceLine() {
   const [pending, setPending] = useState(false)
   const boardId = useGraphStore(state => state.boardId)
+  const rootId = useGraphStore(state => state.rootId)
   const setNodes = useGraphStore(state => state.setNodes)
   const setEdgesPersist = useGraphStore(state => state.setEdgesPersist)
   const internalNodes = useStore((state: ReactFlowState) => state.nodeLookup)
@@ -29,6 +30,7 @@ export function usePlaceLine() {
       start,
       end,
       boardId,
+      rootId,
       internalNodes,
       style: applyDefaultLinkStyle()
     })
@@ -37,7 +39,7 @@ export function usePlaceLine() {
     }
     setEdgesPersist(prev => [...prev, edge])
     setPending(false)
-  }, [boardId, internalNodes, setEdgesPersist, setNodes, applyDefaultLinkStyle])
+  }, [boardId, rootId, internalNodes, setEdgesPersist, setNodes, applyDefaultLinkStyle])
 
   return {
     pending,

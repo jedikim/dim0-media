@@ -48,6 +48,7 @@ export interface Link extends Record<string, unknown> {
   deletedAt?: string
 
   graphUid: string
+  parentId?: string
 }
 
 
@@ -62,7 +63,8 @@ export interface Link extends Record<string, unknown> {
 export const createDefaultLink = (
   boardId: string,
   source: string,
-  target: string
+  target: string,
+  parentId?: string,
 ): Link => ({
   id: generateUuid(),
   type: "link",
@@ -73,4 +75,5 @@ export const createDefaultLink = (
   style: createDefaultLinkStyle(),
   createdAt: new Date().toISOString(),
   graphUid: boardId,
+  parentId,
 })

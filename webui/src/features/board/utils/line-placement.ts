@@ -14,6 +14,7 @@ type LinePlacementInput = {
   start: Point
   end: Point
   boardId: string
+  rootId?: string
   internalNodes: Map<string, InternalNode<Node>>
   style: LinkStyle
 }
@@ -23,10 +24,14 @@ type LinePlacementResult = {
   edge: LinkEdge
 }
 
+/**
+ * Build a new line edge with point endpoints scoped to the current board/root.
+ */
 export function buildLinePlacement({
   start,
   end,
   boardId,
+  rootId,
   internalNodes,
   style,
 }: LinePlacementInput): LinePlacementResult {
@@ -115,6 +120,7 @@ export function buildLinePlacement({
       style: { ...style, pathStyle: 'bezier' },
       createdAt: new Date().toISOString(),
       graphUid: boardId,
+      parentId: rootId,
     } as Link,
   }
 
