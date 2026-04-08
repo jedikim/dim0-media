@@ -30,7 +30,7 @@
 
 Dim0 is built around one architectural bet: **the canvas, not the chat, should be the primary interface for thinking with AI.**
 
-Most tools bolt AI onto an existing product as a sidebar. Dim0 is built the other way around: the board is a powerful workspace in its own right, with notes, code, widgets, nested boards, presentation frames, and documents living side by side, and it is built for an agent that can read context, use tools, and write results directly back into that workspace.
+Many tools treat AI as an add-on to the main product. Dim0 is built the other way around: the board is a powerful workspace in its own right, with notes, code, widgets, nested boards, presentation frames, and documents living side by side, and it is built for an agent that can read context, use tools, and write results directly back into that workspace.
 
 The agent is not just a chatbot. It can:
 
