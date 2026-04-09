@@ -1,3 +1,9 @@
+## v0.1.40 (2026-04-09)
+
+### Feat
+
+- *****: add list view and improve perf of widget nodes (#42)
+
 ## v0.1.39 (2026-04-08)
 
 ### Fix
