@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { ComputerTerminal01Icon, Loading02Icon, PlayIcon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
 
@@ -40,10 +40,27 @@ export const CodeSandboxDialog = memo(function CodeSandboxDialog({
   const [codeDraft, setCodeDraft] = useState(note?.content?.markdown || "")
   const [isExecuting, setIsExecuting] = useState(false)
   const [result, setResult] = useState<CodeExecutionResult>(EMPTY_CODE_EXECUTION_RESULT)
+  const [titleEditing, setTitleEditing] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(note?.label?.markdown || "")
+  const titleInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     setCodeDraft(note?.content?.markdown || "")
   }, [note?.content?.markdown, nodeId])
+
+  useEffect(() => {
+    if (titleEditing) return
+    setTitleDraft(note?.label?.markdown || "")
+  }, [note?.label?.markdown, titleEditing])
+
+  useEffect(() => {
+    if (!titleEditing) return
+    const frame = requestAnimationFrame(() => {
+      titleInputRef.current?.focus()
+      titleInputRef.current?.select()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [titleEditing])
 
   const saveDraft = useCallback((code: string) => {
     if (!note) return
@@ -76,6 +93,34 @@ export const CodeSandboxDialog = memo(function CodeSandboxDialog({
     saveDraft(codeDraft)
     closeNodeSurface()
   }, [closeNodeSurface, codeDraft, saveDraft])
+
+  /**
+   * Persist the edited sandbox title back into the node label.
+   */
+  const commitTitle = useCallback((nextRaw: string) => {
+    if (!note) return
+
+    const next = nextRaw.trim()
+    const prev = note.label?.markdown?.trim() || ""
+    if (next === prev) return
+
+    updateNodeByIdPersist(note.id, (node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        label: next ? { markdown: next } : undefined,
+      },
+    }))
+  }, [note, updateNodeByIdPersist])
+
+  /**
+   * End title editing, optionally saving the current draft.
+   */
+  const stopTitleEdit = useCallback((save: boolean) => {
+    if (save) commitTitle(titleDraft)
+    else setTitleDraft(note?.label?.markdown || "")
+    setTitleEditing(false)
+  }, [commitTitle, note?.label?.markdown, titleDraft])
 
   const handleExecute = useCallback(async () => {
     if (!note?.graphUid || isExecuting) return
@@ -112,6 +157,8 @@ export const CodeSandboxDialog = memo(function CodeSandboxDialog({
 
   if (!note) return null
 
+  const displayTitle = note.label?.markdown?.trim() || "Untitled sandbox"
+
   return (
     <Dialog open onOpenChange={handleOpenChange}>
       <DialogContent
@@ -129,9 +176,41 @@ export const CodeSandboxDialog = memo(function CodeSandboxDialog({
             color: palette.text,
           }}
         >
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex min-w-0 flex-1 items-center gap-2 pr-2">
             <HugeiconsIcon icon={ComputerTerminal01Icon} className="size-4 shrink-0" strokeWidth={2} />
-            <span className="text-sm font-semibold">Python sandbox</span>
+            <div className="min-w-0 flex-1">
+              {titleEditing ? (
+                <input
+                  ref={titleInputRef}
+                  value={titleDraft}
+                  onChange={(event) => setTitleDraft(event.target.value)}
+                  onBlur={() => stopTitleEdit(true)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault()
+                      stopTitleEdit(true)
+                    }
+                    if (event.key === "Escape") {
+                      event.preventDefault()
+                      stopTitleEdit(false)
+                    }
+                  }}
+                  className="w-full bg-transparent text-sm font-semibold border-0 border-b border-current/30 focus:border-secondary focus:outline-none px-0 py-0.5"
+                  style={{ color: palette.text }}
+                  placeholder="Untitled sandbox"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setTitleEditing(true)}
+                  className="block max-w-full truncate text-left text-sm font-semibold hover:underline"
+                  style={{ color: palette.text }}
+                  title={displayTitle}
+                >
+                  {displayTitle}
+                </button>
+              )}
+            </div>
             <span className="text-xs font-medium" style={{ color: palette.muted }}>
               Python
             </span>

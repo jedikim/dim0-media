@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from "react"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
 
 import { Cancel01Icon, Download04Icon, Layout01Icon } from "@hugeicons/core-free-icons"
 import { HugeiconsIcon } from "@hugeicons/react"
@@ -32,10 +32,27 @@ export const WidgetDialog = memo(function WidgetDialog({
   const closeNodeSurface = useGraphStore((state) => state.closeNodeSurface)
   const [activeTab, setActiveTab] = useState("rendered")
   const [htmlDraft, setHtmlDraft] = useState(note?.content?.markdown || "")
+  const [titleEditing, setTitleEditing] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(note?.label?.markdown || "")
+  const titleInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     setHtmlDraft(note?.content?.markdown || "")
   }, [note?.content?.markdown, nodeId])
+
+  useEffect(() => {
+    if (titleEditing) return
+    setTitleDraft(note?.label?.markdown || "")
+  }, [note?.label?.markdown, titleEditing])
+
+  useEffect(() => {
+    if (!titleEditing) return
+    const frame = requestAnimationFrame(() => {
+      titleInputRef.current?.focus()
+      titleInputRef.current?.select()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [titleEditing])
 
   useEffect(() => {
     if (!note) return
@@ -58,6 +75,34 @@ export const WidgetDialog = memo(function WidgetDialog({
       closeNodeSurface()
     }
   }, [closeNodeSurface])
+
+  /**
+   * Persist the edited widget title back into the node label.
+   */
+  const commitTitle = useCallback((nextRaw: string) => {
+    if (!note) return
+
+    const next = nextRaw.trim()
+    const prev = note.label?.markdown?.trim() || ""
+    if (next === prev) return
+
+    updateNodeByIdPersist(note.id, (node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        label: next ? { markdown: next } : undefined,
+      },
+    }))
+  }, [note, updateNodeByIdPersist])
+
+  /**
+   * End title editing, optionally saving the current draft.
+   */
+  const stopTitleEdit = useCallback((save: boolean) => {
+    if (save) commitTitle(titleDraft)
+    else setTitleDraft(note?.label?.markdown || "")
+    setTitleEditing(false)
+  }, [commitTitle, note?.label?.markdown, titleDraft])
 
   /**
    * Download the current widget HTML as a local .html file.
@@ -87,6 +132,7 @@ export const WidgetDialog = memo(function WidgetDialog({
   if (!note) return null
 
   const html = htmlDraft.trim()
+  const displayTitle = note.label?.markdown?.trim() || "Untitled widget"
 
   return (
     <Dialog open onOpenChange={handleOpenChange}>
@@ -96,9 +142,39 @@ export const WidgetDialog = memo(function WidgetDialog({
       >
         <DialogTitle className="sr-only">Widget</DialogTitle>
         <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
-          <div className="flex min-w-0 items-center gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2 pr-2">
             <HugeiconsIcon icon={Layout01Icon} className="size-4 shrink-0" strokeWidth={2} />
-            <span className="truncate text-sm font-semibold">Widget</span>
+            <div className="min-w-0 flex-1">
+              {titleEditing ? (
+                <input
+                  ref={titleInputRef}
+                  value={titleDraft}
+                  onChange={(event) => setTitleDraft(event.target.value)}
+                  onBlur={() => stopTitleEdit(true)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault()
+                      stopTitleEdit(true)
+                    }
+                    if (event.key === "Escape") {
+                      event.preventDefault()
+                      stopTitleEdit(false)
+                    }
+                  }}
+                  className="w-full bg-transparent text-sm font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary focus:outline-none px-0 py-0.5"
+                  placeholder="Untitled widget"
+                />
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setTitleEditing(true)}
+                  className="block max-w-full truncate text-left text-sm font-semibold text-foreground hover:underline"
+                  title={displayTitle}
+                >
+                  {displayTitle}
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-1">
             <Button

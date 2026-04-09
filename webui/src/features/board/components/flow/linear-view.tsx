@@ -22,6 +22,8 @@ import type { NoteNode } from '../../types/flow'
 import { LinearNoteCard } from './linear-note-card'
 import { LinearDocumentCard } from './linear-document-card'
 import { LinearFolderCard } from './linear-folder-card'
+import { LinearWidgetCard } from './linear-widget-card'
+import { LinearCodeSandboxCard } from './linear-code-sandbox-card'
 import { useUpdateNote } from '../../api/update-note'
 import type { NumberProperty } from '@/features/newsfeed/types/properties'
 import { useAppStore } from '@/store'
@@ -45,18 +47,18 @@ function useSortedNodes(nodes: NoteNode[]) {
   )
 }
 
-// snaps to 1 column on small screens using matchMedia
+// snaps to 2 columns on small screens using matchMedia
 function useEffectiveCols(cols: number, breakpointPx: number) {
   const get = () => {
     if (typeof window === 'undefined') return cols
-    return window.innerWidth < breakpointPx ? 1 : cols
+    return window.innerWidth < breakpointPx ? Math.min(2, cols) : cols
   }
   const [effective, setEffective] = useState<number>(get)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     const mq = window.matchMedia(`(max-width: ${breakpointPx - 0.5}px)`)
-    const update = () => setEffective(mq.matches ? 1 : cols)
+    const update = () => setEffective(mq.matches ? Math.min(2, cols) : cols)
     update()
     mq.addEventListener('change', update)
     return () => {
@@ -65,6 +67,51 @@ function useEffectiveCols(cols: number, breakpointPx: number) {
   }, [cols, breakpointPx])
 
   return effective
+}
+
+
+/**
+ * Compute the smallest set of list-order changes needed after a drag.
+ */
+function buildListOrderUpdates(
+  reorderedNodes: NoteNode[],
+  movedNodeId: string,
+  movedIndex: number
+): Map<string, number> {
+  const updates = new Map<string, number>()
+  const previousNode = reorderedNodes[movedIndex - 1] ?? null
+  const nextNode = reorderedNodes[movedIndex + 1] ?? null
+
+  if (!previousNode && !nextNode) {
+    updates.set(movedNodeId, 0)
+    return updates
+  }
+
+  if (!previousNode && nextNode) {
+    updates.set(movedNodeId, (nextNode.data.properties.listOrder.number ?? 0) - 100)
+    return updates
+  }
+
+  if (previousNode && !nextNode) {
+    updates.set(movedNodeId, (previousNode.data.properties.listOrder.number ?? 0) + 100)
+    return updates
+  }
+
+  const previousOrder = previousNode?.data.properties.listOrder.number ?? 0
+  const nextOrder = nextNode?.data.properties.listOrder.number ?? 0
+
+  if (previousOrder === nextOrder) {
+    for (let index = movedIndex + 1; index < reorderedNodes.length; index += 1) {
+      const node = reorderedNodes[index]
+      const currentOrder = node.data.properties.listOrder.number ?? 0
+      updates.set(node.id, currentOrder + 100)
+    }
+  }
+
+  const shiftedNextOrder = updates.get(nextNode!.id) ?? nextOrder
+  updates.set(movedNodeId, (previousOrder + shiftedNextOrder) / 2)
+
+  return updates
 }
 
 export function LinearView({
@@ -80,7 +127,13 @@ export function LinearView({
   const { updateNote } = useUpdateNote()
 
   const sortedNodes = useSortedNodes(
-    (nodes as NoteNode[]).filter(n => n.data?.style?.type === 'sheet' || n.data?.type === 'document' || n.data?.style?.type === 'folder')
+    (nodes as NoteNode[]).filter(n =>
+      n.data?.style?.type === 'sheet' ||
+      n.data?.style?.type === 'widget' ||
+      n.data?.style?.type === 'code-sandbox' ||
+      n.data?.type === 'document' ||
+      n.data?.style?.type === 'folder'
+    )
   )
   const ids = useMemo(() => sortedNodes.map(n => n.id), [sortedNodes])
 
@@ -100,24 +153,12 @@ export function LinearView({
     if (oldIndex === -1 || newIndex === -1) return
 
     const newOrder = arrayMove(sortedNodes, oldIndex, newIndex)
-    const prev = newOrder[newIndex - 1] ?? null
-    const next = newOrder[newIndex + 1] ?? null
-
-    let newOrderValue: number
-    if (prev && next) {
-      newOrderValue = ((prev.data.properties.listOrder.number || 0) + (next.data.properties.listOrder.number || 0)) / 2
-    } else if (next) {
-      newOrderValue = (next.data.properties.listOrder.number || 0) - 100
-    } else if (prev) {
-      newOrderValue = (prev.data.properties.listOrder.number || 0) + 100
-    } else {
-      newOrderValue = 0
-    }
-
     if (!userId || !boardId) return
+    const nextOrderValues = buildListOrderUpdates(newOrder, active.id as string, newIndex)
 
     const updatedNodes = nodes.map(n => {
-      if (n.id !== active.id) return n
+      const nextListOrder = nextOrderValues.get(n.id)
+      if (nextListOrder === undefined) return n
       const newNode = {
         ...n,
         data: {
@@ -126,7 +167,7 @@ export function LinearView({
             ...n.data.properties,
             listOrder: {
               type: 'number',
-              number: newOrderValue
+              number: nextListOrder
             } as NumberProperty
           }
         }
@@ -197,6 +238,10 @@ function SortableNoteCard({ node }: SortableNoteCardProps) {
 
       {node.data?.style?.type === 'folder' ? (
         <LinearFolderCard node={node} />
+      ) : node.data?.style?.type === 'widget' ? (
+        <LinearWidgetCard node={node} />
+      ) : node.data?.style?.type === 'code-sandbox' ? (
+        <LinearCodeSandboxCard node={node} />
       ) : node.data?.type === 'document' ? (
         <LinearDocumentCard node={node} />
       ) : (

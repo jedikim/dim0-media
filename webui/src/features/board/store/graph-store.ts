@@ -914,6 +914,8 @@ export interface GraphStore {
   setIsSelectMode: (enabled: boolean) => void
   isMoving: boolean
   setIsMoving: (moving: boolean) => void
+  rendererSize: { width: number; height: number } | null
+  setRendererSize: (size: { width: number; height: number } | null) => void
   zoom: number
   setZoom: (zoom: number) => void
   boardBackground: string | null
@@ -1897,6 +1899,14 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   setIsMoving: (moving) =>
     set((state) =>
       state.isMoving === moving ? {} : { isMoving: moving },
+    ),
+  rendererSize: null,
+  setRendererSize: (size) =>
+    set((state) =>
+      state.rendererSize?.width === size?.width &&
+      state.rendererSize?.height === size?.height
+        ? {}
+        : { rendererSize: size },
     ),
   setZoom: (zoom) =>
     set((state) =>

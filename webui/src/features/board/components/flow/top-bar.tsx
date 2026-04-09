@@ -3,19 +3,21 @@ import { Button } from '@/components/ui/button'
 import { HugeiconsIcon } from '@hugeicons/react'
 import {
   ArrowMoveDownRightIcon,
+  Analytics02Icon,
   BitcoinPresentationIcon,
   ChartBubble02Icon,
   CircleIcon,
+  ComputerTerminal01Icon,
   Cursor02Icon,
   DiamondIcon,
   FolderAddIcon,
   GeometricShapes01Icon,
   GoogleDocIcon,
+  GridViewIcon,
   Hold01Icon,
   Hold02Icon,
   Image02Icon,
   LabelIcon,
-  Layout01Icon,
   LeftToRightListBulletIcon,
   Note02Icon,
   MoreHorizontalIcon,
@@ -38,7 +40,7 @@ import type { NodeType } from '../../types/style'
 import { useGraphStore } from '../../store/graph-store'
 
 
-type ViewMode = 'graph' | 'linear'
+type ViewMode = 'graph' | 'linear' | 'list'
 
 
 type Props = {
@@ -90,7 +92,7 @@ export const TopBar = memo(function TopBar({
   const currentFolderDepth = useGraphStore(state => state.currentFolderDepth)
   const maxFolderDepth = useGraphStore(state => state.maxFolderDepth)
   const isAtMaxFolderDepth = currentFolderDepth >= maxFolderDepth
-  const normalButtonClass = 'transition-colors text-card-foreground hover:bg-sidebar-primary hover:text-sidebar-primary-foreground p-2.5 rounded-lg flex items-center justify-center gap-2'
+  const normalButtonClass = 'transition-colors text-card-foreground hover:bg-sidebar-primary hover:text-sidebar-primary-foreground !p-2.5 rounded-lg flex items-center justify-center gap-2'
   const activeButtonClass = clsx(normalButtonClass, 'bg-sidebar-primary text-secondary')
   const [openShareDialog, setOpenShareDialog] = useState(false)
   const [isUpdatingSharing, setIsUpdatingSharing] = useState(false)
@@ -131,8 +133,10 @@ export const TopBar = memo(function TopBar({
   ]
 
   const tooltipCopy = {
+    view: 'Change view',
     graph: 'Graph view',
     files: 'Files view',
+    list: 'List view',
     pan: 'Pan mode',
     select: 'Selection mode',
     note: 'Sticky note',
@@ -150,6 +154,7 @@ export const TopBar = memo(function TopBar({
   }
 
   const isPublicShared = boardVisibility === 'public'
+  const currentViewLabel = viewMode === 'graph' ? 'Board' : viewMode === 'linear' ? 'Files' : 'List'
 
   const handleTogglePublicShare = async () => {
     if (!boardId || isUpdatingSharing) return
@@ -180,24 +185,38 @@ export const TopBar = memo(function TopBar({
       role='toolbar'
       aria-label='Board top bar'
     >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant={null} size='default' onClick={() => setViewMode('graph')} className={viewMode === 'graph' ? activeButtonClass : normalButtonClass}>
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button variant={null} size='default' className={activeButtonClass}>
+                <HugeiconsIcon
+                  icon={viewMode === 'graph' ? ChartBubble02Icon : viewMode === 'linear' ? GridViewIcon : LeftToRightListBulletIcon}
+                  className='size-4 shrink-0'
+                  strokeWidth={2}
+                />
+                <span className='sr-only md:not-sr-only text-[10px]'>{currentViewLabel}</span>
+                <ChevronDown className='hidden size-3 shrink-0 text-muted-foreground md:block' />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side='bottom' sideOffset={10}>{tooltipCopy.view}</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent align='start' side='bottom' sideOffset={8} className='min-w-[160px]'>
+          <DropdownMenuItem onSelect={() => setViewMode('graph')} className='gap-2 text-sm'>
             <HugeiconsIcon icon={ChartBubble02Icon} className='size-4 shrink-0' strokeWidth={2} />
-            <span className='text-[10px] sr-only md:not-sr-only'>Graph</span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side='bottom' sideOffset={10}>{tooltipCopy.graph}</TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button variant={null} size='default' onClick={() => setViewMode('linear')} className={viewMode === 'linear' ? activeButtonClass : normalButtonClass}>
+            <span>Board</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setViewMode('linear')} className='gap-2 text-sm'>
+            <HugeiconsIcon icon={GridViewIcon} className='size-4 shrink-0' strokeWidth={2} />
+            <span>Files</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setViewMode('list')} className='gap-2 text-sm'>
             <HugeiconsIcon icon={LeftToRightListBulletIcon} className='size-4 shrink-0' strokeWidth={2} />
-            <span className='text-[10px] sr-only md:not-sr-only'>Files</span>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side='bottom' sideOffset={10}>{tooltipCopy.files}</TooltipContent>
-      </Tooltip>
+            <span>List</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
       <Separator orientation="vertical" className='md:!h-6 hidden md:block' />
 
@@ -306,27 +325,6 @@ export const TopBar = memo(function TopBar({
             <TooltipTrigger asChild>
               <Button
                 variant={null}
-                className={chatOpen ? activeButtonClass : normalButtonClass}
-                size='icon'
-                onClick={() => setOpenChatDialog(!chatOpen)}
-                aria-label='Open assistant'
-                disabled={!boardId}
-              >
-                <div className='relative'>
-                  <BotMessageSquare className='size-4 shrink-0 text-sidebar-icon-4' strokeWidth={2} />
-                  {renderButtonShortcut('C')}
-                </div>
-              </Button>
-            </TooltipTrigger>
-            {renderTooltipContent(tooltipCopy.assistant, 'C')}
-          </Tooltip>
-
-          <Separator orientation="vertical" className='md:!h-6 hidden md:block' />
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant={null}
                 className={slidesPanelOpen ? activeButtonClass : normalButtonClass}
                 size='icon'
                 onClick={onToggleSlidesPanel}
@@ -384,7 +382,7 @@ export const TopBar = memo(function TopBar({
                 <DropdownMenuShortcut>Y</DropdownMenuShortcut>
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => onAddNode({ nodeType: 'widget' })} className='gap-2 text-sm'>
-                <HugeiconsIcon icon={Layout01Icon} className='size-4 shrink-0' strokeWidth={2} />
+                <HugeiconsIcon icon={Analytics02Icon} className='size-4 shrink-0' strokeWidth={2} />
                 <span>Widget</span>
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => setOpenAiSpark(true)} className='gap-2 text-sm' disabled={!boardId}>
@@ -397,7 +395,7 @@ export const TopBar = memo(function TopBar({
         </>
       )}
 
-      {viewMode === 'linear' && (
+      {viewMode !== 'graph' && (
         <>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -446,8 +444,57 @@ export const TopBar = memo(function TopBar({
             </TooltipTrigger>
             <TooltipContent side='bottom' sideOffset={10}>{tooltipCopy.document}</TooltipContent>
           </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={null}
+                className={normalButtonClass}
+                size='icon'
+                onClick={() => onAddNode({ nodeType: 'code-sandbox' })}
+                aria-label='Add code sandbox'
+              >
+                <HugeiconsIcon icon={ComputerTerminal01Icon} className='size-4 shrink-0' strokeWidth={2} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side='bottom' sideOffset={10}>Code snippet</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant={null}
+                className={normalButtonClass}
+                size='icon'
+                onClick={() => onAddNode({ nodeType: 'widget' })}
+                aria-label='Add widget'
+              >
+                <HugeiconsIcon icon={Analytics02Icon} className='size-4 shrink-0' strokeWidth={2} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side='bottom' sideOffset={10}>Widget</TooltipContent>
+          </Tooltip>
         </>
       )}
+
+      <Separator orientation="vertical" className='md:!h-6 hidden md:block' />
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={null}
+            className={chatOpen ? activeButtonClass : normalButtonClass}
+            size='icon'
+            onClick={() => setOpenChatDialog(!chatOpen)}
+            aria-label='Open assistant'
+            disabled={!boardId}
+          >
+            <div className='relative'>
+              <BotMessageSquare className='size-4 shrink-0 text-sidebar-icon-4' strokeWidth={2} />
+              {renderButtonShortcut('C')}
+            </div>
+          </Button>
+        </TooltipTrigger>
+        {renderTooltipContent(tooltipCopy.assistant, 'C')}
+      </Tooltip>
 
       <Separator orientation="vertical" className='md:!h-6 hidden md:block' />
 

@@ -53,6 +53,7 @@ import { applyBackgroundAlpha, type BoardBackgroundTexture } from '../../utils/b
 
 import './graph-styles.css'
 import { useThumbnailCapture } from '../../hooks/use-thumbnail-capture'
+import { ListView } from './list-view'
 
 const proOptions = { hideAttribution: true }
 
@@ -94,7 +95,7 @@ const drawableNodeTypes: NodeType[] = [
 
 const isDrawableNodeType = (nodeType: NodeType) => drawableNodeTypes.includes(nodeType)
 
-type ViewMode = 'graph' | 'linear'
+type ViewMode = 'graph' | 'linear' | 'list'
 
 type EmptyGraphHintProps = {
   isMobile: boolean
@@ -233,7 +234,7 @@ function GraphView({
 }
 
 /**
- * Linear view (your existing default board)
+ * Files view (card-based board list)
  */
 function LinearView() {
   return <DefaultBoardView />
@@ -298,6 +299,7 @@ export default function GraphEditor() {
   const setIsDragging = useGraphStore(state => state.setIsDragging)
   const isMoving = useGraphStore(state => state.isMoving)
   const setIsMoving = useGraphStore(state => state.setIsMoving)
+  const setRendererSize = useGraphStore(state => state.setRendererSize)
   const setZoom = useGraphStore(state => state.setZoom)
   const graphViewports = useGraphStore(useShallow(state => state.graphViewports))
   const setGraphViewport = useGraphStore(state => state.setGraphViewport)
@@ -333,6 +335,25 @@ export default function GraphEditor() {
       ? 'var(--muted)'
       : 'var(--muted-foreground)'
   }, [boardBackgroundTexture])
+
+  useEffect(() => {
+    const renderer = document.querySelector('.react-flow__renderer') as HTMLElement | null
+    if (!renderer) return
+
+    const updateSize = () => {
+      const rect = renderer.getBoundingClientRect()
+      setRendererSize({ width: rect.width, height: rect.height })
+    }
+
+    updateSize()
+    const observer = new ResizeObserver(updateSize)
+    observer.observe(renderer)
+
+    return () => {
+      observer.disconnect()
+      setRendererSize(null)
+    }
+  }, [setRendererSize])
 
   const mindmaps = useMindMapStore(state => state.mindmaps)
   const { addMindMapToBoardAsync } = useAddMindMapToBoard()
@@ -780,8 +801,10 @@ export default function GraphEditor() {
               </>
             )}
           </GraphContextMenu>
-        ) : (
+        ) : viewMode === 'linear' ? (
           <LinearView />
+        ) : (
+          <ListView />
         )}
       </div>
 

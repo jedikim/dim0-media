@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from "react"
+import { memo, useCallback, useEffect, useRef, useState } from "react"
 import type { Viewport } from "@xyflow/react"
 import clsx from "clsx"
 
@@ -61,46 +61,114 @@ export const WidgetNode = memo(function WidgetNode({
   selected = false,
   dragging,
 }: WidgetNodeProps) {
-  const [rendererSize, setRendererSize] = useState<{ width: number; height: number } | null>(null)
-  const { boardId, rootId, graphViewports, isMoving, boardCanEdit } = useGraphStore(useShallow((state) => ({
+  const { boardId, rootId, graphViewports, isMoving, boardCanEdit, rendererSize } = useGraphStore(useShallow((state) => ({
     boardId: state.boardId,
     rootId: state.rootId,
     graphViewports: state.graphViewports,
     isMoving: state.isMoving,
     boardCanEdit: state.boardCanEdit,
+    rendererSize: state.rendererSize,
   })))
   const openNodeSurface = useGraphStore((state) => state.openNodeSurface)
+  const updateNodeByIdPersist = useGraphStore((state) => state.updateNodeByIdPersist)
   const html = note.content?.markdown?.trim() || ""
+  const displayTitle = note.label?.markdown?.trim() || "Untitled widget"
   const scopeViewportKey = boardId ? `${boardId}:${rootId ?? "root"}` : undefined
   const viewport = scopeViewportKey ? graphViewports[scopeViewportKey] : undefined
+  const [titleEditing, setTitleEditing] = useState(false)
+  const [titleDraft, setTitleDraft] = useState(note.label?.markdown || "")
+  const [isVisibleInViewport, setIsVisibleInViewport] = useState(true)
+  const titleInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
-    const renderer = document.querySelector(".react-flow__renderer") as HTMLElement | null
-    if (!renderer) return
+    if (titleEditing) return
+    setTitleDraft(note.label?.markdown || "")
+  }, [note.label?.markdown, titleEditing])
 
-    const updateSize = () => {
-      const rect = renderer.getBoundingClientRect()
-      setRendererSize({ width: rect.width, height: rect.height })
-    }
+  useEffect(() => {
+    if (!titleEditing) return
+    const frame = requestAnimationFrame(() => {
+      titleInputRef.current?.focus()
+      titleInputRef.current?.select()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [titleEditing])
 
-    updateSize()
-    const observer = new ResizeObserver(() => updateSize())
-    observer.observe(renderer)
+  useEffect(() => {
+    if (isMoving) return
+    setIsVisibleInViewport(isNoteInViewport(note, viewport, rendererSize))
+  }, [isMoving, note, rendererSize, viewport])
 
-    return () => observer.disconnect()
-  }, [])
-
-  const isVisibleInViewport = useMemo(
-    () => isNoteInViewport(note, viewport, rendererSize),
-    [note, rendererSize, viewport],
-  )
   const suspendPreview = Boolean(isMoving || dragging || !isVisibleInViewport)
   const canInteractInline = selected && !suspendPreview
 
+  /**
+   * Persist the edited board title for this widget node.
+   */
+  const commitTitle = useCallback((nextRaw: string) => {
+    const next = nextRaw.trim()
+    const prev = note.label?.markdown?.trim() || ""
+    if (next === prev) return
+
+    updateNodeByIdPersist(note.id, (node) => ({
+      ...node,
+      data: {
+        ...node.data,
+        label: next ? { markdown: next } : undefined,
+      },
+    }))
+  }, [note.id, note.label?.markdown, updateNodeByIdPersist])
+
+  /**
+   * End inline title editing, optionally saving the latest draft.
+   */
+  const stopTitleEdit = useCallback((save: boolean) => {
+    if (save) commitTitle(titleDraft)
+    else setTitleDraft(note.label?.markdown || "")
+    setTitleEditing(false)
+  }, [commitTitle, note.label?.markdown, titleDraft])
+
   return (
     <div
-      className="relative w-full h-full overflow-hidden rounded-3xl border border-border border-dashed bg-background p-2 text-left"
+      className="relative w-full h-full overflow-visible rounded-3xl border border-border border-dashed bg-background p-2 text-left"
     >
+      <div className="absolute left-1/2 top-full z-20 mt-2 w-full max-w-[220px] -translate-x-1/2">
+        {titleEditing ? (
+          <input
+            ref={titleInputRef}
+            value={titleDraft}
+            onChange={(event) => setTitleDraft(event.target.value)}
+            onBlur={() => stopTitleEdit(true)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault()
+                stopTitleEdit(true)
+              }
+              if (event.key === "Escape") {
+                event.preventDefault()
+                stopTitleEdit(false)
+              }
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+            className="nodrag w-full bg-transparent border-0 border-b border-foreground/30 focus:border-secondary focus:outline-none px-0 py-0.5 text-center text-sm font-medium text-foreground"
+            placeholder="Untitled widget"
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation()
+              if (!boardCanEdit) return
+              setTitleEditing(true)
+            }}
+            className="nodrag block w-full truncate text-center text-sm font-medium text-foreground hover:underline"
+            title={displayTitle}
+          >
+            {displayTitle}
+          </button>
+        )}
+      </div>
+
       <div className="absolute right-2 top-2 z-20 flex items-center gap-1">
         <div
           className="drag-handle flex size-8 cursor-grab items-center justify-center rounded-full border border-border/70 bg-background/90 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-accent hover:text-foreground active:cursor-grabbing"

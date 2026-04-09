@@ -25,7 +25,8 @@ export function TierBadge({ plan }: TierBadgeProps) {
     >
       {plan === "plus" ? <HugeiconsIcon
         icon={Crown03Icon}
-        className="h-3.5 w-3.5 text-secondary" /> : null}
+        className="h-3.5 w-3.5 text-secondary"
+        strokeWidth={2} /> : null}
       <span>{plan === "plus" ? "plus" : "free"}</span>
     </Badge>
   )

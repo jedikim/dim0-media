@@ -16,7 +16,7 @@ import { useAppStore } from '@/store'
 import { isDocumentUploadLimited } from '../../lib/board-limit'
 
 
-type ViewMode = 'graph' | 'linear'
+type ViewMode = 'graph' | 'linear' | 'list'
 
 interface ActionPanelProps {
   onAddNode: (options: AddNoteNodeOptions) => void
