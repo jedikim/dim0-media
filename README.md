@@ -21,12 +21,12 @@
 </p>
 
 ![Dim0 app screenshot](docs/images/app-screenshot.png)
-*Canvas workspace: notes, agent outputs, and structure on the same board.*
+*Canvas workspace: notes, charts, visual explainers, and AI agent on the same board.*
 
 https://github.com/user-attachments/assets/bec50fc9-a886-4954-81b5-cc64529b7f0e
 
-![Dim0 code, widget, and mindmap examples](docs/images/code-widget-mindmap.png)
-*Generated artifacts: code, charts, visual explainers, interactive widgets, and mind maps created directly inside the canvas.*
+![Assistant](docs/images/assistant-screenshot.png)
+*Assistant performs multi-reasoning steps with tool calls.*
 
 ## What Dim0 Is
 
