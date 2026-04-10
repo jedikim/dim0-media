@@ -13,11 +13,11 @@
 </p>
 
 <p align="center">
-  <a href="https://dim0.net">Website</a> · <a href="https://app.dim0.net">Live App</a> · <a href="https://www.dim0.net/demo.mp4">Watch Demo</a> · MIT License
+  <a href="https://dim0.net">🌐 Website</a> · <a href="https://app.dim0.net">🚀 Live App</a> · <a href="https://www.dim0.net/demo.mp4">🎥 Watch Demo</a> · 📄 MIT License
 </p>
 
 <p align="center">
-  Star ★ if Dim0 is useful to you. It helps others find the project.
+  ⭐ Star if Dim0 is useful to you. It helps others find the project.
 </p>
 
 ![Dim0 app screenshot](docs/images/app-screenshot.png)
@@ -28,7 +28,7 @@ https://github.com/user-attachments/assets/ffc280f2-5fcc-4ecc-aa66-87380f516f8f
 ![Assistant](docs/images/assistant-screenshot.png)
 *Assistant performs multi-reasoning steps with tool calls.*
 
-## What Dim0 Is
+## 🧠 What Dim0 Is
 
 Dim0 is built around one architectural bet: **the canvas, not the chat, should be the primary interface for thinking with AI.**
 
@@ -42,38 +42,40 @@ The agent is not just a chatbot. It can:
 - Create and edit notes directly on the board
 - Generate widgets and visual outputs inside the canvas
 
-## Node Types
+## 🧩 Node Types
+
+https://github.com/user-attachments/assets/52f70d3f-8ca6-41d7-9d37-aa05f97b0fe2
 
 Everything on the board is a node. Dim0 supports:
 
-- Shape nodes for diagrams and spatial structure
-- Rich text notes for writing and editing inside the board
-- Code sandbox nodes for writing and running code
-- Widget nodes for embedded HTML/JS outputs like charts, visual explainers, and interactive tools
-- Document nodes for uploaded files and retrieval context
-- Nested boards for hierarchical organization
-- Frame-based presentation directly from the canvas
+- 🔷 Shape nodes for diagrams and spatial structure
+- 📝 Rich text notes for writing and editing inside the board
+- 💻 Code sandbox nodes for writing and running code
+- 📊 Widget nodes for embedded HTML/JS outputs like charts, visual explainers, and interactive tools
+- 📄 Document nodes for uploaded files and retrieval context
+- 🗂️ Nested boards for hierarchical organization
+- 🎞️ Frame-based presentation directly from the canvas
 
-## Agent Layer
+## 🤖 Agent Layer
 
 The assistant layer is built on the OpenAI Agents SDK and board-aware tools. It can work with:
 
-- Board context from the current graph and selected nodes
-- Note creation and editing tools
-- Web search and fetch tools
-- Code execution via Daytona-backed sandboxes
-- Widget and visual output generation
-- Semantic storage and retrieval backed by Qdrant
+- 🧭 Board context from the current graph and selected nodes
+- ✍️ Note creation and editing tools
+- 🔎 Web search and fetch tools
+- 🧪 Code execution via Daytona-backed sandboxes
+- 🎨 Widget and visual output generation
+- 🧠 Semantic storage and retrieval backed by Qdrant
 
 Model support includes OpenAI, Anthropic, Google Gemini, Mistral, Moonshot, DeepSeek, Qwen, and Z.ai.
 
-## Try It
+## 🚀 Try It
 
 - **Hosted app:** https://app.dim0.net
 - **Website:** https://dim0.net
 - **Self-host:** follow the setup below
 
-## Monorepo Structure
+## 🏗️ Monorepo Structure
 
 This repository contains the full Dim0 product stack:
 
@@ -81,15 +83,15 @@ This repository contains the full Dim0 product stack:
 - `webui/`: React frontend for the canvas, chat, and board UX
 - `build/`: Docker Compose and build-related assets
 
-## Getting Started
+## ⚡ Getting Started
 
-### Prerequisites
+### 📋 Prerequisites
 
 - Node.js (LTS recommended)
 - `uv` for Python dependency management
 - Docker + Docker Compose (optional, recommended for local services)
 
-### Environment Setup
+### 🔧 Environment Setup
 
 Before running Dim0, create a root `.env` from `.env.sample` and review the variables there:
 
@@ -108,10 +110,10 @@ Additional providers and tools can be enabled through the rest of `.env.sample`.
 
 Important notes:
 
-- Both backend and frontend read the root `.env`
+- Backend and frontend both read the root `.env`
 - Only variables prefixed with `VITE_` are exposed to the frontend
 
-### Run Published Images
+### 🐳 Run Published Images
 
 Pull and start the published stack:
 
@@ -134,17 +136,17 @@ Stop it and remove volumes:
 make kill-run
 ```
 
-### Local Development
+### 🛠️ Local Development
 
 If you want to run the source code locally instead of the published images, use the steps below.
 
-#### Start Local Databases
+#### 🗄️ Start Local Databases
 
 ```bash
 make up-db
 ```
 
-#### Run the Backend
+#### Backend
 
 ```bash
 cd backend
@@ -154,7 +156,7 @@ uv run python -m topix.api.app
 
 The backend uses `API_PORT` from `.env` and defaults to `8081`.
 
-#### Run the Frontend
+#### Frontend
 
 ```bash
 cd webui
@@ -164,14 +166,14 @@ npm run dev
 
 The frontend uses `APP_PORT` from `.env` and defaults to `5175`.
 
-## Environment Variables
+## 🔐 Environment Variables
 
 The root `.env.sample` is the source of truth for available configuration.
 It includes app ports and origins, model provider keys, search and image provider keys, local service settings, and backend auth and tracing options.
 
 Use it as a checklist when setting up your local environment.
 
-## Docker and Deployment
+## 🐳 Docker and Deployment
 
 Deployment and local services are managed through Docker Compose with Makefile shortcuts.
 
@@ -219,7 +221,7 @@ You can also override ports and origins for quick tests:
 make up PROFILE=dev API_PORT=9090 API_HOST_PORT=9090 API_ORIGIN=http://localhost:9090
 ```
 
-## Docker Images
+## 📦 Docker Images
 
 This repo can publish public Docker Hub images for self-hosting:
 
@@ -242,7 +244,7 @@ make down-run
 make kill-run
 ```
 
-## Versioning
+## 🔖 Versioning
 
 Dim0 uses one shared semantic version for the whole product. The source of truth is the repo-root `VERSION` file, and release tooling syncs that version into:
 
