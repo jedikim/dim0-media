@@ -23,7 +23,7 @@
 ![Dim0 app screenshot](docs/images/app-screenshot.png)
 *Canvas workspace: notes, charts, visual explainers, and AI agent on the same board.*
 
-https://github.com/user-attachments/assets/bec50fc9-a886-4954-81b5-cc64529b7f0e
+https://github.com/user-attachments/assets/ffc280f2-5fcc-4ecc-aa66-87380f516f8f
 
 ![Assistant](docs/images/assistant-screenshot.png)
 *Assistant performs multi-reasoning steps with tool calls.*
