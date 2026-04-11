@@ -1,3 +1,9 @@
+## v0.1.43 (2026-04-11)
+
+### Fix
+
+- **backend**: scope parsed document links to sub-board (#48)
+
 ## v0.1.42 (2026-04-10)
 
 ## v0.1.41 (2026-04-10)
