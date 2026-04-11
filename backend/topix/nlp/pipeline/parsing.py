@@ -375,7 +375,7 @@ class ParsingPipeline:
 
         for element in elements:
             element.graph_uid = graph_uid
-            if isinstance(element, (Note, Document)):
+            if isinstance(element, (Note, Document, Link)):
                 # TODO(folder): validate root_id belongs to graph_uid before assigning parent_id.
                 element.parent_id = root_id
 
