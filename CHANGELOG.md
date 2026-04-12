@@ -1,3 +1,9 @@
+## v0.1.44 (2026-04-12)
+
+### Feat
+
+- *****: add auto model routing - choose best model per task (#49)
+
 ## v0.1.43 (2026-04-11)
 
 ### Fix
