@@ -55,7 +55,7 @@ export const UserMessage = ({ message, isLatest }: { message: ChatMessage, isLat
           {text}
         </div>
         {contextText && (
-          <div className="absolute bottom-3 transform translate-y-[100%] left-1">
+          <div className="absolute bottom-3 right-[70%] transform translate-y-[100%]">
             <Popover>
               <PopoverTrigger asChild>
                 <button

@@ -202,7 +202,7 @@ async def test_rate_limiter_raises_on_daily_limit(monkeypatch):
         await rate_limiter(request=request, user_id="user-123")
 
     assert exc.value.status_code == status.HTTP_429_TOO_MANY_REQUESTS
-    assert "Limit: 10 requests/day" in exc.value.detail
+    assert "Limit: 50 requests/day" in exc.value.detail
     assert exc.value.headers == {"Retry-After": "3600"}
 
 

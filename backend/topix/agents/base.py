@@ -81,6 +81,7 @@ class BaseAgent(Agent[Context]):
         model: str | LitellmModel,
         model_settings: ModelSettings | None
     ) -> ModelSettings:
+        """Normalize model settings for the selected provider family."""
         model_settings = model_settings or ModelSettings()
 
         if model_settings.max_tokens is None:
@@ -116,7 +117,14 @@ class BaseAgent(Agent[Context]):
                 "drop_params": True,
                 "additional_drop_params": ["frequency_penalty", "presence_penalty"]
             }
+            model_settings.extra_body = {}
         elif isinstance(model, str) and model.startswith("openai"):
+            if model_settings.extra_args is not None:
+                model_settings.extra_args = {
+                    key: value
+                    for key, value in model_settings.extra_args.items()
+                    if key not in {"drop_params", "additional_drop_params"}
+                }
             model_settings.extra_body = {
                 **(model_settings.extra_body or {}),
                 "prompt_cache_retention": "24h",

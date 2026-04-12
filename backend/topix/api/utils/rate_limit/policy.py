@@ -17,7 +17,7 @@ MINUTE_BURST_LIMITS: dict[PlanType, int] = {
 }
 
 DAILY_UTC_LIMITS: dict[PlanType, int] = {
-    "free": 10,
+    "free": 50,
     "plus": 200,
 }
 

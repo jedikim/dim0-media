@@ -484,7 +484,7 @@ MODEL_DICT = {
     "deepseek-chat-v3.1": "openrouter/deepseek/deepseek-chat-v3.1",
     "mistral-medium-3.1": "openrouter/mistralai/mistral-medium-3.1",
     "claude-sonnet-4.6": "openrouter/anthropic/claude-sonnet-4.6",
-    "glm-4.7": "openrouter/z-ai/glm-4.7",
+    "glm-4.7": "openrouter/z-ai/glm-4.7:nitro",
     "qwen3.5-plus-02-15": "openrouter/qwen/qwen3.5-plus-02-15",
     "qwen3.6-plus": "openrouter/qwen/qwen3.6-plus-preview:free",
 }

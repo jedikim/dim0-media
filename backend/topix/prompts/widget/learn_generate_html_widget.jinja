@@ -1,79 +1,132 @@
-SKILL (high priority):
+# SKILL (high priority)
 You are generating a visual explainer or interactive HTML widget for the board. Follow this skill over generic note-writing habits.
 
 Your goal is to create a self-contained visual explainer or widget and store it with `write_note`.
 
-Typical outputs include:
-- charts and KPI panels
-- flash cards and quiz cards
-- timelines and process explainers
-- mini slides and comparison cards
-- infographics and visual summaries
-- compact calculators, demos, or interactive teaching widgets
+---
 
-Rules:
-- Use `write_note` to create the widget note or fully rewrite it when the design changes substantially.
-- Set `note_type` to `widget`.
-- Put only the HTML that should live inside `<body>` in `content`.
-- Do not include `<!doctype html>`, `<html>`, `<head>`, or `<body>` wrappers.
-- The frontend will inject the document shell, base styles, and theme tokens.
-- Keep the widget lightweight and responsive inside an iframe.
-- You may include a local `<style>` block in the body content when useful.
-- Prefer semantic theme tokens rather than hardcoded colors:
-  - `var(--background)`
-  - `var(--foreground)`
-  - `var(--card)`
-  - `var(--card-foreground)`
-  - `var(--muted)`
-  - `var(--muted-foreground)`
-  - `var(--primary)`
-  - `var(--primary-foreground)`
-  - `var(--secondary)`
-  - `var(--secondary-foreground)`
-  - `var(--accent)`
-  - `var(--accent-foreground)`
-  - `var(--border)`
-  - `var(--destructive)`
-  - `var(--chart-1)` to `var(--chart-5)`
-  - `var(--rounded)`
-  - `var(--radius)`
-  - `var(--shadow-sm)`
-  - `var(--shadow-md)`
-- In this app theme, `var(--secondary)` is often a stronger colored fill rather than a very soft neutral surface, so use it intentionally.
-- Prefer `system-ui` for the main font family unless the design strongly needs something else.
-- Make the design work in both light and dark themes without changing the HTML.
-- Prefer a broad outer background using `var(--background)` and avoid an outer border by default. Use filled surfaces like `var(--card)` or borders only for intentional inner panels, cards, or callouts.
-- Prefer `var(--chart-1)` to `var(--chart-5)` for chart series and colorful accents.
-- If you use custom colors, make sure they still work well in both light and dark themes.
-- Keep spacing compact for small widget surfaces.
-- Prefer low padding and small gaps by default; only use larger spacing when it clearly improves readability.
-- Avoid external dependencies unless they are truly necessary.
-- Prefer plain HTML, CSS, and small vanilla JavaScript.
-- If the user asks for charts, `Chart.js` is a good option. If the user asks for a slide-style presentation, `Reveal.js` is a good option. When such a CDN library is truly needed, you may include external `<script src="..."></script>` or `<link rel="stylesheet" href="...">` lines; the frontend will move those imports into the document head.
-- Prefer teaching-friendly layouts that make the key idea obvious at a glance.
-- Use motion only when it meaningfully improves understanding.
-- Make the widget readable on both compact and larger note sizes.
-- If useful, give the note a short `label`.
+## Think before you build
 
-Recommended flow:
-1. Decide what visual format best explains the user's goal.
-2. Think through the structure, hierarchy, and interactions.
-3. Write body-only HTML, CSS, and JavaScript.
-4. Call `write_note(content=..., note_type="widget", label=...)`.
+Before writing any HTML, state in one sentence:
+- What is the core concept to convey?
+- Which format menu item you are using and why?
 
-Design guidance:
-- Start from the explanation goal, not from a random UI pattern.
-- Favor clarity, legibility, and visual hierarchy over decorative complexity.
-- Make the widget immediately useful even without interaction.
-- Keep the visual system calm, warm, and editorial rather than flashy.
-- Prefer moderate corner radii such as `var(--rounded)`, `rounded-md`, or `rounded-lg` equivalents.
-- Avoid overly pill-like or excessively soft rounding unless the user explicitly wants that look.
-- When useful, include concise labels, legends, tooltips, or callouts.
-- Keep external data assumptions low unless the user explicitly asked for them.
-- Prefer self-contained demos over brittle integrations.
+Do not write any HTML until you have answered both. This is not optional.
 
-Remember:
-- This skill is for learning how to build the widget.
-- Invoke it before generating the final HTML when the user asks for a visual explainer or interactive widget.
+Match scope to complexity — a simple concept needs one clear panel, not five. A complex concept earns multiple sections only if each one adds a distinct insight.
 
-Widget body HTML should be production-ready enough for the frontend to wrap and render in an iframe `srcDoc`.
+---
+
+## Format menu — reach for these before defaulting to text
+
+When the concept supports it, prefer these building blocks over plain text cards:
+
+- **Small inline chart** — for any quantity, proportion, or trend (Chart.js is fine)
+- **Step / flow diagram** — for any process, sequence, or cause-effect chain
+- **Animated diagram** — for anything that moves, oscillates, flows, or transforms
+- **Slider or toggle** — for any range, tradeoff, or before/after comparison
+- **Comparison grid** — for two or more options with shared attributes
+- **Progressive reveal** — for concepts that build on each other step by step
+
+Ask yourself: is there a number that could be a chart? A process that could be a flow? A range that could be a slider? A before/after that could be a toggle? Prefer those over static text whenever the concept supports it.
+
+Mix formats within a single widget when it helps. A good mix looks like this:
+
+```html
+<!-- concept label + visual + one-line insight -->
+<div class="step-label">Step 2 — Plasma confinement</div>
+<canvas id="temp-chart"></canvas>
+<p class="note">Above 100M°C, fusion becomes self-sustaining</p>
+```
+
+**Variety should come from what you show, not how you style it.**
+
+---
+
+## Budget rule
+
+The widget's budget is **explanation, not decoration**. Every line of CSS and JS must earn its place by making the concept clearer. If removing it wouldn't hurt understanding, remove it.
+
+A great widget looks like it was designed by an **educator**, not a frontend developer. Ask *"does this help someone understand?"* not *"does this look polished?"*
+
+---
+
+## Styling constraints
+
+- Use theme tokens (listed below) rather than hardcoded colors
+- 1–2 accent colors max — resist colorizing everything
+- Keep `<style>` under ~50 lines; every line beyond that needs a reason
+- Spacing: compact by default — small gaps and low padding unless readability clearly requires more
+- Outer background: `var(--background)`, no outer border; use `var(--card)` only for intentional inner panels
+- Prefer `system-ui` font unless the design strongly needs otherwise
+
+**On animation — do this, not that:**
+```html
+<!-- ✓ motion encodes meaning: particle drifts to show flow -->
+<div class="particle"></div> <!-- animated with translateX -->
+
+<!-- ✗ motion is decoration: card fades in for no reason -->
+<div class="card" style="animation: fadeInUp 0.4s ease"></div>
+```
+
+**On color — do this, not that:**
+```html
+<!-- ✓ one accent marks the key threshold -->
+<span style="color: var(--chart-1)">100M°C</span>
+
+<!-- ✗ every label gets its own color -->
+<span style="color: var(--chart-1)">Step 1</span>
+<span style="color: var(--chart-2)">Step 2</span>
+<span style="color: var(--chart-3)">Step 3</span>
+```
+
+---
+
+## Theme tokens
+
+```
+var(--background)         var(--foreground)
+var(--card)               var(--card-foreground)
+var(--muted)              var(--muted-foreground)
+var(--primary)            var(--primary-foreground)
+var(--secondary)          var(--secondary-foreground)
+var(--accent)             var(--accent-foreground)
+var(--border)             var(--destructive)
+var(--chart-1) … var(--chart-5)
+var(--rounded)            var(--radius)
+var(--shadow-sm)          var(--shadow-md)
+```
+
+Start with `var(--background)`, `var(--card)`, `var(--foreground)`, and one `var(--chart-*)` color. Only reach for more tokens if the concept genuinely needs them.
+
+Note: `var(--secondary)` is often a strong colored fill — use it intentionally, not as a neutral surface.
+
+Design must work in both light and dark themes without changing the HTML.
+
+---
+
+## If nothing in the format menu fits
+
+Some concepts are abstract and resist charts or diagrams. In that case: use a clean typographic layout with one strong visual metaphor — a ratio, a scale, a contrast — rather than forcing an ill-fitting component. A well-structured text hierarchy is better than a chart that doesn't encode anything real.
+
+---
+
+## Technical rules
+
+- Put only the HTML that lives inside `<body>` in `content` — no `<!doctype>`, `<html>`, `<head>`, or `<body>` wrappers
+- Self-contained: no external dependencies unless truly necessary
+- If you need Chart.js or Reveal.js, include a `<script src="...">` tag — the frontend will hoist it to `<head>`
+- Keep the widget lightweight and responsive inside an iframe
+- Use plain HTML, CSS, and vanilla JS by default
+- For first-time creation or substantial redesign: one `write_note` call with the complete widget
+- For subsequent user tweaks: prefer targeted `edit_note` calls over full rewrites
+
+---
+
+## Call
+
+```
+write_note(content=..., note_type="widget", label=...)
+```
+
+Give the note a short, descriptive `label`.

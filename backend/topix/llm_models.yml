@@ -139,7 +139,7 @@ deepseek-chat-v3.1:
 # Z.ai Models
 glm-4.7:
   model: glm-4.7
-  openrouter_model: z-ai/glm-4.7
+  openrouter_model: z-ai/glm-4.7:nitro
   provider: z-ai
   tier: lite
 
@@ -157,7 +157,8 @@ qwen3.6-plus:
   tier: pro
 
 # Moonshot Models
-kimi-k2-thinking:
-  model: kimi-k2-thinking
+kimi-k2.5:
+  model: kimi-k2.5
+  openrouter_model: moonshotai/kimi-k2.5:nitro
   provider: moonshotai
   tier: pro

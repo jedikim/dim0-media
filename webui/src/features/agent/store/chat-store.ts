@@ -4,7 +4,7 @@ import type { LlmModel } from "../types/llm"
 import type { WebSearchEngine } from "../types/web"
 import { defaultServices, type Services } from "../types/services"
 
-const DEFAULT_LLM_MODEL: LlmModel = "openai/gpt-5.4-mini"
+const DEFAULT_LLM_MODEL: LlmModel = "auto"
 
 
 /**
@@ -82,15 +82,26 @@ export const useChatStore = create<ChatStore>((set) => ({
   ),
 
   syncDefaults: (services: Services) => {
-    const defaultLlm = services.llm.find((service) => (
-      service.name === DEFAULT_LLM_MODEL && service.available
-    ))
-    const firstAvailableLlm = services.llm.find((service) => service.available)
-    const selectedLlm = defaultLlm ?? firstAvailableLlm
-
-    if (selectedLlm) {
-      set({ llmModel: selectedLlm.name })
+    const servicesWithAuto: Services = {
+      ...services,
+      llm: [
+        { name: "auto", available: true, provider: "dim0" },
+        ...services.llm.filter((service) => service.name !== "auto"),
+      ],
     }
+
+    set((state) => {
+      const currentLlm = servicesWithAuto.llm.find((service) => (
+        service.name === state.llmModel && service.available
+      ))
+      const defaultLlm = servicesWithAuto.llm.find((service) => (
+        service.name === DEFAULT_LLM_MODEL && service.available
+      ))
+      const firstAvailableLlm = servicesWithAuto.llm.find((service) => service.available)
+      const selectedLlm = currentLlm ?? defaultLlm ?? firstAvailableLlm
+
+      return selectedLlm ? { llmModel: selectedLlm.name } : {}
+    })
 
     const firstAvailableSearch = services.search.find((service) => service.available)
     if (firstAvailableSearch) {
@@ -121,6 +132,6 @@ export const useChatStore = create<ChatStore>((set) => ({
     }
     set({ enabledTools })
 
-    set({ services })
+    set({ services: servicesWithAuto })
   }
 }))

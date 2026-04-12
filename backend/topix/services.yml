@@ -49,7 +49,7 @@ services:
     - glm-4.7
     - qwen3.5-plus-02-15
     - qwen3.6-plus
-    - kimi-k2-thinking
+    - kimi-k2.5
 
   search:
     - name: linkup

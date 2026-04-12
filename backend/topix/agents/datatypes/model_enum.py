@@ -41,7 +41,7 @@ class OpenRouterModel(str, Enum):
     DEEPSEEK_CHAT = "openrouter/deepseek/deepseek-chat-v3.1"
     MISTRAL_MEDIUM = "openrouter/mistralai/mistral-medium-3.1"
     GEMINI_2_5_FLASH = "openrouter/google/gemini-2.5-flash"
-    GLM_4_7 = "openrouter/z-ai/glm-4.7"
+    GLM_4_7 = "openrouter/z-ai/glm-4.7:nitro"
     QWEN_3_5_PLUS = "openrouter/qwen/qwen3.5-plus-02-15"
     QWEN_3_6_PLUS = "openrouter/qwen/qwen3.6-plus-preview:free"
 

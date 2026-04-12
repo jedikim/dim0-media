@@ -240,6 +240,11 @@ export async function* buildResponse(
 
   for await (const rawChunk of chunks) {
     if (rawChunk.type === "tool_call") {
+      const hasDirtySteps = Array.from(stepsById.values()).some((step) => step.dirty)
+      if (hasDirtySteps) {
+        const maybe = await maybeYield(true)
+        if (maybe) yield maybe
+      }
       continue
     }
 

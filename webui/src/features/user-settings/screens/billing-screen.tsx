@@ -237,7 +237,7 @@ export function BillingScreen() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <p className="text-3xl font-semibold text-foreground">Free</p>
-              <FeatureRow icon={Idea01Icon} label="10 AI requests / day" />
+              <FeatureRow icon={Idea01Icon} label="40 AI requests / day" />
               <FeatureRow icon={PaintBoardIcon} label="1 board maximum" />
               <FeatureRow icon={DocumentAttachmentIcon} label="1 document upload / board" />
               <FeatureRow icon={ChatTranslateIcon} label="Basic AI actions" />

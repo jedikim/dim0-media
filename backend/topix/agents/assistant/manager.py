@@ -6,9 +6,11 @@ import re
 
 from collections.abc import AsyncGenerator
 
+from topix.agents.assistant.auto_model import classify_auto_model_complexity
 from topix.agents.assistant.plan import Plan
 from topix.agents.config import AssistantManagerConfig
 from topix.agents.datatypes.context import ReasoningContext
+from topix.agents.datatypes.model_enum import ModelEnum
 from topix.agents.datatypes.reasoning_step import ReasoningStep
 from topix.agents.datatypes.stream import (
     AgentStreamMessage,
@@ -29,6 +31,9 @@ from topix.utils.common import gen_uid
 
 logger = logging.getLogger(__name__)
 
+AUTO_MODEL_BASE_PLAN = "openrouter/moonshotai/kimi-k2.5:nitro"
+AUTO_MODEL_COMPLEX_PLAN = ModelEnum.OpenAI.GPT_5_4
+
 
 class AssistantManager:
     """Orchestrates the full flow: query rewrite, planning, searching ..."""
@@ -36,9 +41,11 @@ class AssistantManager:
     def __init__(
         self,
         plan_agent: Plan,
+        auto_mode: bool = False,
     ):
         """Init method."""
         self.plan_agent = plan_agent
+        self.auto_mode = auto_mode
 
     @classmethod
     def from_config(
@@ -49,18 +56,40 @@ class AssistantManager:
         graph_store: GraphStore | None = None,
         graph_uid: str | None = None,
         root_id: str | None = None,
+        auto_mode: bool = False,
     ) -> AssistantManager:
         """Create an instance of AssistantManager from configuration."""
+        config_ = config.model_copy(deep=True)
+        if auto_mode:
+            config_.plan.model = AUTO_MODEL_BASE_PLAN
+
         plan_agent = Plan.from_config(
             content_store,
-            config.plan,
+            config_.plan,
             memory_filters=memory_filters,
             graph_store=graph_store,
             graph_uid=graph_uid,
             root_id=root_id,
         )
 
-        return cls(plan_agent)
+        return cls(plan_agent, auto_mode=auto_mode)
+
+    def _set_plan_model(self, model: str) -> None:
+        """Swap the concrete model used by the plan agent for this request."""
+        self.plan_agent.model = model
+        self.plan_agent.__post_init__()
+
+    async def _select_plan_model(self, agent_input: list[dict[str, str]]) -> str:
+        """Resolve the concrete plan model for this request."""
+        if not self.auto_mode:
+            return self.plan_agent.model
+
+        complexity = await classify_auto_model_complexity(agent_input)
+        logger.info(f"Auto model classified complexity as {complexity}")
+
+        if complexity == "complex":
+            return AUTO_MODEL_COMPLEX_PLAN
+        return AUTO_MODEL_BASE_PLAN
 
     async def _compose_input(
         self,
@@ -167,6 +196,7 @@ class AssistantManager:
         # launch plan:
         res = ""
         try:
+            self._set_plan_model(await self._select_plan_model(agent_input))
             res = await AgentRunner.run(
                 self.plan_agent, input=agent_input, context=context, max_turns=max_turns
             )
@@ -253,6 +283,7 @@ class AssistantManager:
             )
 
         try:
+            self._set_plan_model(await self._select_plan_model(agent_input))
             res = AgentRunner.run_streamed(
                 self.plan_agent, input=agent_input, context=context, max_turns=max_turns
             )

@@ -8,6 +8,7 @@ import pytest
 
 from topix.agents.assistant.manager import AssistantManager
 from topix.agents.datatypes.context import ReasoningContext
+from topix.agents.datatypes.model_enum import ModelEnum
 from topix.agents.datatypes.outputs import WebSearchOutput
 from topix.agents.datatypes.reasoning_step import ReasoningStep
 from topix.agents.datatypes.stream import (
@@ -37,10 +38,22 @@ class RecordingSession:
         self.items.extend(items)
 
 
+class RecordingPlanAgent:
+    """Minimal plan agent stub for manager routing tests."""
+
+    def __init__(self, model: str = "openrouter/moonshotai/kimi-k2.5:nitro"):
+        """Store only the fields the manager needs to mutate."""
+        self.model = model
+
+    def __post_init__(self) -> None:
+        """Mirror the real plan agent hook used after model swaps."""
+        return None
+
+
 @pytest.mark.asyncio
 async def test_run_streamed_persists_assistant_message_without_tool_calls(monkeypatch: pytest.MonkeyPatch):
     """Streaming should save the final assistant text even if no tool call completed."""
-    manager = AssistantManager(plan_agent=object())
+    manager = AssistantManager(plan_agent=RecordingPlanAgent())
     session = RecordingSession()
 
     async def fake_run_streamed(
@@ -107,7 +120,7 @@ async def test_run_streamed_persists_assistant_message_without_tool_calls(monkey
 @pytest.mark.asyncio
 async def test_run_streamed_flushes_reasoning_step_before_tool_call(monkeypatch: pytest.MonkeyPatch):
     """Buffered assistant text should flush into a step before a tool call is appended."""
-    manager = AssistantManager(plan_agent=object())
+    manager = AssistantManager(plan_agent=RecordingPlanAgent())
     session = RecordingSession()
     tool_call = ToolCall(
         id="tool-search",
@@ -184,3 +197,33 @@ async def test_run_streamed_flushes_reasoning_step_before_tool_call(monkeypatch:
     assert isinstance(steps[2], ReasoningStep)
     assert steps[2].id == "raw-1:1"
     assert steps[2].message == "Inflation slowed."
+
+
+@pytest.mark.asyncio
+async def test_select_plan_model_uses_full_model_for_complex(monkeypatch: pytest.MonkeyPatch):
+    """Auto mode should upgrade only complex requests to the larger model."""
+    manager = AssistantManager(plan_agent=RecordingPlanAgent(), auto_mode=True)
+
+    async def fake_classify(messages: list[dict[str, str]]) -> str:
+        return "complex"
+
+    monkeypatch.setattr("topix.agents.assistant.manager.classify_auto_model_complexity", fake_classify)
+
+    selected_model = await manager._select_plan_model([{"role": "user", "content": "Hard task"}])
+
+    assert selected_model == ModelEnum.OpenAI.GPT_5_4
+
+
+@pytest.mark.asyncio
+async def test_select_plan_model_uses_mini_for_medium(monkeypatch: pytest.MonkeyPatch):
+    """Auto mode should keep medium requests on the fast Kimi base plan."""
+    manager = AssistantManager(plan_agent=RecordingPlanAgent(), auto_mode=True)
+
+    async def fake_classify(messages: list[dict[str, str]]) -> str:
+        return "medium"
+
+    monkeypatch.setattr("topix.agents.assistant.manager.classify_auto_model_complexity", fake_classify)
+
+    selected_model = await manager._select_plan_model([{"role": "user", "content": "Medium task"}])
+
+    assert selected_model == "openrouter/moonshotai/kimi-k2.5:nitro"

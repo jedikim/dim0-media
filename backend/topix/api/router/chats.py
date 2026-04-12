@@ -167,14 +167,17 @@ async def send_message(
 
     if body.use_deep_research:
         deepsearch_config = DeepResearchConfig.from_yaml()
-        deepsearch_config.set_model(body.model)
+        deepsearch_model = body.model if body.model != "auto" else "openai/gpt-5.4-mini"
+        deepsearch_config.set_model(deepsearch_model)
 
         deepsearch = DeepResearch.from_config(deepsearch_config)
 
         run_streamed = deepsearch.run_streamed
     else:
         assistant_config = AssistantManagerConfig.from_yaml()
-        assistant_config.set_model(body.model)
+        auto_mode = body.model == "auto"
+        if not auto_mode:
+            assistant_config.set_model(body.model)
         assistant_config.set_web_engine(body.web_search_engine)
         assistant_config.set_reasoning(body.reasoning_effort)
 
@@ -205,6 +208,7 @@ async def send_message(
             graph_store=graph_store if chat.graph_uid else None,
             graph_uid=chat.graph_uid,
             root_id=body.root_id,
+            auto_mode=auto_mode,
         )
 
         assistant.plan_agent.set_enabled_tools(enabled_tools)

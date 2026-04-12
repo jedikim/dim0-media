@@ -19,6 +19,7 @@ import { useShallow } from "zustand/shallow"
  * Optional: pretty labels for families
  */
 const LlmFamilyLabel: Record<LlmFamily, string> = {
+  dim0: "Dim0",
   openai: "OpenAI",
   google: "Google Gemini",
   anthropic: "Anthropic Claude",
