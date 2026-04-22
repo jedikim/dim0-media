@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { InfoIcon, TimeClockIcon, TrendingDownIcon, TrendingUpIcon } from '@/components/icons'
+import { TrendingUp, TrendingDown, Clock, Info } from 'lucide-react'
 import {
   AreaChart,
   Area,
@@ -20,7 +20,7 @@ const formatNumber = (n: number) =>
 
 const formatDelta = (n: number, pct: number) => {
   const pos = n >= 0
-  const Icon = pos ? TrendingUpIcon : TrendingDownIcon
+  const Icon = pos ? TrendingUp : TrendingDown
   return (
     <span className={`inline-flex items-center gap-1 ${pos ? 'text-emerald-400' : 'text-rose-400'}`}>
       <Icon className='w-3 h-3' />
@@ -106,11 +106,11 @@ export default function TradingWidget({
             <span className='text-muted-foreground'>today</span>
           </div>
           <div className='flex items-center gap-1 text-xs text-muted-foreground'>
-            <TimeClockIcon className='w-3 h-3' />
+            <Clock className='w-3 h-3' />
             <span>Updated • {snapshot.asOf}</span>
             <span className='mx-1'>•</span>
             <button className='inline-flex items-center gap-1 hover:underline'>
-              <InfoIcon className='w-3 h-3' />
+              <Info className='w-3 h-3' />
               Disclaimer
             </button>
           </div>

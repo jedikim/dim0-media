@@ -4,15 +4,6 @@ import { useNavigate, useParams, useSearch } from "@tanstack/react-router"
 import { nodeCenter } from "../utils/point-attach"
 import { useGraphStore } from "../store/graph-store"
 
-
-/**
- * Upper cap on viewport zoom when auto-centering on a node so we never
- * yank an over-zoomed user even closer. Below the cap we keep the user's
- * current zoom to preserve their context.
- */
-const MAX_AUTO_CENTER_ZOOM = 1
-
-
 /**
  * Type for the `center_around` search param.
  */
@@ -29,7 +20,6 @@ export function useCenterAroundParam({
 }) {
   const navigate = useNavigate()
   const nodesById = useGraphStore(state => state.nodesById)
-  const zoom = useGraphStore(state => state.zoom)
 
   const params = useParams({
     from: "/boards/$id",
@@ -49,8 +39,7 @@ export function useCenterAroundParam({
     if (!node) return
 
     const { x, y } = nodeCenter(node)
-    const targetZoom = Math.min(zoom, MAX_AUTO_CENTER_ZOOM)
-    setCenter(x, y, { zoom: targetZoom, duration: 250 })
+    setCenter(x, y, { duration: 250 })
 
     if (!params) return
     navigate({
@@ -64,5 +53,5 @@ export function useCenterAroundParam({
         return next
       },
     })
-  }, [search, nodesById, setCenter, navigate, params, zoom])
+  }, [search, nodesById, setCenter, navigate, params])
 }

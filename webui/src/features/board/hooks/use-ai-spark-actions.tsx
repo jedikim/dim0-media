@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react"
 import { toast } from "sonner"
+import { CancelIcon, CheckmarkCircle03Icon, ReloadIcon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 
-import { CancelStatusIcon, CheckCircleStatusIcon, LoaderRefreshIcon } from "@/components/icons"
 import { useConvertToMindMap } from "@/features/board/api/convert-to-mindmap"
 import { useDrawify } from "@/features/board/api/drawify"
 import { useTranslateText } from "@/features/board/api/translate-text"
@@ -136,12 +137,12 @@ export const useAiSparkActions = () => {
     const formatElapsed = () => `${Math.max(0, Math.floor((Date.now() - startedAt) / 1000))}s`
     const toastId = toast(`Working on it… ${formatElapsed()}`, {
       duration: Infinity,
-      icon: <LoaderRefreshIcon className="size-4 animate-spin [animation-duration:750ms]" />,
+      icon: <HugeiconsIcon icon={ReloadIcon} className="size-4 animate-spin [animation-duration:750ms]" strokeWidth={2} />,
     })
     const timer = window.setInterval(() => {
       toast(`Working on it… ${formatElapsed()}`, {
         id: toastId,
-        icon: <LoaderRefreshIcon className="size-4 animate-spin [animation-duration:750ms]" />,
+        icon: <HugeiconsIcon icon={ReloadIcon} className="size-4 animate-spin [animation-duration:750ms]" strokeWidth={2} />,
       })
     }, 1000)
     try {
@@ -170,7 +171,7 @@ export const useAiSparkActions = () => {
       toast.dismiss(toastId)
       const finalElapsed = formatElapsed()
       toast.success(`Added to board. (${finalElapsed})`, {
-        icon: <CheckCircleStatusIcon className="size-4" />,
+        icon: <HugeiconsIcon icon={CheckmarkCircle03Icon} className="size-4" strokeWidth={2} />,
         duration: 3000,
       })
       return true
@@ -180,7 +181,7 @@ export const useAiSparkActions = () => {
       toast.dismiss(toastId)
       const finalElapsed = formatElapsed()
       toast.error(`Could not complete the action. (${finalElapsed})`, {
-        icon: <CancelStatusIcon className="size-4" />,
+        icon: <HugeiconsIcon icon={CancelIcon} className="size-4" strokeWidth={2} />,
         duration: 4000,
       })
       return false

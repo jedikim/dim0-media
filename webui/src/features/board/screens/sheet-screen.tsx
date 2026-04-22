@@ -40,7 +40,7 @@ export const SheetScreen = () => {
               <SheetEditor
                 value={note.content?.markdown || ""}
                 onSave={handleSave}
-                className="h-[calc(100vh-72px)]"
+                className="h-[calc(100vh-180px)]"
               />
             </div>
           </div>

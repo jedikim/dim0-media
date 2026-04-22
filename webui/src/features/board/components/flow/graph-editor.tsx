@@ -44,7 +44,6 @@ import { useAddMindMapToBoard } from '../../api/add-mindmap-to-board'
 import { useCopyPasteNodes } from '../../hooks/use-copy-paste'
 import { useCenterAroundParam } from '../../hooks/use-center-around'
 import { useBoardShortcuts } from '../../hooks/use-board-shortcuts'
-import { useDropImageUpload } from '../../hooks/use-drop-image-upload'
 import { PresentationControls } from './presentation-controls'
 import { useTheme } from '@/components/theme-provider'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -65,14 +64,14 @@ const defaultEdgeOptions = {
   type: 'default',
   zIndex: 1000,
   style: {
-    stroke: 'var(--secondary-foreground)',
+    stroke: 'var(--secondary)',
     strokeWidth: 2,
     strokeDasharray: '8 6',
     strokeLinecap: 'round' as const,
   },
   markerEnd: {
     type: MarkerType.ArrowClosed,
-    color: 'var(--secondary-foreground)',
+    color: 'var(--secondary)',
     width: 22,
     height: 22,
   },
@@ -134,7 +133,7 @@ function EmptyGraphHint({ isMobile }: EmptyGraphHintProps) {
  */
 function GraphZoomHint() {
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-14 z-10 flex justify-center px-4 hidden md:block">
+    <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center px-4 hidden md:block">
       <p className="text-center text-xs leading-relaxed text-sidebar-foreground/60">
         Use Ctrl + mouse scroll or Ctrl + / Ctrl - to zoom in and out
       </p>
@@ -431,11 +430,6 @@ export default function GraphEditor() {
     [viewMode, screenToFlowPosition, setLastCursorPosition],
   )
 
-  const { onDragOver: handleImageDragOver, onDrop: handleImageDrop } = useDropImageUpload({
-    enabled: viewMode === 'graph' && boardCanEdit && !effectiveIsLocked,
-    screenToFlowPosition,
-  })
-
   const handleNodeDoubleClick = useCallback<NonNullable<ReactFlowProps<NoteNode, LinkEdge>['onNodeDoubleClick']>>(
     (event, node) => {
       if (!boardId) return
@@ -726,8 +720,6 @@ export default function GraphEditor() {
         style={{ backgroundColor: displayBoardBackground }}
         onDoubleClick={handlePaneDoubleClick}
         onMouseMove={handlePaneMouseMove}
-        onDragOver={handleImageDragOver}
-        onDrop={handleImageDrop}
       >
         {viewMode === 'graph' ? (
           <GraphContextMenu nodes={nodes} setNodesPersist={setNodesPersist}>

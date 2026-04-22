@@ -15,11 +15,11 @@ import {
 import type { NoteNode, LinkEdge } from '../../types/flow'
 import { cn } from '@/lib/utils'
 import { useMemo, type ReactElement } from 'react'
-import { TextAlignCenterIcon, TextAlignRightIcon, TextParagraphIcon } from '@/components/icons'
 import { Card, CardContent } from '@/components/ui/card'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Label } from '@/components/ui/label'
 import { useGraphStore } from '../../store/graph-store'
+import { AlignCenter, AlignLeft, AlignRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { ColorGrid } from './color-panel'
 import { useStyleDefaults } from '../../style-provider'
@@ -37,7 +37,7 @@ const Section = ({ title, children }: { title: string, children: React.ReactNode
 
 const ColorDot = ({ color }: { color?: string | null }): ReactElement => (
   <span
-    className='inline-flex size-6 rounded-sm border border-border/60'
+    className='inline-flex size-6 rounded-full border border-border/60'
     style={{ backgroundColor: color ?? 'transparent' }}
   />
 )
@@ -62,7 +62,7 @@ const RailButton = ({
       'text-muted-foreground hover:text-foreground hover:bg-muted/30 hover:border-border/60'
     )}
   >
-    <span className='text-xs font-sans font-normal truncate'>{title}</span>
+    <span className='text-xs font-mono font-normal truncate'>{title}</span>
     <span className='inline-flex h-6 w-6 shrink-0 items-center justify-center'>
       {indicator}
     </span>
@@ -356,7 +356,7 @@ export function StylePanel<T extends StyleLike>({
       <Section title='Fill style'>
         <ToggleGroup type='single' value={(s.fillStyle as FillStyle) ?? 'solid'} onValueChange={v => v && onStyleChange({ fillStyle: v as T[keyof T] } as Partial<T>)} className='flex flex-wrap gap-2'>
           {(['hachure', 'dots', 'zigzag', 'solid', 'cross-hatch'] as FillStyle[]).map(kind => (
-            <ToggleGroupItem key={kind} value={kind} className='h-9 w-9 items-center justify-center rounded-md border bg-muted text-muted-foreground data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'>
+            <ToggleGroupItem key={kind} value={kind} className='h-9 w-9 items-center justify-center rounded-xl border bg-muted text-muted-foreground data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'>
               <FillGlyph kind={kind} />
             </ToggleGroupItem>
           ))}
@@ -367,7 +367,7 @@ export function StylePanel<T extends StyleLike>({
       <Section title='Stroke width'>
         <ToggleGroup type='single' value={String(s.strokeWidth ?? 1)} onValueChange={v => v && onStyleChange({ strokeWidth: Number(v) } as Partial<T>)} className='flex flex-wrap gap-2'>
           {StrokeWidthPresets.map(w => (
-            <ToggleGroupItem key={w} value={String(w)} className='h-9 w-9 items-center justify-center rounded-md border bg-muted text-muted-foreground data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'>
+            <ToggleGroupItem key={w} value={String(w)} className='h-9 w-9 items-center justify-center rounded-xl border bg-muted text-muted-foreground data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'>
               <LineGlyph width={w} />
             </ToggleGroupItem>
           ))}
@@ -377,9 +377,9 @@ export function StylePanel<T extends StyleLike>({
     strokeStyle: (
       <Section title='Stroke style'>
         <ToggleGroup type='single' value={(s.strokeStyle as StrokeStyle) ?? 'solid'} onValueChange={v => v && onStyleChange({ strokeStyle: v as T[keyof T] } as Partial<T>)} className='flex flex-wrap gap-2'>
-          <ToggleGroupItem value='solid' className='h-9 w-9 items-center justify-center rounded-md border bg-muted text-muted-foreground data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'><LineGlyph width={2} /></ToggleGroupItem>
-          <ToggleGroupItem value='dashed' className='h-9 w-9 items-center justify-center rounded-md border bg-muted text-muted-foreground data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'><LineGlyph width={2} dash={[6, 4]} /></ToggleGroupItem>
-          <ToggleGroupItem value='dotted' className='h-9 w-9 items-center justify-center rounded-md border bg-muted text-muted-foreground data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'><LineGlyph width={2} dash={[1, 5]} /></ToggleGroupItem>
+          <ToggleGroupItem value='solid' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted text-muted-foreground data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'><LineGlyph width={2} /></ToggleGroupItem>
+          <ToggleGroupItem value='dashed' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted text-muted-foreground data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'><LineGlyph width={2} dash={[6, 4]} /></ToggleGroupItem>
+          <ToggleGroupItem value='dotted' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted text-muted-foreground data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'><LineGlyph width={2} dash={[1, 5]} /></ToggleGroupItem>
         </ToggleGroup>
       </Section>
     ),
@@ -387,7 +387,7 @@ export function StylePanel<T extends StyleLike>({
       <Section title='Sloppiness'>
         <ToggleGroup type='single' value={String(s.roughness ?? 0)} onValueChange={v => v && onStyleChange({ roughness: Number(v) } as Partial<T>)} className='flex flex-wrap gap-2'>
           {SloppyPresets.map(val => (
-            <ToggleGroupItem key={val} value={String(val)} className='h-9 w-9 items-center justify-center rounded-md border bg-muted text-muted-foreground data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'>
+            <ToggleGroupItem key={val} value={String(val)} className='h-9 w-9 items-center justify-center rounded-xl border bg-muted text-muted-foreground data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'>
               <WavyGlyph amount={val * 4} />
             </ToggleGroupItem>
           ))}
@@ -397,28 +397,28 @@ export function StylePanel<T extends StyleLike>({
     roundness: (
       <Section title='Roundness'>
         <ToggleGroup type='single' value={String(s.roundness ?? 0)} onValueChange={v => v && onStyleChange({ roundness: Number(v) as T[keyof T] } as Partial<T>)} className='flex gap-2'>
-          <ToggleGroupItem value='0' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'><CornerGlyph r={0} /></ToggleGroupItem>
-          <ToggleGroupItem value='2' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'><CornerGlyph r={2} /></ToggleGroupItem>
+          <ToggleGroupItem value='0' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'><CornerGlyph r={0} /></ToggleGroupItem>
+          <ToggleGroupItem value='2' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'><CornerGlyph r={2} /></ToggleGroupItem>
         </ToggleGroup>
       </Section>
     ),
     textAlign: (
       <Section title='Text align'>
         <ToggleGroup type='single' value={(s.textAlign as TextAlign) ?? 'left'} onValueChange={v => v && onStyleChange({ textAlign: v as T[keyof T] } as Partial<T>)} className='flex gap-2'>
-          <ToggleGroupItem value='left' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'><TextParagraphIcon className='h-4 w-4' /></ToggleGroupItem>
-          <ToggleGroupItem value='center' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'><TextAlignCenterIcon className='h-4 w-4' /></ToggleGroupItem>
-          <ToggleGroupItem value='right' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'><TextAlignRightIcon className='h-4 w-4' /></ToggleGroupItem>
+          <ToggleGroupItem value='left' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'><AlignLeft className='h-4 w-4' /></ToggleGroupItem>
+          <ToggleGroupItem value='center' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'><AlignCenter className='h-4 w-4' /></ToggleGroupItem>
+          <ToggleGroupItem value='right' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'><AlignRight className='h-4 w-4' /></ToggleGroupItem>
         </ToggleGroup>
       </Section>
     ),
     fontFamily: (
       <Section title='Font family'>
         <ToggleGroup type='single' value={(s.fontFamily as FontFamily) ?? 'sans-serif'} onValueChange={v => v && onStyleChange({ fontFamily: v as T[keyof T] } as Partial<T>)} className='flex gap-2'>
-          <ToggleGroupItem value='handwriting' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground font-handwriting'>Aa</ToggleGroupItem>
-          <ToggleGroupItem value='informal' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground font-informal'>Aa</ToggleGroupItem>
-          <ToggleGroupItem value='sans-serif' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground font-sans'>Aa</ToggleGroupItem>
-          <ToggleGroupItem value='serif' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground font-serif'>Aa</ToggleGroupItem>
-          <ToggleGroupItem value='monospace' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground font-mono'>{'<>'}</ToggleGroupItem>
+          <ToggleGroupItem value='handwriting' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary font-handwriting'>Aa</ToggleGroupItem>
+          <ToggleGroupItem value='informal' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary font-informal'>Aa</ToggleGroupItem>
+          <ToggleGroupItem value='sans-serif' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary font-sans'>Aa</ToggleGroupItem>
+          <ToggleGroupItem value='serif' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary font-serif'>Aa</ToggleGroupItem>
+          <ToggleGroupItem value='monospace' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary font-mono'>{'<>'}</ToggleGroupItem>
         </ToggleGroup>
       </Section>
     ),
@@ -426,7 +426,7 @@ export function StylePanel<T extends StyleLike>({
       <Section title='Font size'>
         <ToggleGroup type='single' value={(s.fontSize as FontSize) ?? 'M'} onValueChange={v => v && onStyleChange({ fontSize: v as T[keyof T] } as Partial<T>)} className='flex gap-2'>
           {(['S', 'M', 'L', 'XL'] as FontSize[]).map(size => (
-            <ToggleGroupItem key={size} value={size} className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'>{size}</ToggleGroupItem>
+            <ToggleGroupItem key={size} value={size} className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'>{size}</ToggleGroupItem>
           ))}
         </ToggleGroup>
       </Section>
@@ -434,11 +434,11 @@ export function StylePanel<T extends StyleLike>({
     textStyle: (
       <Section title='Text style'>
         <ToggleGroup type='single' value={(s.textStyle as TextStyle) ?? 'normal'} onValueChange={v => v && onStyleChange({ textStyle: v as T[keyof T] } as Partial<T>)} className='flex gap-2'>
-          <ToggleGroupItem value='normal' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'>A</ToggleGroupItem>
-          <ToggleGroupItem value='italic' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground italic'>I</ToggleGroupItem>
-          <ToggleGroupItem value='bold' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground font-bold'>B</ToggleGroupItem>
-          <ToggleGroupItem value='underline' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground underline'>U</ToggleGroupItem>
-          <ToggleGroupItem value='strikethrough' className='h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground line-through'>S</ToggleGroupItem>
+          <ToggleGroupItem value='normal' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'>A</ToggleGroupItem>
+          <ToggleGroupItem value='italic' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary italic'>I</ToggleGroupItem>
+          <ToggleGroupItem value='bold' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary font-bold'>B</ToggleGroupItem>
+          <ToggleGroupItem value='underline' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary underline'>U</ToggleGroupItem>
+          <ToggleGroupItem value='strikethrough' className='h-9 w-9 items-center justify-center rounded-xl border bg-muted data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary line-through'>S</ToggleGroupItem>
         </ToggleGroup>
       </Section>
     ),
@@ -446,7 +446,7 @@ export function StylePanel<T extends StyleLike>({
       <Section title='Path style'>
         <ToggleGroup type='single' value={(s as LinkStyle).pathStyle ?? 'bezier'} onValueChange={v => v && onStyleChange({ pathStyle: v as PathStyleKind } as unknown as Partial<T>)} className='flex gap-2'>
           {(['bezier', 'straight', 'polyline'] as PathStyleKind[]).map(kind => (
-            <ToggleGroupItem key={kind} value={kind} className='h-9 w-12 items-center justify-center rounded-md border bg-muted text-muted-foreground data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'>
+            <ToggleGroupItem key={kind} value={kind} className='h-9 w-12 items-center justify-center rounded-xl border bg-muted text-muted-foreground data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'>
               <PathStyleGlyph kind={kind} />
             </ToggleGroupItem>
           ))}
@@ -457,7 +457,7 @@ export function StylePanel<T extends StyleLike>({
       <Section title='Source arrowhead'>
         <ToggleGroup type='single' value={(s as LinkStyle).sourceArrowhead ?? 'none'} onValueChange={v => v && onStyleChange({ sourceArrowhead: v as ArrowheadType } as unknown as Partial<T>)} className='flex gap-2'>
           {(['none', 'arrow', 'arrow-filled', 'barb'] as ArrowheadType[]).map(kind => (
-            <ToggleGroupItem key={`src-${kind}`} value={kind} className='h-9 w-12 items-center justify-center rounded-md border bg-muted text-muted-foreground data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'>
+            <ToggleGroupItem key={`src-${kind}`} value={kind} className='h-9 w-12 items-center justify-center rounded-xl border bg-muted text-muted-foreground data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'>
               <ArrowheadGlyph kind={kind} />
             </ToggleGroupItem>
           ))}
@@ -468,7 +468,7 @@ export function StylePanel<T extends StyleLike>({
       <Section title='Target arrowhead'>
         <ToggleGroup type='single' value={(s as LinkStyle).targetArrowhead ?? 'arrow'} onValueChange={v => v && onStyleChange({ targetArrowhead: v as ArrowheadType } as unknown as Partial<T>)} className='flex gap-2'>
           {(['none', 'arrow', 'arrow-filled', 'barb'] as ArrowheadType[]).map(kind => (
-            <ToggleGroupItem key={`dst-${kind}`} value={kind} className='h-9 w-12 items-center justify-center rounded-md border bg-muted text-muted-foreground data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'>
+            <ToggleGroupItem key={`dst-${kind}`} value={kind} className='h-9 w-12 items-center justify-center rounded-xl border bg-muted text-muted-foreground data-[state=on]:bg-secondary/10 data-[state=on]:text-secondary'>
               <ArrowheadGlyph kind={kind} />
             </ToggleGroupItem>
           ))}
@@ -504,10 +504,10 @@ export function StylePanel<T extends StyleLike>({
     strokeStyle: <LineGlyph width={2} dash={(s.strokeStyle as StrokeStyle) === 'dashed' ? [6, 4] : (s.strokeStyle as StrokeStyle) === 'dotted' ? [1, 5] : undefined} />,
     roughness: <WavyGlyph amount={(s.roughness ?? 0) * 4} />,
     roundness: <CornerGlyph r={(s.roundness ?? 0) === 2 ? 2 : 0} />,
-    textAlign: (s.textAlign as TextAlign) === 'center' ? <TextAlignCenterIcon className='size-4' /> : (s.textAlign as TextAlign) === 'right' ? <TextAlignRightIcon className='size-4' /> : <TextParagraphIcon className='size-4' />,
-    fontFamily: <span className='inline-flex size-6 rounded-sm border border-border/60 items-center justify-center text-xs font-normal'>Aa</span>,
-    fontSize: <span className='inline-flex size-6 rounded-sm border border-border/60 items-center justify-center text-[10px] font-normal'>{(s.fontSize as FontSize) ?? 'M'}</span>,
-    textStyle: <span className='inline-flex size-6 rounded-sm border border-border/60 items-center justify-center text-[10px] font-normal'>T</span>,
+    textAlign: (s.textAlign as TextAlign) === 'center' ? <AlignCenter className='size-4' /> : (s.textAlign as TextAlign) === 'right' ? <AlignRight className='size-4' /> : <AlignLeft className='size-4' />,
+    fontFamily: <span className='inline-flex size-6 rounded-full border border-border/60 items-center justify-center text-xs font-normal'>Aa</span>,
+    fontSize: <span className='inline-flex size-6 rounded-full border border-border/60 items-center justify-center text-[10px] font-normal'>{(s.fontSize as FontSize) ?? 'M'}</span>,
+    textStyle: <span className='inline-flex size-6 rounded-full border border-border/60 items-center justify-center text-[10px] font-normal'>T</span>,
     pathStyle: <PathStyleGlyph kind={(s as LinkStyle).pathStyle ?? 'bezier'} />,
     sourceArrowhead: <ArrowheadGlyph kind={(s as LinkStyle).sourceArrowhead ?? 'none'} />,
     targetArrowhead: <ArrowheadGlyph kind={(s as LinkStyle).targetArrowhead ?? 'arrow'} />,

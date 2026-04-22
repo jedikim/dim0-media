@@ -16,7 +16,7 @@ import {
   sortableKeyboardCoordinates
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { DragGripIcon } from '@/components/icons'
+import { Grip } from 'lucide-react'
 import { useGraphStore } from '../../store/graph-store'
 import type { NoteNode } from '../../types/flow'
 import { LinearNoteCard } from './linear-note-card'
@@ -233,7 +233,7 @@ function SortableNoteCard({ node }: SortableNoteCardProps) {
         className='absolute left-1 top-1 z-30 p-1 rounded-md cursor-grab active:cursor-grabbing touch-none text-foreground/50 hover:text-foreground transition'
         onClick={e => e.preventDefault()}
       >
-        <DragGripIcon className='size-4' />
+        <Grip className='size-4' />
       </button>
 
       {node.data?.style?.type === 'folder' ? (

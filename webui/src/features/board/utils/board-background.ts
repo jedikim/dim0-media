@@ -36,18 +36,15 @@ export const clearBoardBackground = (boardId: string | undefined) => {
   }
 }
 
-/**
- * Returns the saved board texture, defaulting to dots when no preference exists yet.
- */
 export const getBoardBackgroundTexture = (boardId?: string): BoardBackgroundTexture | null => {
   if (!boardId) return null
   try {
     const raw = localStorage.getItem(`${BOARD_BG_TEXTURE_PREFIX}${boardId}`)
-    if (!raw) return "dots"
+    if (!raw) return null
     if (raw === "dots" || raw === "lines") return raw
-    return "dots"
+    return null
   } catch {
-    return "dots"
+    return null
   }
 }
 

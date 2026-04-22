@@ -5,8 +5,10 @@ import { trimText } from "@/lib/common"
 import { UNTITLED_LABEL } from "@/features/board/const"
 import { useNavigate, useParams, useRouterState, useSearch } from "@tanstack/react-router"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "../ui/context-menu"
-import { BoardContextIcon, DashboardAddIcon, DeleteIcon, EditIcon, MinusIcon, PlusIcon } from "@/components/icons"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { DashboardCircleAddIcon, Delete02Icon, Edit01Icon, NoteIcon } from "@hugeicons/core-free-icons"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible"
+import { Minus, Plus } from "lucide-react"
 import { ChatMenuItem, NewChatItem } from "./chat"
 import { ConfirmDeleteBoardAlert } from "./confirm-delete-board"
 import { useEffect, useState } from "react"
@@ -36,7 +38,7 @@ export function DashboardMenuItem() {
         className="text-xs font-medium truncate"
         isActive={isActive}
       >
-        <DashboardAddIcon className="shrink-0 size-4 text-sidebar-icon-2" weight={isActive ? 'fill' : undefined} strokeWidth={2} />
+        <HugeiconsIcon icon={DashboardCircleAddIcon} className="shrink-0 size-4 text-sidebar-icon-2" strokeWidth={2} />
         <span>Dashboard</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -69,11 +71,11 @@ export function NewBoardItem() {
           <TooltipTrigger asChild>
             <span className="block">
               <SidebarMenuButton
-                className="text-xs text-secondary-foreground/60 font-medium transition-all cursor-not-allowed opacity-60"
+                className="text-xs text-secondary/60 font-medium transition-all cursor-not-allowed opacity-60"
                 disabled
                 onClick={handleClick}
               >
-                <EditIcon className="text-xs shrink-0 text-sidebar-icon-1/60" strokeWidth={2} />
+                <HugeiconsIcon icon={Edit01Icon} className="text-xs shrink-0 text-sidebar-icon-1/60" strokeWidth={2} />
                 <span>New Board</span>
               </SidebarMenuButton>
             </span>
@@ -88,8 +90,8 @@ export function NewBoardItem() {
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton className="text-xs text-secondary-foreground font-medium transition-all" onClick={handleClick}>
-        <EditIcon className="text-xs shrink-0 text-sidebar-icon-1" strokeWidth={2} />
+      <SidebarMenuButton className="text-xs text-secondary font-medium transition-all" onClick={handleClick}>
+        <HugeiconsIcon icon={Edit01Icon} className="text-xs shrink-0 text-sidebar-icon-1" strokeWidth={2} />
         <span>New Board</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -161,10 +163,10 @@ export function BoardItem({ boardId, label }: { boardId: string, label?: string 
               <ContextMenuTrigger asChild>
                 <SidebarMenuButton
                   onClick={handleClick}
-                className="text-xs font-medium truncate"
-                isActive={isActive}
-              >
-                  <BoardContextIcon className="shrink-0 size-4" weight={isActive ? 'fill' : undefined} />
+                  className="text-xs font-medium truncate"
+                  isActive={isActive}
+                >
+                  <HugeiconsIcon icon={NoteIcon} className="shrink-0 size-4" strokeWidth={2} />
                   <span>{boardDisplayLabel}</span>
                 </SidebarMenuButton>
               </ContextMenuTrigger>
@@ -181,15 +183,19 @@ export function BoardItem({ boardId, label }: { boardId: string, label?: string 
               variant="destructive"
               className="text-xs flex flex-row items-center"
             >
-              <DeleteIcon className="mr-2 size-4" strokeWidth={2} />
+              <HugeiconsIcon
+                icon={Delete02Icon}
+                className="mr-2 size-4"
+                strokeWidth={2}
+              />
               <span>Delete Board</span>
             </ContextMenuItem>
           </ContextMenuContent>
 
           <CollapsibleTrigger asChild>
             <SidebarMenuAction className="right-1.5">
-              <PlusIcon className="group-data-[state=open]/collapsible:hidden" strokeWidth={2} />
-              <MinusIcon className="group-data-[state=closed]/collapsible:hidden" strokeWidth={2} />
+              <Plus className="group-data-[state=open]/collapsible:hidden" strokeWidth={2} />
+              <Minus className="group-data-[state=closed]/collapsible:hidden" strokeWidth={2} />
             </SidebarMenuAction>
           </CollapsibleTrigger>
 

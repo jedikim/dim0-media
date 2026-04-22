@@ -18,7 +18,7 @@ export function NewsfeedLinearPage() {
 
   return (
     <div className='absolute inset-0 w-full h-full flex flex-col'>
-      <h1 className='relative text-xl font-semibold w-full text-center text-secondary-foreground z-50 mt-4'>Newsfeed</h1>
+      <h1 className='relative text-xl font-semibold w-full text-center text-secondary z-50 mt-4'>Newsfeed</h1>
       <div className='relative w-full flex-1 h-full'>
         <div className='w-full h-full absolute inset-0 overflow-x-hidden overflow-y-auto scrollbar-thin flex flex-col items-center p-4 pb-16 space-y-4 z-10'>
           {nf.isLoading && <LoadingWindow message="Loading…" viewMode="full" className='bg-transparent' />}

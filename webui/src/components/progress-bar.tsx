@@ -72,7 +72,7 @@ export const ProgressBar = ({ estimatedTime, isStop, startedAt }: ProgressBarPro
       <div className='w-full max-w-[250px]'>
         <div className='flex items-center justify-between mb-1'>
           <span className='text-xs text-muted-foreground font-mono'>Estimated</span>
-          <span className='text-xs font-mono tabular-nums text-secondary-foreground'>{value}%</span>
+          <span className='text-xs font-mono tabular-nums text-secondary'>{value}%</span>
         </div>
         <Progress value={value} className='h-2' />
       </div>

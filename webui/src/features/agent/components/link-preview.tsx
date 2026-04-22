@@ -1,8 +1,9 @@
 import { trimText } from "@/lib/common"
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
-import { LinkIcon } from "@/components/icons"
 import type { UrlAnnotation } from "../types/tool-outputs"
 import { extractMainDomain } from "../utils/url"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { Link02Icon } from "@hugeicons/core-free-icons"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
@@ -217,7 +218,7 @@ export const LinkPreviewCard = ({
                   )}
                 />
               ) : (
-                <LinkIcon className="size-3" strokeWidth={2} />
+                <HugeiconsIcon icon={Link02Icon} className="size-3" strokeWidth={2} />
               )}
               {name && <span className={cn(clipText && "truncate")}>{name}</span>}
             </div>

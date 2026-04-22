@@ -3,7 +3,8 @@ import { useListBoards } from "@/features/board/api/list-boards"
 import { useUpdateChat } from "@/features/agent/api/update-chat"
 import { useParams } from "@tanstack/react-router"
 import { UNTITLED_LABEL } from "@/features/board/const"
-import { AddIcon, BoardContextIcon } from "@/components/icons"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { AiChipIcon, PlusSignIcon } from "@hugeicons/core-free-icons"
 import { useAppStore } from "@/store"
 
 
@@ -48,15 +49,15 @@ export const ContextBoard = ({ contextBoardId, boardAsContext }: ContextBoardPro
     }
   }
 
-  const Icon = attachedId ? BoardContextIcon : AddIcon
+  const icon = attachedId ? AiChipIcon : PlusSignIcon
 
   return (
     <Select value={value} onValueChange={handleSelectBoard}>
       <SelectTrigger
-        className="rounded-md border bg-card/60 text-xs font-medium backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/50 px-2 py-1 gap-2 !h-8 text-secondary-foreground shadow-sm"
+        className="rounded-full border bg-card/60 text-xs font-medium backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/50 px-2 py-1 gap-2 !h-8 text-secondary shadow-sm"
         size='sm'
       >
-        <Icon className="size-4 shrink-0 text-secondary-foreground my-icon" strokeWidth={2} />
+        <HugeiconsIcon icon={icon} className="size-4 shrink-0 text-secondary my-icon" strokeWidth={2} />
         <span>{label}</span>
       </SelectTrigger>
       <SelectContent>

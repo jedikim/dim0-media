@@ -22,8 +22,6 @@ import {
 } from './edge-geometry'
 import { useEdgeGeometry } from './use-edge-geometry'
 import { useControlPointDrag } from './use-control-point-drag'
-import { useRoughPath, hashSeed } from './use-rough-path'
-import { useFreehandPath } from './use-freehand-path'
 import {
   BASE_HEAD_SIZE,
   HEAD_SCALE,
@@ -64,7 +62,6 @@ function isFinitePoint(point: Partial<Point> | null | undefined): point is Point
  * Renders an edge between two nodes, with optional arrowheads, label, and control point.
  */
 export const EdgeView = memo(function EdgeView({
-  id,
   source,
   target,
   style = {},
@@ -74,7 +71,6 @@ export const EdgeView = memo(function EdgeView({
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
   const { screenToFlowPosition } = useReactFlow()
-  const isMoving = useGraphStore(state => state.isMoving)
 
   const sourceNodeSlice = useGraphStore(useShallow(selectEdgeNodeSlice(source)))
   const targetNodeSlice = useGraphStore(useShallow(selectEdgeNodeSlice(target)))
@@ -161,20 +157,6 @@ export const EdgeView = memo(function EdgeView({
     isBezierPath,
     bendPointDrag,
     storedBendPoint
-  })
-
-  const roughSeed = useMemo(() => hashSeed(id ?? `${source}->${target}`), [id, source, target])
-  const roughDisabled = isMoving || Boolean(edgeData.labelEditing)
-  const isSolidStroke = (linkStyle?.strokeStyle ?? 'solid') === 'solid'
-  const freehandDisabled = roughDisabled || !isSolidStroke
-  const roughMainPath = useRoughPath(pathData?.path ?? null, {
-    seed: roughSeed,
-    strokeWidth,
-    disabled: roughDisabled || isSolidStroke,
-  })
-  const freehandMainPath = useFreehandPath(pathData?.path ?? null, {
-    strokeWidth,
-    disabled: freehandDisabled,
   })
 
   const dashArray = useMemo(() => cssDashArray(linkStyle, strokeWidth), [linkStyle, strokeWidth])
@@ -266,7 +248,7 @@ export const EdgeView = memo(function EdgeView({
     if (!hasLabel && !isLabelEditing) return null
     if (isLabelEditing) return null
 
-    const padding = 0
+    const padding = 6
     const rectX = pathData.labelX - estimatedLabelSize.width / 2 - padding
     const rectY = pathData.labelY - estimatedLabelSize.height / 2 - padding
     const rectW = estimatedLabelSize.width + padding * 2
@@ -308,25 +290,6 @@ export const EdgeView = memo(function EdgeView({
     }
   }, [pathData, bezierPoints, estimatedLabelSize, hasLabel, isLabelEditing])
 
-  const roughGapFirst = useRoughPath(labelGapPaths?.first ?? null, {
-    seed: roughSeed + 1,
-    strokeWidth,
-    disabled: roughDisabled || isSolidStroke,
-  })
-  const roughGapSecond = useRoughPath(labelGapPaths?.second ?? null, {
-    seed: roughSeed + 2,
-    strokeWidth,
-    disabled: roughDisabled || isSolidStroke,
-  })
-  const freehandGapFirst = useFreehandPath(labelGapPaths?.first ?? null, {
-    strokeWidth,
-    disabled: freehandDisabled,
-  })
-  const freehandGapSecond = useFreehandPath(labelGapPaths?.second ?? null, {
-    strokeWidth,
-    disabled: freehandDisabled,
-  })
-
   if (!geom || !pathData || !renderedStart || !renderedEnd || !labelTransformStyle || isInvalid) {
     return null
   }
@@ -337,48 +300,6 @@ export const EdgeView = memo(function EdgeView({
     !!edgeData.onControlPointChange &&
     selected &&
     !isLabelEditing
-
-  const freehandFillStyle: CSSProperties = {
-    fill: displayStroke,
-    stroke: 'none',
-  }
-  const markerCarrierStyle: CSSProperties = {
-    fill: 'none',
-    stroke: 'transparent',
-    strokeWidth: Math.max(strokeWidth, 1),
-  }
-
-  const renderHalf = (
-    smoothD: string,
-    roughD: string | null,
-    freehandD: string | null,
-    markerStart?: string,
-    markerEnd?: string,
-  ) => {
-    if (freehandD) {
-      return (
-        <>
-          <path d={freehandD} style={freehandFillStyle} pointerEvents="none" />
-          <path
-            d={smoothD}
-            style={markerCarrierStyle}
-            markerStart={markerStart ? `url(#${markerStart})` : undefined}
-            markerEnd={markerEnd ? `url(#${markerEnd})` : undefined}
-            pointerEvents="none"
-          />
-        </>
-      )
-    }
-    return (
-      <path
-        d={roughD ?? smoothD}
-        style={edgeStrokeStyle}
-        markerStart={markerStart ? `url(#${markerStart})` : undefined}
-        markerEnd={markerEnd ? `url(#${markerEnd})` : undefined}
-        pointerEvents="none"
-      />
-    )
-  }
 
   return (
     <>
@@ -393,58 +314,42 @@ export const EdgeView = memo(function EdgeView({
               strokeWidth: Math.max(strokeWidth, 12),
             }}
           />
-          {labelGapPaths.first && renderHalf(
-            labelGapPaths.first,
-            roughGapFirst,
-            freehandGapFirst,
-            startMarkerId,
-            undefined,
+          {labelGapPaths.first && (
+            <path
+              d={labelGapPaths.first}
+              style={edgeStrokeStyle}
+              markerStart={startMarkerId ? `url(#${startMarkerId})` : undefined}
+              pointerEvents="none"
+            />
           )}
-          {labelGapPaths.second && renderHalf(
-            labelGapPaths.second,
-            roughGapSecond,
-            freehandGapSecond,
-            undefined,
-            endMarkerId,
+          {labelGapPaths.second && (
+            <path
+              d={labelGapPaths.second}
+              style={edgeStrokeStyle}
+              markerEnd={endMarkerId ? `url(#${endMarkerId})` : undefined}
+              pointerEvents="none"
+            />
           )}
-          {!labelGapPaths.first && labelGapPaths.second && startMarkerId && renderHalf(
-            labelGapPaths.second,
-            roughGapSecond,
-            freehandGapSecond,
-            startMarkerId,
-            undefined,
+          {!labelGapPaths.first && labelGapPaths.second && startMarkerId && (
+            <path
+              d={labelGapPaths.second}
+              style={edgeStrokeStyle}
+              markerStart={`url(#${startMarkerId})`}
+              pointerEvents="none"
+            />
           )}
-          {!labelGapPaths.second && labelGapPaths.first && endMarkerId && renderHalf(
-            labelGapPaths.first,
-            roughGapFirst,
-            freehandGapFirst,
-            undefined,
-            endMarkerId,
+          {!labelGapPaths.second && labelGapPaths.first && endMarkerId && (
+            <path
+              d={labelGapPaths.first}
+              style={edgeStrokeStyle}
+              markerEnd={`url(#${endMarkerId})`}
+              pointerEvents="none"
+            />
           )}
-        </>
-      ) : freehandMainPath ? (
-        <>
-          <BaseEdge
-            path={pathData.path}
-            style={{
-              ...edgeStrokeStyle,
-              stroke: 'transparent',
-              strokeDasharray: undefined,
-              strokeWidth: Math.max(strokeWidth, 12),
-            }}
-          />
-          <path d={freehandMainPath} style={freehandFillStyle} pointerEvents="none" />
-          <path
-            d={pathData.path}
-            style={markerCarrierStyle}
-            markerStart={startMarkerId ? `url(#${startMarkerId})` : undefined}
-            markerEnd={endMarkerId ? `url(#${endMarkerId})` : undefined}
-            pointerEvents="none"
-          />
         </>
       ) : (
         <BaseEdge
-          path={roughMainPath ?? pathData.path}
+          path={pathData.path}
           style={edgeStrokeStyle}
           markerStart={startMarkerId ? `url(#${startMarkerId})` : undefined}
           markerEnd={endMarkerId ? `url(#${endMarkerId})` : undefined}
@@ -455,7 +360,7 @@ export const EdgeView = memo(function EdgeView({
         <path
           key={`edge-hidden-${index}`}
           d={segment}
-          className='stroke-secondary-foreground'
+          className='stroke-secondary'
           style={{
             strokeWidth,
             fill: 'none',
@@ -496,7 +401,7 @@ export const EdgeView = memo(function EdgeView({
             cx={displayBendPoint!.x}
             cy={displayBendPoint!.y}
             r={6}
-            className='cursor-move fill-background stroke-secondary-foreground stroke-2'
+            className='cursor-move fill-background stroke-secondary stroke-2'
             pointerEvents='all'
             onPointerDown={handleControlPointPointerDown}
           />

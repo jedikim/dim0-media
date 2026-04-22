@@ -140,13 +140,13 @@ export function LinePlacementOverlay({
             y1={line.y1}
             x2={line.x2}
             y2={line.y2}
-            stroke="var(--secondary-foreground)"
+            stroke="var(--secondary)"
             strokeWidth={2}
             strokeDasharray="6 4"
           />
         </svg>
       )}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-lg bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow pointer-events-none">
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-full bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow pointer-events-none">
         Click start then end · Esc to cancel
       </div>
     </div>

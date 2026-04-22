@@ -1,6 +1,7 @@
 import { useState } from "react"
-import { ArrowCollapseIcon, ArrowExpandIcon } from "@/components/icons"
 import type { ReasoningTextStep } from "../../types/stream"
+import { ArrowDown01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { ShinyText } from "@/components/animations/shiny-text"
 import { MarkdownView } from "@/components/markdown/markdown-view"
 import { cn } from "@/lib/utils"
@@ -46,20 +47,14 @@ export const ReasoningStepRow = ({
             onClick={() => setViewMore((value) => !value)}
           >
             <span>Reasoning</span>
-            {viewMore ? (
-              <ArrowCollapseIcon
-                className='size-4'
-                strokeWidth={2}
-              />
-            ) : (
-              <ArrowExpandIcon
-                className='size-4'
-                strokeWidth={2}
-              />
-            )}
+            <HugeiconsIcon
+              icon={viewMore ? ArrowDown01Icon : ArrowRight01Icon}
+              className='size-4'
+              strokeWidth={2}
+            />
           </button>
           {viewMore && (
-            <div className='mt-2 font-sans text-muted-foreground/80 rounded-lg border border-border p-2 bg-sidebar border-dashed [&_p]:!text-sm [&_li]:!text-sm italic'>
+            <div className='mt-2 text-muted-foreground/80 rounded-lg border border-border p-2 bg-sidebar border-dashed [&_p]:!text-sm [&_li]:!text-sm italic'>
               <MarkdownView content={step.reasoning} />
             </div>
           )}
@@ -67,7 +62,7 @@ export const ReasoningStepRow = ({
       )}
       {step.message !== "" ? (
         <div
-          className="font-sans text-base text-card-foreground"
+          className="text-base text-card-foreground"
         >
           <MarkdownView content={step.message} isStreaming={isStreaming} />
         </div>

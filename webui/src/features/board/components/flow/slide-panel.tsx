@@ -16,7 +16,7 @@ import {
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ChevronRightIcon, DragGripIcon, PresentationIcon } from '@/components/icons'
+import { ChevronRight, Grip, Presentation } from 'lucide-react'
 import { useGraphStore } from '../../store/graph-store'
 import type { NoteNode } from '../../types/flow'
 import { useAddNoteNode } from '../../hooks/use-add-node'
@@ -113,7 +113,7 @@ export function SlidePanel({ onClose }: SlidePanelProps) {
             aria-label="Close slides panel"
             title="Close"
           >
-            <ChevronRightIcon className="size-4 text-muted-foreground" />
+            <ChevronRight className="size-4 text-muted-foreground" />
           </button>
           Slides
         </div>
@@ -122,7 +122,7 @@ export function SlidePanel({ onClose }: SlidePanelProps) {
             Add Slide
           </button>
           <button className={panelButtonClass} onClick={handlePresent}>
-            <PresentationIcon className="size-4 mr-1 inline-block" />
+            <Presentation className="size-4 mr-1 inline-block" />
             Present
           </button>
         </div>
@@ -176,7 +176,7 @@ function SortableSlideRow({ node }: SortableSlideRowProps) {
         className="p-1 rounded-md cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground transition"
         onClick={e => e.preventDefault()}
       >
-        <DragGripIcon className="size-4" />
+        <Grip className="size-4" />
       </button>
       <div className="text-sm">{getSlideName(node)}</div>
     </div>

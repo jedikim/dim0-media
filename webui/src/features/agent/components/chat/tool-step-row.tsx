@@ -1,11 +1,12 @@
 import { useMemo, useState, type ReactNode } from "react"
-import { ChevronDownIcon, CircleNotchIcon, ExternalLinkIcon, NoteIcon as ThoughtIcon } from "@/components/icons"
 import { Link, useSearch } from "@tanstack/react-router"
 import type { ToolCallStep } from "../../types/stream"
 import { ToolNameIcon } from "../../types/stream"
 import { extractStepDescription, getWebSearchUrls } from "../../utils/stream/build"
 import type { CodeInterpreterOutput, CreateNoteOutput, EditNoteOutput, WriteNoteOutput } from "../../types/tool-outputs"
 import type { ToolStepWidgetAttachment } from "./tool-step-widgets"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { IdeaIcon, Search01Icon, Tick01Icon } from "@hugeicons/core-free-icons"
 import { MiniLinkCard } from "../link-preview"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
@@ -15,6 +16,7 @@ import ImageSearchStrip from "@/features/widgets/components/image-card"
 import { ImageGenView } from "./image-gen-view"
 import { NoteWidgetPreview } from "./note-widget-preview"
 import { useChat } from "../../hooks/chat-context"
+import { ArrowUpRightIcon } from "lucide-react"
 import { BoardUrl } from "@/routes"
 
 
@@ -27,7 +29,7 @@ const ReasoningMessage = ({
   return (
     <div className='text-muted-foreground p-0 space-y-1 italic'>
       <div className='flex items-center gap-2 font-medium cursor-pointer text-xs'>
-        <ThoughtIcon className='size-4' strokeWidth={2} />
+        <HugeiconsIcon icon={IdeaIcon} className='size-4' strokeWidth={2} />
         <span>Thought</span>
       </div>
       <span className='text-sm'>{reasoning}</span>
@@ -56,7 +58,7 @@ const CodeInterpreterResult = ({
       {stdout !== "" && (
         <div className='w-full flex flex-col gap-1'>
           <span className='text-xs font-medium text-muted-foreground'>stdout</span>
-          <div className={cn(blockClass, "border-border bg-muted text-card-foreground")}>
+          <div className={cn(blockClass, "border-border bg-sidebar-accent/40 text-card-foreground")}>
             {stdout}
           </div>
         </div>
@@ -91,7 +93,7 @@ const NoteToolResult = ({
   const noteId = output.noteId
 
   return (
-    <div className='w-full rounded-lg border border-border bg-muted p-3'>
+    <div className='w-full rounded-lg border border-border bg-sidebar-accent/40 p-3'>
       <div className='flex items-center justify-between gap-2 text-xs font-medium text-muted-foreground'>
         <span>note</span>
         <Link
@@ -106,7 +108,7 @@ const NoteToolResult = ({
           title='Open on board'
           aria-label='Open on board'
         >
-          <ExternalLinkIcon className='size-3.5' />
+          <ArrowUpRightIcon className='size-3.5' />
         </Link>
       </div>
       <div className='mt-1 text-sm text-card-foreground whitespace-pre-line'>
@@ -167,56 +169,6 @@ const ToolStepWidgetView = ({
 
 
 /**
- * Renders tool call arguments as plain key/value rows (sienna key, foreground value).
- * Falls back to a single row with an implicit key when the raw input is a plain string.
- */
-const ToolArgsRows = ({
-  args,
-  stepName,
-}: {
-  args: unknown
-  stepName: string
-}) => {
-  const rows = useMemo<{ key: string; value: string }[]>(() => {
-    if (args === undefined || args === null) return []
-    if (typeof args === "string") {
-      const implicitKey =
-        stepName === "web_search" || stepName === "memory_search"
-          ? "query"
-          : stepName === "navigate"
-            ? "url"
-            : stepName === "code_interpreter"
-              ? "code"
-              : "input"
-      return args.trim() === "" ? [] : [{ key: implicitKey, value: args }]
-    }
-    if (typeof args === "object") {
-      return Object.entries(args as Record<string, unknown>)
-        .filter(([, v]) => v !== undefined && v !== null && v !== "")
-        .map(([k, v]) => ({
-          key: k,
-          value: typeof v === "string" ? v : JSON.stringify(v),
-        }))
-    }
-    return []
-  }, [args, stepName])
-
-  if (rows.length === 0) return null
-
-  return (
-    <div className='w-full flex flex-col gap-1 font-mono text-xs'>
-      {rows.map((row) => (
-        <div key={row.key} className='flex flex-row items-start gap-3 overflow-hidden'>
-          <span className='text-wiki-link shrink-0 min-w-20'>{row.key}</span>
-          <span className='truncate min-w-0 text-card-foreground' title={row.value}>{row.value}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-
-/**
  * Renders one tool step row with optional details and widget attachments.
  */
 export const ToolStepRow = ({
@@ -235,6 +187,7 @@ export const ToolStepRow = ({
     shouldThrow: false,
   }) ?? {}
   const [viewMore, setViewMore] = useState(false)
+  const [isInputCopied, setIsInputCopied] = useState(false)
 
   const { reasoning, message, title, input } = extractStepDescription(step)
   const codeInterpreterOutput = (
@@ -255,20 +208,25 @@ export const ToolStepRow = ({
     return getWebSearchUrls(step)
   }, [viewMore, isStreaming, step])
 
-  const handleCopy = async (text: string) => {
+  const handleInputCopy = async (text: string) => {
     await navigator.clipboard.writeText(text)
-    toast("Copied to clipboard")
+    setIsInputCopied(true)
+    toast("Input copied to clipboard!")
+    setTimeout(() => setIsInputCopied(false), 1500)
   }
 
   const isLoading = isStreaming && step.state === "started"
+  const messageClass = "transition-all w-full h-auto min-h-2 min-w-0 overflow-x-hidden overflow-y-auto scrollbar-thin py-2 rounded-xl"
   const spanMessageClass = "text-sm text-card-foreground whitespace-pre-line"
-  const StepIcon = ToolNameIcon[step.name]
-  const iconClass = "size-4"
-  const rawArgs = step.arguments?.input
-  const hasArgs = rawArgs !== undefined && rawArgs !== null && rawArgs !== ""
+  const stepIcon = ToolNameIcon[step.name]
+  const successIcon = stepIcon || Tick01Icon
+  const successDivClass = cn(
+    "absolute rounded-full bg-primary z-20 flex items-center justify-center top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2",
+    stepIcon ? "w-4 h-4 bg-transparent text-muted-foreground" : "w-3 h-3 bg-primary text-primary-foreground"
+  )
+  const iconClass = stepIcon ? "size-4" : "size-3"
   const canExpand = !isStreaming && (
     reasoning !== "" ||
-    hasArgs ||
     !!input ||
     !!codeInterpreterOutput ||
     !!noteToolOutput ||
@@ -282,68 +240,86 @@ export const ToolStepRow = ({
   }
 
   return (
-    <div className='w-full flex flex-col'>
-      <div className='w-full p-1'>
-        <div className='rounded-lg border border-sidebar-border overflow-hidden flex flex-col'>
-          <div className='bg-muted px-2 py-1 flex flex-row items-center gap-2'>
-            {isLoading ? (
-              <CircleNotchIcon className={cn(iconClass, 'shrink-0 text-muted-foreground animate-spin')} strokeWidth={2} />
-            ) : (
-              <StepIcon className={cn(iconClass, 'shrink-0 text-muted-foreground')} strokeWidth={2} />
-            )}
-            {message !== "" ? (
-              <div className='flex-1 min-w-0 flex flex-col'>
-                <h4 className={cn('text-sm font-medium font-mono leading-5 transition-colors', isLoading ? 'text-muted-foreground' : 'text-foreground')}>{title}</h4>
-                <span className={spanMessageClass}>{message}</span>
-              </div>
-            ) : (
-              <h4 className={cn('flex-1 min-w-0 truncate text-sm font-medium font-mono leading-5 transition-colors', isLoading ? 'text-muted-foreground' : 'text-foreground')}>{title}</h4>
-            )}
-            {canExpand && (
-              <button
-                className='flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors p-1 -mr-1'
-                onClick={() => setViewMore((v) => !v)}
-                aria-label={viewMore ? 'Collapse details' : 'Expand details'}
-                aria-expanded={viewMore}
-              >
-                <ChevronDownIcon
-                  className={cn('size-4 transition-transform', viewMore && 'rotate-180')}
-                  strokeWidth={2}
-                />
-              </button>
-            )}
-          </div>
-          {canExpand && viewMore && (
-            <div className='bg-sidebar px-3 py-3 flex flex-col gap-2 w-full min-w-0'>
-              {inlineDetail}
-              {step.name !== "code_interpreter" && (
-                <ToolArgsRows args={rawArgs} stepName={step.name} />
-              )}
-              {input && step.name === "code_interpreter" && (
-                <button
-                  className='w-full text-left rounded-md border border-sidebar-border bg-background/60 p-3 font-mono text-xs leading-5 whitespace-pre-wrap break-words hover:bg-background/80 transition-colors'
-                  onClick={() => void handleCopy(input)}
-                  title='Copy code'
-                >
-                  {input}
-                </button>
-              )}
-              {codeInterpreterOutput && (
-                <CodeInterpreterResult output={codeInterpreterOutput} />
-              )}
-              {noteToolOutput && (
-                <NoteToolResult output={noteToolOutput} chatId={chatId} rootId={rootId} />
-              )}
-              {sources.length > 0 && (
-                <div className='w-full flex flex-row flex-wrap items-start gap-1 mt-2'>
-                  {sources.map((source, index) => <MiniLinkCard key={index} annotation={source} />)}
-                </div>
-              )}
+    <div className='relative w-full p-2 flex flex-row items-start justify-start gap-2'>
+      <div className='absolute w-[1px] h-full top-0 left-[0.98rem] bg-border' />
+      <div className='relative flex-shrink-0'>
+        <div className='relative z-20 mt-2 -ml-1 rounded-full bg-background w-6 h-6'>
+          {isLoading && (
+            <div className='absolute animate-ping w-3 h-3 rounded-full bg-accent-foreground/75 z-20 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2' />
+          )}
+          {!isLoading && (
+            <div className={successDivClass}>
+              <HugeiconsIcon icon={successIcon} className={iconClass} strokeWidth={2} />
             </div>
+          )}
+          {isLoading && (
+            <div className='absolute w-2 h-2 rounded-full bg-accent-foreground z-20 top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2' />
           )}
         </div>
       </div>
-      <ToolStepWidgetView attachment={attachment} />
+      <div className='relative flex-1 min-w-0 flex flex-col items-start rounded-lg text-sm max-w-[94%]'>
+        <div className={messageClass}>
+          <div className='flex flex-col gap-2'>
+            <div>
+              <h4 className='text-sm font-normal text-muted-foreground block h-6 leading-6'>{title}</h4>
+              {canExpand && !viewMore && (
+                <button
+                  className='text-xs text-secondary font-sans hover:underline'
+                  onClick={() => setViewMore(true)}
+                >
+                  Show details
+                </button>
+              )}
+            </div>
+            {message !== "" && (
+              <span className={spanMessageClass}>
+                {message}
+              </span>
+            )}
+            {inlineDetail}
+            {canExpand && viewMore && input && step.name !== "code_interpreter" && (
+              <button
+                className='text-xs font-mono px-2 py-1 rounded-sm bg-sidebar-accent/50 border border-border inline-flex flex-row items-center justify-start gap-1 max-w-[260px] sm:max-w-[320px] w-auto mr-auto overflow-hidden cursor-copy hover:bg-sidebar-accent/70 transition-colors'
+                onClick={() => void handleInputCopy(input)}
+                title={input}
+              >
+                <HugeiconsIcon icon={Search01Icon} strokeWidth={2} className='size-3 shrink-0' />
+                <span className='truncate min-w-0 text-left'>{input}</span>
+                {isInputCopied && <span className='text-xs text-primary shrink-0'>copied</span>}
+              </button>
+            )}
+            {canExpand && viewMore && input && step.name === "code_interpreter" && (
+              <button
+                className='w-full text-left rounded-lg border border-border bg-sidebar-accent/40 p-3 font-mono text-xs leading-5 whitespace-pre-wrap break-words hover:bg-sidebar-accent/60 transition-colors'
+                onClick={() => void handleInputCopy(input)}
+                title='Copy code'
+              >
+                {input}
+              </button>
+            )}
+            {canExpand && viewMore && codeInterpreterOutput && (
+              <CodeInterpreterResult output={codeInterpreterOutput} />
+            )}
+            {canExpand && viewMore && noteToolOutput && (
+              <NoteToolResult output={noteToolOutput} chatId={chatId} rootId={rootId} />
+            )}
+            {canExpand && viewMore && sources.length > 0 && (
+              <div className='w-full flex flex-row flex-wrap items-start gap-1 mt-2'>
+                {sources.map((source, index) => <MiniLinkCard key={index} annotation={source} />)}
+              </div>
+            )}
+            {canExpand && viewMore && (
+              <button
+                className='text-xs text-secondary font-sans hover:underline ml-2'
+                onClick={() => setViewMore(false)}
+              >
+                Show less
+              </button>
+            )}
+            <ToolStepWidgetView attachment={attachment} />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

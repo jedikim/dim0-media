@@ -1,5 +1,5 @@
 import { Link, useSearch } from "@tanstack/react-router"
-import { ExternalLinkIcon, LoaderIcon, WarningIcon } from "@/components/icons"
+import { ArrowUpRightIcon, LoaderCircleIcon, TriangleAlertIcon } from "lucide-react"
 
 import { useGetNote } from "@/features/board/api/get-note"
 import { WidgetIframe } from "@/features/board/components/flow/widget-iframe"
@@ -38,7 +38,7 @@ export const NoteWidgetPreview = ({
       <div className='relative h-[260px] w-full overflow-hidden rounded-xl bg-muted/50'>
         <div className='skeleton-shimmer absolute inset-0' />
         <div className='relative z-10 flex h-full w-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground'>
-          <LoaderIcon className='size-5 animate-spin' />
+          <LoaderCircleIcon className='size-5 animate-spin' />
           <span>Generating widget preview</span>
         </div>
       </div>
@@ -48,7 +48,7 @@ export const NoteWidgetPreview = ({
   if (isLoading) {
     return (
       <div className='flex h-[260px] w-full items-center justify-center rounded-xl bg-muted/40 text-sm text-muted-foreground'>
-        <LoaderIcon className='mr-2 size-4 animate-spin' />
+        <LoaderCircleIcon className='mr-2 size-4 animate-spin' />
         Loading widget preview
       </div>
     )
@@ -57,7 +57,7 @@ export const NoteWidgetPreview = ({
   if (isError || !note || note.style.type !== "widget" || !note.content?.markdown?.trim()) {
     return (
       <div className='flex h-[260px] w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-border/60 bg-muted/30 px-4 text-center text-sm text-muted-foreground'>
-        <WarningIcon className='size-5' />
+        <TriangleAlertIcon className='size-5' />
         <span>Widget preview unavailable</span>
         <Link
           to='/boards/$id'
@@ -67,10 +67,10 @@ export const NoteWidgetPreview = ({
             current_chat_id: chatId || undefined,
             root_id: rootId || undefined,
           }}
-          className='inline-flex items-center gap-1 text-xs font-medium text-secondary-foreground hover:underline'
+          className='inline-flex items-center gap-1 text-xs font-medium text-secondary hover:underline'
         >
           Open on board
-          <ExternalLinkIcon className='size-3.5' />
+          <ArrowUpRightIcon className='size-3.5' />
         </Link>
       </div>
     )
@@ -82,7 +82,7 @@ export const NoteWidgetPreview = ({
         html={note.content.markdown}
         title={note.label?.markdown || "Widget preview"}
         autoHeight
-        maxHeight={1200}
+        maxHeight={800}
         minHeight={260}
         className='w-full border-0 bg-transparent rounded-sm'
       />

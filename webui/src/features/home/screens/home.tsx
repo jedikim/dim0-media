@@ -1,6 +1,7 @@
 import { Chat } from "@/features/agent/components/chat-view"
 import { Dashboard } from "@/features/board/components/dashboard"
-import { NoteIcon } from "@/components/icons"
+import { NoteIcon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 
 /**
  * HomePage displaying dashboard, chat, and subscriptions.
@@ -12,7 +13,7 @@ export const HomePage = () => {
         <Chat className="relative sm:h-[350px] h-[400px]" />
         <div className='text-left max-w-[900px] w-full border-b border-border'>
           <h3 className="transition-all text-lg font-medium py-1 px-4 flex flex-row items-center gap-2">
-            <NoteIcon className='w-5 h-5' strokeWidth={2} />
+            <HugeiconsIcon icon={NoteIcon} className='w-5 h-5' strokeWidth={2} />
             <span>Note Boards</span>
           </h3>
         </div>

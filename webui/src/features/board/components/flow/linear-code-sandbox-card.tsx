@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
-import { ConsoleIcon, DeleteIcon } from '@/components/icons'
+
+import { ComputerTerminal01Icon, Delete02Icon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useGraphStore } from '../../store/graph-store'
 import type { NoteNode } from '../../types/flow'
@@ -89,7 +91,7 @@ export const LinearCodeSandboxCard = memo(function LinearCodeSandboxCard({ node 
         aria-label='Delete sandbox'
         title='Delete'
       >
-        <DeleteIcon className='size-4' strokeWidth={2} />
+        <HugeiconsIcon icon={Delete02Icon} className='size-4' strokeWidth={2} />
       </button>
 
       <button
@@ -100,7 +102,7 @@ export const LinearCodeSandboxCard = memo(function LinearCodeSandboxCard({ node 
         className='w-full min-h-[100px] max-h-[225px] rounded-md border-2 border-transparent bg-transparent text-left transition-colors hover:bg-accent hover:border-border flex items-center justify-center p-3'
       >
         <div className='flex w-full max-w-[92px] aspect-square items-center justify-center rounded-2xl border border-border/70 bg-background text-muted-foreground shadow-sm'>
-          <ConsoleIcon className='size-12 shrink-0' strokeWidth={1.8} />
+          <HugeiconsIcon icon={ComputerTerminal01Icon} className='size-12 shrink-0' strokeWidth={1.8} />
         </div>
       </button>
 
@@ -123,7 +125,7 @@ export const LinearCodeSandboxCard = memo(function LinearCodeSandboxCard({ node 
             }}
             onMouseDown={event => event.stopPropagation()}
             onClick={event => event.stopPropagation()}
-            className='w-full bg-transparent text-center text-sm font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary-foreground focus:outline-none px-0 py-0.5'
+            className='w-full bg-transparent text-center text-sm font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary focus:outline-none px-0 py-0.5'
             placeholder='Untitled sandbox'
           />
         ) : (

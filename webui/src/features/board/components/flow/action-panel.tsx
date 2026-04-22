@@ -11,7 +11,6 @@ import { AiSparkDialog } from './utils/ai-spark-dialog'
 import { TopBar } from './top-bar'
 import { SlidePanel } from './slide-panel'
 import { CopilotSheet } from './copilot-sheet'
-import { FloatingAssistant } from './floating-assistant/floating-assistant'
 import { updateBoard } from '../../api/update-board'
 import { useAppStore } from '@/store'
 import { isDocumentUploadLimited } from '../../lib/board-limit'
@@ -175,13 +174,6 @@ export const ActionPanel = memo(function ActionPanel({
           <SlidePanel onClose={() => setOpenSlidesPanel(false)} />
         </SheetContent>
       </Sheet>
-      {!openChatDialog && !presentationMode && viewMode === 'graph' && boardId && (
-        <FloatingAssistant
-          boardId={boardId}
-          currentChatId={currentChatId}
-          onOpenFullSheet={() => setOpenChatDialog(true)}
-        />
-      )}
       <CopilotSheet
         open={openChatDialog}
         onOpenChange={setOpenChatDialog}

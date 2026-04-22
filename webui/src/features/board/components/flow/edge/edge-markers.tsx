@@ -6,16 +6,15 @@ import type { LinkEdge } from '../../../types/flow'
 import type { Link } from '../../../types/link'
 import type { ArrowheadType, LinkStyle } from '../../../types/style'
 import {
-  curvedTrianglePath,
-  filledCurvedTrianglePath,
-  curvedBarbPaths,
+  trianglePath,
+  barbPaths,
 } from './edge-geometry'
 
 export const BASE_HEAD_SIZE = 10
-export const HEAD_SCALE = 1.4
+export const HEAD_SCALE = 1.8
 export const TIP_FACTOR = 0.95
 export const BASE_X_FACTOR = 0.25
-export const BASE_THICKNESS_BOOST = 1.0
+export const BASE_THICKNESS_BOOST = 1.1
 
 type MarkerOrient = 'start' | 'end'
 
@@ -54,7 +53,7 @@ function renderMarker(
   const markerBoxSize = headSize + markerPadding * 2
   const viewBox = `${-markerPadding} ${-markerPadding} ${markerBoxSize} ${markerBoxSize}`
   const refX = kind === 'barb'
-    ? headSize * TIP_FACTOR
+    ? headSize * (BASE_X_FACTOR - 0.08)
     : headSize * BASE_X_FACTOR
   const refProps = {
     refX: `${refX}`,
@@ -75,7 +74,7 @@ function renderMarker(
   const markerId = getMarkerId(kind, stroke, strokeWidth, orient)
 
   if (kind === 'arrow-filled') {
-    const { d } = filledCurvedTrianglePath(headSize * 0.95, TIP_FACTOR, BASE_X_FACTOR)
+    const { d } = trianglePath(headSize * 0.95, TIP_FACTOR, BASE_X_FACTOR)
     return (
       <marker id={markerId} viewBox={viewBox} {...refProps}>
         <path
@@ -91,17 +90,15 @@ function renderMarker(
   }
 
   if (kind === 'arrow') {
-    const { d, baseX } = curvedTrianglePath(headSize, TIP_FACTOR, BASE_X_FACTOR)
+    const { d, baseX } = trianglePath(headSize, TIP_FACTOR, BASE_X_FACTOR)
     const topY = headSize * 0.1
     const bottomY = headSize * 0.9
-    const midY = headSize / 2
-    const baseCtrlX = baseX + headSize * 0.1
     return (
       <marker id={markerId} viewBox={viewBox} {...refProps}>
         <g {...commonGroupProps}>
           <path d={d} strokeWidth={headStrokeWidth} fill='none' />
           <path
-            d={`M ${baseX} ${bottomY} Q ${baseCtrlX} ${midY} ${baseX} ${topY}`}
+            d={`M ${baseX} ${bottomY} L ${baseX} ${topY}`}
             strokeWidth={headStrokeWidth * BASE_THICKNESS_BOOST}
           />
         </g>
@@ -109,7 +106,7 @@ function renderMarker(
     )
   }
 
-  const { p1, p2 } = curvedBarbPaths(headSize, TIP_FACTOR, BASE_X_FACTOR)
+  const { p1, p2 } = barbPaths(headSize, TIP_FACTOR, BASE_X_FACTOR)
   return (
     <marker id={markerId} viewBox={viewBox} {...refProps}>
       <g {...commonGroupProps} strokeWidth={headStrokeWidth}>

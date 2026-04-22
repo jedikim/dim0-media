@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { NodeResizeControl, type ControlPosition, type NodeProps } from "@xyflow/react"
-import { PdfIcon } from "@/components/icons"
+import { Pdf02Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import type { NoteNode } from "../../types/flow"
 import type { DocumentProperties } from "../../types/document"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -90,14 +91,15 @@ export const DocumentNode = memo(function DocumentNode({ id, data, selected }: N
   const className = cn(
     "w-full h-full p-3 text-card-foreground border-2 border-dashed flex flex-col items-center text-center",
     rounded,
-    selected ? "border-secondary-foreground" : "border-transparent",
+    selected ? "border-secondary" : "border-transparent",
   )
 
   const content = (
     <div className="relative w-full h-full">
       <div className={className}>
         <div className="flex h-full w-full items-center justify-center">
-          <PdfIcon
+          <HugeiconsIcon
+            icon={Pdf02Icon}
             className="h-full w-full"
             strokeWidth={1.8}
             color={displayTextColor}
@@ -126,7 +128,7 @@ export const DocumentNode = memo(function DocumentNode({ id, data, selected }: N
             }}
             onMouseDown={event => event.stopPropagation()}
             onClick={event => event.stopPropagation()}
-            className={`w-full bg-transparent border-0 border-b border-foreground/30 focus:border-secondary-foreground focus:outline-none px-0 py-0.5 ${textAlignClass} ${fontClass} ${sizeClass} ${textStyleClass}`}
+            className={`w-full bg-transparent border-0 border-b border-foreground/30 focus:border-secondary focus:outline-none px-0 py-0.5 ${textAlignClass} ${fontClass} ${sizeClass} ${textStyleClass}`}
             style={{ color: displayTextColor }}
             placeholder='Untitled document'
           />
@@ -161,7 +163,7 @@ export const DocumentNode = memo(function DocumentNode({ id, data, selected }: N
           keepAspectRatio
         >
           <div
-            className={`absolute w-3 h-3 bg-secondary-foreground rounded-full ${className} z-20`}
+            className={`absolute w-3 h-3 bg-secondary rounded-full ${className} z-20`}
             style={{ transform: getHandleTransform(pos) }}
           />
         </NodeResizeControl>

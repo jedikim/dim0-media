@@ -1,7 +1,8 @@
 import * as React from "react"
-import { ViewIcon, ViewOffIcon } from "@/components/icons"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { ViewIcon, ViewOffSlashIcon } from "@hugeicons/core-free-icons"
 
 type Props = React.ComponentProps<typeof Input>
 
@@ -24,9 +25,17 @@ export function PasswordInput(props: Props) {
         tabIndex={-1}
       >
         {show ? (
-          <ViewOffIcon className="h-4 w-4" strokeWidth={2} />
+          <HugeiconsIcon
+            icon={ViewOffSlashIcon}
+            className="h-4 w-4"
+            strokeWidth={2}
+          />
         ) : (
-          <ViewIcon className="h-4 w-4" strokeWidth={2} />
+          <HugeiconsIcon
+            icon={ViewIcon}
+            className="h-4 w-4"
+            strokeWidth={2}
+          />
         )}
       </Button>
     </div>

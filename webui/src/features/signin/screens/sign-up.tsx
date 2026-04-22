@@ -10,7 +10,10 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-import { Loader2Icon, LockIcon, MailIcon, UserProfileIcon, UserSquareIcon } from "@/components/icons"
+
+import { HugeiconsIcon } from "@hugeicons/react"
+import { Mail01Icon, UserIcon, UserSquareIcon, LockIcon } from "@hugeicons/core-free-icons"
+import { Loader2 } from "lucide-react"
 import { PasswordInput } from "../components/password-input"
 import { PasswordStrengthMeter } from "../components/password-strength-meter"
 import { getPasswordStrength } from "../lib/password-strength"
@@ -84,7 +87,11 @@ export function SignupPage() {
                   autoComplete="name"
                   className="pl-9"
                 />
-                <UserProfileIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" strokeWidth={2} />
+                <HugeiconsIcon
+                  icon={UserIcon}
+                  className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"
+                  strokeWidth={2}
+                />
               </div>
             </div>
 
@@ -100,7 +107,11 @@ export function SignupPage() {
                   autoComplete="username"
                   className="pl-9"
                 />
-                <UserSquareIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" strokeWidth={2} />
+                <HugeiconsIcon
+                  icon={UserSquareIcon}
+                  className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"
+                  strokeWidth={2}
+                />
               </div>
             </div>
 
@@ -117,7 +128,11 @@ export function SignupPage() {
                   autoComplete="email"
                   className="pl-9"
                 />
-                <MailIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" strokeWidth={2} />
+                <HugeiconsIcon
+                  icon={Mail01Icon}
+                  className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"
+                  strokeWidth={2}
+                />
               </div>
             </div>
 
@@ -133,7 +148,11 @@ export function SignupPage() {
                   autoComplete="new-password"
                   className="pl-9 pr-9"
                 />
-                <LockIcon className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" strokeWidth={2} />
+                <HugeiconsIcon
+                  icon={LockIcon}
+                  className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"
+                  strokeWidth={2}
+                />
               </div>
               <PasswordStrengthMeter password={password} />
             </div>
@@ -151,7 +170,7 @@ export function SignupPage() {
             <Button type="submit" className="w-full" disabled={mut.isPending || !canSubmit}>
               {mut.isPending ? (
                 <span className="inline-flex items-center gap-2">
-                  <Loader2Icon className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   Creating…
                 </span>
               ) : (

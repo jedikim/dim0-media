@@ -49,8 +49,8 @@ async def test_build_note_uses_frontend_aligned_defaults() -> None:
 
     assert note.graph_uid == "graph-1"
     assert note.style.type == NodeType.SHEET
-    assert note.properties.node_size.size.width == 320
-    assert note.properties.node_size.size.height == 200
+    assert note.properties.node_size.size.width == 368
+    assert note.properties.node_size.size.height == 360
     assert note.properties.node_position.position.x == 0
     assert note.properties.node_position.position.y == 0
 
@@ -128,8 +128,8 @@ async def test_write_note_tool_creates_note_in_root_scope_by_default() -> None:
 
 
 @pytest.mark.asyncio
-async def test_write_note_tool_rewrites_existing_note_and_seeds_size_when_too_small() -> None:
-    """Converting a too-small note to sheet seeds the default sheet size for readability."""
+async def test_write_note_tool_rewrites_existing_note() -> None:
+    """Write note should fully rewrite the authored fields of an existing note."""
     graph_store = DummyGraphStore()
     existing_note = Note(
         id="note-1",
@@ -137,7 +137,6 @@ async def test_write_note_tool_rewrites_existing_note_and_seeds_size_when_too_sm
         label=RichText(markdown="Before"),
         content=RichText(markdown="Old"),
     )
-    # Default node_size is 300x100; height is below the sheet min so it should be upgraded.
     updated_note = existing_note.model_copy(deep=True)
     updated_note.label = RichText(markdown="After")
     updated_note.content = RichText(markdown="New")
@@ -174,52 +173,11 @@ async def test_write_note_tool_rewrites_existing_note_and_seeds_size_when_too_sm
                     "id": ANY,
                     "type": "size",
                     "size": {
-                        "width": 320.0,
-                        "height": 200.0,
+                        "width": 368.0,
+                        "height": 360.0,
                     },
                 },
             },
-        },
-    )
-
-
-@pytest.mark.asyncio
-async def test_write_note_tool_preserves_size_when_existing_already_sheet_sized() -> None:
-    """Converting to sheet must not overwrite an existing size that already meets the sheet min."""
-    graph_store = DummyGraphStore()
-    existing_note = Note(
-        id="note-1",
-        graph_uid="graph-1",
-        label=RichText(markdown="Before"),
-        content=RichText(markdown="Old"),
-    )
-    existing_note.properties.node_size.size.width = 480
-    existing_note.properties.node_size.size.height = 320
-
-    updated_note = existing_note.model_copy(deep=True)
-    updated_note.style.type = NodeType.SHEET
-
-    graph_store.get_nodes.return_value = [existing_note]
-    graph_store.patch_note.return_value = updated_note
-
-    tool = create_write_note_tool(graph_store, "graph-1")
-    await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
-        json.dumps(
-            {
-                "note_id": "note-1",
-                "content": "New",
-                "note_type": "sheet",
-            }
-        ),
-    )
-
-    graph_store.patch_note.assert_awaited_once_with(
-        "note-1",
-        {
-            "label": None,
-            "content": {"markdown": "New"},
-            "style": {"type": NodeType.SHEET},
         },
     )
 

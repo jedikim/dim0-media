@@ -1,9 +1,10 @@
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { LockIcon, SearchEngineIcon } from "@/components/icons"
 import { useChatStore } from "@/features/agent/store/chat-store"
 import { WebSearchEngineDescription, WebSearchEngineIcons, WebSearchEngineName, type WebSearchEngine } from "@/features/agent/types/web"
+import { InternetIcon, SquareLock01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { clsx } from "clsx"
 import { useShallow } from "zustand/shallow"
 
@@ -21,7 +22,7 @@ const SearchEngineCard: React.FC<{ searchEngine: WebSearchEngine | "-1", availab
   )
 
   const contentClass = clsx(
-    "w-48 rounded-lg border border-border bg-popover shadow text-sm",
+    "w-48 rounded-xl border border-border bg-popover shadow text-sm",
   )
 
   const Icon = searchEngine !== "-1" ? WebSearchEngineIcons[searchEngine] : null
@@ -73,7 +74,7 @@ export const SearchEngineChoiceMenu = () => {
 
   const iconClass = clsx(
     "size-4 shrink-0 my-icon",
-    enabledTools.includes("web_search") ? '!text-secondary-foreground' : ''
+    enabledTools.includes("web_search") ? '!text-secondary' : ''
   )
 
   const defaultValue = enabledTools.includes("web_search") ? webSearchEngine : "-1"
@@ -87,7 +88,7 @@ export const SearchEngineChoiceMenu = () => {
         <div className="w-full">
           <TooltipTrigger asChild>
             <SelectTrigger className="w-full rounded-md text-xs px-2 py-1.5 shadow-none hover:bg-accent [&>svg:not(.my-icon)]:hidden border border-transparent hover:border-border transition-colors justify-start gap-2" size="sm">
-              <SearchEngineIcon className={iconClass} strokeWidth={2} />
+              <HugeiconsIcon icon={InternetIcon} className={iconClass} strokeWidth={2} />
               <span className="text-xs">{triggerLabel}</span>
             </SelectTrigger>
           </TooltipTrigger>
@@ -110,7 +111,7 @@ export const SearchEngineChoiceMenu = () => {
                   <SearchEngineCard searchEngine={engine.name as WebSearchEngine} available={engine.available} />
                   {
                     !engine.available && (
-                      <LockIcon className='size-4 absolute right-2 top-1/2 -translate-y-1/2' strokeWidth={2} />
+                      <HugeiconsIcon icon={SquareLock01Icon} className='size-4 absolute right-2 top-1/2 -translate-y-1/2' strokeWidth={2} />
                     )
                   }
                 </SelectItem>

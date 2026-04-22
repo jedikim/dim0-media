@@ -1,6 +1,7 @@
-import { HomeIcon } from "@/components/icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { SidebarMenuButton, SidebarMenuItem } from "../ui/sidebar"
 import { useNavigate } from "@tanstack/react-router"
+import { Home12Icon } from "@hugeicons/core-free-icons"
 
 export const HomeMenuItem = () => {
   const navigate = useNavigate()
@@ -11,8 +12,8 @@ export const HomeMenuItem = () => {
 
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton className="text-xs text-secondary-foreground font-medium transition-all" onClick={handleClick}>
-        <HomeIcon className="text-xs shrink-0 text-sidebar-icon-3" strokeWidth={2} />
+      <SidebarMenuButton className="text-xs text-secondary font-medium transition-all" onClick={handleClick}>
+        <HugeiconsIcon icon={Home12Icon} className="text-xs shrink-0 text-sidebar-icon-3" strokeWidth={2} />
         <span>Home</span>
       </SidebarMenuButton>
     </SidebarMenuItem>

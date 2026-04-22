@@ -11,16 +11,8 @@ import { useCreateBoard } from "@/features/board/api/create-board"
 import { useListBoards } from "@/features/board/api/list-boards"
 import { UNTITLED_LABEL } from "@/features/board/const"
 import { useGraphStore } from "@/features/board/store/graph-store"
-import {
-  CancelStatusIcon,
-  CheckCircleStatusIcon,
-  CircleNotchIcon,
-  NotebookIcon,
-  SchemaMapIcon,
-  TreeMapIcon,
-  type AppIconComponent,
-} from "@/components/icons"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { CancelIcon, ChartBubbleIcon, CheckmarkCircle03Icon, GitForkIcon, NotebookIcon, ReloadIcon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { useNavigate } from "@tanstack/react-router"
 import clsx from "clsx"
 import { useState } from "react"
@@ -29,26 +21,23 @@ import { useAppStore } from "@/store"
 
 
 // Spinner icon for loading state
-const LoadingIcon = () => (
-  <CircleNotchIcon
-    className="size-4 animate-spin [animation-duration:750ms]"
-    strokeWidth={2}
-  />
-)
+const LoadingIcon = () => <HugeiconsIcon
+  icon={ReloadIcon}
+  className="size-4 animate-spin [animation-duration:750ms]"
+  strokeWidth={2}
+/>
 
-const SuccessIcon = () => (
-  <CheckCircleStatusIcon
-    className="text-foreground size-4"
-    strokeWidth={2}
-  />
-)
+const SuccessIcon = () => <HugeiconsIcon
+  icon={CheckmarkCircle03Icon}
+  className="text-foreground size-4"
+  strokeWidth={2}
+/>
 
-const ErrorIcon = () => (
-  <CancelStatusIcon
-    className="text-destructive size-4"
-    strokeWidth={2}
-  />
-)
+const ErrorIcon = () => <HugeiconsIcon
+  icon={CancelIcon}
+  className="text-destructive size-4"
+  strokeWidth={2}
+/>
 
 
 export interface SaveAsNoteProps {
@@ -57,7 +46,6 @@ export interface SaveAsNoteProps {
   saveAsIs?: boolean
   boardId?: string
   useAnchors?: boolean
-  compact?: boolean
 }
 
 
@@ -68,7 +56,6 @@ export const SaveAsNote = ({
   saveAsIs = false,
   boardId,
   useAnchors = false,
-  compact = false,
 }: SaveAsNoteProps) => {
   const [processing, setProcessing] = useState<boolean>(false)
   const userId = useAppStore(s => s.userId)
@@ -215,11 +202,7 @@ export const SaveAsNote = ({
   }
 
   const label = type === "notify" ? "Notify" : type === "mapify" ? "Mapify" : "Schemify"
-  const Icon: AppIconComponent = type === "notify"
-    ? NotebookIcon
-    : type === "mapify"
-      ? TreeMapIcon
-      : SchemaMapIcon
+  const icon = type === "notify" ? NotebookIcon : type === "mapify" ? GitForkIcon : ChartBubbleIcon
   const actionLabel = type === "notify"
     ? "Convert current answer to a sticky note"
     : type === "mapify"
@@ -227,57 +210,28 @@ export const SaveAsNote = ({
     : "Convert current answer to a schema"
 
   const buttonClass = clsx(
-    "transition-all text-muted-foreground hover:text-foreground flex flex-row items-center rounded-md",
-    compact ? "justify-center size-8" : "text-xs gap-2 p-1",
+    "transition-all text-xs text-muted-foreground hover:text-foreground flex flex-row items-center gap-2 p-1 rounded-md",
     processing && "opacity-75 pointer-events-none"
   )
 
   const iconCpn = processing ?
     <LoadingIcon /> :
-    <Icon className="size-4" strokeWidth={2} />
-
-  const dropdownTrigger = (
-    <DropdownMenuTrigger asChild>
-      <button
-        className={buttonClass}
-        aria-label={actionLabel}
-        title={actionLabel}
-      >
-        {iconCpn}
-        {!compact && <span>{label}</span>}
-      </button>
-    </DropdownMenuTrigger>
-  )
-
-  const contextTrigger = (
-    <ContextMenuTrigger asChild>
-      <button
-        className={buttonClass}
-        onClick={() => boardId && launchGeneration(boardId)}
-        aria-label={actionLabel}
-        title={actionLabel}
-      >
-        {iconCpn}
-        {!compact && <span>{label}</span>}
-      </button>
-    </ContextMenuTrigger>
-  )
-
-  const withTooltip = (trigger: React.ReactNode) =>
-    compact ? (
-      <Tooltip>
-        <TooltipTrigger asChild>{trigger}</TooltipTrigger>
-        <TooltipContent side='left'>{label}</TooltipContent>
-      </Tooltip>
-    ) : (
-      trigger
-    )
+    <HugeiconsIcon icon={icon} className="size-4" strokeWidth={2} />
 
   return (
     <>
       {!boardId ? (
         <DropdownMenu>
-          {withTooltip(dropdownTrigger)}
+          <DropdownMenuTrigger asChild>
+            <button
+              className={buttonClass}
+              aria-label={actionLabel}
+              title={actionLabel}
+            >
+              {iconCpn}
+              <span>{label}</span>
+            </button>
+          </DropdownMenuTrigger>
           <DropdownMenuContent className="w-48">
             <DropdownMenuLabel>Boards</DropdownMenuLabel>
             <DropdownMenuSeparator />
@@ -293,7 +247,17 @@ export const SaveAsNote = ({
         </DropdownMenu>
       ) : (
         <ContextMenu>
-          {withTooltip(contextTrigger)}
+          <ContextMenuTrigger asChild>
+            <button
+              className={buttonClass}
+              onClick={() => launchGeneration(boardId)}
+              aria-label={actionLabel}
+              title={actionLabel}
+            >
+              {iconCpn}
+              <span>{label}</span>
+            </button>
+          </ContextMenuTrigger>
           <ContextMenuContent className="w-48">
             <ContextMenuLabel>Select a different board</ContextMenuLabel>
             <ContextMenuSeparator />

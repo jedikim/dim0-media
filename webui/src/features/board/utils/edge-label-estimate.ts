@@ -78,7 +78,7 @@ export function estimateEdgeLabelSize({
   }
 
   const estimatedTextWidth = Math.min(maxWidth, longestLineChars * charWidth)
-  const width = Math.ceil(Math.max(60, estimatedTextWidth + H_PADDING))
+  const width = Math.ceil(Math.max(96, estimatedTextWidth + H_PADDING))
   const height = Math.ceil(Math.max(lineHeight + V_PADDING, wrappedLineCount * lineHeight + V_PADDING))
 
   return { width, height }

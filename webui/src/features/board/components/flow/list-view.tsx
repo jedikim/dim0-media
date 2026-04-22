@@ -1,14 +1,14 @@
 import { memo, useMemo } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import {
-  ConsoleIcon,
-  DeleteIcon,
-  FolderIcon,
-  LearnWidgetIcon,
-  NotepadIcon,
-  PdfIcon,
-  type AppIconComponent,
-} from '@/components/icons'
+  Analytics02Icon,
+  ComputerTerminal01Icon,
+  Delete02Icon,
+  Folder01Icon,
+  Note02Icon,
+  Pdf02Icon,
+} from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
 
 import { useGraphStore } from '../../store/graph-store'
 import type { NoteNode } from '../../types/flow'
@@ -16,7 +16,7 @@ import { formatDistanceToNow } from '../../utils/date'
 
 
 type ListRowMeta = {
-  icon: AppIconComponent
+  icon: typeof Note02Icon
   label: string
   onOpen?: () => void
 }
@@ -63,7 +63,7 @@ function useListRowMeta(node: NoteNode): ListRowMeta {
 
   if (node.data?.style?.type === 'folder') {
     return {
-      icon: FolderIcon,
+      icon: Folder01Icon,
       label: node.data.label?.markdown?.trim() || 'Untitled folder',
       onOpen: boardId
         ? () => {
@@ -79,14 +79,14 @@ function useListRowMeta(node: NoteNode): ListRowMeta {
 
   if (node.data?.type === 'document') {
     return {
-      icon: PdfIcon,
+      icon: Pdf02Icon,
       label: node.data.label?.markdown?.trim() || 'Untitled document',
     }
   }
 
   if (node.data?.style?.type === 'widget') {
     return {
-      icon: LearnWidgetIcon,
+      icon: Analytics02Icon,
       label: node.data.label?.markdown?.trim() || 'Untitled widget',
       onOpen: boardCanEdit ? () => openNodeSurface(node.id, 'widget') : undefined,
     }
@@ -94,14 +94,14 @@ function useListRowMeta(node: NoteNode): ListRowMeta {
 
   if (node.data?.style?.type === 'code-sandbox') {
     return {
-      icon: ConsoleIcon,
+      icon: ComputerTerminal01Icon,
       label: node.data.label?.markdown?.trim() || 'Untitled sandbox',
       onOpen: boardCanEdit ? () => openNodeSurface(node.id, 'code-sandbox') : undefined,
     }
   }
 
   return {
-    icon: NotepadIcon,
+    icon: Note02Icon,
     label: node.data.label?.markdown?.trim() || 'Untitled note',
     onOpen: boardCanEdit ? () => openNodeSurface(node.id, 'sheet') : undefined,
   }
@@ -120,7 +120,6 @@ type ListRowProps = {
  */
 const ListRow = memo(function ListRow({ node, index, isLast }: ListRowProps) {
   const { icon, label, onOpen } = useListRowMeta(node)
-  const Icon = icon
   const setNodesPersist = useGraphStore(state => state.setNodesPersist)
   const setEdgesPersist = useGraphStore(state => state.setEdgesPersist)
   const boardCanEdit = useGraphStore(state => state.boardCanEdit)
@@ -135,11 +134,11 @@ const ListRow = memo(function ListRow({ node, index, isLast }: ListRowProps) {
         {!isLast ? (
           <div className='absolute left-5 top-1/2 bottom-0 w-px bg-border/80 transition-colors group-hover:bg-foreground/45' />
         ) : null}
-        <div className='absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 rounded-bl-md border-b border-l border-border/80 transition-colors group-hover:border-foreground/45' />
+        <div className='absolute left-5 top-1/2 h-4 w-4 -translate-y-1/2 rounded-bl-2xl border-b border-l border-border/80 transition-colors group-hover:border-foreground/45' />
       </div>
 
       <div
-        className='select-none flex min-h-11 items-center gap-3 rounded-md border border-transparent px-3 py-2 transition-colors group-hover:border-border/70 group-hover:bg-accent/30'
+        className='select-none flex min-h-11 items-center gap-3 rounded-lg border border-transparent px-3 py-2 transition-colors group-hover:border-border/70 group-hover:bg-accent/30'
         onMouseDown={event => {
           if (event.detail > 1) {
             event.preventDefault()
@@ -148,7 +147,7 @@ const ListRow = memo(function ListRow({ node, index, isLast }: ListRowProps) {
         onDoubleClick={() => onOpen?.()}
         title={onOpen ? `Double-click to open ${label}` : label}
       >
-        <Icon className='size-5 shrink-0 text-muted-foreground' strokeWidth={1.9} />
+        <HugeiconsIcon icon={icon} className='size-5 shrink-0 text-muted-foreground' strokeWidth={1.9} />
         <span className='min-w-0 flex-1 truncate text-sm font-medium text-foreground'>
           {label}
         </span>
@@ -172,7 +171,7 @@ const ListRow = memo(function ListRow({ node, index, isLast }: ListRowProps) {
             aria-label={`Delete ${label}`}
             title='Delete'
           >
-            <DeleteIcon className='size-4' strokeWidth={2} />
+            <HugeiconsIcon icon={Delete02Icon} className='size-4' strokeWidth={2} />
           </button>
         ) : null}
       </div>

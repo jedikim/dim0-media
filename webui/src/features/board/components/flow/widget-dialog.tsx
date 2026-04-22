@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 
-import { CancelPlainIcon, DownloadIcon, LayoutIcon } from "@/components/icons"
+import { Cancel01Icon, Download04Icon, Layout01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
+
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -141,7 +143,7 @@ export const WidgetDialog = memo(function WidgetDialog({
         <DialogTitle className="sr-only">Widget</DialogTitle>
         <div className="flex items-center justify-between border-b border-border/70 px-4 py-3">
           <div className="flex min-w-0 flex-1 items-center gap-2 pr-2">
-            <LayoutIcon className="size-4 shrink-0" />
+            <HugeiconsIcon icon={Layout01Icon} className="size-4 shrink-0" strokeWidth={2} />
             <div className="min-w-0 flex-1">
               {titleEditing ? (
                 <input
@@ -159,7 +161,7 @@ export const WidgetDialog = memo(function WidgetDialog({
                       stopTitleEdit(false)
                     }
                   }}
-                  className="w-full bg-transparent text-sm font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary-foreground focus:outline-none px-0 py-0.5"
+                  className="w-full bg-transparent text-sm font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary focus:outline-none px-0 py-0.5"
                   placeholder="Untitled widget"
                 />
               ) : (
@@ -183,10 +185,10 @@ export const WidgetDialog = memo(function WidgetDialog({
               aria-label="Download HTML"
               disabled={!html}
             >
-              <DownloadIcon className="size-4" />
+              <HugeiconsIcon icon={Download04Icon} className="size-4" strokeWidth={2} />
             </Button>
             <Button variant="ghost" size="icon-sm" onClick={() => handleOpenChange(false)} title="Close" aria-label="Close">
-              <CancelPlainIcon className="size-4" />
+              <HugeiconsIcon icon={Cancel01Icon} className="size-4" strokeWidth={2} />
             </Button>
           </div>
         </div>

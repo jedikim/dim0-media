@@ -6,10 +6,7 @@ import { CustomTable } from "./custom-table"
 import { Pre } from "./custom-pre"
 import { MarkdownLink } from "./markdown-link"
 import { Streamdown } from "streamdown"
-import { createCodePlugin } from "./streamdown-code-plugin"
-
-
-const code = createCodePlugin(["rose-pine-dawn", "rose-pine-moon"])
+import { code } from "@streamdown/code"
 
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
@@ -45,19 +42,19 @@ const CustomLink = MarkdownLink
  *  Typed wrappers for common elements
  *  ------------------------------------------------------*/
 function H1(props: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h1 className="mt-7 scroll-m-20 pb-2 text-2xl font-medium tracking-tight first:mt-0" {...props} />
+  return <h1 className="mt-7 scroll-m-20 pb-2 text-2xl font-heading font-medium tracking-tight first:mt-0" {...props} />
 }
 
 function H2(props: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h2 className="mt-6 scroll-m-20 text-xl font-medium tracking-tight" {...props} />
+  return <h2 className="mt-6 scroll-m-20 text-xl font-heading font-medium tracking-tight" {...props} />
 }
 
 function H3(props: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className="mt-5 scroll-m-20 text-lg font-medium tracking-tight" {...props} />
+  return <h3 className="mt-5 scroll-m-20 text-lg font-heading font-medium tracking-tight" {...props} />
 }
 
 function H4(props: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h4 className="mt-4 scroll-m-20 text-base font-medium tracking-tight" {...props} />
+  return <h4 className="mt-4 scroll-m-20 text-base font-heading font-medium tracking-tight" {...props} />
 }
 
 function P(props: React.HTMLAttributes<HTMLParagraphElement>) {

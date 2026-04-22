@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react"
+import { AlertTriangle } from "lucide-react"
+import { HugeiconsIcon } from "@hugeicons/react"
+import type { IconSvgElement } from "@hugeicons/react"
 import {
-  AwardIcon,
+  Award04Icon,
   ChatTranslateIcon,
-  DocumentIcon,
-  IdeaIcon,
-  NoteIcon,
-  SparklesFeatureIcon,
-  WarningIcon,
-  type AppIconComponent,
-} from "@/components/icons"
+  Crown03Icon,
+  DocumentAttachmentIcon,
+  Idea01Icon,
+  PaintBoardIcon,
+  SparklesIcon,
+} from "@hugeicons/core-free-icons"
 
 import { refresh } from "@/api"
 import { Badge } from "@/components/ui/badge"
@@ -30,17 +32,15 @@ import { useAppStore } from "@/store"
 
 
 type FeatureRowProps = {
-  icon: AppIconComponent
+  icon: IconSvgElement
   label: string
 }
 
 
 function FeatureRow({ icon, label }: FeatureRowProps) {
-  const Icon = icon
-
   return (
     <div className="flex items-center gap-2">
-      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+      <HugeiconsIcon icon={icon} className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={2} />
       <span>{label}</span>
     </div>
   )
@@ -204,7 +204,7 @@ export function BillingScreen() {
             <CardContent className="pt-0">
               <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                 <div className="flex items-center gap-2">
-                  <WarningIcon className="h-4 w-4 shrink-0" />
+                  <AlertTriangle className="h-4 w-4 shrink-0" />
                   <span className="font-medium">
                     Access remains active until {formattedPeriodEnd ?? "the end of this period"}.
                   </span>
@@ -237,21 +237,21 @@ export function BillingScreen() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <p className="text-3xl font-semibold text-foreground">Free</p>
-              <FeatureRow icon={IdeaIcon} label="40 AI requests / day" />
-              <FeatureRow icon={NoteIcon} label="1 board maximum" />
-              <FeatureRow icon={DocumentIcon} label="1 document upload / board" />
+              <FeatureRow icon={Idea01Icon} label="40 AI requests / day" />
+              <FeatureRow icon={PaintBoardIcon} label="1 board maximum" />
+              <FeatureRow icon={DocumentAttachmentIcon} label="1 document upload / board" />
               <FeatureRow icon={ChatTranslateIcon} label="Basic AI actions" />
-              <FeatureRow icon={AwardIcon} label="Community support" />
+              <FeatureRow icon={Award04Icon} label="Community support" />
               <p className="pt-2 text-xs leading-relaxed text-muted-foreground/80">
                 Free is currently limited while we run on a small budget. We plan to make the free plan more usable over time.
               </p>
             </CardContent>
           </Card>
 
-          <Card className="relative border-secondary-foreground/60 bg-gradient-to-br from-secondary-foreground/20 via-secondary-foreground/10 to-card">
+          <Card className="relative border-secondary/60 bg-gradient-to-br from-secondary/20 via-secondary/10 to-card">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <AwardIcon className="h-6 w-6 text-secondary-foreground" strokeWidth={2} />
+                <HugeiconsIcon icon={Crown03Icon} className="h-6 w-6 text-secondary" strokeWidth={2} />
                 <CardTitle className="text-4xl font-informal">Plus</CardTitle>
                 {userPlan === "plus" ? (
                   <Badge variant="outline" className="w-fit bg-background/40 font-mono font-medium uppercase tracking-wide">
@@ -267,11 +267,11 @@ export function BillingScreen() {
                 <span className="text-sm text-muted-foreground">/ {plusIntervalLabel}</span>
               </div>
               <div className="space-y-2.5 text-sm text-muted-foreground">
-                <FeatureRow icon={IdeaIcon} label="Unlimited AI requests" />
-                <FeatureRow icon={NoteIcon} label="Unlimited boards" />
-                <FeatureRow icon={DocumentIcon} label="Unlimited document uploads" />
-                <FeatureRow icon={SparklesFeatureIcon} label="Advanced AI actions" />
-                <FeatureRow icon={AwardIcon} label="Priority support" />
+                <FeatureRow icon={Idea01Icon} label="Unlimited AI requests" />
+                <FeatureRow icon={PaintBoardIcon} label="Unlimited boards" />
+                <FeatureRow icon={DocumentAttachmentIcon} label="Unlimited document uploads" />
+                <FeatureRow icon={SparklesIcon} label="Advanced AI actions" />
+                <FeatureRow icon={Award04Icon} label="Priority support" />
               </div>
 
               {userPlan === "plus" ? (

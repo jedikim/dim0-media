@@ -1,7 +1,9 @@
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Chat } from '@/features/agent/components/chat-view'
-import { ArrowExpandIcon, ExternalLinkIcon, SparklesIcon } from '@/components/icons'
+import { LinkSquare01Icon } from '@hugeicons/core-free-icons'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { BotMessageSquare, ChevronRight } from 'lucide-react'
 
 interface CopilotSheetProps {
   open: boolean
@@ -38,9 +40,7 @@ export function CopilotSheet({
         </SheetHeader>
         <div className="px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm font-medium">
-            <div className="flex items-center justify-center rounded-md bg-gradient-to-br from-wiki-link to-secondary-foreground size-6 shadow-sm">
-              <SparklesIcon className="size-3.5 text-primary-foreground" weight="fill" />
-            </div>
+            <BotMessageSquare className="size-4 text-sidebar-icon-4" strokeWidth={2} />
             Board Assistant
           </div>
           <div className="flex items-center gap-1">
@@ -51,7 +51,7 @@ export function CopilotSheet({
               title="Open full chat view"
               aria-label="Open full chat view"
             >
-              <ExternalLinkIcon className="size-4" strokeWidth={2} />
+              <HugeiconsIcon icon={LinkSquare01Icon} className="size-4" strokeWidth={2} />
             </Button>
             <Button
               variant="ghost"
@@ -60,7 +60,7 @@ export function CopilotSheet({
               title="Close"
               aria-label="Close"
             >
-              <ArrowExpandIcon className="size-4" strokeWidth={2} />
+              <ChevronRight className="size-4" />
             </Button>
           </div>
         </div>

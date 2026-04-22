@@ -1,7 +1,14 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
-import { CancelCircleStatusIcon, DownloadIcon, ImagePlaceholderIcon } from "@/components/icons"
+
+// Hugeicons
+import {
+  Image01Icon,
+  CancelCircleIcon,
+  Download04Icon,
+} from "@hugeicons/core-free-icons"
 import { useGetImage } from "../../api/get-image"
+import { HugeiconsIcon } from "@hugeicons/react"
 
 type AgentImageProps = {
   filename?: string
@@ -46,7 +53,8 @@ export const ImageGenView = ({
       {/* Loading / no filename placeholder */}
       {isPending && (
         <div className="flex aspect-square w-full items-center justify-center animate-pulse">
-          <ImagePlaceholderIcon
+          <HugeiconsIcon
+            icon={Image01Icon}
             size={48}
             className="opacity-60"
             strokeWidth={2}
@@ -57,7 +65,8 @@ export const ImageGenView = ({
       {/* Error */}
       {!isPending && isError && (
         <div className="flex aspect-square w-full items-center justify-center">
-          <CancelCircleStatusIcon
+          <HugeiconsIcon
+            icon={CancelCircleIcon}
             size={48}
             className="text-destructive opacity-80"
             strokeWidth={2}
@@ -77,10 +86,10 @@ export const ImageGenView = ({
           <button
             type="button"
             onClick={handleDownload}
-            className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-md bg-background/80 shadow-sm backdrop-blur-sm border hover:bg-accent transition"
+            className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/80 shadow-sm backdrop-blur-sm border hover:bg-accent transition"
             aria-label="Download image"
           >
-            <DownloadIcon className="size-4" strokeWidth={2} />
+            <HugeiconsIcon icon={Download04Icon} className="size-4" strokeWidth={2} />
           </button>
         </div>
       )}

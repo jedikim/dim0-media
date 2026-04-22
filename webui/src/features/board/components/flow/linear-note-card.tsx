@@ -4,14 +4,13 @@ import type { NoteNode } from '../../types/flow'
 import { MarkdownView } from '@/components/markdown/markdown-view'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useGraphStore } from '../../store/graph-store'
-import { DeleteIcon, PaintBoardIcon, PinIcon, PinOffIcon } from '@/components/icons'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { Delete02Icon, PaintBoardIcon, PinIcon, PinOffIcon } from '@hugeicons/core-free-icons'
 import clsx from 'clsx'
 import { TAILWIND_300 } from '../../lib/colors/tailwind'
 import { formatDistanceToNow } from '../../utils/date'
 import { useTheme } from '@/components/theme-provider'
 import { darkModeDisplayHex } from '../../lib/colors/dark-variants'
-import { DocumentCardView } from './document-card-view'
-import type { NoteWithPin } from './note-card'
 
 
 type Props = { node: NoteNode }
@@ -34,9 +33,6 @@ export function LinearNoteCard({ node }: Props) {
   const isDark = resolvedTheme === 'dark'
 
   const color = isDark ? darkModeDisplayHex(node.data.style.backgroundColor) ?? '#a5c9ff' : node.data.style.backgroundColor
-  const textColor = isDark
-    ? darkModeDisplayHex(node.data.style.textColor) ?? undefined
-    : node.data.style.textColor
   const isPinned = node.data.properties.pinned.boolean
   const isSheet = node.data.style.type === 'sheet'
   const isCodeSandbox = node.data.style.type === 'code-sandbox'
@@ -114,113 +110,88 @@ export function LinearNoteCard({ node }: Props) {
   }, [boardCanEdit, isCodeSandbox, isWidget, node.id, openNodeSurface])
 
   const cardClass = clsx(
-    'transition rounded-lg relative transition-all duration-200 group',
+    'transition rounded-lg relative bg-background overflow-hidden transition-all duration-200 group sticky-note-shadow paper-note-texture p-0.5',
     usesHostedSurface && boardCanEdit && 'cursor-pointer',
-    isSheet
-      ? null
-      : clsx(
-        'overflow-hidden bg-background sticky-note-shadow paper-note-texture p-0.5',
-        isPinned
-          ? 'ring-2 ring-secondary-foreground/60'
-          : 'hover:ring-2 hover:ring-secondary-foreground/40',
-      ),
+    isPinned
+      ? 'ring-2 ring-secondary/60'
+      : 'hover:ring-2 hover:ring-secondary/40'
   )
 
-  const cardBackground = isSheet ? undefined : color
   const CardBody = useMemo(() => (
-    <div className={cardClass} style={cardBackground ? { backgroundColor: cardBackground } : undefined}>
-      {!isSheet && (
-        <div
-          className='absolute top-0 inset-x-0 z-20 rounded-t-sm border-b border-foreground/60 pointer-events-none transition-opacity opacity-0 group-hover:opacity-100 group-hover:pointer-events-auto'
-          style={cardBackground ? { backgroundColor: cardBackground } : undefined}
-        >
-          <div className='px-1.5 py-1 w-full h-full flex items-center justify-end gap-1'>
-            <div className='flex flex-row items-center gap-2 px-1'>
-              {timeAgo && fullDate && (
-                <div className=''>
-                  <span title={fullDate} className='text-xs text-muted-foreground select-none'>
-                    {timeAgo}
-                  </span>
-                </div>
-              )}
-            </div>
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  className='p-1 text-foreground/80 hover:text-foreground transition-colors'
-                  aria-label='Change background color'
-                  title='Change background color'
-                  onClick={e => e.stopPropagation()}
-                >
-                  <PaintBoardIcon className='size-4 shrink-0' strokeWidth={2} />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align='start' className='w-auto p-2'>
-                <div className='grid grid-cols-6 gap-2'>
-                  {[{ name: 'white', hex: '#ffffff' }, ...TAILWIND_300].map(c => (
-                    <button
-                      key={c.name}
-                      className='h-6 w-6 rounded-md border border-border hover:brightness-95'
-                      style={{ backgroundColor: isDark ? darkModeDisplayHex(c.hex) || c.hex : c.hex }}
-                      title={`${c.name}-100`}
-                      aria-label={`${c.name}-100`}
-                      onClick={() => onPickColor(c.hex)}
-                    />
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-            <button
-              className='p-1 text-foreground/80 hover:text-foreground transition-colors'
-              onClick={onTogglePin}
-              aria-label='Toggle pin'
-              title='Pin/Unpin'
-            >
-              {isPinned
-                ? <PinIcon className='w-4 h-4 text-secondary-foreground' strokeWidth={2} />
-                : <PinOffIcon className='w-4 h-4' strokeWidth={2} />
-              }
-            </button>
-            <button
-              className='p-1 text-foreground/80 hover:text-destructive transition-colors'
-              onClick={onDelete}
-              aria-label='Delete note'
-              title='Delete'
-            >
-              <DeleteIcon className='w-4 h-4' strokeWidth={2} />
-            </button>
+    <div className={cardClass} style={{ backgroundColor: color }}>
+      {/* hover toolbar */}
+      <div
+        className='absolute top-0 inset-x-0 z-20 rounded-t-sm border-b border-foreground/60 pointer-events-none transition-opacity opacity-0 group-hover:opacity-100 group-hover:pointer-events-auto'
+        style={{ backgroundColor: color }}
+      >
+        <div className='px-1.5 py-1 w-full h-full flex items-center justify-end gap-1'>
+          <div className='flex flex-row items-center gap-2 px-1'>
+            {timeAgo && fullDate && (
+              <div className=''>
+                <span title={fullDate} className='text-xs text-muted-foreground select-none'>
+                  {timeAgo}
+                </span>
+              </div>
+            )}
           </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                className='p-1 text-foreground/80 hover:text-foreground transition-colors'
+                aria-label='Change background color'
+                title='Change background color'
+                onClick={e => e.stopPropagation()}
+              >
+                <HugeiconsIcon icon={PaintBoardIcon} className='size-4 shrink-0' strokeWidth={2} />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align='start' className='w-auto p-2'>
+              <div className='grid grid-cols-6 gap-2'>
+                {[{ name: 'white', hex: '#ffffff' }, ...TAILWIND_300].map(c => (
+                  <button
+                    key={c.name}
+                    className='h-6 w-6 rounded-md border border-border hover:brightness-95'
+                    style={{ backgroundColor: isDark ? darkModeDisplayHex(c.hex) || c.hex : c.hex }}
+                    title={`${c.name}-100`}
+                    aria-label={`${c.name}-100`}
+                    onClick={() => onPickColor(c.hex)}
+                  />
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+          <button
+            className='p-1 text-foreground/80 hover:text-foreground transition-colors'
+            onClick={onTogglePin}
+            aria-label='Toggle pin'
+            title='Pin/Unpin'
+          >
+            {isPinned
+              ? <HugeiconsIcon icon={PinIcon} className='w-4 h-4 text-secondary' strokeWidth={2} />
+              : <HugeiconsIcon icon={PinOffIcon} className='w-4 h-4' strokeWidth={2} />
+            }
+          </button>
+          <button
+            className='p-1 text-foreground/80 hover:text-destructive transition-colors'
+            onClick={onDelete}
+            aria-label='Delete note'
+            title='Delete'
+          >
+            <HugeiconsIcon icon={Delete02Icon} className='w-4 h-4' strokeWidth={2} />
+          </button>
         </div>
-      )}
+      </div>
 
       {/* content area */}
       <div
-        className={clsx(
-          'relative z-10 text-foreground',
-          isSheet
-            ? 'h-[220px]'
-            : 'p-2 pt-8 min-h-[100px] max-h-[300px] overflow-x-hidden overflow-y-auto scrollbar-thin space-y-1',
-        )}
+        className='p-2 pt-8 min-h-[100px] max-h-[300px] overflow-x-hidden overflow-y-auto scrollbar-thin text-foreground relative z-10 space-y-1'
         onClick={() => {
-          if (isSheet) return
           if (usesHostedSurface) {
             handleOpenSurface()
           }
         }}
       >
-        {isSheet ? (
-          <DocumentCardView
-            note={node.data as NoteWithPin}
-            selected={false}
-            isDark={isDark}
-            isPinned={Boolean(isPinned)}
-            textColor={textColor}
-            onTogglePin={onTogglePin}
-            onDelete={onDelete}
-            onOpen={handleOpenSurface}
-            hideBadge
-          />
-        ) : isCodeSandbox ? (
+        {isCodeSandbox ? (
           <pre className='whitespace-pre-wrap break-all font-mono text-sm leading-5 text-foreground/90'>
             {node.data.content?.markdown || '# Write Python here'}
           </pre>
@@ -243,19 +214,17 @@ export function LinearNoteCard({ node }: Props) {
       </div>
     </div>
   ), [
-    cardBackground,
     cardClass,
+    color,
     fullDate,
     isDark,
     isCodeSandbox,
     isPinned,
-    isSheet,
     handleOpenSurface,
-    node.data,
+    node.data.content?.markdown,
     onDelete,
     onPickColor,
     onTogglePin,
-    textColor,
     timeAgo,
     usesHostedSurface,
     isWidget,
@@ -296,7 +265,7 @@ export function LinearNoteCard({ node }: Props) {
               }
             }}
             onClick={e => e.stopPropagation()}
-            className='w-full bg-transparent text-center text-sm font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary-foreground focus:outline-none px-0 py-0.5'
+            className='w-full bg-transparent text-center text-sm font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary focus:outline-none px-0 py-0.5'
             placeholder='Untitled note'
           />
         ) : (

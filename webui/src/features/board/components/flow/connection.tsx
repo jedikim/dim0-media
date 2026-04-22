@@ -25,7 +25,7 @@ export function CustomConnectionLine({
     []
   )
 
-  const strokeColor = 'var(--secondary-foreground)'
+  const strokeColor = 'var(--secondary)'
   const style = {
     stroke: strokeColor,
     strokeWidth: 2,

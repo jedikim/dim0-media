@@ -69,7 +69,7 @@ function getDefaultMindMapBendPoint(sourceCenter: Point, targetCenter: Point): P
   const verticalRelation = dy >= 0 ? 1 : -1
   const verticalBendDirection = horizontalDirection === verticalRelation ? 1 : -1
 
-  const verticalOffset = Math.min(120, Math.max(20, len * 0.08))
+  const verticalOffset = Math.min(320, Math.max(34, len * 0.24))
 
   return {
     x: midX,

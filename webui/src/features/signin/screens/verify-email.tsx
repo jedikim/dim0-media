@@ -1,7 +1,7 @@
 import * as React from "react"
 import { useMutation } from "@tanstack/react-query"
 import { useNavigate } from "@tanstack/react-router"
-import { Loader2Icon, MailCheckIcon } from "@/components/icons"
+import { Loader2, MailCheck } from "lucide-react"
 
 import { getEmailVerificationStatus, resendVerificationEmail, verifyEmailToken } from "@/api"
 import { Button } from "@/components/ui/button"
@@ -69,7 +69,7 @@ export function VerifyEmailPage() {
       <Card className="bg-card text-card-foreground border border-border shadow-xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl flex items-center justify-center gap-2">
-            <MailCheckIcon className="h-6 w-6 text-secondary-foreground" />
+            <MailCheck className="h-6 w-6 text-secondary" />
             Verify your email
           </CardTitle>
           <CardDescription className="text-muted-foreground">
@@ -102,7 +102,7 @@ export function VerifyEmailPage() {
 
           {verifyTokenMut.isPending ? (
             <p className="text-sm text-muted-foreground inline-flex items-center gap-2">
-              <Loader2Icon className="h-4 w-4 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
               Verifying email...
             </p>
           ) : null}
@@ -119,7 +119,7 @@ export function VerifyEmailPage() {
           >
             {resendMut.isPending ? (
               <span className="inline-flex items-center gap-2">
-                <Loader2Icon className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Sending...
               </span>
             ) : (
@@ -140,7 +140,7 @@ export function VerifyEmailPage() {
           >
             {checkMut.isPending ? (
               <span className="inline-flex items-center gap-2">
-                <Loader2Icon className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
                 Checking...
               </span>
             ) : (

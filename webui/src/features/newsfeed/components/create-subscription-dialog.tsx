@@ -8,7 +8,8 @@ import { matchPredefined, PREDEFINED_TOPICS, TOPIC_DISPLAY, TOPIC_EMOJI } from '
 import { useCreateSubscription } from '../api/create-subscription'
 import { useCreateNewsfeed } from '../api/create-newsfeed'
 import { generateUuid } from '@/lib/common'
-import { CheckIcon } from '@/components/icons'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { Tick01Icon } from '@hugeicons/core-free-icons'
 
 type Step = 'editing' | 'creating'
 
@@ -62,7 +63,7 @@ export function CreateSubscriptionDialog({
     <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) reset() }}>
       <DialogTrigger asChild>
         {trigger ?? (
-          <Button size='sm' className='rounded-md'>Add new subscription</Button>
+          <Button size='sm' className='rounded-full'>Add new subscription</Button>
         )}
       </DialogTrigger>
 
@@ -83,18 +84,17 @@ export function CreateSubscriptionDialog({
                 placeholder='custom topic'
                 value={topic}
                 onChange={e => setTopic(e.target.value)}
-                className='focus-visible:ring-2 focus-visible:ring-secondary-foreground/20 focus-visible:border-secondary-foreground transition-all'
+                className='focus-visible:ring-2 focus-visible:ring-secondary/20 focus-visible:border-secondary transition-all'
               />
               <div className='flex flex-wrap gap-2'>
                 {PREDEFINED_TOPICS.map(k => {
                   const label = TOPIC_DISPLAY[k]
                   const active = (matchPredefined(topic) === k)
-                  const TopicIcon = TOPIC_EMOJI[k]
                   return (
                     <Badge
                       key={k}
                       className={[
-                        'cursor-pointer select-none p-2 rounded-sm border border-border',
+                        'cursor-pointer select-none p-2 rounded-lg border border-border',
                         active
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-card text-card-foreground backdrop-blur hover:bg-accent transition-all'
@@ -103,9 +103,9 @@ export function CreateSubscriptionDialog({
                       onClick={() => setTopic(k)}
                     >
                       <span className='inline-flex items-center gap-1'>
-                      {active
-                          ? <CheckIcon strokeWidth={2} className='w-4 h-4' />
-                          : <TopicIcon strokeWidth={2} className='w-4 h-4' />
+                        {active
+                          ? <HugeiconsIcon icon={Tick01Icon} strokeWidth={2} className='w-4 h-4' />
+                          : <HugeiconsIcon icon={TOPIC_EMOJI[k]} strokeWidth={2} className='w-4 h-4' />
                         }
                       </span>
                       {label}
@@ -125,7 +125,7 @@ export function CreateSubscriptionDialog({
                 rows={6}
                 value={desc}
                 onChange={e => setDesc(e.target.value)}
-                className='resize-none focus-visible:ring-2 focus-visible:ring-secondary-foreground/20 focus-visible:border-secondary-foreground transition-all'
+                className='resize-none focus-visible:ring-2 focus-visible:ring-secondary/20 focus-visible:border-secondary transition-all'
                 placeholder='Describe your topic in more details'
               />
               <div className='text-xs text-muted-foreground'>
@@ -136,7 +136,7 @@ export function CreateSubscriptionDialog({
             {/* Actions */}
             <div className='flex justify-end gap-2'>
               <Button variant='ghost' onClick={() => setOpen(false)}>Cancel</Button>
-              <Button onClick={submit} disabled={disabledCreate} className='rounded-md'>
+              <Button onClick={submit} disabled={disabledCreate} className='rounded-lg'>
                 Create
               </Button>
             </div>

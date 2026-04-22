@@ -9,7 +9,8 @@ import {
   ContextMenuSeparator,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
-import { DeleteIcon, FolderIcon } from '@/components/icons'
+import { HugeiconsIcon } from '@hugeicons/react'
+import { Delete02Icon, Folder02Icon } from '@hugeicons/core-free-icons'
 import { useDeleteNewsfeed } from '@/features/newsfeed/api/delete-newsfeed'
 import { dateToTailwindColor } from '../../utils/color'
 import { getLuminance, toBaseHex } from '@/features/board/lib/colors/tailwind'
@@ -47,7 +48,7 @@ export function NewsletterCard({
 
   const textClass = lum > 0.7 ? 'text-slate-900' : 'text-slate-50'
   const subTextClass = lum > 0.7 ? 'text-slate-700' : 'text-slate-100/80'
-  const ringWhenActive = 'ring-2 ring-secondary-foreground/40 border-secondary-foreground'
+  const ringWhenActive = 'ring-2 ring-secondary/40 border-secondary'
 
   const createdMs = useMemo(() => new Date(createdAt).getTime(), [createdAt])
 
@@ -103,7 +104,7 @@ export function NewsletterCard({
           <Card
             style={{ backgroundColor: bgColor }}
             className={cn(
-              'rounded-xl h-24 transition hover:shadow-sm hover:ring-2 hover:ring-secondary-foreground/20 hover:border-secondary-foreground/60 border border-transparent',
+              'rounded-xl h-24 transition hover:shadow-sm hover:ring-2 hover:ring-secondary/20 hover:border-secondary/60 border border-transparent',
               active && ringWhenActive,
               (generating || del.isPending) && 'pointer-events-none',
               'bg-transparent'
@@ -138,7 +139,7 @@ export function NewsletterCard({
           onSelect={() => onClick?.()}
           disabled={!!generating}
         >
-          <FolderIcon className='mr-2 size-4' strokeWidth={2} />
+          <HugeiconsIcon icon={Folder02Icon} className='mr-2 size-4' strokeWidth={2} />
           Open
         </ContextMenuItem>
 
@@ -150,7 +151,7 @@ export function NewsletterCard({
           onSelect={handleDelete}
           disabled={!!generating || del.isPending}
         >
-          <DeleteIcon className='mr-2 size-4' strokeWidth={2} />
+          <HugeiconsIcon icon={Delete02Icon} className='mr-2 size-4' strokeWidth={2} />
           Delete
         </ContextMenuItem>
       </ContextMenuContent>

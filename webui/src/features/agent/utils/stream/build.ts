@@ -151,7 +151,7 @@ const flushStep = (s: StepAccum) => {
 /**
  * Builds a readable fallback title when a tool name is not in the display map.
  */
-export const getToolTitle = (toolName: ToolName) =>
+const getToolTitle = (toolName: ToolName) =>
   ToolNameDescription[toolName] || toolName.replaceAll("_", " ")
 
 

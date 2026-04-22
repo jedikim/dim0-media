@@ -1,15 +1,13 @@
-import { CheckIcon, CopyActionIcon } from "@/components/icons"
+import { CopyIcon, Tick01Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { useState } from "react"
 import { toast } from "sonner"
-import clsx from "clsx"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 
 
 /**
  * Button component to copy the assistant's answer to the clipboard.
- * Renders icon-only with a tooltip when `compact` is set; otherwise shows icon + "Copy" label.
  */
-export const CopyAnswer = ({ answer, compact = false }: { answer: string, compact?: boolean }) => {
+export const CopyAnswer = ({ answer }: { answer: string }) => {
   const [copied, setCopied] = useState(false)
   const actionLabel = "Copy current answer to the clipboard"
 
@@ -21,29 +19,17 @@ export const CopyAnswer = ({ answer, compact = false }: { answer: string, compac
     })
   }
 
-  const Icon = copied ? CheckIcon : CopyActionIcon
+  const icon = copied ? Tick01Icon : CopyIcon
 
-  const buttonEl = (
+  return (
     <button
-      className={clsx(
-        "transition-all text-muted-foreground hover:text-foreground flex flex-row items-center rounded-md",
-        compact ? "justify-center size-8" : "text-xs gap-2 p-1",
-      )}
+      className="transition-all text-xs text-muted-foreground hover:text-foreground flex flex-row items-center gap-2 p-1 rounded-md"
       onClick={handleCopy}
       aria-label={actionLabel}
       title={actionLabel}
     >
-      <Icon className='size-4 shrink-0' strokeWidth={2} />
-      {!compact && <span>Copy</span>}
+      <HugeiconsIcon icon={icon} className='size-4 shrink-0' strokeWidth={2} />
+      <span>Copy</span>
     </button>
-  )
-
-  if (!compact) return buttonEl
-
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{buttonEl}</TooltipTrigger>
-      <TooltipContent side='left'>Copy</TooltipContent>
-    </Tooltip>
   )
 }

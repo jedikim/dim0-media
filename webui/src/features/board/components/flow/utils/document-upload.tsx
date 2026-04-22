@@ -1,11 +1,12 @@
 import { useState } from "react"
-import { CancelStatusIcon, CheckCircleStatusIcon, LoaderRefreshIcon } from "@/components/icons"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { useParseDocument } from "@/features/board/api/parse-document"
 import { useGraphStore } from "@/features/board/store/graph-store"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { CancelIcon, CheckmarkCircle03Icon, ReloadIcon } from "@hugeicons/core-free-icons"
 import { useAppStore } from "@/store"
 import { FREE_PLAN_DOCUMENT_LIMIT_TOOLTIP, isDocumentUploadLimited } from "@/features/board/lib/board-limit"
 
@@ -15,15 +16,27 @@ export interface DocumentUploadDialogProps {
 }
 
 const LoadingIcon = () => (
-  <LoaderRefreshIcon className="size-4 animate-spin [animation-duration:750ms]" />
+  <HugeiconsIcon
+    icon={ReloadIcon}
+    className="size-4 animate-spin [animation-duration:750ms]"
+    strokeWidth={2}
+  />
 )
 
 const SuccessIcon = () => (
-  <CheckCircleStatusIcon className="text-foreground size-4" />
+  <HugeiconsIcon
+    icon={CheckmarkCircle03Icon}
+    className="text-foreground size-4"
+    strokeWidth={2}
+  />
 )
 
 const ErrorIcon = () => (
-  <CancelStatusIcon className="text-destructive size-4" />
+  <HugeiconsIcon
+    icon={CancelIcon}
+    className="text-destructive size-4"
+    strokeWidth={2}
+  />
 )
 
 /**

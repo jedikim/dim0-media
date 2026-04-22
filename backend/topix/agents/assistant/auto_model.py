@@ -49,7 +49,7 @@ Edge case rules:
 
 Examples:
 
-User: "add a note saying buy milk"
+User: "add a sticky note saying buy milk"
 complexity: simple
 
 User: "what year was the Eiffel Tower built?"

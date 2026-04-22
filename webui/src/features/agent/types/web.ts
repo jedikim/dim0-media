@@ -1,5 +1,4 @@
-import type { AppIconComponent } from "@/components/icons"
-import { ExaBrandIcon, OpenAIBrandIcon, PerplexityBrandIcon, TavilyBrandIcon } from "@/components/icons"
+import { Exa, OpenAI, Perplexity, Tavily } from "@lobehub/icons"
 
 /**
  * Link preview interface for web pages.
@@ -38,10 +37,10 @@ export const WebSearchEngineDescription: Record<WebSearchEngine, string> = {
 }
 
 
-export const WebSearchEngineIcons: Record<WebSearchEngine, AppIconComponent | null> = {
-  openai: OpenAIBrandIcon,
-  perplexity: PerplexityBrandIcon,
-  tavily: TavilyBrandIcon,
+export const WebSearchEngineIcons: Record<WebSearchEngine, React.ComponentType<{ size?: number | string, color?: string }> | null> = {
+  openai: OpenAI,
+  perplexity: Perplexity.Color,
+  tavily: Tavily.Color,
   linkup: null,
-  exa: ExaBrandIcon,
-} 
+  exa: Exa.Color,
+}

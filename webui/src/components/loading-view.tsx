@@ -1,6 +1,8 @@
 import { ShinyText } from "./animations/shiny-text"
 import { Orbit } from "./animate-ui/icons/orbit"
-import { AlertIcon, ListTreeIcon } from "@/components/icons"
+import { ListTree } from "lucide-react"
+import { HugeiconsIcon } from "@hugeicons/react"
+import { Alert02Icon } from "@hugeicons/core-free-icons"
 import clsx from "clsx"
 
 /**
@@ -12,7 +14,7 @@ export const ThinkingDots = ({ message, isStopped = false }: { message: string, 
       {
         !isStopped ?
         <Orbit animate animation="path-loop" loop speed={2} className='size-4 text-foreground/50' strokeWidth={2} /> :
-        <ListTreeIcon
+        <ListTree
           className='size-4 text-accent-foreground'
           strokeWidth={2}
         />
@@ -48,7 +50,7 @@ export interface LoadingWindowProps {
 export const LoadingWindow = ({ message, viewMode = "compact", className = undefined }: LoadingWindowProps) => {
   const clName = clsx(
     "z-30 flex flex-col items-center justify-center gap-2 p-4 bg-card text-card-foreground",
-    viewMode === "full" ? "absolute inset-0 z-20 w-full h-full border-none" : " w-64 border border-border rounded-md shadow-lg",
+    viewMode === "full" ? "absolute inset-0 z-20 w-full h-full border-none" : " w-64 border border-border rounded-xl shadow-lg",
     className
   )
   return (
@@ -83,7 +85,7 @@ export const ErrorWindow = ({ message, viewMode = "compact", className = undefin
     <>
       <div className={clName}>
         <div className="text-medium text-xs text-center text-destructive flex flex-row items-center gap-2">
-          <AlertIcon className='w-4 h-4' strokeWidth={2} />
+          <HugeiconsIcon icon={Alert02Icon} className='w-4 h-4' strokeWidth={2} />
           <span>{message}</span>
         </div>
       </div>

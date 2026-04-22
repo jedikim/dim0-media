@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { Cancel01Icon, Download04Icon, LinkSquare02Icon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import { useNavigate } from "@tanstack/react-router"
 
-import { CancelPlainIcon, DownloadIcon, SheetExternalLinkIcon } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { SheetUrl } from "@/routes"
@@ -139,7 +140,7 @@ export const SheetNodeDialog = memo(function SheetNodeDialog({
                     stopTitleEdit(false)
                   }
                 }}
-                className="w-full bg-transparent text-sm font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary-foreground focus:outline-none px-0 py-0.5"
+                className="w-full bg-transparent text-sm font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary focus:outline-none px-0 py-0.5"
                 placeholder="Untitled note"
               />
             ) : (
@@ -163,13 +164,13 @@ export const SheetNodeDialog = memo(function SheetNodeDialog({
               aria-label="Download markdown"
               disabled={!note.content?.markdown?.trim()}
             >
-              <DownloadIcon className="size-4" />
+              <HugeiconsIcon icon={Download04Icon} className="size-4" strokeWidth={2} />
             </Button>
             <Button variant="ghost" size="icon-sm" onClick={handleOpenFullView} title="Open full view" aria-label="Open full view">
-              <SheetExternalLinkIcon className="size-4" />
+              <HugeiconsIcon icon={LinkSquare02Icon} className="size-4" strokeWidth={2} />
             </Button>
             <Button variant="ghost" size="icon-sm" onClick={() => handleOpenChange(false)} title="Close" aria-label="Close">
-              <CancelPlainIcon className="size-4" />
+              <HugeiconsIcon icon={Cancel01Icon} className="size-4" strokeWidth={2} />
             </Button>
           </div>
         </div>

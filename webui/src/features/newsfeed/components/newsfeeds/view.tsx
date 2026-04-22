@@ -134,7 +134,7 @@ export function NewsfeedsView() {
               {markdown && (
                 <div className='prose max-w-[800px] mx-auto p-4'>
                   <div className='text-center mt-12'>
-                    <h1 className='text-xl text-secondary-foreground font-semibold'>{currentFeedTitle}</h1>
+                    <h1 className='text-xl text-secondary font-semibold'>{currentFeedTitle}</h1>
                   </div>
                   <MarkdownView content={markdown} />
                 </div>
@@ -175,7 +175,7 @@ export function NewsfeedsView() {
                 <ErrorWindow message='Failed to load newsfeed' viewMode='full' className='bg-transparent' />
               )}
               <div className='text-center mt-16 mb-4'>
-                <h1 className='text-xl text-secondary-foreground font-semibold'>{currentFeedTitle}</h1>
+                <h1 className='text-xl text-secondary font-semibold'>{currentFeedTitle}</h1>
               </div>
               {annotations.length > 0 ? (
                 <NewsfeedGrid annotations={annotations} viewMode={viewMode} />

@@ -2,13 +2,13 @@ import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useStat
 import { clsx } from "clsx"
 
 import { Shape } from "../notes/shape"
-import { DocumentCardView } from "./document-card-view"
+import { SheetNodeView } from "./sheet-node-view"
 import { CodeSandboxNode } from "./code-sandbox-node"
 import { WidgetNode } from "./widget-node"
-import { NodeTitleCaption } from "./node-title-caption"
 import { useGraphStore } from "../../store/graph-store"
 import { darkModeDisplayHex } from "../../lib/colors/dark-variants"
 import { fontFamilyToTwClass, fontSizeToTwClass, textStyleToTwClass } from "../../types/style"
+import type { NoteNode } from "../../types/flow"
 import type { Note, NoteProperties } from "../../types/note"
 
 
@@ -87,7 +87,7 @@ const NoteDisplayContent = memo(function NoteDisplayContent({
   nodeHeight,
   onCanvasRenderReadyChange,
 }: NoteDisplayContentProps) {
-  const fontFamily = note.style.fontFamily
+  const fontFamily = note.style.type === "sheet" ? "sans-serif" : note.style.fontFamily
   const icon =
     note.properties.iconData?.type === "icon" && note.properties.iconData.icon?.type === "icon"
       ? note.properties.iconData.icon.icon
@@ -142,7 +142,6 @@ export const NodeCard = memo(function NodeCard({
   const isCodeSandbox = note.style.type === "code-sandbox"
   const isWidget = note.style.type === "widget"
   const isText = note.style.type === "text"
-  const isImage = note.style.type === "image"
   const nonSheetDisplayValue = note.content?.markdown || note.label?.markdown || ""
 
   const setNodesPersist = useGraphStore((state) => state.setNodesPersist)
@@ -158,19 +157,24 @@ export const NodeCard = memo(function NodeCard({
   const selRef = useRef<{ start: number; end: number } | null>(null)
 
   const textColor = isDark ? darkModeDisplayHex(note.style.textColor) || undefined : note.style.textColor
+  const sheetBackgroundColor = isDark
+    ? darkModeDisplayHex(note.style.backgroundColor) || note.style.backgroundColor
+    : note.style.backgroundColor
   const isPinned = note.properties.pinned.boolean === true
+  const fontFamily = note.style.type === "sheet" ? "sans-serif" : note.style.fontFamily
+  const displayTitle = note.label?.markdown?.trim() || "Untitled note"
 
   const labelClass = useMemo(
     () =>
       clsx(
         "relative bg-transparent overflow-visible flex items-center justify-center",
         isSheet
-          ? "w-full h-full"
+          ? `w-[360px] ${fontFamilyToTwClass(fontFamily)}`
           : isText
             ? "w-full h-full p-0"
             : "w-full h-full p-1",
       ),
-    [isSheet, isText],
+    [fontFamily, isSheet, isText],
   )
 
   useEffect(() => {
@@ -267,6 +271,22 @@ export const NodeCard = memo(function NodeCard({
     setLabelDraft(next)
   }, [])
 
+  const updateStyle = useCallback((next: Partial<Note["style"]>) => {
+    updateNodeByIdPersist(note.id, (node) => {
+      const data = node.data as NoteNode["data"]
+      return {
+        ...node,
+        data: {
+          ...data,
+          style: {
+            ...data.style,
+            ...next,
+          },
+        },
+      }
+    })
+  }, [note.id, updateNodeByIdPersist])
+
   const stopDragging = useCallback((event: React.PointerEvent) => {
     if (labelEditing) {
       event.stopPropagation()
@@ -302,6 +322,10 @@ export const NodeCard = memo(function NodeCard({
     setEdgesPersist((edges) => edges.filter((edge) => edge.source !== note.id && edge.target !== note.id))
   }, [note.id, setEdgesPersist, setNodesPersist])
 
+  const handlePickPalette = useCallback((hex: string) => {
+    updateStyle({ backgroundColor: hex })
+  }, [updateStyle])
+
   const handleOpenSheet = useCallback(() => {
     if (!boardCanEdit) return
     openNodeSurface(note.id, "sheet")
@@ -330,33 +354,6 @@ export const NodeCard = memo(function NodeCard({
           onPointerDown={stopDragging}
         >
           <WidgetNode note={note} selected={selected} dragging={dragging} />
-        </LabelContainer>
-      )
-    }
-
-    if (isImage) {
-      return (
-        <LabelContainer
-          className={labelClass}
-          textColor={textColor}
-          onDoubleClick={handleLabelDoubleClick}
-          onPointerDown={stopDragging}
-        >
-          <div className="group relative flex h-full w-full items-center justify-center overflow-visible">
-            <NoteDisplayContent
-              note={note}
-              labelEditing={labelEditing}
-              labelDraft={labelDraft}
-              textareaRef={textareaRef}
-              onLabelChange={handleLabelChange}
-              contentRef={contentRef}
-              textColor={textColor}
-              nodeWidth={nodeWidth}
-              nodeHeight={nodeHeight}
-              onCanvasRenderReadyChange={onCanvasRenderReadyChange}
-            />
-            <ImageCaptionOverlay note={note} selected={selected} />
-          </div>
         </LabelContainer>
       )
     }
@@ -391,48 +388,31 @@ export const NodeCard = memo(function NodeCard({
       onDoubleClick={handleLabelDoubleClick}
       onPointerDown={stopDragging}
     >
-      <DocumentCardView
-        note={note}
-        selected={selected}
-        dragging={dragging}
-        isDark={isDark}
-        isPinned={isPinned}
-        textColor={textColor}
-        onTogglePin={handleTogglePin}
-        onDelete={handleDelete}
-        onOpen={handleOpenSheet}
-      />
+      <div className="relative w-full h-full">
+        <SheetNodeView
+          note={note}
+          selected={selected}
+          dragging={dragging}
+          isDark={isDark}
+          isPinned={isPinned}
+          backgroundColor={sheetBackgroundColor}
+          onPickPalette={handlePickPalette}
+          onTogglePin={handleTogglePin}
+          onDelete={handleDelete}
+          onOpenSticky={handleOpenSheet}
+        />
+        <div className="absolute left-1/2 top-full mt-4 w-full -translate-x-1/2 px-2">
+          <button
+            type="button"
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={handleOpenSheet}
+            className="block w-full truncate text-center text-sm font-semibold text-card-foreground hover:underline"
+            title={displayTitle}
+          >
+            {displayTitle}
+          </button>
+        </div>
+      </div>
     </LabelContainer>
-  )
-})
-
-
-type ImageCaptionOverlayProps = {
-  note: Note
-  selected: boolean
-}
-
-
-/**
- * Caption rendered below an image node. Hidden by default; revealed on hover,
- * when the node is selected, or while the caption is being edited.
- */
-const ImageCaptionOverlay = memo(function ImageCaptionOverlay({
-  note,
-  selected,
-}: ImageCaptionOverlayProps) {
-  const [editing, setEditing] = useState(false)
-  const reveal = selected || editing
-
-  return (
-    <NodeTitleCaption
-      note={note}
-      placeholder="Add caption…"
-      onEditingChange={setEditing}
-      className={clsx(
-        "pointer-events-auto absolute left-1/2 top-full z-20 mt-2 w-full max-w-[220px] -translate-x-1/2 transition-opacity",
-        reveal ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-      )}
-    />
   )
 })

@@ -1,6 +1,7 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { CodeInterpreterIcon } from "@/components/icons"
 import { useChatStore } from "@/features/agent/store/chat-store"
+import { CodeIcon } from "@hugeicons/core-free-icons"
+import { HugeiconsIcon } from "@hugeicons/react"
 import clsx from "clsx"
 import { useShallow } from "zustand/shallow"
 
@@ -31,7 +32,7 @@ export const CodeInterpreterChoiceMenu = () => {
   )
   const iconClass = clsx(
     "size-4 shrink-0",
-    isEnabled ? "text-secondary-foreground" : "text-muted-foreground"
+    isEnabled ? "text-secondary" : "text-muted-foreground"
   )
 
   return (
@@ -44,7 +45,7 @@ export const CodeInterpreterChoiceMenu = () => {
             aria-label="Toggle Code Interpreter"
             title="Toggle Code Interpreter"
           >
-            <CodeInterpreterIcon className={iconClass} strokeWidth={2} />
+            <HugeiconsIcon icon={CodeIcon} className={iconClass} strokeWidth={2} />
             <span className="text-xs">Code interpreter</span>
           </button>
         </TooltipTrigger>

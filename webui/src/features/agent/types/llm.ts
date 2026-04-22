@@ -1,15 +1,4 @@
-import type { AppIconComponent } from "@/components/icons"
-import {
-  ClaudeBrandIcon,
-  DeepSeekBrandIcon,
-  Dim0Icon,
-  GeminiBrandIcon,
-  MistralBrandIcon,
-  MoonshotBrandIcon,
-  OpenAIBrandIcon,
-  QwenBrandIcon,
-  ZAiBrandIcon,
-} from "@/components/icons"
+import { OpenAI, Gemini, DeepSeek, Mistral, Moonshot, Claude, Qwen, ZAI } from '@lobehub/icons'
 
 export const LlmModels = [
   "auto",
@@ -193,14 +182,14 @@ export const LlmFamilyMap: Record<LlmModel, LlmFamily> = {
 }
 
 
-export const LlmFamilyIcon: Record<LlmFamily, AppIconComponent> = {
-  dim0: Dim0Icon,
-  openai: OpenAIBrandIcon,
-  google: GeminiBrandIcon,
-  anthropic: ClaudeBrandIcon,
-  mistralai: MistralBrandIcon,
-  deepseek: DeepSeekBrandIcon,
-  "z-ai": ZAiBrandIcon,
-  qwen: QwenBrandIcon,
-  moonshotai: MoonshotBrandIcon
+export const LlmFamilyIcon: Record<LlmFamily, React.ComponentType<{ size?: number | string, color?: string }>> = {
+  dim0: OpenAI,
+  openai: OpenAI,
+  google: Gemini.Color,
+  anthropic: Claude.Color,
+  mistralai: Mistral.Color,
+  deepseek: DeepSeek.Color,
+  "z-ai": ZAI,
+  qwen: Qwen.Color,
+  moonshotai: Moonshot
 }

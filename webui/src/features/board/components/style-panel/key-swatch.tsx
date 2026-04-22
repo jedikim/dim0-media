@@ -16,10 +16,10 @@ type KeySwatchProps = {
 }
 
 const SIZE_MAP = {
-  dot: "h-6 w-6 rounded-sm",
+  dot: "h-6 w-6 rounded-full",
   sm: "h-7 w-7 rounded-md",
-  md: "h-9 w-9 rounded-md",
-  lg: "h-11 w-11 rounded-lg",
+  md: "h-9 w-9 rounded-lg",
+  lg: "h-11 w-11 rounded-xl",
 } as const
 
 export const KeySwatch = ({
@@ -45,7 +45,7 @@ export const KeySwatch = ({
       className={cn(
         "relative border border-border shadow-sm transition focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-1 focus-visible:ring-offset-background",
         SIZE_MAP[size],
-        selected && "ring-2 ring-secondary-foreground",
+        selected && "ring-2 ring-secondary",
         className
       )}
       style={{
