@@ -1,3 +1,9 @@
+## v0.2.1 (2026-04-22)
+
+### Feat
+
+- *****: add tiptap editor and major ui revamps (#54)
+
 ## v0.2.0 (2026-04-22)
 
 ### Feat
