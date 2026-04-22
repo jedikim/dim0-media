@@ -104,7 +104,7 @@ export const CodeSandboxNode = memo(function CodeSandboxNode({
               }
             }}
             onPointerDown={(event) => event.stopPropagation()}
-            className="nodrag w-full rounded-md border border-border/50 bg-black/20 px-2 py-1 text-sm font-medium text-white/95 shadow-sm backdrop-blur-sm focus:border-secondary focus:outline-none"
+            className="nodrag w-full rounded-md border border-border/50 bg-black/20 px-2 py-1 text-sm font-medium text-white/95 shadow-sm backdrop-blur-sm focus:border-secondary-foreground focus:outline-none"
             placeholder="Untitled sandbox"
           />
         ) : (

@@ -1,9 +1,8 @@
 import { useNavigate } from "@tanstack/react-router"
+import { AddIcon } from "@/components/icons"
 import { UNTITLED_LABEL } from "../const"
 import type { Graph } from "../types/board"
 import { useCreateBoard } from "../api/create-board"
-import { HugeiconsIcon } from "@hugeicons/react"
-import { PlusSignIcon } from "@hugeicons/core-free-icons"
 import { formatDateForUI } from "../utils/datetime"
 
 
@@ -29,8 +28,8 @@ export const BoardCard = ({
         transition-all
         rounded-xl
         text-card-foreground
-        border border-transparent hover:border-secondary
-        hover:ring-2 hover:ring-secondary/50
+        border border-transparent hover:border-secondary-foreground
+        hover:ring-2 hover:ring-secondary-foreground/50
         shadow-md hover:shadow-lg
         cursor-pointer
         w-64 h-60
@@ -86,9 +85,9 @@ export const NewBoardCard = () => {
         transition-all
         rounded-xl
         bg-transparent hover:bg-accent
-        hover:ring-2 hover:ring-secondary/10
+        hover:ring-2 hover:ring-secondary-foreground/10
         text-card-foreground
-        border-2 border-border hover:border-secondary border-dashed
+        border-2 border-border hover:border-secondary-foreground border-dashed
         shadow-none hover:shadow-sm
         cursor-pointer
         w-64 h-60
@@ -100,12 +99,8 @@ export const NewBoardCard = () => {
       `}
       onClick={handleClick}
     >
-      <HugeiconsIcon
-        icon={PlusSignIcon}
-        className='shrink-0 size-6 text-secondary'
-        strokeWidth={2}
-      />
-      <span className='font-medium text-sm text-secondary'>New Board</span>
+      <AddIcon className='shrink-0 size-6 text-secondary-foreground' strokeWidth={2} />
+      <span className='font-medium text-sm text-secondary-foreground'>New Board</span>
     </div>
   )
 }

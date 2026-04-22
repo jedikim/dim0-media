@@ -65,7 +65,7 @@ export function SettingsScreen() {
         </Card>
 
         {BILLING_ENABLED ? (
-          <Card className="border-secondary/60 bg-gradient-to-br from-secondary/20 via-secondary/10 to-card">
+          <Card className="border-secondary-foreground/60 bg-gradient-to-br from-secondary-foreground/20 via-secondary-foreground/10 to-card">
             <CardHeader>
               <CardTitle>Billing</CardTitle>
               <CardDescription>Manage subscription and usage limits</CardDescription>

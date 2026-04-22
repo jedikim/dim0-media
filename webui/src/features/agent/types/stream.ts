@@ -1,21 +1,22 @@
-import type { IconSvgElement } from "@hugeicons/react"
-import type { Annotation, ToolOutput } from "./tool-outputs"
+import type { AppIconComponent } from "@/components/icons"
 import {
-  AiBrowserIcon,
-  AiImageIcon,
-  Album02Icon,
-  ChipIcon,
-  DashboardBrowsingIcon,
-  EarthIcon,
-  NoteAddIcon,
-  NoteEditIcon,
+  BrowserSearchIcon,
+  CreateNoteIcon,
+  EditNoteIcon,
+  ImageGenerationIcon,
+  ImageSearchWidgetIcon,
+  MemorySearchIcon,
   NoteIcon,
-  AnalyticsUpIcon,
-  SearchList01Icon,
-  SourceCodeIcon,
-  ThermometerWarmIcon,
-  ViewIcon,
-} from "@hugeicons/core-free-icons"
+  OutlineGeneratorIcon,
+  ReadNoteIcon,
+  ScrollIcon,
+  StockWidgetIcon,
+  ToolCodeIcon,
+  WeatherWidgetIcon,
+  WebCollectorIcon,
+  WriteNoteToolIcon,
+} from "@/components/icons"
+import type { Annotation, ToolOutput } from "./tool-outputs"
 
 
 /**
@@ -145,26 +146,26 @@ export const ToolNameDescription: Record<ToolName, string> = {
 }
 
 
-export const ToolNameIcon: Record<string, IconSvgElement> = {
+export const ToolNameIcon: Record<string, AppIconComponent> = {
   answer_reformulate: NoteIcon,
-  web_search: EarthIcon,
-  memory_search: ChipIcon,
-  outline_generator: SearchList01Icon,
-  web_collector: AiBrowserIcon,
+  web_search: BrowserSearchIcon,
+  memory_search: MemorySearchIcon,
+  outline_generator: OutlineGeneratorIcon,
+  web_collector: WebCollectorIcon,
   synthesizer: NoteIcon,
-  navigate: AiBrowserIcon,
-  code_interpreter: SourceCodeIcon,
-  write_note: NoteAddIcon,
-  create_note: NoteAddIcon,
-  edit_note: NoteEditIcon,
-  get_note: ViewIcon,
-  image_description: AiImageIcon,
-  topic_illustrator: AiImageIcon,
-  image_generation: AiImageIcon,
-  display_weather_widget: ThermometerWarmIcon,
-  display_stock_widget: DashboardBrowsingIcon,
-  display_image_search_widget: Album02Icon,
-  learn_generate_html_widget: AnalyticsUpIcon,
+  navigate: BrowserSearchIcon,
+  code_interpreter: ToolCodeIcon,
+  write_note: WriteNoteToolIcon,
+  create_note: CreateNoteIcon,
+  edit_note: EditNoteIcon,
+  get_note: ReadNoteIcon,
+  image_description: ImageGenerationIcon,
+  topic_illustrator: ImageGenerationIcon,
+  image_generation: ImageGenerationIcon,
+  display_weather_widget: WeatherWidgetIcon,
+  display_stock_widget: StockWidgetIcon,
+  display_image_search_widget: ImageSearchWidgetIcon,
+  learn_generate_html_widget: ScrollIcon,
 }
 
 

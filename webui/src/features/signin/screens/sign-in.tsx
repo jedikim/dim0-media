@@ -10,10 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
-
-import { HugeiconsIcon } from "@hugeicons/react"
-import { Mail01Icon, LockIcon } from "@hugeicons/core-free-icons"
-import { Loader2 } from "lucide-react"
+import { Loader2Icon, LockIcon, MailIcon } from "@/components/icons"
 import { PasswordInput } from "../components/password-input"
 import { renderGoogleSigninButton } from "../lib/google-connect"
 
@@ -153,11 +150,7 @@ export function SigninPage() {
                       autoFocus
                       className="pl-9"
                     />
-                    <HugeiconsIcon
-                      icon={Mail01Icon}
-                      className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"
-                      strokeWidth={2}
-                    />
+                    <MailIcon className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" strokeWidth={2} />
                   </div>
                 </div>
 
@@ -173,11 +166,7 @@ export function SigninPage() {
                       autoComplete="current-password"
                       className="pl-9 pr-9"
                     />
-                    <HugeiconsIcon
-                      icon={LockIcon}
-                      className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground"
-                      strokeWidth={2}
-                    />
+                    <LockIcon className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" strokeWidth={2} />
                   </div>
                 </div>
 
@@ -190,7 +179,7 @@ export function SigninPage() {
                 <Button type="submit" className="w-full" disabled={localSigninMutation.isPending || authMethodsQuery.isLoading}>
                   {localSigninMutation.isPending ? (
                     <span className="inline-flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2Icon className="h-4 w-4 animate-spin" />
                       Signing in…
                     </span>
                   ) : (
@@ -217,7 +206,7 @@ export function SigninPage() {
                 </div>
                 {googleSigninMutation.isPending ? (
                   <div className="flex items-center justify-center text-sm text-muted-foreground gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2Icon className="h-4 w-4 animate-spin" />
                     Connecting to Google…
                   </div>
                 ) : null}

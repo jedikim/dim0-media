@@ -127,7 +127,7 @@ function WelcomeLayout({
       {showShuffle && onShuffle ? (
         <button
           type='button'
-          className='mt-3 rounded-2xl px-3 py-1 text-xs font-medium text-accent-foreground/50 bg-accent hover:bg-muted shadow-sm hover:text-accent-foreground transition-colors'
+          className='mt-3 rounded-md px-3 py-1 text-xs font-medium text-accent-foreground/50 bg-accent hover:bg-muted shadow-sm hover:text-accent-foreground transition-colors'
           onClick={onShuffle}
           aria-label='Shuffle welcome message'
         >

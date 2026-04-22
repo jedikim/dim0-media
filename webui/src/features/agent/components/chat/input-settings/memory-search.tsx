@@ -1,7 +1,6 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { MemorySearchIcon } from "@/components/icons"
 import { useChatStore } from "@/features/agent/store/chat-store"
-import { ChipIcon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
 import { clsx } from "clsx"
 import { useEffect } from "react"
 
@@ -36,7 +35,7 @@ export const MemorySearchChoiceMenu = ({ available = true }: { available?: boole
   )
   const iconClass = clsx(
     "size-4 shrink-0",
-    available && isEnabled ? "text-secondary" : "text-muted-foreground"
+    available && isEnabled ? "text-secondary-foreground" : "text-muted-foreground"
   )
 
   return (
@@ -48,7 +47,7 @@ export const MemorySearchChoiceMenu = ({ available = true }: { available?: boole
             onClick={handleToggle}
             disabled={!available}
           >
-            <HugeiconsIcon icon={ChipIcon} className={iconClass} strokeWidth={2} />
+            <MemorySearchIcon className={iconClass} strokeWidth={2} />
             <span className="text-xs">Memory search</span>
           </button>
         </TooltipTrigger>

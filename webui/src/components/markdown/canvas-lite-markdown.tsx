@@ -75,12 +75,15 @@ const INLINE_PATTERN =
 const HR_LINE_PATTERN = /^[ \t]*---[ \t]*$/
 const DOUBLE_HR_LINE_PATTERN = /^[ \t]*===[ \t]*$/
 
+/**
+ * Mirrors the font stacks defined in index.css so canvas measurement matches DOM text.
+ */
 const FONT_FAMILY_MAP: Record<FontFamily, string> = {
-  handwriting: '"Shantell Sans", "Geist Handwriting Fallback", ui-handwriting, cursive',
-  'sans-serif': 'system-ui, "Instrument Sans", "Geist Fallback", ui-sans-serif, sans-serif',
-  serif: '"Source Serif 4", ui-serif, Georgia, serif',
-  monospace: '"Ubuntu Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-  informal: '"Gochi Hand", "Comic Sans", cursive, sans-serif',
+  handwriting: '"Architects Daughter", cursive',
+  'sans-serif': '"Atkinson Hyperlegible Next", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", ui-sans-serif, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"',
+  serif: '"Lora", "Source Serif 4", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif',
+  monospace: '"Inconsolata", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+  informal: '"Shantell Sans", ui-handwriting, cursive',
 }
 
 const FONT_SIZE_MAP: Record<FontSize, number> = {
@@ -89,15 +92,6 @@ const FONT_SIZE_MAP: Record<FontSize, number> = {
   L: 24,
   XL: 36,
 }
-const INFORMAL_FONT_SIZE_MAP: Record<FontSize, number> = {
-  S: 15.4,
-  M: 17.6,
-  L: 26.4,
-  XL: 39.6,
-}
-
-const H_PADDING = 8
-const V_PADDING = 8
 const CODE_BLOCK_PADDING_X = 6
 const CODE_BLOCK_MARGIN_Y = 4
 const CONTENT_HEIGHT_BUFFER = 4
@@ -107,7 +101,12 @@ const MIN_RENDER_SCALE = 0.15
 const MAX_RENDER_SCALE = 1.5
 const MAX_RENDER_WIDTH = 2000
 const MAX_RENDER_HEIGHT = 1200
-const FONT_SIZE_COMPENSATION = 1.08
+const LINE_HEIGHT_MAP: Record<FontSize, number> = {
+  S: 20,
+  M: 24,
+  L: 32,
+  XL: 40,
+}
 
 const renderCache = new Map<string, CacheEntry>()
 const pendingTasks = new Map<string, QueueTask>()
@@ -415,18 +414,13 @@ const getFontFamily = (type: InlineType, fontFamily: FontFamily): string => {
 
 /**
  * Resolves pixel font size for renderer layout and drawing.
- * Informal uses a custom scale to match CSS adjustments in index.css.
  */
-const getFontSizePx = (fontSize: FontSize, fontFamily: FontFamily): number => {
-  const baseSize = fontFamily === 'informal'
-    ? INFORMAL_FONT_SIZE_MAP[fontSize]
-    : FONT_SIZE_MAP[fontSize]
-  return baseSize * FONT_SIZE_COMPENSATION
-}
+const getFontSizePx = (fontSize: FontSize): number =>
+  FONT_SIZE_MAP[fontSize]
 
 
-const getLineHeightPx = (fontSize: FontSize, fontFamily: FontFamily): number =>
-  Math.ceil(getFontSizePx(fontSize, fontFamily) * 1.35)
+const getLineHeightPx = (fontSize: FontSize): number =>
+  LINE_HEIGHT_MAP[fontSize]
 
 
 /**
@@ -442,7 +436,7 @@ const getCanvasFont = ({
   fontFamily: FontFamily
   fontSize: FontSize
   textStyle: TextStyle
-}) => `${getFontStyle(type, textStyle)} ${getFontWeight(type, textStyle)} ${getFontSizePx(fontSize, fontFamily)}px ${getFontFamily(type, fontFamily)}`
+}) => `${getFontStyle(type, textStyle)} ${getFontWeight(type, textStyle)} ${getFontSizePx(fontSize)}px ${getFontFamily(type, fontFamily)}`
 
 
 /**
@@ -468,7 +462,7 @@ const measureText = ({
   const cached = widthCache.get(key)
   if (cached !== undefined) return cached
 
-  if (!measureCtx) return text.length * getFontSizePx(fontSize, fontFamily) * 0.55
+  if (!measureCtx) return text.length * getFontSizePx(fontSize) * 0.55
 
   measureCtx.font = font
   const width = measureCtx.measureText(text).width
@@ -520,7 +514,7 @@ const wrapCodeLine = (line: string, opts: LayoutOptions, maxWidth: number): stri
  * Output lines are consumed by the canvas draw pass.
  */
 function layoutTokens(tokens: Token[], opts: LayoutOptions): LayoutLine[] {
-  const maxWidth = Math.max(40, opts.width - H_PADDING * 2)
+  const maxWidth = Math.max(40, opts.width)
 
   const lines: LayoutLine[] = []
   let currentRuns: StyledRun[] = []
@@ -669,8 +663,8 @@ function layoutTokens(tokens: Token[], opts: LayoutOptions): LayoutLine[] {
  */
 const getTextX = (opts: RenderOptions, lineWidth: number): number => {
   if (opts.align === 'center') return Math.floor((opts.width - lineWidth) / 2)
-  if (opts.align === 'right') return Math.max(H_PADDING, opts.width - H_PADDING - lineWidth)
-  return H_PADDING
+  if (opts.align === 'right') return Math.max(0, opts.width - lineWidth)
+  return 0
 }
 
 
@@ -725,7 +719,7 @@ export const estimateMarkdownContentHeight = ({
     textStyle,
   }
   const lines = layoutTokens(tokenize(text), layoutOpts)
-  const lineHeight = getLineHeightPx(fontSize, fontFamily)
+  const lineHeight = getLineHeightPx(fontSize)
   return getContentHeight(lines, lineHeight) + CONTENT_HEIGHT_BUFFER
 }
 
@@ -778,15 +772,27 @@ const drawToCanvas = (ctx: CanvasRenderingContext2D, opts: RenderOptions, lines:
   ctx.fillStyle = opts.textColor
   ctx.strokeStyle = opts.textColor
 
-  const fontSizePx = getFontSizePx(opts.fontSize, opts.fontFamily)
-  const lineHeight = getLineHeightPx(opts.fontSize, opts.fontFamily)
+  const fontSizePx = getFontSizePx(opts.fontSize)
+  const lineHeight = getLineHeightPx(opts.fontSize)
   const contentHeight = getContentHeight(lines, lineHeight)
+  const availableHeight = Math.max(0, opts.height)
+  const shouldCenterVertically = contentHeight <= availableHeight
   const centeredTop = Math.floor((opts.height - contentHeight) / 2)
-  const startBaseline = Math.max(V_PADDING + fontSizePx, centeredTop + fontSizePx)
+  const topInset = Math.ceil(fontSizePx * 0.92)
+  const startBaseline = shouldCenterVertically
+    ? Math.max(topInset, centeredTop + topInset)
+    : topInset
   let y = startBaseline
 
   for (const line of lines) {
-    if (y > opts.height - V_PADDING) break
+    const lineTop = y - fontSizePx
+    const lineBottom = lineTop + getLineAdvance(line, lineHeight)
+
+    if (lineBottom <= 0) {
+      y += getLineAdvance(line, lineHeight)
+      continue
+    }
+    if (lineTop >= opts.height) break
 
     if (line.kind === 'code-block') {
       if (line.isFirst) y += CODE_BLOCK_MARGIN_Y
@@ -802,9 +808,9 @@ const drawToCanvas = (ctx: CanvasRenderingContext2D, opts: RenderOptions, lines:
         })
       })
 
-      const blockX = H_PADDING
+      const blockX = 0
       const blockY = y - fontSizePx + 2
-      const blockWidth = Math.max(10, opts.width - H_PADDING * 2)
+      const blockWidth = Math.max(10, opts.width)
       const blockHeight = lineHeight
 
       ctx.save()
@@ -849,14 +855,14 @@ const drawToCanvas = (ctx: CanvasRenderingContext2D, opts: RenderOptions, lines:
       ctx.save()
       ctx.globalAlpha = 0.55
       ctx.beginPath()
-      ctx.moveTo(H_PADDING, y)
-      ctx.lineTo(opts.width - H_PADDING, y)
+      ctx.moveTo(0, y)
+      ctx.lineTo(opts.width, y)
       ctx.lineWidth = 1
       ctx.stroke()
       if (line.double) {
         ctx.beginPath()
-        ctx.moveTo(H_PADDING, y + 3)
-        ctx.lineTo(opts.width - H_PADDING, y + 3)
+        ctx.moveTo(0, y + 3)
+        ctx.lineTo(opts.width, y + 3)
         ctx.lineWidth = 1
         ctx.stroke()
       }

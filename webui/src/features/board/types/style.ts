@@ -183,9 +183,6 @@ const ORANGE_200 = resolveFamilyShade("orange", 200) ?? "#fed7aa"
 const BLUE_200 = resolveFamilyShade("blue", 200) ?? "#bfdbfe"
 
 
-const BLUE_300 = resolveFamilyShade("blue", 300) ?? "#93c5fd"
-
-
 const STONE_200 = resolveFamilyShade("stone", 200) ?? "#e7e5e4"
 
 
@@ -286,7 +283,8 @@ export const createDefaultStyle = ({
         fontFamily: "handwriting",
         fontSize: "M",
         textAlign: "left",
-        backgroundColor: BLUE_300
+        backgroundColor: TRANSPARENT_HEX,
+        strokeColor: TRANSPARENT_HEX,
       } as Style
     case "text":
       return {

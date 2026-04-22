@@ -1,7 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { Clock02Icon, GridViewIcon, InformationCircleIcon, LeftToRightListBulletIcon, TextAlignLeftIcon } from '@hugeicons/core-free-icons'
+import { ChatHistoryIcon, GridViewIcon, InfoCircleIcon, TextListIcon, TextParagraphIcon } from '@/components/icons'
 import type { ViewMode } from '../../types/newsfeeds-view'
 
 export function TopViewPanel({
@@ -72,31 +71,31 @@ export function TopViewPanel({
       <ModeButton
         mode='linear'
         label='Linear'
-        icon={<HugeiconsIcon icon={LeftToRightListBulletIcon} className='size-4 shrink-0' strokeWidth={2} />}
+        icon={<TextListIcon className='size-4 shrink-0' strokeWidth={2} />}
         disabled={!hasLatest}
       />
       <ModeButton
         mode='grid'
         label='Grid'
-        icon={<HugeiconsIcon icon={GridViewIcon} className='size-4 shrink-0' strokeWidth={2} />}
+        icon={<GridViewIcon className='size-4 shrink-0' strokeWidth={2} />}
         disabled={!hasLatest}
       />
       <ModeButton
         mode='article'
         label='Article'
-        icon={<HugeiconsIcon icon={TextAlignLeftIcon} className='size-4 shrink-0' strokeWidth={2} />}
+        icon={<TextParagraphIcon className='size-4 shrink-0' strokeWidth={2} />}
         disabled={!hasLatest}
       />
       <Separator orientation='vertical' className='md:!h-6 hidden md:block' />
       <ModeButton
         mode='history'
         label='History'
-        icon={<HugeiconsIcon icon={Clock02Icon} className='size-4 shrink-0' strokeWidth={2} />}
+        icon={<ChatHistoryIcon className='size-4 shrink-0' strokeWidth={2} />}
       />
       <ModeButton
         mode='info'
         label='Info'
-        icon={<HugeiconsIcon icon={InformationCircleIcon} className='size-4 shrink-0' strokeWidth={2} />}
+        icon={<InfoCircleIcon className='size-4 shrink-0' strokeWidth={2} />}
       />
     </div>
   )

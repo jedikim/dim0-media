@@ -16,8 +16,8 @@ function PointNodeBase({ selected, data }: NodeProps<NoteNode>) {
   const size = POINT_NODE_SIZE
   const showActive = Boolean((data as { endpointActive?: boolean }).endpointActive)
   const isInteractive = showActive
-  const highlight = selected ? 'ring-2 ring-secondary ring-offset-2 ring-offset-background' : ''
-  const fillClass = showActive ? 'bg-secondary' : 'bg-transparent'
+  const highlight = selected ? 'ring-2 ring-secondary-foreground ring-offset-2 ring-offset-background' : ''
+  const fillClass = showActive ? 'bg-secondary-foreground' : 'bg-transparent'
   return (
     <div
       className={clsx(

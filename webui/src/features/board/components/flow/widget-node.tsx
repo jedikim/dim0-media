@@ -2,10 +2,9 @@ import { memo, useCallback, useEffect, useRef, useState } from "react"
 import type { Viewport } from "@xyflow/react"
 import clsx from "clsx"
 
-import { DragDropIcon, Layout01Icon, Maximize01Icon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
 import { useShallow } from "zustand/react/shallow"
 
+import { DragGripIcon, ExpandIcon, LayoutIcon } from "@/components/icons"
 import { useGraphStore } from "../../store/graph-store"
 import type { Note } from "../../types/note"
 import { WidgetIframe } from "./widget-iframe"
@@ -150,7 +149,7 @@ export const WidgetNode = memo(function WidgetNode({
               }
             }}
             onPointerDown={(event) => event.stopPropagation()}
-            className="nodrag w-full bg-transparent border-0 border-b border-foreground/30 focus:border-secondary focus:outline-none px-0 py-0.5 text-center text-sm font-medium text-foreground"
+            className="nodrag w-full bg-transparent border-0 border-b border-foreground/30 focus:border-secondary-foreground focus:outline-none px-0 py-0.5 text-center text-sm font-medium text-foreground"
             placeholder="Untitled widget"
           />
         ) : (
@@ -175,7 +174,7 @@ export const WidgetNode = memo(function WidgetNode({
           title="Drag widget"
           aria-label="Drag widget"
         >
-          <HugeiconsIcon icon={DragDropIcon} className="size-4 shrink-0" strokeWidth={2} />
+          <DragGripIcon className="size-4 shrink-0" />
         </div>
 
         {boardCanEdit && (
@@ -189,7 +188,7 @@ export const WidgetNode = memo(function WidgetNode({
             title="Open widget"
             aria-label="Open widget"
           >
-            <HugeiconsIcon icon={Maximize01Icon} className="size-4 shrink-0" strokeWidth={2} />
+            <ExpandIcon className="size-4 shrink-0" />
           </button>
         )}
       </div>
@@ -208,7 +207,7 @@ export const WidgetNode = memo(function WidgetNode({
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
-            <HugeiconsIcon icon={Layout01Icon} className="size-5 shrink-0" strokeWidth={2} />
+            <LayoutIcon className="size-5 shrink-0" />
             <span>Widget HTML will render here</span>
           </div>
         )}

@@ -1,7 +1,6 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { ImageGenerationIcon } from "@/components/icons"
 import { useChatStore } from "@/features/agent/store/chat-store"
-import { AiImageIcon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
 import { clsx } from "clsx"
 
 // Component that allows users to enable or disable the memory search tool
@@ -25,7 +24,7 @@ export const ImageGenMenu = () => {
   )
   const iconClass = clsx(
     "size-4 shrink-0",
-    isEnabled ? "text-secondary" : "text-muted-foreground"
+    isEnabled ? "text-secondary-foreground" : "text-muted-foreground"
   )
 
   return (
@@ -36,7 +35,7 @@ export const ImageGenMenu = () => {
             className={buttonClass}
             onClick={handleToggle}
           >
-            <HugeiconsIcon icon={AiImageIcon} className={iconClass} strokeWidth={2} />
+            <ImageGenerationIcon className={iconClass} strokeWidth={2} />
             <span className="text-xs">Image generation</span>
           </button>
         </TooltipTrigger>

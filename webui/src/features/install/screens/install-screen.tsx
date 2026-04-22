@@ -1,6 +1,6 @@
 import { InstallPhoneIllustration } from "@/components/illustrations/install-phone-illustration"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { EllipsisVertical, Share } from "lucide-react"
+import { ShareIcon, SidebarMenuIcon } from "@/components/icons"
 import type { ReactNode } from "react"
 import { siAndroid, siApple, siGooglechrome, siSafari } from "simple-icons"
 
@@ -141,7 +141,7 @@ export function InstallScreen() {
                 <>
                   Tap <strong>Share</strong>
                   <InstructionIcon>
-                    <Share className="size-3.5" strokeWidth={2} />
+                    <ShareIcon className="size-3.5" strokeWidth={2} />
                   </InstructionIcon>
                   .
                 </>,
@@ -175,7 +175,7 @@ export function InstallScreen() {
                 <>
                   Tap the browser <strong>menu</strong>
                   <InstructionIcon>
-                    <EllipsisVertical className="size-3.5" strokeWidth={2} />
+                    <SidebarMenuIcon className="size-3.5" strokeWidth={2} />
                   </InstructionIcon>
                   .
                 </>,

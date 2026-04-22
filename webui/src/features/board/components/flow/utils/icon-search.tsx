@@ -61,7 +61,7 @@ export const IconSearchDialog = ({
   return (
     <Dialog open={openIconSearch} onOpenChange={setOpenIconSearch}>
       <DialogContent className='sm:max-w-xl p-0 overflow-hidden sm:w-1/3 sm:h-[50vh] flex flex-col'>
-        <DialogHeader className='p-4 border-b text-secondary w-full text-center'>
+        <DialogHeader className='p-4 border-b text-secondary-foreground w-full text-center'>
           <DialogTitle>Search icons</DialogTitle>
         </DialogHeader>
         <div className='p-4'>
@@ -70,7 +70,7 @@ export const IconSearchDialog = ({
             value={q}
             onChange={e => setQ(e.target.value)}
             autoFocus
-            className='focus-visible:ring-2 focus-visible:ring-secondary/75 focus-visible:border-secondary'
+            className='focus-visible:ring-2 focus-visible:ring-secondary-foreground/75 focus-visible:border-secondary-foreground'
           />
         </div>
         <div className='p-4 pt-2 h-full w-full flex-1 overflow-y-auto scrollbar-thin'>
@@ -85,7 +85,7 @@ export const IconSearchDialog = ({
               {data?.map(icon => (
                 <button
                   key={icon.url}
-                  className='group relative aspect-square rounded-md border hover:ring-2 hover:ring-secondary/75 grid place-items-center p-1 bg-card'
+                  className='group relative aspect-square rounded-md border hover:ring-2 hover:ring-secondary-foreground/75 grid place-items-center p-1 bg-card'
                   title={icon.name}
                   onClick={() => handleSelectIcon(icon.name)}
                 >

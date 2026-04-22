@@ -73,8 +73,10 @@ export const DEFAULT_DIAMOND_NOTE_HEIGHT = 340
 export const DEFAULT_TEXT_NOTE_WIDTH = 150
 export const DEFAULT_TEXT_NOTE_HEIGHT = 20
 
-export const DEFAULT_STICKY_NOTE_WIDTH = 368
-export const DEFAULT_STICKY_NOTE_HEIGHT = 360
+export const DEFAULT_SHEET_WIDTH = 320
+export const DEFAULT_SHEET_HEIGHT = 200
+export const SHEET_MIN_WIDTH = 200
+export const SHEET_MIN_HEIGHT = 120
 
 export const DEFAULT_SLIDE_WIDTH = 960
 export const DEFAULT_SLIDE_HEIGHT = 540
@@ -83,8 +85,8 @@ export const DEFAULT_FOLDER_WIDTH = 150
 export const DEFAULT_FOLDER_HEIGHT = 150
 export const DEFAULT_CODE_SANDBOX_WIDTH = 320
 export const DEFAULT_CODE_SANDBOX_HEIGHT = 320
-export const DEFAULT_WIDGET_WIDTH = 360
-export const DEFAULT_WIDGET_HEIGHT = 260
+export const DEFAULT_WIDGET_WIDTH = 800
+export const DEFAULT_WIDGET_HEIGHT = 500
 
 
 /**
@@ -93,7 +95,7 @@ export const DEFAULT_WIDGET_HEIGHT = 260
  */
 export const createDefaultNoteProperties = ({ type = 'rectangle' }: { type?: NodeType }): NoteProperties => {
   const defaultSize = type === 'sheet'
-    ? { width: DEFAULT_STICKY_NOTE_WIDTH, height: DEFAULT_STICKY_NOTE_HEIGHT }
+    ? { width: DEFAULT_SHEET_WIDTH, height: DEFAULT_SHEET_HEIGHT }
     : type === 'text'
     ? { width: DEFAULT_TEXT_NOTE_WIDTH, height: DEFAULT_TEXT_NOTE_HEIGHT }
     : type === 'slide'
@@ -168,7 +170,11 @@ export const createDefaultNote = ({
     graphUid: boardId,
     style: { ...createDefaultStyle({ type: nodeType }) },
     minWidth: nodeType === 'sheet'
-      ? DEFAULT_STICKY_NOTE_WIDTH
+      ? DEFAULT_SHEET_WIDTH
+      : nodeType === 'text'
+      ? DEFAULT_TEXT_NOTE_WIDTH
+      : nodeType === 'slide'
+      ? DEFAULT_SLIDE_WIDTH
       : nodeType === 'folder'
       ? DEFAULT_FOLDER_WIDTH
       : nodeType === 'code-sandbox'
@@ -181,7 +187,11 @@ export const createDefaultNote = ({
       ? DEFAULT_DIAMOND_NOTE_WIDTH
       : DEFAULT_RECTANGLE_NOTE_WIDTH,
     minHeight: nodeType === 'sheet'
-      ? DEFAULT_STICKY_NOTE_HEIGHT
+      ? DEFAULT_SHEET_HEIGHT
+      : nodeType === 'text'
+      ? DEFAULT_TEXT_NOTE_HEIGHT
+      : nodeType === 'slide'
+      ? DEFAULT_SLIDE_HEIGHT
       : nodeType === 'folder'
       ? DEFAULT_FOLDER_HEIGHT
       : nodeType === 'code-sandbox'

@@ -2,11 +2,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Card, CardContent } from '@/components/ui/card'
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { DeleteIcon, PropertyIcon } from '@/components/icons'
 import { cn } from '@/lib/utils'
 import type { Subscription } from '../types/subscription'
 import { TOPIC_DISPLAY, TOPIC_EMOJI, matchPredefined } from '../constants/topics'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { Delete02Icon, PropertyNewIcon } from '@hugeicons/core-free-icons'
 import { SquareDashedKanban } from '@/components/animate-ui/icons/square-dashed-kanban'
 
 
@@ -28,6 +27,7 @@ export function SubscriptionCard({
   const topicKey = matchPredefined(title)
   const label = topicKey ? TOPIC_DISPLAY[topicKey] : title || 'Subscription'
   const description = sub.properties?.rawDescription?.text
+  const TopicIcon = topicKey ? TOPIC_EMOJI[topicKey] : PropertyIcon
 
   const handleDelete = () => {
     if (!onDelete) return
@@ -71,7 +71,7 @@ export function SubscriptionCard({
       <ContextMenuTrigger asChild>
         <Card
           className={cn(
-            'w-64 h-20 justify-center items-center flex rounded-xl transition bg-accent hover:bg-muted shadow-md hover:shadow-lg border border-transparent hover:border-secondary hover:ring-2 hover:ring-secondary/20 p-0 overflow-hidden cursor-pointer',
+            'w-64 h-20 justify-center items-center flex rounded-xl transition bg-accent hover:bg-muted shadow-md hover:shadow-lg border border-transparent hover:border-secondary-foreground hover:ring-2 hover:ring-secondary-foreground/20 p-0 overflow-hidden cursor-pointer',
             sub.creating && 'bg-muted'
           )}
         >
@@ -110,8 +110,7 @@ export function SubscriptionCard({
                       strokeWidth={2}
                     />
                   ) : (
-                    <HugeiconsIcon
-                      icon={topicKey ? TOPIC_EMOJI[topicKey] : PropertyNewIcon}
+                    <TopicIcon
                       className='w-5 h-5 text-muted-foreground flex-shrink-0'
                       strokeWidth={1.5}
                     />
@@ -142,7 +141,7 @@ export function SubscriptionCard({
           onClick={handleDelete}
           className='text-destructive focus:text-destructive'
         >
-          <HugeiconsIcon icon={Delete02Icon} className='w-4 h-4 mr-2' strokeWidth={2} />
+          <DeleteIcon className='w-4 h-4 mr-2' strokeWidth={2} />
           Delete
         </ContextMenuItem>
       </ContextMenuContent>

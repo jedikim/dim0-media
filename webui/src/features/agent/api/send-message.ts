@@ -4,6 +4,7 @@ import type { SendMessageRequestPayload } from "./types"
 import { handleStreamingResponse } from "../utils/stream/digest"
 import { useChatStore } from "../store/chat-store"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useNavigate, useRouter } from "@tanstack/react-router"
 import type { ChatMessage } from "../types/chat"
 import snakecaseKeys from "snakecase-keys"
 import { buildResponse } from "../utils/stream/build"
@@ -111,6 +112,8 @@ export const useSendMessage = () => {
   const setIsStreaming = useChatStore((state) => state.setIsStreaming)
 
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const router = useRouter()
 
   const mutation = useMutation({
     mutationFn: async ({
@@ -252,23 +255,36 @@ export const useSendMessage = () => {
           } = useGraphStore.getState()
 
           if (activeBoardId) {
+            let lastCreatedNoteId: string | null = null
             for (const output of noteToolOutputs) {
               if (output.graphUid !== activeBoardId || !output.noteId) continue
+
+              const isNewlyCreated = output.type === "create_note"
+                || (output.type === "write_note" && output.action === "created")
 
               try {
                 const note = await getBoardNote(activeBoardId, output.noteId)
                 const fetchedNode = convertNoteToNode(note)
                 setNodesPersist((prevNodes) =>
-                  applyRemoteNoteNode(
-                    prevNodes,
-                    fetchedNode,
-                    output.type === "create_note"
-                      || (output.type === "write_note" && output.action === "created")
-                  ),
+                  applyRemoteNoteNode(prevNodes, fetchedNode, isNewlyCreated),
                 { persist: false })
+
+                if (isNewlyCreated) {
+                  lastCreatedNoteId = output.noteId
+                }
               } catch (error) {
                 console.error("Failed to apply remote note update locally:", error)
               }
+            }
+
+            if (lastCreatedNoteId && router.state.location.pathname.startsWith(`/boards/${activeBoardId}`)) {
+              const noteIdToCenter = lastCreatedNoteId
+              navigate({
+                to: "/boards/$id",
+                params: { id: activeBoardId },
+                replace: true,
+                search: (prev: Record<string, unknown>) => ({ ...prev, center_around: noteIdToCenter }),
+              })
             }
           }
         }

@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { SparklesIcon } from "@/components/icons"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { NoteNode } from "@/features/board/types/flow"
 import { buildContextTextFromNodes } from "@/features/board/utils/context-text"
 import { useAiSparkActions } from "@/features/board/hooks/use-ai-spark-actions"
-import { Sparkles } from "lucide-react"
 
 export interface AiSparkDialogProps {
   open: boolean
@@ -82,7 +82,7 @@ export const AiSparkDialog = ({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="size-4 text-secondary" />
+            <SparklesIcon className="size-4 text-secondary-foreground" />
             <span>AI Spark</span>
           </DialogTitle>
           <DialogDescription>
@@ -103,7 +103,7 @@ export const AiSparkDialog = ({
                     <span className="flex items-center gap-2">
                       <span>{action.label}</span>
                       {action.key === "drawify" && (
-                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground border border-border rounded-full px-2 py-0.5">
+                        <span className="text-[10px] uppercase tracking-wide text-muted-foreground border border-border rounded-sm px-2 py-0.5">
                           Beta
                         </span>
                       )}
@@ -130,7 +130,7 @@ export const AiSparkDialog = ({
               <label className="text-xs font-medium text-muted-foreground">Context</label>
               <button
                 type="button"
-                className="text-xs text-secondary underline-offset-2 hover:underline disabled:opacity-50"
+                className="text-xs text-secondary-foreground underline-offset-2 hover:underline disabled:opacity-50"
                 onClick={() => setUseSelection(!useSelection)}
                 disabled={selectionContext.length === 0}
               >

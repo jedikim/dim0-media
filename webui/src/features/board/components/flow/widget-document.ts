@@ -7,8 +7,8 @@ type WidgetThemeTokenName =
   | "--muted-foreground"
   | "--primary"
   | "--primary-foreground"
-  | "--secondary"
   | "--secondary-foreground"
+  | "--secondary"
   | "--accent"
   | "--accent-foreground"
   | "--destructive"
@@ -36,8 +36,8 @@ const WIDGET_THEME_TOKEN_NAMES: WidgetThemeTokenName[] = [
   "--muted-foreground",
   "--primary",
   "--primary-foreground",
-  "--secondary",
   "--secondary-foreground",
+  "--secondary",
   "--accent",
   "--accent-foreground",
   "--destructive",
@@ -63,8 +63,8 @@ const DEFAULT_WIDGET_TOKENS: WidgetThemeTokens = {
   "--muted-foreground": "#71717a",
   "--primary": "#18181b",
   "--primary-foreground": "#fafafa",
-  "--secondary": "#e4e4e7",
-  "--secondary-foreground": "#18181b",
+  "--secondary-foreground": "#e4e4e7",
+  "--secondary": "#18181b",
   "--accent": "#f4f4f5",
   "--accent-foreground": "#18181b",
   "--destructive": "#dc2626",
@@ -87,10 +87,14 @@ const renderThemeTokenBlock = (tokens: WidgetThemeTokens) =>
 
 const WIDGET_BASE_STYLE = `
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&family=Inconsolata:wght@200..900&family=Architects+Daughter&display=swap');
+
     :root {
       ${renderThemeTokenBlock(DEFAULT_WIDGET_TOKENS)}
+      --font-sans: "Atkinson Hyperlegible Next", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-handwriting: "Architects Daughter", cursive;
       color-scheme: light dark;
-      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: var(--font-sans);
     }
 
     html, body {

@@ -10,8 +10,7 @@ import {
   LlmFamilyIcon,
   type LlmFamily,
 } from "@/features/agent/types/llm"
-import { SquareLock01Icon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
+import { LockIcon } from "@/components/icons"
 import { clsx } from "clsx"
 import { useShallow } from "zustand/shallow"
 
@@ -51,7 +50,7 @@ const ModelCard: React.FC<{ model: LlmModel; available?: boolean }> = ({ model, 
         <span className="truncate">{LlmName[model]}</span>
       </HoverCardTrigger>
       <HoverCardContent
-        className="w-48 rounded-xl border border-border bg-popover text-popover-foreground shadow text-sm"
+        className="w-48 rounded-lg border border-border bg-popover text-popover-foreground shadow text-sm"
         side="left"
         sideOffset={15}
       >
@@ -93,13 +92,13 @@ export const ModelChoiceMenu = ({ display = "icon" }: ModelChoiceMenuProps) => {
   const isRow = display === "row"
   const triggerClassName = isRow
     ? "w-full rounded-md text-xs px-2 py-1.5 shadow-none hover:bg-accent [&>svg:not(.my-icon)]:hidden border border-transparent hover:border-border transition-colors justify-start gap-2 text-muted-foreground"
-    : "w-auto rounded-full text-xs p-2 shadow-none border-none"
+    : "w-auto rounded-md text-xs p-2 shadow-none border-none"
 
   return (
     <Select onValueChange={handleModelChange} value={llmModel}>
       <Tooltip delayDuration={400}>
         <div className={clsx(
-          isRow ? "w-full" : "rounded-full bg-background backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/50 border border-transparent hover:border-border transition-colors"
+          isRow ? "w-full" : "rounded-md bg-background backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/50 border border-transparent hover:border-border transition-colors"
         )}>
           <TooltipTrigger asChild>
             <SelectTrigger className={triggerClassName} size="sm" hideChevron>
@@ -161,8 +160,7 @@ export const ModelChoiceMenu = ({ display = "icon" }: ModelChoiceMenuProps) => {
                     >
                       <ModelCard model={model.name} available={model.available} />
                       {!model.available && (
-                        <HugeiconsIcon
-                          icon={SquareLock01Icon}
+                        <LockIcon
                           className="size-4 absolute right-2 top-1/2 -translate-y-1/2"
                           strokeWidth={2}
                         />

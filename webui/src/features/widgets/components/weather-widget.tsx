@@ -7,15 +7,15 @@
 
 import { motion } from 'framer-motion'
 import {
-  CloudDrizzle,
-  CloudRain,
-  CloudSnow,
-  Sun,
-  CloudSun,
-  Cloud,
-  MapPin,
-  Clock,
-} from 'lucide-react'
+  MapPinIcon,
+  TimeClockIcon,
+  SunnyIcon,
+  WeatherCloudDrizzleIcon,
+  WeatherCloudIcon,
+  WeatherCloudRainIcon,
+  WeatherCloudSnowIcon,
+  WeatherCloudSunIcon,
+} from '@/components/icons'
 import {
   LineChart,
   Line,
@@ -57,17 +57,17 @@ export type WeatherWidgetProps = {
 function iconFor(kind: WeatherKind, className = 'w-5 h-5') {
   switch (kind) {
     case 'sunny':
-      return <Sun className={className} />
+      return <SunnyIcon className={className} />
     case 'partly':
-      return <CloudSun className={className} />
+      return <WeatherCloudSunIcon className={className} />
     case 'cloudy':
-      return <Cloud className={className} />
+      return <WeatherCloudIcon className={className} />
     case 'drizzle':
-      return <CloudDrizzle className={className} />
+      return <WeatherCloudDrizzleIcon className={className} />
     case 'rain':
-      return <CloudRain className={className} />
+      return <WeatherCloudRainIcon className={className} />
     case 'snow':
-      return <CloudSnow className={className} />
+      return <WeatherCloudSnowIcon className={className} />
   }
 }
 
@@ -148,11 +148,11 @@ export function WeatherWidget(props: WeatherWidgetProps) {
 
         <div className='text-xs text-right space-y-0.5'>
           <div className='flex items-center justify-end gap-1 opacity-80'>
-            <MapPin className='w-3.5 h-3.5' />
+            <MapPinIcon className='w-3.5 h-3.5' />
             <span className='truncate max-w-[120px]'>{location}</span>
           </div>
           <div className='flex items-center justify-end gap-1 opacity-70'>
-            <Clock className='w-3.5 h-3.5' />
+            <TimeClockIcon className='w-3.5 h-3.5' />
             <span>{asOf}</span>
           </div>
         </div>

@@ -1,6 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Folder01Icon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
+import { FolderIcon } from "@/components/icons"
 import type { NoteNode } from "../../types/flow"
 import { useGraphStore } from "../../store/graph-store"
 import { useTheme } from "@/components/theme-provider"
@@ -82,8 +81,7 @@ export const FolderNode = memo(function FolderNode({ id, data }: FolderNodeProps
   return (
     <div className="relative w-full h-full">
       <div className="flex h-full w-full items-center justify-center">
-        <HugeiconsIcon
-          icon={Folder01Icon}
+        <FolderIcon
           className="h-full w-full"
           strokeWidth={1.8}
           color={displayStrokeColor}
@@ -111,7 +109,7 @@ export const FolderNode = memo(function FolderNode({ id, data }: FolderNodeProps
             onMouseDown={event => event.stopPropagation()}
             onDoubleClick={event => event.stopPropagation()}
             onClick={event => event.stopPropagation()}
-            className={`w-full bg-transparent border-0 border-b border-foreground/30 focus:border-secondary focus:outline-none px-0 py-0.5 ${textAlignClass} ${fontClass} ${sizeClass} ${textStyleClass}`}
+            className={`w-full bg-transparent border-0 border-b border-foreground/30 focus:border-secondary-foreground focus:outline-none px-0 py-0.5 ${textAlignClass} ${fontClass} ${sizeClass} ${textStyleClass}`}
             style={{ color: displayTextColor }}
             placeholder="Untitled folder"
           />

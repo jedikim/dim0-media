@@ -1,7 +1,6 @@
 import { memo } from 'react'
+import { ArrowClockwise, ArrowCounterClockwise, DotsNine, GridFour, LockSimple, LockSimpleOpen } from '@phosphor-icons/react'
 import { Button } from '@/components/ui/button'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { GridIcon, More01Icon, Redo03Icon, SquareLock02Icon, SquareUnlock02Icon, Undo03Icon } from '@hugeicons/core-free-icons'
 import clsx from 'clsx'
 import type { Viewport } from '@xyflow/react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -88,7 +87,7 @@ export const ViewportControls = memo(function ViewportControls({
               className={controlButtonClass}
               aria-label='Reset zoom to 100%'
             >
-              <span className='text-xs font-medium text-secondary min-w-[2.4rem] text-center'>
+              <span className='text-xs font-medium text-secondary-foreground min-w-[2.4rem] text-center'>
                 {Math.round((zoom || 1) * 100)}%
               </span>
             </Button>
@@ -107,7 +106,7 @@ export const ViewportControls = memo(function ViewportControls({
               aria-label='Undo'
               disabled={!canUndo}
             >
-              <HugeiconsIcon icon={Undo03Icon} className='size-4 shrink-0' strokeWidth={2} />
+              <ArrowCounterClockwise className='size-4 shrink-0' />
             </Button>
           </TooltipTrigger>
           <TooltipContent side='right' sideOffset={10}>
@@ -124,7 +123,7 @@ export const ViewportControls = memo(function ViewportControls({
               aria-label='Redo'
               disabled={!canRedo}
             >
-              <HugeiconsIcon icon={Redo03Icon} className='size-4 shrink-0' strokeWidth={2} />
+              <ArrowClockwise className='size-4 shrink-0' />
             </Button>
           </TooltipTrigger>
           <TooltipContent side='right' sideOffset={10}>
@@ -141,9 +140,9 @@ export const ViewportControls = memo(function ViewportControls({
               aria-label={isLocked ? 'Unlock canvas' : 'Lock canvas'}
             >
               {isLocked ? (
-                <HugeiconsIcon icon={SquareLock02Icon} className='size-4 shrink-0' strokeWidth={2} />
+                <LockSimple className='size-4 shrink-0' />
               ) : (
-                <HugeiconsIcon icon={SquareUnlock02Icon} className='size-4 shrink-0' strokeWidth={2} />
+                <LockSimpleOpen className='size-4 shrink-0' />
               )}
             </Button>
           </TooltipTrigger>
@@ -157,7 +156,7 @@ export const ViewportControls = memo(function ViewportControls({
               <PopoverTrigger asChild>
                 <Button variant={null} size='icon' type='button' className={controlButtonClass} aria-label='Board background'>
                   <span
-                    className='w-4 h-4 rounded-full border-2 border-secondary/50'
+                    className='w-4 h-4 rounded-full border-2 border-secondary-foreground/50'
                     style={{
                       backgroundColor: applyBackgroundAlpha(
                         isDark ? darkModeDisplayHex(boardBackground) || boardBackground : boardBackground,
@@ -215,16 +214,16 @@ export const ViewportControls = memo(function ViewportControls({
                   className={clsx(
                     'h-7 w-7 rounded-md text-[8px] font-medium transition-colors flex items-center justify-center',
                     option.value === boardBackgroundTexture
-                      ? 'bg-sidebar-primary text-secondary'
+                      ? 'bg-sidebar-primary text-secondary-foreground'
                       : 'bg-muted text-muted-foreground/50 hover:bg-muted/70'
                   )}
                   onClick={() => onBoardBackgroundTextureChange(option.value)}
                   aria-label={option.label}
                 >
                   {option.value === 'lines' ? (
-                    <HugeiconsIcon icon={GridIcon} className='size-4' strokeWidth={2} />
+                    <GridFour className='size-4' />
                   ) : option.value === 'dots' ? (
-                    <HugeiconsIcon icon={More01Icon} className='size-4' strokeWidth={2} />
+                    <DotsNine className='size-4' />
                   ) : (
                     'None'
                   )}

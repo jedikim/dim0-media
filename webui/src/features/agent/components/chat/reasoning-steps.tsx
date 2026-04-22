@@ -1,11 +1,9 @@
 import { useMemo, useState } from "react"
+import { ArrowRevealIcon, EllipsisIcon } from "@/components/icons"
 import { isReasoningTextStep, isToolCallStep, type AgentResponse, type ReasoningTextStep, type ToolCallStep } from "../../types/stream"
 import { ReasoningStepRow } from "./reasoning-step-row"
 import { ToolStepRow } from "./tool-step-row"
 import { buildToolStepWidgetAttachments, type ToolStepWidgetAttachment } from "./tool-step-widgets"
-import { ArrowUp01Icon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
-import { Ellipsis } from "lucide-react"
 
 
 type TimelineItem =
@@ -52,9 +50,9 @@ const CollapsedToolBlockRow = ({
       <div className='relative flex-shrink-0'>
         <div className='relative z-20 mt-2 -ml-1 rounded-full bg-background w-6 h-6 flex items-center justify-center'>
           {isExpanded ? (
-            <HugeiconsIcon icon={ArrowUp01Icon} className='size-4' strokeWidth={2} />
+            <ArrowRevealIcon className='size-4' strokeWidth={2} />
           ) : (
-            <Ellipsis className='size-4' strokeWidth={2} />
+            <EllipsisIcon className='size-4' strokeWidth={2} />
           )}
         </div>
       </div>

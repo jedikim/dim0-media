@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { Delete02Icon, Pdf02Icon } from '@hugeicons/core-free-icons'
+import { DeleteIcon, PdfIcon } from '@/components/icons'
 
 import type { NoteNode } from '../../types/flow'
 import { useGraphStore } from '../../store/graph-store'
@@ -75,7 +74,7 @@ export const LinearDocumentCard = memo(function LinearDocumentCard({ node }: Pro
         aria-label='Delete document'
         title='Delete'
       >
-        <HugeiconsIcon icon={Delete02Icon} className='size-4' strokeWidth={2} />
+        <DeleteIcon className='size-4' strokeWidth={2} />
       </button>
 
       <div
@@ -87,7 +86,7 @@ export const LinearDocumentCard = memo(function LinearDocumentCard({ node }: Pro
         )}
       >
         <div className='flex w-full max-w-[92px] aspect-square items-center justify-center rounded-2xl border border-border/70 bg-background text-muted-foreground shadow-sm'>
-          <HugeiconsIcon icon={Pdf02Icon} className='size-12 shrink-0' strokeWidth={1.8} />
+          <PdfIcon className='size-12 shrink-0' strokeWidth={1.8} />
         </div>
       </div>
 
@@ -110,7 +109,7 @@ export const LinearDocumentCard = memo(function LinearDocumentCard({ node }: Pro
             }}
             onMouseDown={event => event.stopPropagation()}
             onClick={event => event.stopPropagation()}
-            className='w-full bg-transparent text-center text-sm font-sans font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary focus:outline-none px-0 py-0.5'
+            className='w-full bg-transparent text-center text-sm font-sans font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary-foreground focus:outline-none px-0 py-0.5'
             placeholder='Untitled document'
           />
         ) : (
