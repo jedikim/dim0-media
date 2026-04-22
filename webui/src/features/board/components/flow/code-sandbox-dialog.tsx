@@ -1,6 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { ComputerTerminal01Icon, Loading02Icon, PlayIcon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
+import { ConsoleIcon, LoaderIcon, PlayIcon } from "@/components/icons"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
@@ -177,7 +176,7 @@ export const CodeSandboxDialog = memo(function CodeSandboxDialog({
           }}
         >
           <div className="flex min-w-0 flex-1 items-center gap-2 pr-2">
-            <HugeiconsIcon icon={ComputerTerminal01Icon} className="size-4 shrink-0" strokeWidth={2} />
+            <ConsoleIcon className="size-4 shrink-0" strokeWidth={2} />
             <div className="min-w-0 flex-1">
               {titleEditing ? (
                 <input
@@ -195,7 +194,7 @@ export const CodeSandboxDialog = memo(function CodeSandboxDialog({
                       stopTitleEdit(false)
                     }
                   }}
-                  className="w-full bg-transparent text-sm font-semibold border-0 border-b border-current/30 focus:border-secondary focus:outline-none px-0 py-0.5"
+                  className="w-full bg-transparent text-sm font-semibold border-0 border-b border-current/30 focus:border-secondary-foreground focus:outline-none px-0 py-0.5"
                   style={{ color: palette.text }}
                   placeholder="Untitled sandbox"
                 />
@@ -221,9 +220,9 @@ export const CodeSandboxDialog = memo(function CodeSandboxDialog({
             </span>
             <Button type="button" size="sm" onClick={handleExecute} disabled={isExecuting} className="gap-2">
               {isExecuting ? (
-                <HugeiconsIcon icon={Loading02Icon} className="size-4 shrink-0 animate-spin" strokeWidth={2} />
+                <LoaderIcon className="size-4 shrink-0 animate-spin" strokeWidth={2} />
               ) : (
-                <HugeiconsIcon icon={PlayIcon} className="size-4 shrink-0" strokeWidth={2} />
+                <PlayIcon className="size-4 shrink-0" strokeWidth={2} />
               )}
               {isExecuting ? "Running" : "Execute"}
             </Button>

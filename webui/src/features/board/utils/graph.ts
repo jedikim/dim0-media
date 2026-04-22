@@ -4,8 +4,6 @@ import { createDefaultLinkProperties, type Link } from "../types/link"
 import type { Document } from "../types/document"
 import {
   createDefaultNoteProperties,
-  DEFAULT_STICKY_NOTE_HEIGHT,
-  DEFAULT_STICKY_NOTE_WIDTH,
   type Note,
 } from "../types/note"
 import { createDefaultLinkStyle } from "../types/style"
@@ -25,14 +23,11 @@ type PointPair = {
 export const convertNoteToNode = (note: Note | Document): NoteNode => {
   const position = note.properties?.nodePosition?.position || { x: 0, y: 0 }
   const fallbackSize = { width: 300, height: 100 }
-  // Sheets keep a canonical outer frame so load/save/render all use identical geometry.
-  const size = note.type === "note" && note.style.type === "sheet"
-    ? { width: DEFAULT_STICKY_NOTE_WIDTH, height: DEFAULT_STICKY_NOTE_HEIGHT }
-    : note.properties?.nodeSize?.size || (
-      note.type === "note"
-        ? createDefaultNoteProperties({ type: note.style.type }).nodeSize.size ?? fallbackSize
-        : fallbackSize
-    )
+  const size = note.properties?.nodeSize?.size || (
+    note.type === "note"
+      ? createDefaultNoteProperties({ type: note.style.type }).nodeSize.size ?? fallbackSize
+      : fallbackSize
+  )
   const zIndex =
     note.type === "note" ? note.properties?.nodeZIndex?.number || 0 : 0
 
@@ -220,16 +215,8 @@ export const convertNodeToNote = (node: NoteNode): Note | Document | null => {
       ? createDefaultNoteProperties({ type: note.style.type })
       : note.properties)
 
-    /**
-     * Sheets use a fixed canonical outer box so persisted geometry stays
-     * stable across reloads and attached edge math does not drift.
-     */
-    const size = note.type === "note" && note.style.type === "sheet"
-      ? { width: DEFAULT_STICKY_NOTE_WIDTH, height: DEFAULT_STICKY_NOTE_HEIGHT }
-      : { width: node.measured.width || 100, height: node.measured.height || 100 }
-
     note.properties.nodeSize = {
-      size,
+      size: { width: node.measured.width || 100, height: node.measured.height || 100 },
       type: "size",
     }
   }

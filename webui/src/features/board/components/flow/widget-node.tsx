@@ -1,13 +1,13 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { memo, useEffect, useState } from "react"
 import type { Viewport } from "@xyflow/react"
 import clsx from "clsx"
 
-import { DragDropIcon, Layout01Icon, Maximize01Icon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
 import { useShallow } from "zustand/react/shallow"
 
+import { DragGripIcon, ExpandIcon, LayoutIcon } from "@/components/icons"
 import { useGraphStore } from "../../store/graph-store"
 import type { Note } from "../../types/note"
+import { NodeTitleCaption } from "./node-title-caption"
 import { WidgetIframe } from "./widget-iframe"
 
 
@@ -70,29 +70,10 @@ export const WidgetNode = memo(function WidgetNode({
     rendererSize: state.rendererSize,
   })))
   const openNodeSurface = useGraphStore((state) => state.openNodeSurface)
-  const updateNodeByIdPersist = useGraphStore((state) => state.updateNodeByIdPersist)
   const html = note.content?.markdown?.trim() || ""
-  const displayTitle = note.label?.markdown?.trim() || "Untitled widget"
   const scopeViewportKey = boardId ? `${boardId}:${rootId ?? "root"}` : undefined
   const viewport = scopeViewportKey ? graphViewports[scopeViewportKey] : undefined
-  const [titleEditing, setTitleEditing] = useState(false)
-  const [titleDraft, setTitleDraft] = useState(note.label?.markdown || "")
   const [isVisibleInViewport, setIsVisibleInViewport] = useState(true)
-  const titleInputRef = useRef<HTMLInputElement | null>(null)
-
-  useEffect(() => {
-    if (titleEditing) return
-    setTitleDraft(note.label?.markdown || "")
-  }, [note.label?.markdown, titleEditing])
-
-  useEffect(() => {
-    if (!titleEditing) return
-    const frame = requestAnimationFrame(() => {
-      titleInputRef.current?.focus()
-      titleInputRef.current?.select()
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [titleEditing])
 
   useEffect(() => {
     if (isMoving) return
@@ -102,72 +83,17 @@ export const WidgetNode = memo(function WidgetNode({
   const suspendPreview = Boolean(isMoving || dragging || !isVisibleInViewport)
   const canInteractInline = selected && !suspendPreview
 
-  /**
-   * Persist the edited board title for this widget node.
-   */
-  const commitTitle = useCallback((nextRaw: string) => {
-    const next = nextRaw.trim()
-    const prev = note.label?.markdown?.trim() || ""
-    if (next === prev) return
-
-    updateNodeByIdPersist(note.id, (node) => ({
-      ...node,
-      data: {
-        ...node.data,
-        label: next ? { markdown: next } : undefined,
-      },
-    }))
-  }, [note.id, note.label?.markdown, updateNodeByIdPersist])
-
-  /**
-   * End inline title editing, optionally saving the latest draft.
-   */
-  const stopTitleEdit = useCallback((save: boolean) => {
-    if (save) commitTitle(titleDraft)
-    else setTitleDraft(note.label?.markdown || "")
-    setTitleEditing(false)
-  }, [commitTitle, note.label?.markdown, titleDraft])
-
   return (
     <div
       className="relative w-full h-full overflow-visible rounded-3xl border border-border border-dashed bg-background p-2 text-left"
     >
-      <div className="absolute left-1/2 top-full z-20 mt-2 w-full max-w-[220px] -translate-x-1/2">
-        {titleEditing ? (
-          <input
-            ref={titleInputRef}
-            value={titleDraft}
-            onChange={(event) => setTitleDraft(event.target.value)}
-            onBlur={() => stopTitleEdit(true)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault()
-                stopTitleEdit(true)
-              }
-              if (event.key === "Escape") {
-                event.preventDefault()
-                stopTitleEdit(false)
-              }
-            }}
-            onPointerDown={(event) => event.stopPropagation()}
-            className="nodrag w-full bg-transparent border-0 border-b border-foreground/30 focus:border-secondary focus:outline-none px-0 py-0.5 text-center text-sm font-medium text-foreground"
-            placeholder="Untitled widget"
-          />
-        ) : (
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              if (!boardCanEdit) return
-              setTitleEditing(true)
-            }}
-            className="nodrag block w-full truncate text-center text-sm font-medium text-foreground hover:underline"
-            title={displayTitle}
-          >
-            {displayTitle}
-          </button>
-        )}
-      </div>
+      <NodeTitleCaption
+        nodeId={note.id}
+        label={note.label?.markdown}
+        placeholder="Untitled widget"
+        textClassName="text-center text-sm font-medium text-foreground"
+        className="absolute left-1/2 top-full z-20 mt-2 w-full -translate-x-1/2"
+      />
 
       <div className="absolute right-2 top-2 z-20 flex items-center gap-1">
         <div
@@ -175,7 +101,7 @@ export const WidgetNode = memo(function WidgetNode({
           title="Drag widget"
           aria-label="Drag widget"
         >
-          <HugeiconsIcon icon={DragDropIcon} className="size-4 shrink-0" strokeWidth={2} />
+          <DragGripIcon className="size-4 shrink-0" />
         </div>
 
         {boardCanEdit && (
@@ -189,7 +115,7 @@ export const WidgetNode = memo(function WidgetNode({
             title="Open widget"
             aria-label="Open widget"
           >
-            <HugeiconsIcon icon={Maximize01Icon} className="size-4 shrink-0" strokeWidth={2} />
+            <ExpandIcon className="size-4 shrink-0" />
           </button>
         )}
       </div>
@@ -208,7 +134,7 @@ export const WidgetNode = memo(function WidgetNode({
           />
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
-            <HugeiconsIcon icon={Layout01Icon} className="size-5 shrink-0" strokeWidth={2} />
+            <LayoutIcon className="size-5 shrink-0" />
             <span>Widget HTML will render here</span>
           </div>
         )}

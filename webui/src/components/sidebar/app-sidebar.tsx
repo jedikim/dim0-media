@@ -19,8 +19,7 @@ import { ChatMenuItem, NewChatItem } from './chat'
 import { BoardItem, DashboardMenuItem, NewBoardItem } from './board'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Chat } from '@/features/agent/types/chat'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { Award04Icon, Clock02Icon, Download04Icon, LogoutSquareIcon, MinusSignIcon, PlusSignIcon, UserIcon } from '@hugeicons/core-free-icons'
+import { AwardIcon, ChatHistoryIcon, InstallAppIcon, LogoutIcon, MinusIcon, PlusIcon, UserProfileIcon } from '@/components/icons'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -133,7 +132,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
                     aria-label="Install app"
                     title="Install app"
                   >
-                    <HugeiconsIcon icon={Download04Icon} className="size-4" strokeWidth={2} />
+                    <InstallAppIcon className="size-4" strokeWidth={2} />
                   </button>
                 </div>
               </SidebarMenuItem>
@@ -144,7 +143,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
         <div ref={handleScrollAreaRef} className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
           <div className="pb-0">
             <SidebarGroup>
-              <SidebarGroupLabel><span>Workspace</span></SidebarGroupLabel>
+              <SidebarGroupLabel><span>WORKSPACE</span></SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   <HomeMenuItem />
@@ -157,7 +156,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
             </SidebarGroup>
 
             <SidebarGroup>
-              <SidebarGroupLabel><span>Chats</span></SidebarGroupLabel>
+              <SidebarGroupLabel><span>CHATS</span></SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   <NewChatItem />
@@ -165,10 +164,10 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
                     <CollapsibleTrigger asChild>
                       <SidebarMenuItem>
                         <SidebarMenuButton className="font-medium text-xs flex flex-row items-center w-full">
-                          <HugeiconsIcon icon={Clock02Icon} className="size-4 shrink-0" strokeWidth={2} />
+                          <ChatHistoryIcon className="size-4 shrink-0" strokeWidth={2} />
                           <span>Chat History</span>
-                          <HugeiconsIcon icon={PlusSignIcon} className="ml-auto group-data-[state=open]/collapsible:hidden" strokeWidth={2} />
-                          <HugeiconsIcon icon={MinusSignIcon} className="ml-auto group-data-[state=closed]/collapsible:hidden" strokeWidth={2} />
+                          <PlusIcon className="ml-auto group-data-[state=open]/collapsible:hidden" strokeWidth={2} />
+                          <MinusIcon className="ml-auto group-data-[state=closed]/collapsible:hidden" strokeWidth={2} />
                         </SidebarMenuButton>
                       </SidebarMenuItem>
                     </CollapsibleTrigger>
@@ -219,21 +218,21 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
                         className='text-xs'
                         onClick={() => navigate({ to: "/settings" })}
                       >
-                        <HugeiconsIcon icon={UserIcon} className="mr-2 h-4 w-4" strokeWidth={2} />
+                        <UserProfileIcon className="mr-2 h-4 w-4" strokeWidth={2} />
                         <span>Profile</span>
                       </DropdownMenuItem>
                       {BILLING_ENABLED ? (
                         <DropdownMenuItem
-                          className='text-xs bg-gradient-to-br from-secondary/10 via-secondary/5 to-transparent text-secondary'
+                          className='text-xs bg-gradient-to-br from-secondary-foreground/10 via-secondary-foreground/5 to-transparent text-secondary-foreground'
                           onClick={() => navigate({ to: "/settings/billing" })}
                         >
-                          <HugeiconsIcon icon={Award04Icon} className="mr-2 h-4 w-4 text-secondary" strokeWidth={2} />
+                          <AwardIcon className="mr-2 h-4 w-4 text-secondary-foreground" strokeWidth={2} />
                           <span>Upgrade Plan</span>
                         </DropdownMenuItem>
                       ) : null}
                       <DropdownMenuSeparator />
                       <DropdownMenuItem onClick={onLogout} className='text-xs'>
-                        <HugeiconsIcon icon={LogoutSquareIcon} className="mr-2 h-4 w-4" strokeWidth={2} />
+                        <LogoutIcon className="mr-2 h-4 w-4" strokeWidth={2} />
                         <span>Logout</span>
                       </DropdownMenuItem>
                     </DropdownMenuContent>

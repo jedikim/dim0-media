@@ -172,9 +172,9 @@ export function AuthBackground() {
   return (
     <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
       {/* soft secondary blobs */}
-      <div className="absolute -top-24 left-1/2 -translate-x-1/2 h-[40vh] w-[70vw] rounded-full bg-secondary/20 blur-3xl" />
-      <div className="absolute -bottom-24 -left-24 h-[45vh] w-[55vw] rounded-full bg-secondary/15 blur-3xl" />
-      <div className="absolute -bottom-40 -right-40 h-[35vh] w-[45vw] rounded-full bg-secondary/10 blur-3xl" />
+      <div className="absolute -top-24 left-1/2 -translate-x-1/2 h-[40vh] w-[70vw] rounded-full bg-secondary-foreground/20 blur-3xl" />
+      <div className="absolute -bottom-24 -left-24 h-[45vh] w-[55vw] rounded-full bg-secondary-foreground/15 blur-3xl" />
+      <div className="absolute -bottom-40 -right-40 h-[35vh] w-[45vw] rounded-full bg-secondary-foreground/10 blur-3xl" />
 
       {/* seamless grain overlay (no tiling) */}
       <div

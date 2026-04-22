@@ -1,5 +1,5 @@
-import { AnalyticsUpIcon, ChatBotIcon, ChipIcon, GlobalIcon, Stethoscope02Icon } from "@hugeicons/core-free-icons"
-import type { IconSvgElement } from "@hugeicons/react"
+import type { AppIconComponent } from "@/components/icons"
+import { LearnWidgetIcon, PropertyIcon, StethoscopeIcon, GlobeIcon, MemorySearchIcon } from "@/components/icons"
 
 export const PREDEFINED_TOPICS = ['ai', 'technology', 'health', 'climate', 'finance'] as const
 export type PredefinedTopic = typeof PREDEFINED_TOPICS[number]
@@ -18,12 +18,12 @@ export const TOPIC_DISPLAY: Record<PredefinedTopic, string> = {
 /**
  * An emoji to represent each predefined topic.
  */
-export const TOPIC_EMOJI: Record<PredefinedTopic, IconSvgElement> = {
-  ai: ChatBotIcon,
-  technology: ChipIcon,
-  health: Stethoscope02Icon,
-  climate: GlobalIcon,
-  finance: AnalyticsUpIcon
+export const TOPIC_EMOJI: Record<PredefinedTopic, AppIconComponent> = {
+  ai: PropertyIcon,
+  technology: MemorySearchIcon,
+  health: StethoscopeIcon,
+  climate: GlobeIcon,
+  finance: LearnWidgetIcon
 }
 
 /**

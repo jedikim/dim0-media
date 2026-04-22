@@ -20,6 +20,72 @@ export function trianglePath(size: number, tipFactor: number, baseFactor: number
   return { d, baseX, tipX }
 }
 
+/**
+ * Open two-edge path for outlined arrowheads with a concave hand-drawn curve.
+ * Caller pairs this with a separate straight base stroke.
+ */
+export function curvedTrianglePath(
+  size: number,
+  tipFactor: number,
+  baseFactor: number,
+  curveInset = 0.08,
+): { d: string; baseX: number; tipX: number } {
+  const tipX = size * tipFactor
+  const baseX = size * baseFactor
+  const topY = size * 0.1
+  const bottomY = size * 0.9
+  const midY = size / 2
+  const inset = size * curveInset
+
+  const midX = (baseX + tipX) / 2
+  const upperCtrlY = (topY + midY) / 2 + inset
+  const lowerCtrlY = (bottomY + midY) / 2 - inset
+
+  const d = [
+    `M ${baseX} ${topY}`,
+    `Q ${midX} ${upperCtrlY} ${tipX} ${midY}`,
+    `Q ${midX} ${lowerCtrlY} ${baseX} ${bottomY}`,
+  ].join(' ')
+
+  return { d, baseX, tipX }
+}
+
+
+/**
+ * Closed filled-arrow path with concave back edge. Gives a hand-drawn "swoosh"
+ * look — the two outer edges bow inward and the rear base bows toward the tip.
+ */
+export function filledCurvedTrianglePath(
+  size: number,
+  tipFactor: number,
+  baseFactor: number,
+  curveInset = 0.08,
+  backBow = 0.12,
+): { d: string; baseX: number; tipX: number } {
+  const tipX = size * tipFactor
+  const baseX = size * baseFactor
+  const topY = size * 0.1
+  const bottomY = size * 0.9
+  const midY = size / 2
+  const inset = size * curveInset
+
+  const midX = (baseX + tipX) / 2
+  const upperCtrlY = (topY + midY) / 2 + inset
+  const lowerCtrlY = (bottomY + midY) / 2 - inset
+  const backCtrlX = baseX + size * backBow
+
+  const d = [
+    `M ${baseX} ${topY}`,
+    `Q ${midX} ${upperCtrlY} ${tipX} ${midY}`,
+    `Q ${midX} ${lowerCtrlY} ${baseX} ${bottomY}`,
+    `Q ${backCtrlX} ${midY} ${baseX} ${topY}`,
+    `Z`,
+  ].join(' ')
+
+  return { d, baseX, tipX }
+}
+
+
 export function barbPaths(size: number, tipFactor: number, baseFactor: number): { p1: string; p2: string } {
   const tipX = size * tipFactor
   const baseX = size * baseFactor
@@ -29,6 +95,34 @@ export function barbPaths(size: number, tipFactor: number, baseFactor: number): 
 
   const p1 = `M ${baseX} ${midY} L ${tipX} ${midY} L ${baseX} ${topY}`
   const p2 = `M ${tipX} ${midY} L ${baseX} ${bottomY}`
+
+  return { p1, p2 }
+}
+
+
+/**
+ * Hand-drawn barb variant: keeps the short shaft stub but replaces the two
+ * splayed strokes with concave quadratic curves bowing toward the arrow axis.
+ */
+export function curvedBarbPaths(
+  size: number,
+  tipFactor: number,
+  baseFactor: number,
+  curveInset = 0.08,
+): { p1: string; p2: string } {
+  const tipX = size * tipFactor
+  const baseX = size * baseFactor
+  const topY = size * 0.05
+  const bottomY = size * 0.95
+  const midY = size / 2
+  const inset = size * curveInset
+  const midX = (baseX + tipX) / 2
+
+  const upperCtrlY = (midY + topY) / 2 + inset
+  const lowerCtrlY = (midY + bottomY) / 2 - inset
+
+  const p1 = `M ${tipX} ${midY} Q ${midX} ${upperCtrlY} ${baseX} ${topY}`
+  const p2 = `M ${tipX} ${midY} Q ${midX} ${lowerCtrlY} ${baseX} ${bottomY}`
 
   return { p1, p2 }
 }

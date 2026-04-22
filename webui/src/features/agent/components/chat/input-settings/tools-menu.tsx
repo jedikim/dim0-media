@@ -1,7 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { ToolsIcon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
+import { ToolsMenuIcon } from "@/components/icons"
 import { clsx } from "clsx"
 import { CodeInterpreterChoiceMenu } from "./code-interpreter"
 import { ImageGenMenu } from "./image-gen"
@@ -15,7 +14,7 @@ type ToolsMenuProps = {
 
 export const ToolsMenu = ({ memorySearchAvailable = true }: ToolsMenuProps) => {
   const buttonClass = clsx(
-    "transition-all shrink-0 my-icon p-2 rounded-full",
+    "transition-all shrink-0 my-icon p-2 rounded-md",
     "hover:bg-accent dark:bg-input/30 dark:hover:bg-accent/50",
     "border border-transparent hover:border-border transition-colors",
     "text-muted-foreground"
@@ -24,14 +23,14 @@ export const ToolsMenu = ({ memorySearchAvailable = true }: ToolsMenuProps) => {
   return (
     <Dialog>
       <Tooltip delayDuration={400}>
-        <div className="rounded-full bg-background backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/50">
+        <div className="rounded-md bg-background backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/50">
           <TooltipTrigger asChild>
             <DialogTrigger asChild>
               <button
                 className={buttonClass}
                 aria-label="Open settings"
               >
-                <HugeiconsIcon icon={ToolsIcon} className="size-4 shrink-0" strokeWidth={2} />
+                <ToolsMenuIcon className="size-4 shrink-0" strokeWidth={2} />
               </button>
             </DialogTrigger>
           </TooltipTrigger>
@@ -40,7 +39,7 @@ export const ToolsMenu = ({ memorySearchAvailable = true }: ToolsMenuProps) => {
           Settings
         </TooltipContent>
       </Tooltip>
-      <DialogContent className="w-[320px] max-w-[calc(100%-2rem)] rounded-2xl p-4">
+      <DialogContent className="w-[320px] max-w-[calc(100%-2rem)] rounded-lg p-4">
         <DialogHeader className="mb-2">
           <DialogTitle className="text-sm font-medium text-muted-foreground">
             Settings

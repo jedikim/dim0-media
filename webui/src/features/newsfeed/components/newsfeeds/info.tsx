@@ -8,15 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { useGetSubscription } from '@/features/newsfeed/api/get-subscription'
 import { useUpdateSubscription } from '@/features/newsfeed/api/update-subscription'
 import type { Subscription } from '@/features/newsfeed/types/subscription'
-
-import { HugeiconsIcon } from '@hugeicons/react'
-import {
-  Tick01Icon,
-  PlusSignIcon,
-  Delete02Icon,
-  Cancel01Icon,
-  PencilEditIcon
-} from '@hugeicons/core-free-icons'
+import { AddIcon, CancelPlainIcon, CheckIcon, DeleteIcon, PencilEditIcon } from '@/components/icons'
 
 type Editing = {
   title?: boolean
@@ -167,7 +159,7 @@ export function SubscriptionInfoPanel({
                 value={titleVal}
                 onChange={e => setTitleVal(e.target.value)}
                 placeholder='Topic title'
-                className='focus-visible:ring-2 focus-visible:ring-secondary/50 focus-visible:border-secondary border border-border font-medium bg-card'
+                className='focus-visible:ring-2 focus-visible:ring-secondary-foreground/50 focus-visible:border-secondary-foreground border border-border font-medium bg-card'
               />
             </div>
           )}
@@ -195,7 +187,7 @@ export function SubscriptionInfoPanel({
               value={descVal}
               onChange={e => setDescVal(e.target.value)}
               placeholder='Describe your topic…'
-              className='border border-border resize-none focus-visible:ring-2 focus-visible:ring-secondary/50 focus-visible:border-secondary bg-card'
+              className='border border-border resize-none focus-visible:ring-2 focus-visible:ring-secondary-foreground/50 focus-visible:border-secondary-foreground bg-card'
             />
           )}
         </Box>
@@ -217,22 +209,22 @@ export function SubscriptionInfoPanel({
               {(kwVal.length ? kwVal : ['—']).map(k => (
                 k === '—'
                   ? <span key='empty' className='text-sm text-muted-foreground'>—</span>
-                  : <Badge key={k} variant='outline' className='px-2 py-1 h-7 rounded-md bg-background font-mono'>{k}</Badge>
+                  : <Badge key={k} variant='outline' className='px-2 py-1 h-7 rounded-sm bg-background font-mono'>{k}</Badge>
               ))}
             </div>
           ) : (
             <div className='space-y-3'>
               <div className='flex flex-wrap gap-2'>
                 {kwVal.map(k => (
-                  <Badge key={k} variant='outline' className='px-2 py-1 h-7 rounded-md flex flex-row items-center gap-1 font-mono bg-card'>
+                  <Badge key={k} variant='outline' className='px-2 py-1 h-7 rounded-sm flex flex-row items-center gap-1 font-mono bg-card'>
                     {k}
                     <button
                       type='button'
                       onClick={() => removeKeyword(k)}
                       title='Remove'
-                      className='transition-all hover:bg-muted p-1 rounded-full -mr-1'
+                      className='transition-all hover:bg-muted p-1 rounded-md -mr-1'
                     >
-                      <HugeiconsIcon icon={Delete02Icon} className='size-3' strokeWidth={2} />
+                      <DeleteIcon className='size-3' strokeWidth={2} />
                     </button>
                   </Badge>
                 ))}
@@ -243,10 +235,10 @@ export function SubscriptionInfoPanel({
                   onChange={e => setKwInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') addKeyword() }}
                   placeholder='Add keyword and press Enter'
-                  className='focus-visible:ring-2 focus-visible:ring-secondary/50 focus-visible:border-secondary border border-border font-mono bg-card'
+                  className='focus-visible:ring-2 focus-visible:ring-secondary-foreground/50 focus-visible:border-secondary-foreground border border-border font-mono bg-card'
                 />
                 <Button type='button' size='icon' onClick={addKeyword}>
-                  <HugeiconsIcon icon={PlusSignIcon} className='size-4' strokeWidth={2} />
+                  <AddIcon className='size-4' strokeWidth={2} />
                 </Button>
               </div>
             </div>
@@ -282,10 +274,10 @@ export function SubscriptionInfoPanel({
                         const v = e.target.value
                         setSeedVal(prev => prev.map(x => x === u ? v : x))
                       }}
-                      className='focus-visible:ring-2 focus-visible:ring-secondary/50 focus-visible:border-secondary min-w-[300px] border border-border font-mono text-sm bg-card'
+                      className='focus-visible:ring-2 focus-visible:ring-secondary-foreground/50 focus-visible:border-secondary-foreground min-w-[300px] border border-border font-mono text-sm bg-card'
                     />
                     <Button type='button' variant='ghost' size='icon' onClick={() => removeSeed(u)}>
-                      <HugeiconsIcon icon={Delete02Icon} className='size-4' strokeWidth={2} />
+                      <DeleteIcon className='size-4' strokeWidth={2} />
                     </Button>
                   </div>
                 ))}
@@ -296,10 +288,10 @@ export function SubscriptionInfoPanel({
                   onChange={e => setSeedInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') addSeed() }}
                   placeholder='Add a source URL then Enter'
-                  className='focus-visible:ring-2 focus-visible:ring-secondary/50 focus-visible:border-secondary border border-border font-mono text-sm bg-card'
+                  className='focus-visible:ring-2 focus-visible:ring-secondary-foreground/50 focus-visible:border-secondary-foreground border border-border font-mono text-sm bg-card'
                 />
                 <Button type='button' size='icon' onClick={addSeed}>
-                  <HugeiconsIcon icon={PlusSignIcon} className='size-4' strokeWidth={2} />
+                  <AddIcon className='size-4' strokeWidth={2} />
                 </Button>
               </div>
             </div>
@@ -347,9 +339,9 @@ function Box({
             onClick={onEdit}
             title='Edit'
             aria-label='Edit'
-            className='rounded-full !p-1 bg-background text-muted-foreground'
+            className='rounded-md !p-1 bg-background text-muted-foreground'
           >
-            <HugeiconsIcon icon={PencilEditIcon} className='size-4' strokeWidth={2} />
+            <PencilEditIcon className='size-4' strokeWidth={2} />
           </Button>
         ) : (
           <>
@@ -360,9 +352,9 @@ function Box({
               title='Cancel'
               aria-label='Cancel'
               disabled={saving}
-              className='rounded-full !p-1 border border-border'
+              className='rounded-md !p-1 border border-border'
             >
-              <HugeiconsIcon icon={Cancel01Icon} className='size-4' strokeWidth={2} />
+              <CancelPlainIcon className='size-4' strokeWidth={2} />
             </Button>
             <Button
               size='icon'
@@ -370,9 +362,9 @@ function Box({
               title='Save'
               aria-label='Save'
               disabled={saving}
-              className='bg-primary text-primary-foreground hover:opacity-90 rounded-full !p-1'
+              className='bg-primary text-primary-foreground hover:opacity-90 rounded-md !p-1'
             >
-              <HugeiconsIcon icon={Tick01Icon} className='size-4' strokeWidth={2} />
+              <CheckIcon className='size-4' strokeWidth={2} />
             </Button>
           </>
         )}

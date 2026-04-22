@@ -262,7 +262,7 @@ export const LiteMarkdown = memo(function LiteMarkdown({ text, className }: Lite
               href={token.href}
               target='_blank'
               rel='noreferrer'
-              className='text-secondary underline hover:text-secondary/80'
+              className='text-secondary-foreground underline hover:text-secondary-foreground/80'
             >
               {token.content}
             </a>

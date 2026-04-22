@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
-import { ExternalLink } from 'lucide-react'
+import { ExternalLinkIcon } from '@/components/icons'
 
 type Props = {
   images: string[] // array of image URLs
@@ -136,7 +136,7 @@ export default function ImageSearchStrip({
                 />
                 {/* external icon on hover */}
                 <div className='pointer-events-none absolute right-1.5 top-1.5 opacity-0 group-hover:opacity-100 transition-opacity'>
-                  <ExternalLink className='w-3.5 h-3.5 text-foreground/80 drop-shadow' />
+                  <ExternalLinkIcon className='w-3.5 h-3.5 text-foreground/80 drop-shadow' />
                 </div>
 
                 {showOverlayCounter && (
@@ -197,7 +197,7 @@ function ImagesGrid({
             referrerPolicy='no-referrer'
           />
           <div className='pointer-events-none absolute right-1.5 top-1.5 opacity-0 group-hover:opacity-100 transition-opacity'>
-            <ExternalLink className='w-3.5 h-3.5 text-white/90 drop-shadow' />
+            <ExternalLinkIcon className='w-3.5 h-3.5 text-white/90 drop-shadow' />
           </div>
         </div>
       ))}

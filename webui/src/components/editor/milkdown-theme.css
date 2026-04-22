@@ -12,8 +12,8 @@
 
   /* ===== Accents ===== */
   --crepe-color-primary: var(--color-primary);
-  --crepe-color-secondary: var(--color-accent);
-  --crepe-color-on-secondary: var(--color-accent-foreground);
+  --crepe-color-secondary-foreground: var(--color-accent);
+  --crepe-color-on-secondary-foreground: var(--color-accent-foreground);
 
   /* ===== UI / States ===== */
   --crepe-color-outline: var(--color-muted-foreground);
@@ -30,8 +30,8 @@
   --crepe-color-inline-area: var(--color-input);            /* inline edit bg */
 
   /* ===== Fonts ===== */
-  --crepe-font-title: var(--font-sans);
-  --crepe-font-default: var(--font-sans);
+  --crepe-font-title: var(--font-serif);
+  --crepe-font-default: var(--font-serif);
   --crepe-font-code: var(--font-mono);
 
   /* ===== Shadows ===== */
@@ -215,7 +215,7 @@
   display: inline-block;
   font-family: var(--font-sans);
   font-weight: 500;
-  color: var(--secondary);
+  color: var(--secondary-foreground);
   text-decoration: underline;
   cursor: pointer;
 }

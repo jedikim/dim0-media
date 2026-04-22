@@ -1,6 +1,5 @@
 import { cn } from "@/lib/utils"
-import { MilkdownProvider } from "@milkdown/react"
-import { MdEditor } from "@/components/editor/milkdown"
+import { MdEditor } from "@/components/editor/tiptap"
 
 type SheetEditorProps = {
   value: string
@@ -8,10 +7,6 @@ type SheetEditorProps = {
   className?: string
 }
 
-/**
- * Lightweight wrapper around the Milkdown editor for sheet content so it can be
- * reused in dialogs and full-page views.
- */
 export const SheetEditor = ({ value, onSave, className }: SheetEditorProps) => {
   return (
     <div
@@ -19,9 +14,7 @@ export const SheetEditor = ({ value, onSave, className }: SheetEditorProps) => {
       onDoubleClickCapture={(e) => e.stopPropagation()}
       onMouseDownCapture={(e) => e.stopPropagation()}
     >
-      <MilkdownProvider>
-        <MdEditor markdown={value} onSave={onSave} />
-      </MilkdownProvider>
+      <MdEditor markdown={value} onSave={onSave} />
     </div>
   )
 }

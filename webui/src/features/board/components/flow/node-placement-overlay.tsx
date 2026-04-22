@@ -200,7 +200,7 @@ export function NodePlacementOverlay({
     >
       {preview && (
         <div
-          className="absolute border-2 border-dashed border-secondary/80 bg-secondary/10 pointer-events-none"
+          className="absolute border-2 border-dashed border-secondary-foreground/80 bg-secondary-foreground/10 pointer-events-none"
           style={{
             left: preview.x,
             top: preview.y,
@@ -209,7 +209,7 @@ export function NodePlacementOverlay({
           }}
         />
       )}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-full bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow pointer-events-none">
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 rounded-lg bg-background/80 px-3 py-1 text-xs font-medium text-muted-foreground shadow pointer-events-none">
         Click and drag to draw · Esc to cancel
       </div>
     </div>

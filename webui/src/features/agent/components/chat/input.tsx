@@ -1,18 +1,14 @@
 import { useMemo, useState, type KeyboardEvent } from 'react'
 import clsx from 'clsx'
 import { useChatStore } from '../../store/chat-store'
-import { SendMessageError, useSendMessage } from '../../api/send-message'
-import { generateUuid, trimText } from '@/lib/common'
+import { SendMessageError } from '../../api/send-message'
+import { useSubmitPrompt } from '../../hooks/use-submit-prompt'
 import { useAppStore } from '@/store'
 import { SendButton } from './send-button'
 import TextareaAutosize from 'react-textarea-autosize'
 import { useChat } from '../../hooks/chat-context'
-import { useCreateChat } from '../../api/create-chat'
-import { useUpdateChat } from '../../api/update-chat'
-import { useNavigate, useRouterState, useParams } from '@tanstack/react-router'
-import { ChatUrl, SettingsBillingUrl } from '@/routes'
-import { useDescribeChat } from '../../api/describe-chat'
-import type { SendMessageRequestPayload } from '../../api/types'
+import { useNavigate, useParams } from '@tanstack/react-router'
+import { SettingsBillingUrl } from '@/routes'
 import { WelcomeMessage } from './welcome-message'
 import { StarterPromptPills } from './starter-prompts'
 import { InputSettings } from './input-settings/settings'
@@ -25,9 +21,8 @@ import { buildContextTextFromNodes } from '@/features/board/utils/context-text'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { AlertIcon } from '@/components/icons'
 import { toast } from 'sonner'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { Alert02Icon } from '@hugeicons/core-free-icons'
 
 export interface InputBarProps {
   attachedBoardId?: string
@@ -86,17 +81,12 @@ export const InputBar = ({
   preferChatRoute = false,
   enableSelectionContext = false,
 }: InputBarProps) => {
-  const { chatId, setChatId } = useChat()
+  const { chatId } = useChat()
 
-  const userId = useAppStore((state) => state.userId)
   const userPlan = useAppStore((state) => state.userPlan)
 
-  const llmModel = useChatStore((state) => state.llmModel)
   const isStreaming = useChatStore((state) => state.isStreaming)
-  const webSearchEngine = useChatStore((state) => state.webSearchEngine)
-  const enabledTools = useChatStore((state) => state.enabledTools)
   const useDeepResearch = useChatStore((state) => state.useDeepResearch)
-  const setUseDeepResearch = useChatStore((state) => state.setUseDeepResearch)
   const enableMessageBoardContextSelection = useChatStore((state) => state.enableMessageBoardContextSelection)
 
   const [input, setInput] = useState<string>('')
@@ -112,7 +102,6 @@ export const InputBar = ({
       ))
     })
   )
-  const rootId = useGraphStore((state) => state.rootId)
 
   const selectedNodeCount = selectedNodes.length
   const messageContext = useMemo(() => {
@@ -134,15 +123,9 @@ export const InputBar = ({
     description: string
   } | null>(null)
 
-  const { createChatAsync } = useCreateChat()
-  const { updateChatAsync } = useUpdateChat()
-  const { sendMessageAsync } = useSendMessage()
-  const { describeChatAsync } = useDescribeChat()
-
+  const submit = useSubmitPrompt()
   const navigate = useNavigate()
-  const routerLocation = useRouterState({ select: (s) => s.location })
   const boardParams = useParams({ from: "/boards/$id", shouldThrow: false })
-  const isBoardRoute = routerLocation.pathname?.startsWith("/boards/")
   const boardRouteId = boardParams?.id
   const settingsBoardId = attachedBoardId ?? boardRouteId
   const memorySearchAvailable = Boolean(settingsBoardId)
@@ -151,53 +134,15 @@ export const InputBar = ({
     const trimmed = text.trim()
     if (!trimmed) return
 
-    const createNewChat = forceNewChat || !chatId
-    let id: string
-
-    const targetBoardId = settingsBoardId
-
-    if (createNewChat) {
-      const newChatId = generateUuid()
-      await createChatAsync({ userId, boardId: targetBoardId, chatId: newChatId })
-      void updateChatAsync({ chatId: newChatId, chatData: { label: trimText(trimmed, 20) } }).catch(() => {})
-
-      if (!preferChatRoute && isBoardRoute && targetBoardId) {
-        navigate({
-          to: "/boards/$id",
-          params: { id: targetBoardId },
-          search: (prev: Record<string, unknown>) => ({
-            ...prev,
-            current_chat_id: newChatId
-          })
-        })
-      } else {
-        navigate({ to: ChatUrl, params: { id: newChatId } })
-      }
-
-      setChatId(newChatId)
-      id = newChatId
-    } else {
-      id = chatId!
-    }
-
-    const payload: SendMessageRequestPayload = {
-      query: trimmed,
-      messageId: generateUuid(),
-      rootId,
-      model: llmModel,
-      webSearchEngine,
-      enabledTools,
-      useDeepResearch,
-      messageContext,
-    }
-
-    // clear input right before launching search
     setInput('')
-    // reset deep research toggle after sending
-    setUseDeepResearch(false)
 
     try {
-      await sendMessageAsync({ payload, userId, chatId: id })
+      await submit(trimmed, {
+        forceNewChat,
+        attachedBoardId,
+        preferChatRoute,
+        messageContext,
+      })
     } catch (error) {
       if (error instanceof SendMessageError && error.status === 429) {
         setLimitDialogCopy({
@@ -209,10 +154,6 @@ export const InputBar = ({
         toast.error(message)
       }
       throw error
-    }
-
-    if (createNewChat) {
-      void describeChatAsync({ chatId: id, userId }).catch(() => {})
     }
   }
 
@@ -278,7 +219,7 @@ export const InputBar = ({
   )
 
   const inboxClass = clsx(
-    'rounded-2xl relative flex flex-col text-card-foreground text-base p-2 border transition-colors transition-shadow',
+    'rounded-lg relative flex flex-col text-card-foreground text-base p-2 border transition-colors transition-shadow',
     chatId ? 'bg-accent backdrop-blur-lg supports-[backdrop-filter]:bg-accent/70 dark:border dark:border-border/50 shadow-lg' :
       'bg-accent text-base shadow-xl',
     'border-transparent hover:border-border/70 focus-within:border-border/70'
@@ -353,7 +294,7 @@ export const InputBar = ({
               onChange={(e) => setInput(e.target.value)}
               minRows={4}
               maxRows={18}
-              className="w-full resize-none rounded-lg border border-border/50 shadow-sm bg-background px-3 py-2 text-base outline-none"
+              className="w-full resize-none rounded-md border border-border/50 shadow-sm bg-background px-3 py-2 text-base outline-none"
               placeholder="Refine your prompt here..."
               autoFocus
             />
@@ -376,7 +317,7 @@ export const InputBar = ({
         <DialogContent className="sm:max-w-[560px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <HugeiconsIcon icon={Alert02Icon} className="size-5 shrink-0 text-secondary" strokeWidth={2} />
+              <AlertIcon className="size-5 shrink-0 text-secondary-foreground" strokeWidth={2} />
               <span>{limitDialogCopy?.title}</span>
             </DialogTitle>
             <DialogDescription className="text-sm leading-7 text-foreground/80">

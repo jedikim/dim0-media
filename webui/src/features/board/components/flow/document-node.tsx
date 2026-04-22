@@ -1,7 +1,6 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { memo, useMemo } from "react"
 import { NodeResizeControl, type ControlPosition, type NodeProps } from "@xyflow/react"
-import { Pdf02Icon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
+import { PdfIcon } from "@/components/icons"
 import type { NoteNode } from "../../types/flow"
 import type { DocumentProperties } from "../../types/document"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -9,7 +8,7 @@ import { fontFamilyToTwClass, fontSizeToTwClass, textStyleToTwClass, type Style 
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/components/theme-provider"
 import { darkModeDisplayHex } from "../../lib/colors/dark-variants"
-import { useGraphStore } from "../../store/graph-store"
+import { NodeTitleCaption } from "./node-title-caption"
 
 
 type ResizeHandle = {
@@ -39,13 +38,7 @@ const getHandleTransform = (pos: ControlPosition) => {
 export const DocumentNode = memo(function DocumentNode({ id, data, selected }: NodeProps<NoteNode>) {
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === "dark"
-  const updateNodeByIdPersist = useGraphStore(state => state.updateNodeByIdPersist)
-  const [labelEditing, setLabelEditing] = useState(false)
-  const [labelDraft, setLabelDraft] = useState(data.label?.markdown || '')
-  const inputRef = useRef<HTMLInputElement | null>(null)
-  const label = data.label?.markdown?.trim()
   const summary = (data.properties as DocumentProperties)?.summary?.text?.trim()
-  const displayLabel = label || "Untitled document"
   const style = data.style as Style | undefined
   const rounded = (style?.roundness ?? 1) > 0 ? "rounded-xl" : "rounded-none"
   const textAlignClass = data.style.textAlign === "left" ? "text-left" : data.style.textAlign === "right" ? "text-right" : "text-center"
@@ -54,100 +47,33 @@ export const DocumentNode = memo(function DocumentNode({ id, data, selected }: N
   const textStyleClass = textStyleToTwClass(data.style.textStyle)
 
   const displayTextColor = isDark ? darkModeDisplayHex(data.style.textColor) || "#000000" : data.style.textColor
-
-  useEffect(() => {
-    if (labelEditing) return
-    setLabelDraft(data.label?.markdown || '')
-  }, [data.label?.markdown, labelEditing])
-
-  useEffect(() => {
-    if (!labelEditing) return
-    const frame = requestAnimationFrame(() => {
-      inputRef.current?.focus()
-      inputRef.current?.select()
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [labelEditing])
-
-  const commitLabel = useCallback((nextRaw: string) => {
-    const next = nextRaw.trim()
-    const prev = data.label?.markdown?.trim() || ''
-    if (next === prev) return
-    updateNodeByIdPersist(id, prevNode => ({
-      ...prevNode,
-      data: {
-        ...prevNode.data,
-        label: next ? { markdown: next } : undefined,
-      },
-    }))
-  }, [data.label?.markdown, id, updateNodeByIdPersist])
-
-  const stopLabelEdit = useCallback((save: boolean) => {
-    if (save) commitLabel(labelDraft)
-    else setLabelDraft(data.label?.markdown || '')
-    setLabelEditing(false)
-  }, [commitLabel, data.label?.markdown, labelDraft])
+  const captionTextStyle = useMemo(() => ({ color: displayTextColor }), [displayTextColor])
 
   const className = cn(
     "w-full h-full p-3 text-card-foreground border-2 border-dashed flex flex-col items-center text-center",
     rounded,
-    selected ? "border-secondary" : "border-transparent",
+    selected ? "border-secondary-foreground" : "border-transparent",
   )
 
   const content = (
     <div className="relative w-full h-full">
       <div className={className}>
         <div className="flex h-full w-full items-center justify-center">
-          <HugeiconsIcon
-            icon={Pdf02Icon}
+          <PdfIcon
             className="h-full w-full"
             strokeWidth={1.8}
             color={displayTextColor}
           />
         </div>
       </div>
-      <div
-        className={`absolute left-1/2 top-full mt-2 w-full -translate-x-1/2 line-clamp-2 break-words max-w-[220px] overflow-ellipsis ${textAlignClass} ${fontClass} ${sizeClass} ${textStyleClass}`}
-        style={{ color: displayTextColor }}
-      >
-        {labelEditing ? (
-          <input
-            ref={inputRef}
-            value={labelDraft}
-            onChange={event => setLabelDraft(event.target.value)}
-            onBlur={() => stopLabelEdit(true)}
-            onKeyDown={event => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                stopLabelEdit(true)
-              }
-              if (event.key === 'Escape') {
-                event.preventDefault()
-                stopLabelEdit(false)
-              }
-            }}
-            onMouseDown={event => event.stopPropagation()}
-            onClick={event => event.stopPropagation()}
-            className={`w-full bg-transparent border-0 border-b border-foreground/30 focus:border-secondary focus:outline-none px-0 py-0.5 ${textAlignClass} ${fontClass} ${sizeClass} ${textStyleClass}`}
-            style={{ color: displayTextColor }}
-            placeholder='Untitled document'
-          />
-        ) : (
-          <button
-            type='button'
-            onClick={event => {
-              event.stopPropagation()
-              setLabelEditing(true)
-            }}
-            className={`block w-full truncate hover:underline ${textAlignClass} ${fontClass} ${sizeClass} ${textStyleClass}`}
-            style={{ color: displayTextColor }}
-            title={displayLabel}
-            aria-label={displayLabel}
-          >
-            {displayLabel}
-          </button>
-        )}
-      </div>
+      <NodeTitleCaption
+        nodeId={id}
+        label={data.label?.markdown}
+        placeholder="Untitled document"
+        textClassName={`${textAlignClass} ${fontClass} ${sizeClass} ${textStyleClass}`}
+        textStyle={captionTextStyle}
+        className="absolute left-1/2 top-full mt-2 w-full -translate-x-1/2"
+      />
     </div>
   )
 
@@ -163,7 +89,7 @@ export const DocumentNode = memo(function DocumentNode({ id, data, selected }: N
           keepAspectRatio
         >
           <div
-            className={`absolute w-3 h-3 bg-secondary rounded-full ${className} z-20`}
+            className={`absolute w-3 h-3 bg-secondary-foreground rounded-full ${className} z-20`}
             style={{ transform: getHandleTransform(pos) }}
           />
         </NodeResizeControl>

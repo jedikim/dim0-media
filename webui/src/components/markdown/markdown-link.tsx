@@ -1,7 +1,6 @@
 import React from "react"
 import { useNavigate } from "@tanstack/react-router"
-import { HugeiconsIcon } from "@hugeicons/react"
-import { Link02Icon } from "@hugeicons/core-free-icons"
+import { LinkIcon } from "@/components/icons"
 import { cn } from "@/lib/utils"
 
 const boardLinkRe = /^\/boards\/([^/]+)\/([^/]+)\/([^/]+)$/
@@ -54,7 +53,7 @@ export function MarkdownLink({ children, href, ...rest }: MarkdownLinkProps) {
     >
       {
         isExternal ? label :
-        <HugeiconsIcon icon={Link02Icon} className='size-3' strokeWidth={2} />
+        <LinkIcon className='size-3' strokeWidth={2} />
       }
     </a>
   )

@@ -1,13 +1,11 @@
 import { useAppStore } from "@/store"
 import { SidebarMenuButton, SidebarMenuItem, SidebarMenuSubButton, SidebarMenuSubItem } from "../ui/sidebar"
-import { BotMessageSquare } from "lucide-react"
+import { ChatNewIcon, DeleteIcon } from "@/components/icons"
 import { useDeleteChat } from "@/features/agent/api/delete-chat"
 import { trimText } from "@/lib/common"
 import { UNTITLED_LABEL } from "@/features/board/const"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "../ui/context-menu"
 import { useNavigate, useParams, useRouterState, useSearch } from "@tanstack/react-router"
-import { Delete02Icon } from "@hugeicons/core-free-icons"
-import { HugeiconsIcon } from "@hugeicons/react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
 
 /**
@@ -54,10 +52,10 @@ export function NewChatItem({
     <SidebarMenuItem>
       <SidebarMenuButton
         onClick={handleClick}
-        className='text-xs text-secondary font-medium truncate cursor-pointer'
+        className='text-xs text-secondary-foreground font-medium truncate cursor-pointer'
         isActive={isActive}
       >
-        <BotMessageSquare className='text-xs shrink-0 text-sidebar-icon-4' strokeWidth={2} />
+        <ChatNewIcon className='text-xs shrink-0 text-sidebar-icon-4' weight={isActive ? 'fill' : undefined} strokeWidth={2} />
         <span>New Chat</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -121,11 +119,7 @@ export function ChatMenuItem({ chatId, label }: { chatId: string, label?: string
             variant='destructive'
             className='text-xs flex flex-row items-center'
           >
-            <HugeiconsIcon
-              icon={Delete02Icon}
-              className="size-4 mr-2"
-              strokeWidth={2}
-            />
+            <DeleteIcon className="size-4 mr-2" strokeWidth={2} />
             <span>Delete Chat</span>
           </ContextMenuItem>
         </ContextMenuContent>

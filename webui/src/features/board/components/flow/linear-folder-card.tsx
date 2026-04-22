@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { HugeiconsIcon } from '@hugeicons/react'
-import { Delete02Icon, Folder01Icon } from '@hugeicons/core-free-icons'
+import { DeleteIcon, FolderIcon } from '@/components/icons'
 
 import type { NoteNode } from '../../types/flow'
 import { useGraphStore } from '../../store/graph-store'
@@ -83,7 +82,7 @@ export const LinearFolderCard = memo(function LinearFolderCard({ node }: Props) 
         aria-label='Delete folder'
         title='Delete'
       >
-        <HugeiconsIcon icon={Delete02Icon} className='size-4' strokeWidth={2} />
+        <DeleteIcon className='size-4' strokeWidth={2} />
       </button>
 
       <button
@@ -99,7 +98,7 @@ export const LinearFolderCard = memo(function LinearFolderCard({ node }: Props) 
         className='w-full min-h-[100px] max-h-[225px] rounded-md border-2 border-transparent bg-transparent transition-colors group-hover:bg-accent group-hover:border-border flex items-center justify-center p-3'
       >
         <div className='flex w-full max-w-[92px] aspect-square items-center justify-center rounded-2xl border border-border/70 bg-background text-muted-foreground shadow-sm'>
-          <HugeiconsIcon icon={Folder01Icon} className='size-12 shrink-0' strokeWidth={1.8} />
+          <FolderIcon className='size-12 shrink-0' strokeWidth={1.8} />
         </div>
       </button>
 
@@ -122,7 +121,7 @@ export const LinearFolderCard = memo(function LinearFolderCard({ node }: Props) 
             }}
             onMouseDown={event => event.stopPropagation()}
             onClick={event => event.stopPropagation()}
-            className='w-full bg-transparent text-center text-sm font-sans font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary focus:outline-none px-0 py-0.5'
+            className='w-full bg-transparent text-center text-sm font-sans font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary-foreground focus:outline-none px-0 py-0.5'
             placeholder='Untitled folder'
           />
         ) : (

@@ -1,8 +1,8 @@
 import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 
-import { Analytics02Icon, Delete02Icon } from '@hugeicons/core-free-icons'
-import { HugeiconsIcon } from '@hugeicons/react'
+import { Trash } from '@phosphor-icons/react'
+import { LearnWidgetIcon } from '@/components/icons'
 
 import { useGraphStore } from '../../store/graph-store'
 import type { NoteNode } from '../../types/flow'
@@ -92,7 +92,7 @@ export const LinearWidgetCard = memo(function LinearWidgetCard({ node }: Props) 
         aria-label='Delete widget'
         title='Delete'
       >
-        <HugeiconsIcon icon={Delete02Icon} className='size-4' strokeWidth={2} />
+        <Trash className='size-4' />
       </button>
 
       <button
@@ -106,7 +106,7 @@ export const LinearWidgetCard = memo(function LinearWidgetCard({ node }: Props) 
         )}
       >
         <div className='flex w-full max-w-[92px] aspect-square items-center justify-center rounded-2xl border border-border/70 bg-background text-muted-foreground shadow-sm'>
-          <HugeiconsIcon icon={Analytics02Icon} className='size-12 shrink-0' strokeWidth={1.8} />
+          <LearnWidgetIcon className='size-12 shrink-0' />
         </div>
       </button>
 
@@ -129,7 +129,7 @@ export const LinearWidgetCard = memo(function LinearWidgetCard({ node }: Props) 
             }}
             onMouseDown={event => event.stopPropagation()}
             onClick={event => event.stopPropagation()}
-            className='w-full bg-transparent text-center text-sm font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary focus:outline-none px-0 py-0.5'
+            className='w-full bg-transparent text-center text-sm font-semibold text-foreground border-0 border-b border-foreground/30 focus:border-secondary-foreground focus:outline-none px-0 py-0.5'
             placeholder='Untitled widget'
           />
         ) : (

@@ -4,7 +4,7 @@ import { useChatStore } from "../../store/chat-store"
 import { UserMessage } from "./user-message"
 import { AssistantMessage } from "./assistant-message"
 import type { ChatMessage } from "../../types/chat"
-import { TreeAgentIcon } from "./tree-thinking-indicator"
+import { ThinkingIndicator } from "@/components/animations/thinking-indicator"
 
 
 /**
@@ -35,14 +35,15 @@ const EMPTY_MESSAGES: ChatMessage[] = []
 
 
 /**
- * TrailingAssistantIndicator renders the assistant marker at the end of the conversation.
+ * TrailingAssistantIndicator shows the cycling thinking animation while the
+ * turn is streaming and collapses to nothing once the turn ends.
  */
 const TrailingAssistantIndicator = ({ isStreaming }: { isStreaming: boolean }) => {
+  if (!isStreaming) return null
+
   return (
     <div className='w-full flex justify-start mt-2'>
-      <div className='min-h-9'>
-        <TreeAgentIcon isStopped={!isStreaming} />
-      </div>
+      <ThinkingIndicator className='text-sm text-foreground/60' iconSize={18} />
     </div>
   )
 }
