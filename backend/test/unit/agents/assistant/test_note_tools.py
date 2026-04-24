@@ -15,6 +15,7 @@ from topix.agents.notes.service import build_note, get_default_note_size
 from topix.agents.notes.tools import (
     create_edit_note_tool,
     create_get_note_tool,
+    create_link_notes_tool,
     create_write_note_tool,
 )
 from topix.datatypes.note.note import Note
@@ -28,6 +29,7 @@ class DummyGraphStore:
     def __init__(self):
         """Initialize async methods used by note tools."""
         self.add_notes = AsyncMock()
+        self.add_links = AsyncMock()
         self.get_graph = AsyncMock(return_value=type("Graph", (), {"nodes": []})())
         self.get_nodes = AsyncMock(return_value=[])
         self.patch_note = AsyncMock()
@@ -70,8 +72,8 @@ async def test_build_widget_note_uses_widget_defaults() -> None:
     )
 
     assert note.style.type == NodeType.WIDGET
-    assert note.properties.node_size.size.width == 360
-    assert note.properties.node_size.size.height == 260
+    assert note.properties.node_size.size.width == 800
+    assert note.properties.node_size.size.height == 500
 
 
 @pytest.mark.asyncio
@@ -364,3 +366,118 @@ async def test_get_note_tool_rejects_cross_board_notes() -> None:
 
     assert isinstance(result, str)
     assert "does not belong to the current board scope" in result
+
+
+@pytest.mark.asyncio
+async def test_link_notes_tool_creates_link_with_label() -> None:
+    """Link notes should create a Link between two notes in the current board scope."""
+    graph_store = DummyGraphStore()
+    graph_store.get_nodes.return_value = [
+        Note(id="src", graph_uid="graph-1"),
+        Note(id="dst", graph_uid="graph-1"),
+    ]
+
+    tool = create_link_notes_tool(graph_store, "graph-1")
+    result = await tool.on_invoke_tool(
+        RunContextWrapper(Context()),
+        json.dumps({"source_id": "src", "target_id": "dst", "label": "causes"}),
+    )
+
+    assert result.type == "link_notes"
+    assert result.source_id == "src"
+    assert result.target_id == "dst"
+    assert result.graph_uid == "graph-1"
+    assert result.label == "causes"
+    graph_store.add_links.assert_awaited_once()
+    created_link = graph_store.add_links.await_args.args[0][0]
+    assert created_link.source == "src"
+    assert created_link.target == "dst"
+    assert created_link.graph_uid == "graph-1"
+    assert created_link.label is not None
+    assert created_link.label.markdown == "causes"
+
+
+@pytest.mark.asyncio
+async def test_link_notes_tool_omits_label_when_none() -> None:
+    """Link notes should leave the edge label unset when none is provided."""
+    graph_store = DummyGraphStore()
+    graph_store.get_nodes.return_value = [
+        Note(id="src", graph_uid="graph-1"),
+        Note(id="dst", graph_uid="graph-1"),
+    ]
+
+    tool = create_link_notes_tool(graph_store, "graph-1")
+    await tool.on_invoke_tool(
+        RunContextWrapper(Context()),
+        json.dumps({"source_id": "src", "target_id": "dst"}),
+    )
+
+    created_link = graph_store.add_links.await_args.args[0][0]
+    assert created_link.label is None
+
+
+@pytest.mark.asyncio
+async def test_link_notes_tool_rejects_same_source_and_target() -> None:
+    """Link notes should refuse self-loops to keep the graph sane."""
+    graph_store = DummyGraphStore()
+    tool = create_link_notes_tool(graph_store, "graph-1")
+
+    result = await tool.on_invoke_tool(
+        RunContextWrapper(Context()),
+        json.dumps({"source_id": "same", "target_id": "same"}),
+    )
+
+    assert isinstance(result, str)
+    assert "must refer to different notes" in result
+    graph_store.add_links.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_link_notes_tool_rejects_missing_notes() -> None:
+    """Link notes should fail when either endpoint does not exist."""
+    graph_store = DummyGraphStore()
+    graph_store.get_nodes.return_value = [Note(id="src", graph_uid="graph-1")]  # missing dst
+
+    tool = create_link_notes_tool(graph_store, "graph-1")
+    result = await tool.on_invoke_tool(
+        RunContextWrapper(Context()),
+        json.dumps({"source_id": "src", "target_id": "dst"}),
+    )
+
+    assert isinstance(result, str)
+    assert "Note(s) not found" in result
+    graph_store.add_links.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_link_notes_tool_rejects_cross_board_notes() -> None:
+    """Link notes should refuse endpoints from a different board scope."""
+    graph_store = DummyGraphStore()
+    graph_store.get_nodes.return_value = [
+        Note(id="src", graph_uid="graph-1"),
+        Note(id="dst", graph_uid="graph-2"),
+    ]
+
+    tool = create_link_notes_tool(graph_store, "graph-1")
+    result = await tool.on_invoke_tool(
+        RunContextWrapper(Context()),
+        json.dumps({"source_id": "src", "target_id": "dst"}),
+    )
+
+    assert isinstance(result, str)
+    assert "does not belong to the current board scope" in result
+    graph_store.add_links.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_link_notes_tool_schema_hides_board_scope() -> None:
+    """Link notes tool should expose only source, target, and label to the agent."""
+    tool = create_link_notes_tool(DummyGraphStore(), "graph-1")
+
+    properties = tool.params_json_schema["properties"]
+    assert "graph_uid" not in properties
+    assert "source_id" in properties
+    assert "target_id" in properties
+    assert "label" in properties
+    required = set(tool.params_json_schema.get("required", []))
+    assert {"source_id", "target_id"}.issubset(required)

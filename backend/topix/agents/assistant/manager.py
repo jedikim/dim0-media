@@ -11,14 +11,16 @@ from topix.agents.assistant.plan import Plan
 from topix.agents.config import AssistantManagerConfig
 from topix.agents.datatypes.context import ReasoningContext
 from topix.agents.datatypes.model_enum import ModelEnum
+from topix.agents.datatypes.outputs import CreateNoteOutput, LinkNotesOutput, WriteNoteOutput
 from topix.agents.datatypes.reasoning_step import ReasoningStep
 from topix.agents.datatypes.stream import (
     AgentStreamMessage,
     ContentType,
     StreamingMessageType,
 )
-from topix.agents.datatypes.tool_call import ToolCall
+from topix.agents.datatypes.tool_call import ToolCall, ToolCallState
 from topix.agents.datatypes.tools import AgentToolName
+from topix.agents.notes.layout import rearrange_created_notes
 from topix.agents.run import AgentRunner
 from topix.agents.sessions import AssistantSession
 from topix.agents.utils.text import post_process_url_citations
@@ -42,10 +44,14 @@ class AssistantManager:
         self,
         plan_agent: Plan,
         auto_mode: bool = False,
+        graph_store: GraphStore | None = None,
+        graph_uid: str | None = None,
     ):
         """Init method."""
         self.plan_agent = plan_agent
         self.auto_mode = auto_mode
+        self.graph_store = graph_store
+        self.graph_uid = graph_uid
 
     @classmethod
     def from_config(
@@ -72,7 +78,12 @@ class AssistantManager:
             root_id=root_id,
         )
 
-        return cls(plan_agent, auto_mode=auto_mode)
+        return cls(
+            plan_agent,
+            auto_mode=auto_mode,
+            graph_store=graph_store,
+            graph_uid=graph_uid,
+        )
 
     def _set_plan_model(self, model: str) -> None:
         """Swap the concrete model used by the plan agent for this request."""
@@ -112,6 +123,78 @@ class AssistantManager:
             else:
                 return [{"role": "user", "content": query}]
         return [{"role": "user", "content": query}]
+
+    def _collect_created_note_ids(self, context: ReasoningContext) -> list[str]:
+        """Pick note ids that this turn just created, in first-seen order.
+
+        Covers both `write_note(action="created")` and the older `create_note` tool.
+        Rewrites and edits are excluded so the user's existing layout is respected.
+        """
+        if self.graph_uid is None:
+            return []
+
+        created: list[str] = []
+        seen: set[str] = set()
+        for call in context.tool_calls:
+            if call.state != ToolCallState.COMPLETED:
+                continue
+            output = call.output
+            if isinstance(output, CreateNoteOutput):
+                pass  # falls through to the id extraction below
+            elif isinstance(output, WriteNoteOutput):
+                if output.action != "created":
+                    continue
+            else:
+                continue
+
+            if output.graph_uid != self.graph_uid:
+                continue
+            if output.note_id in seen:
+                continue
+            seen.add(output.note_id)
+            created.append(output.note_id)
+        return created
+
+    def _collect_created_link_ids(self, context: ReasoningContext) -> list[str]:
+        """Pick link ids that this turn just created, in first-seen order."""
+        if self.graph_uid is None:
+            return []
+
+        created: list[str] = []
+        seen: set[str] = set()
+        for call in context.tool_calls:
+            if call.state != ToolCallState.COMPLETED:
+                continue
+            output = call.output
+            if not isinstance(output, LinkNotesOutput):
+                continue
+            if output.graph_uid != self.graph_uid:
+                continue
+            if output.link_id in seen:
+                continue
+            seen.add(output.link_id)
+            created.append(output.link_id)
+        return created
+
+    async def _rearrange_turn_notes(self, context: ReasoningContext) -> None:
+        """Flex-wrap any notes the planner created this turn. Non-fatal on error."""
+        if self.graph_store is None or self.graph_uid is None:
+            return
+        created_ids = self._collect_created_note_ids(context)
+        if len(created_ids) < 2:
+            return
+        created_link_ids = self._collect_created_link_ids(context)
+        try:
+            await rearrange_created_notes(
+                self.graph_store,
+                self.graph_uid,
+                created_ids,
+                created_link_ids=created_link_ids,
+            )
+        except Exception:
+            logger.exception(
+                "rearrange_created_notes failed; notes left at their creation positions"
+            )
 
     async def _postprocess_answer(  # noqa: C901
         self,
@@ -202,6 +285,8 @@ class AssistantManager:
             )
         except Exception:
             logger.info(f"Max turns exceeded: {max_turns}", exc_info=True)
+
+        await self._rearrange_turn_notes(context)
 
         if session:
             await session.add_items(
@@ -317,6 +402,8 @@ class AssistantManager:
             )
 
         flush_current_buffers()
+
+        await self._rearrange_turn_notes(context)
 
         final_reasoning_step = next(
             (

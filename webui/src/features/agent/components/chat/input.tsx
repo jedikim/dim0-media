@@ -219,10 +219,11 @@ export const InputBar = ({
   )
 
   const inboxClass = clsx(
-    'rounded-lg relative flex flex-col text-card-foreground text-base p-2 border transition-colors transition-shadow',
+    'rounded-xl relative flex flex-col text-card-foreground text-base p-2 border transition-colors transition-shadow',
     chatId ? 'bg-accent backdrop-blur-lg supports-[backdrop-filter]:bg-accent/70 dark:border dark:border-border/50 shadow-lg' :
       'bg-accent text-base shadow-xl',
-    'border-transparent hover:border-border/70 focus-within:border-border/70'
+    'border-transparent hover:border-secondary-foreground/50',
+    'focus-within:border-secondary-foreground/50 focus-within:ring-2 focus-within:ring-secondary-foreground/10'
   )
   const showStarterPrompts = !chatId && !isStreaming && Boolean(attachedBoardId)
 

@@ -282,7 +282,6 @@ export default function GraphEditor() {
   const nodes = useGraphStore(useShallow(state => state.nodes))
   const edges = useGraphStore(useShallow(state => state.edges))
 
-  const setNodes = useGraphStore(state => state.setNodes)
   const onNodesChange = useGraphStore(state => state.onNodesChange)
   const onEdgesChange = useGraphStore(state => state.onEdgesChange)
   const onNodesDelete = useGraphStore(state => state.onNodesDelete)
@@ -635,46 +634,6 @@ export default function GraphEditor() {
       clearDeferredUiTimeouts()
     }
   }, [shouldHideFloatingUi, clearDeferredUiTimeouts])
-
-  // --- frontend-only expiration for data.isNew ---
-  const newTimersRef = useRef<Map<string, number>>(new Map())
-
-  useEffect(() => {
-    // schedule timers for nodes that are marked isNew and don't already have one
-    nodes.forEach(n => {
-      const isNew = !!n.data?.isNew
-      const hasTimer = newTimersRef.current.has(n.id)
-      if (isNew && !hasTimer) {
-        const t = window.setTimeout(() => {
-          setNodes(ns =>
-            ns.map(m =>
-              m.id === n.id ? { ...m, data: { ...m.data, isNew: false } } : m,
-            ),
-          )
-          newTimersRef.current.delete(n.id)
-        }, 5000)
-        newTimersRef.current.set(n.id, t)
-      }
-    })
-
-    // clear timers for nodes no longer needing them (removed or isNew flipped)
-    for (const [id, t] of newTimersRef.current) {
-      const stillNew = nodes.some(n => n.id === id && n.data?.isNew)
-      if (!stillNew) {
-        clearTimeout(t)
-        newTimersRef.current.delete(id)
-      }
-    }
-  }, [nodes, setNodes])
-
-  // clear all timers on unmount
-  useEffect(() => {
-    const timers = newTimersRef.current
-    return () => {
-      for (const [, t] of timers) clearTimeout(t)
-      timers.clear()
-    }
-  }, [])
 
   const captureThumbnail = useThumbnailCapture(boardId || '')
 

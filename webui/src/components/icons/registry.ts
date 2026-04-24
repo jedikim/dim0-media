@@ -1,5 +1,6 @@
 import { Claude, DeepSeek, Exa, Gemini, Mistral, Moonshot, OpenAI, Perplexity, Qwen, Tavily, ZAI } from "@lobehub/icons"
 import {
+  ArrowUpIcon,
   ArticleIcon,
   ArrowsClockwiseIcon,
   ArrowsOutSimpleIcon,
@@ -67,7 +68,6 @@ import {
   NoteIcon as NoteGlyphIcon,
   PaintBrushIcon,
   PathIcon as PathGlyphIcon,
-  PaperPlaneRightIcon,
   PencilIcon,
   PentagramIcon,
   PlayIcon as PlayGlyphIcon,
@@ -227,7 +227,7 @@ export const RadioIndicatorIcon = createPhosphorIcon(CircleGlyphIcon)
 export const SchemaMapIcon = createPhosphorIcon(GraphIcon)
 export const SearchEngineIcon = createPhosphorIcon(GlobeSimpleIcon)
 export const SelectionContextIcon = createPhosphorIcon(SelectionIcon)
-export const SendIcon = createPhosphorIcon(PaperPlaneRightIcon)
+export const SendIcon = createPhosphorIcon(ArrowUpIcon)
 export const ShareIcon = createPhosphorIcon(ShareNetworkIcon)
 export const SidebarMenuIcon = createPhosphorIcon(DotsThreeOutlineVerticalIcon)
 export const SparklesFeatureIcon = createPhosphorIcon(SparkleIcon)

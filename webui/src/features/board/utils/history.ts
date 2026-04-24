@@ -21,7 +21,7 @@ export type Patch = {
 }
 
 const stripNodeUi = (node: NoteNode): NoteNode => {
-  const data = node.data as { endpointActive?: boolean; isNew?: boolean } | undefined
+  const data = node.data as { endpointActive?: boolean } | undefined
   return {
     ...node,
     selected: false,
@@ -30,7 +30,6 @@ const stripNodeUi = (node: NoteNode): NoteNode => {
       ? {
           ...node.data,
           endpointActive: undefined,
-          isNew: undefined,
         }
       : node.data,
   }

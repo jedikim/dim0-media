@@ -39,7 +39,7 @@ const ReasoningMessage = ({
 /**
  * Renders code interpreter stdout and stderr when available.
  */
-const CodeInterpreterResult = ({
+export const CodeInterpreterResult = ({
   output
 }: { output: CodeInterpreterOutput }) => {
   const stdout = output.stdout.trim()
@@ -77,7 +77,7 @@ const CodeInterpreterResult = ({
 /**
  * Renders a compact summary for note tool results.
  */
-const NoteToolResult = ({
+export const NoteToolResult = ({
   output,
   chatId,
   rootId,
@@ -170,7 +170,7 @@ const ToolStepWidgetView = ({
  * Renders tool call arguments as plain key/value rows (sienna key, foreground value).
  * Falls back to a single row with an implicit key when the raw input is a plain string.
  */
-const ToolArgsRows = ({
+export const ToolArgsRows = ({
   args,
   stepName,
 }: {
@@ -284,12 +284,12 @@ export const ToolStepRow = ({
   return (
     <div className='w-full flex flex-col'>
       <div className='w-full p-1'>
-        <div className='rounded-lg border border-sidebar-border overflow-hidden flex flex-col'>
-          <div className='bg-muted px-2 py-1 flex flex-row items-center gap-2'>
+        <div className='rounded-md border border-sidebar-border overflow-hidden flex flex-col'>
+          <div className='bg-gradient-to-r from-secondary/30 via-muted to-muted px-2 py-1 flex flex-row items-center gap-2'>
             {isLoading ? (
-              <CircleNotchIcon className={cn(iconClass, 'shrink-0 text-muted-foreground animate-spin')} strokeWidth={2} />
+              <CircleNotchIcon className={cn(iconClass, 'shrink-0 text-secondary-foreground animate-spin')} strokeWidth={2} />
             ) : (
-              <StepIcon className={cn(iconClass, 'shrink-0 text-muted-foreground')} strokeWidth={2} />
+              <StepIcon className={cn(iconClass, 'shrink-0 text-secondary-foreground')} strokeWidth={2} />
             )}
             {message !== "" ? (
               <div className='flex-1 min-w-0 flex flex-col'>

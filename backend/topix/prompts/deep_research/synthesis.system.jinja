@@ -68,13 +68,9 @@ Treat all tags and sentinel markers as input structure only. Do NOT copy or ment
 - Use **bold text** for important terms or concepts you want to highlight.
 - Use inline code (backticks) for variable names, parameters, file names, and short code-like tokens.
 - When you include math, write it in LaTeX:
-  - use $...$ for inline formulas,
-  - use
-    $$
-    ...your expression...
-    $$
-    for block formulas.
-- When you need a literal dollar sign that is NOT math (for example, money), escape it as `\$` so it is not treated as math.
+  - use `\(...\)` for inline formulas,
+  - use `\[...\]` for block formulas, with `\[` at the start of a line and `\]` at the end.
+- Never use `$...$` or `$$...$$` for math. A bare `$` always means a literal dollar sign (currency or prose) and is rendered as-is; do not escape it.
 - You may include small Markdown tables or structured lists when they make comparisons or data clearer, but:
   - only use data that is actually present or clearly implied in the materials or in well-known background,
   - do not fabricate precise numbers or invented datasets.

@@ -1,7 +1,7 @@
 import { useState } from "react"
 import { ArrowCollapseIcon, ArrowExpandIcon } from "@/components/icons"
 import type { ReasoningTextStep } from "../../types/stream"
-import { ShinyText } from "@/components/animations/shiny-text"
+import { ThinkingDots } from "@/components/animations/thinking-indicator"
 import { MarkdownView } from "@/components/markdown/markdown-view"
 import { cn } from "@/lib/utils"
 
@@ -72,12 +72,10 @@ export const ReasoningStepRow = ({
           <MarkdownView content={step.message} isStreaming={isStreaming} />
         </div>
       ) : isStreaming ? (
-        <ShinyText
-          text='Thinking'
-          disabled={false}
-          speed={1}
-          className='text-sm text-foreground/50'
-        />
+        <span className='inline-flex items-center gap-1 font-mono text-sm font-medium text-muted-foreground'>
+          Thinking
+          <ThinkingDots />
+        </span>
       ) : null}
     </div>
   )

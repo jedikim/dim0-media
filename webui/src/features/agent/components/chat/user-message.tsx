@@ -45,7 +45,7 @@ export const UserMessage = ({ message, isLatest }: { message: ChatMessage, isLat
             bg-muted
             text-card-foreground text-base
             text-left
-            rounded-xl
+            rounded-lg
             px-3 py-2
             whitespace-pre-wrap break-words
             border border-border/70

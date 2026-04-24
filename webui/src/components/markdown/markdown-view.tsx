@@ -7,6 +7,7 @@ import { Pre } from "./custom-pre"
 import { MarkdownLink } from "./markdown-link"
 import { Streamdown } from "streamdown"
 import { createCodePlugin } from "./streamdown-code-plugin"
+import { sanitizeMathDelimiters } from "./sanitize-math"
 
 
 const code = createCodePlugin(["rose-pine-dawn", "rose-pine-moon"])
@@ -14,6 +15,23 @@ const code = createCodePlugin(["rose-pine-dawn", "rose-pine-moon"])
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
+
+
+const DISPLAY_MATH_RE = /\\\[([\s\S]+?)\\\]/g
+const INLINE_MATH_RE = /\\\(([\s\S]+?)\\\)/g
+
+
+/**
+ * Rewrites LaTeX-style math delimiters into the `$$` form that remark-math parses.
+ * Lets the model emit `\(...\)` and `\[...\]`, which do not collide with currency `$` in prose.
+ * Single-dollar math is disabled on the renderer side, so both inline and block map to `$$...$$`;
+ * remark-math treats same-line `$$...$$` as inline and own-line `$$...$$` as display.
+ */
+function normalizeMathDelimiters(src: string): string {
+  return src
+    .replace(DISPLAY_MATH_RE, (_, body) => `\n$$\n${body}\n$$\n`)
+    .replace(INLINE_MATH_RE, (_, body) => `$$${body}$$`)
+}
 
 /** -------------------------------------------------------
  *  transparent scrollbars
@@ -194,6 +212,7 @@ const components = {
  * Renderer: GFM + math override + mermaid
  * ------------------------------------------------------*/
 const Renderer: React.FC<{ content: string; isStreaming?: boolean }> = ({ content, isStreaming }) => {
+  const normalized = normalizeMathDelimiters(sanitizeMathDelimiters(content))
   return (
     <div>
       <Streamdown
@@ -202,14 +221,16 @@ const Renderer: React.FC<{ content: string; isStreaming?: boolean }> = ({ conten
         shikiTheme={["rose-pine-dawn", "rose-pine-moon"]}
         remarkPlugins={[
           remarkGfm, // <- restores GFM (tables, task lists, etc.)
-          [remarkMath, { singleDollarTextMath: true }], // <- $...$ + $$...$$
+          // singleDollarTextMath disabled: bare `$` stays literal (currency, prose).
+          // Math must arrive as `\(...\)` / `\[...\]` and is normalized to `$$` above.
+          [remarkMath, { singleDollarTextMath: false }],
         ]}
         rehypePlugins={[
           rehypeKatex, // <- render math with KaTeX
         ]}
         plugins={isStreaming ? undefined: { code: code }}
       >
-        {content}
+        {normalized}
       </Streamdown>
     </div>
   )

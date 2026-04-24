@@ -107,9 +107,6 @@ export const useAddMindMapToBoard = () => {
           edge.data.parentId = rootId
         })
 
-        // mark as new (frontend only)
-        mindMapNodes.forEach(n => { n.data.isNew = true })
-
         // avoid overlap and merge into the board
         const displacedMindMapNodes = contextNodes.length > 0 && useAnchors !== false
           ? displaceNodes(stackBase, mindMapNodes, contextNodes)

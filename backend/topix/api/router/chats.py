@@ -197,6 +197,7 @@ async def send_message(
                     "get_note",
                     "write_note",
                     "edit_note",
+                    "link_notes",
                     "learn_generate_html_widget",
                 }
             ]

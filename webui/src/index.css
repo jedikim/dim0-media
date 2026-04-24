@@ -260,11 +260,20 @@
 
   /* ── ring blink (attention pulse for arriving content) ──── */
   @keyframes ring-blink {
-    0%, 100% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--secondary-foreground) 40%, transparent); }
-    50%      { box-shadow: 0 0 0 6px color-mix(in oklab, var(--secondary-foreground) 20%, transparent); }
+    0%, 100% { box-shadow: 0 0 0 0 oklch(from var(--secondary-foreground) l c h / 0.40); }
+    50%      { box-shadow: 0 0 0 6px oklch(from var(--secondary-foreground) l c h / 0.20); }
   }
   .animate-ring-blink {
     animation: ring-blink 1s ease-in-out 2;
+  }
+
+  /* ── ring pulse soft (ongoing heartbeat for thinking state) ── */
+  @keyframes ring-pulse-soft {
+    0%, 100% { box-shadow: 0 0 0 0 oklch(from var(--secondary-foreground) l c h / 0.15); }
+    50%      { box-shadow: 0 0 0 5px oklch(from var(--secondary-foreground) l c h / 0.10); }
+  }
+  .animate-ring-pulse-soft {
+    animation: ring-pulse-soft 1.8s ease-in-out infinite;
   }
 
   .skeleton-shimmer {

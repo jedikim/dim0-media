@@ -22,14 +22,9 @@ Formatting rules:
 - **Artifacts:** If the input includes code, math, data/CLI, or formulas, keep the original blocks with minimal cleanup. **Do not fabricate artifacts.** If a domain clearly requires an artifact but none is given, add the line: "Not provided in input."
 - **Math rules:**
   - Keep all math in LaTeX if present.
-  - **Inline math:** use `$...$`.
-  - **Block math:** must be formatted exactly as:
-    $$
-    ...expression...
-    $$
-    with each `$$` on its own line.
-  - When a normal dollar sign is needed in text, escape it as `\$`.
-  - Avoid stray or unmatched `$` or `$$`.
+  - **Inline math:** use `\(...\)`.
+  - **Block math:** use `\[...\]`, with `\[` at the start of a line and `\]` at the end.
+  - Never use `$...$` or `$$...$$` for math. A bare `$` always means a literal dollar sign (currency or prose) and is rendered as-is; do not escape it.
 - **Examples & pitfalls:** Keep only if present in the input.
 - **Takeaway:** End with a single-sentence key line **only if** the article is not already very short.
 

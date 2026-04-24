@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearch } from "@tanstack/react-router"
 
 import { nodeCenter } from "../utils/point-attach"
 import { useGraphStore } from "../store/graph-store"
+import { useFitNodes } from "./use-fit-nodes"
 
 
 /**
@@ -14,13 +15,17 @@ const MAX_AUTO_CENTER_ZOOM = 1
 
 
 /**
- * Type for the `center_around` search param.
+ * Type for the `center_around` search param. Accepts a single id or a
+ * comma-separated list of ids.
  */
 type CenterAroundSearch = { center_around?: string }
 
 /**
- * Centers the board viewport on a node when the `center_around` search param is present.
- * After centering, the param is removed to avoid repeated recentering.
+ * Drives the viewport from the `center_around` search param. A single id
+ * centers the viewport on that node while preserving the user's current
+ * zoom; multiple comma-separated ids fit the viewport to the whole set
+ * (useful when an agent turn produces several notes at once).
+ * After dispatching, the param is removed to avoid repeated recentering.
  */
 export function useCenterAroundParam({
   setCenter,
@@ -30,6 +35,7 @@ export function useCenterAroundParam({
   const navigate = useNavigate()
   const nodesById = useGraphStore(state => state.nodesById)
   const zoom = useGraphStore(state => state.zoom)
+  const fitNodes = useFitNodes()
 
   const params = useParams({
     from: "/boards/$id",
@@ -44,13 +50,20 @@ export function useCenterAroundParam({
   })
 
   useEffect(() => {
-    if (!search || !setCenter) return
-    const node = nodesById.get(search)
-    if (!node) return
+    if (!search) return
+    const ids = search.split(",").map(id => id.trim()).filter(Boolean)
+    if (ids.length === 0) return
 
-    const { x, y } = nodeCenter(node)
-    const targetZoom = Math.min(zoom, MAX_AUTO_CENTER_ZOOM)
-    setCenter(x, y, { zoom: targetZoom, duration: 250 })
+    if (ids.length === 1) {
+      if (!setCenter) return
+      const node = nodesById.get(ids[0])
+      if (!node) return
+      const { x, y } = nodeCenter(node)
+      const targetZoom = Math.min(zoom, MAX_AUTO_CENTER_ZOOM)
+      setCenter(x, y, { zoom: targetZoom, duration: 250 })
+    } else {
+      void fitNodes(ids, { padding: 0.25, duration: 300, maxZoom: MAX_AUTO_CENTER_ZOOM })
+    }
 
     if (!params) return
     navigate({
@@ -64,5 +77,5 @@ export function useCenterAroundParam({
         return next
       },
     })
-  }, [search, nodesById, setCenter, navigate, params, zoom])
+  }, [search, nodesById, setCenter, fitNodes, navigate, params, zoom])
 }

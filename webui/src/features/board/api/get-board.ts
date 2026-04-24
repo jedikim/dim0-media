@@ -5,6 +5,7 @@ import { useGraphStore } from "../store/graph-store"
 import { convertLinkToEdgeWithPoints, convertNoteToNode } from "../utils/graph"
 import type { LinkEdge, NoteNode } from "../types/flow"
 import { apiFetch } from "@/api"
+import type { Link } from "../types/link"
 import type { Note } from "../types/note"
 
 
@@ -113,4 +114,20 @@ export async function getBoardNote(
   })
   const data = camelcaseKeys(res.data, { deep: true })
   return data.note as Note
+}
+
+
+/**
+ * Fetch a single link (edge) from a board by id.
+ */
+export async function getBoardLink(
+  boardId: string,
+  linkId: string,
+): Promise<Link> {
+  const res = await apiFetch<{ data: Record<string, unknown> }>({
+    path: `/boards/${boardId}/links/${linkId}`,
+    method: "GET",
+  })
+  const data = camelcaseKeys(res.data, { deep: true })
+  return data.link as Link
 }

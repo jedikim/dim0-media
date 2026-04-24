@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useEditor, EditorContent } from "@tiptap/react"
 import { useDebouncedCallback } from "use-debounce"
 import { getExtensions } from "./extensions"
@@ -10,6 +10,7 @@ import { TocPanel } from "./toc"
 import { TagPanel } from "./tag/tag-panel"
 import { scanTags } from "./tag/tag-utils"
 import type { TagGroup } from "./tag/tag-utils"
+import { sanitizeMathDelimiters } from "@/components/markdown/sanitize-math"
 import "./editor.css"
 
 export interface MdEditorProps {
@@ -31,9 +32,11 @@ export function TipTapEditor({ markdown, onSave, placeholder, className }: MdEdi
     setTags(scanTags(md))
   }, 2000)
 
+  const initialContent = useMemo(() => sanitizeMathDelimiters(markdown), [markdown])
+
   const editor = useEditor({
     extensions: getExtensions(placeholder),
-    content: markdown,
+    content: initialContent,
     immediatelyRender: false,
     onUpdate({ editor }) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -302,6 +302,22 @@ class GetNoteOutput(BaseModel):
         return f'read {self.note_type} note_id="{self.note_id}"{label}'
 
 
+class LinkNotesOutput(BaseModel):
+    """Output from link notes tool."""
+
+    type: Literal["link_notes"] = "link_notes"
+    link_id: Annotated[str, "The unique id of the newly created link."]
+    source_id: Annotated[str, "The note id the link originates from."]
+    target_id: Annotated[str, "The note id the link points to."]
+    graph_uid: Annotated[str, "The board id where the link belongs."]
+    label: Annotated[str | None, "Optional short label rendered on the edge."] = None
+
+    def to_compact_repr(self) -> str:
+        """Return the new link metadata in a compact, history-safe form."""
+        label = f' "{self.label}"' if self.label else ""
+        return f'linked {self.source_id} -> {self.target_id} link_id="{self.link_id}"{label}'
+
+
 class MemorySearchOutput(BaseModel):
     """Output from memory search tool."""
 
@@ -356,6 +372,7 @@ type ToolOutput = Union[
     CreateNoteOutput,
     EditNoteOutput,
     GetNoteOutput,
+    LinkNotesOutput,
     WebSearchOutput,
     MemorySearchOutput,
     NotifyOutput,

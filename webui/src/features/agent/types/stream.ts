@@ -5,6 +5,7 @@ import {
   EditNoteIcon,
   ImageGenerationIcon,
   ImageSearchWidgetIcon,
+  LinkIcon,
   MemorySearchIcon,
   NoteIcon,
   OutlineGeneratorIcon,
@@ -108,6 +109,7 @@ export type ToolName =
   | "create_note"
   | "edit_note"
   | "get_note"
+  | "link_notes"
   | "outline_generator"
   | "web_collector"
   | "synthesizer"
@@ -131,6 +133,7 @@ export const ToolNameDescription: Record<ToolName, string> = {
   create_note: "Create note",
   edit_note: "Edit note",
   get_note: "Read note",
+  link_notes: "Link notes",
   outline_generator: "Generate outline",
   web_collector: "Collect web content",
   synthesizer: "Synthesize response",
@@ -159,6 +162,7 @@ export const ToolNameIcon: Record<string, AppIconComponent> = {
   create_note: CreateNoteIcon,
   edit_note: EditNoteIcon,
   get_note: ReadNoteIcon,
+  link_notes: LinkIcon,
   image_description: ImageGenerationIcon,
   topic_illustrator: ImageGenerationIcon,
   image_generation: ImageGenerationIcon,

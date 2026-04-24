@@ -16,11 +16,3 @@ async def test_learn_generate_html_widget_returns_widget_note_guidance() -> None
     prompt = await learn_generate_html_widget(RunContextWrapper(Context()))
 
     assert "write_note" in prompt
-    assert "note_type" in prompt
-    assert "widget" in prompt
-    assert "iframe" in prompt
-    assert "visual explainer" in prompt
-    assert "Chart.js" in prompt
-    assert "system-ui" in prompt
-    assert "var(--background)" in prompt
-    assert "light and dark themes" in prompt

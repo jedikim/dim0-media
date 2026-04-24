@@ -14,7 +14,8 @@ import { useTheme } from '@/components/theme-provider'
 
 type TextAlign = 'left' | 'center' | 'right'
 const MARKDOWN_RENDER_SCALE = 1
-const hasMathSyntax = (value: string) => value.includes('$$')
+const hasMathSyntax = (value: string) =>
+  value.includes('$$') || value.includes('\\[') || value.includes('\\(')
 
 
 /**

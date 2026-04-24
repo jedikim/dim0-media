@@ -76,19 +76,14 @@ const ResizeHandles = memo(function ResizeHandles({
 type NodeStatusOverlayProps = {
   selected: boolean
   nodeType: NoteNode['data']['style']['type']
-  isNew?: boolean
 }
 
 const NodeStatusOverlay = memo(function NodeStatusOverlay({
   selected,
   nodeType,
-  isNew,
 }: NodeStatusOverlayProps) {
   if (selected && nodeType !== 'sheet') {
     return <div className='absolute inset-1 border border-secondary-foreground pointer-events-none rounded-md z-10' />
-  }
-  if (!selected && isNew) {
-    return <div className='absolute inset-0 border-2 border-dashed border-secondary-foreground pointer-events-none rounded z-10' />
   }
   return null
 })
@@ -202,7 +197,7 @@ function NodeViewBase({ id, data, selected, width, height, dragging }: NodeProps
         nodeWidth={width}
         nodeHeight={height}
       />
-      <NodeStatusOverlay selected={selected} nodeType={nodeType} isNew={data.isNew} />
+      <NodeStatusOverlay selected={selected} nodeType={nodeType} />
     </div>
   )
 
@@ -273,7 +268,7 @@ function NodeViewBase({ id, data, selected, width, height, dragging }: NodeProps
           }}
         >
           <FolderNode id={id} data={data} />
-          <NodeStatusOverlay selected={selected} nodeType={nodeType} isNew={data.isNew} />
+          <NodeStatusOverlay selected={selected} nodeType={nodeType} />
         </div>
 
         <ResizeHandles

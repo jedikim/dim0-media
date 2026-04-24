@@ -19,7 +19,7 @@ type Token =
   | { type: 'hr-double' }
 
 const INLINE_PATTERN =
-  /(\$\$[\s\S]+?\$\$|\*\*[^*]+\*\*|==[^=\s](?:[^=]*?[^=\s])?==|`[^`]+`|\*[^*]+\*|__[^_]+__|~~[^~]+~~|_[^_]+_|\[[^\]]+\]\([^)]+\))/g
+  /(\$\$[\s\S]+?\$\$|\\\([^\n]+?\\\)|\\\[[^\n]+?\\\]|\*\*[^*]+\*\*|==[^=\s](?:[^=]*?[^=\s])?==|`[^`]+`|\*[^*]+\*|__[^_]+__|~~[^~]+~~|_[^_]+_|\[[^\]]+\]\([^)]+\))/g
 const CROSS_LINE_PATTERN = /^([ \t]*)(\[(x)\]|☒|❎)(\s*)(.*)$/i
 const HR_LINE_PATTERN = /^[ \t]*---[ \t]*$/
 const DOUBLE_HR_LINE_PATTERN = /^[ \t]*===[ \t]*$/
@@ -55,6 +55,12 @@ function tokenizeInline(segment: string): Token[] {
       const trimmed = body.trim()
       const isBlock = body.includes('\n')
       tokens.push({ type: isBlock ? 'math-block' : 'math-inline', content: trimmed })
+    } else if (match.startsWith('\\(') && match.endsWith('\\)')) {
+      tokens.push({ type: 'math-inline', content: match.slice(2, -2).trim() })
+    } else if (match.startsWith('\\[') && match.endsWith('\\]')) {
+      const body = match.slice(2, -2)
+      const isBlock = body.includes('\n')
+      tokens.push({ type: isBlock ? 'math-block' : 'math-inline', content: body.trim() })
     } else if ((match.startsWith('**') && match.endsWith('**')) || (match.startsWith('__') && match.endsWith('__'))) {
       tokens.push({ type: 'bold', content: transformSymbols(match.slice(2, -2)) })
     } else if ((match.startsWith('*') && match.endsWith('*'))) {
@@ -130,7 +136,8 @@ function tokenizeTextLines(block: string): Token[] {
 function tokenizeTextBlock(block: string): Token[] {
   if (!block) return []
   const tokens: Token[] = []
-  const pattern = /\$\$[\s\S]+?\$\$/g
+  // Matches `$$...$$` (legacy) and `\[...\]` (canonical) across lines.
+  const pattern = /\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]/g
   let lastIndex = 0
   let match: RegExpExecArray | null
 

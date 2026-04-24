@@ -7,7 +7,13 @@ from typing import Literal
 from agents import FunctionTool, RunContextWrapper
 
 from topix.agents.datatypes.context import Context
-from topix.agents.datatypes.outputs import CreateNoteOutput, EditNoteOutput, GetNoteOutput, WriteNoteOutput
+from topix.agents.datatypes.outputs import (
+    CreateNoteOutput,
+    EditNoteOutput,
+    GetNoteOutput,
+    LinkNotesOutput,
+    WriteNoteOutput,
+)
 from topix.agents.datatypes.tools import AgentToolName
 from topix.agents.notes.service import (
     SHEET_MIN_HEIGHT,
@@ -16,8 +22,10 @@ from topix.agents.notes.service import (
     get_default_note_size,
 )
 from topix.agents.tool_handler import ToolHandler
+from topix.datatypes.note.link import Link
 from topix.datatypes.note.style import NodeType
 from topix.datatypes.property import SizeProperty
+from topix.datatypes.resource import RichText
 from topix.store.graph import GraphStore
 
 
@@ -281,5 +289,69 @@ def create_get_note_tool(
     return ToolHandler.convert_func_to_tool(
         get_note,
         tool_name=AgentToolName.GET_NOTE,
+        tool_description=None,
+    )
+
+
+def create_link_notes_tool(
+    graph_store: GraphStore,
+    graph_uid: str,
+) -> FunctionTool:
+    """Build a link-notes tool bound to the current board scope."""
+
+    async def link_notes(
+        _wrapper: RunContextWrapper[Context],
+        source_id: str,
+        target_id: str,
+        label: str | None = None,
+    ) -> LinkNotesOutput:
+        """Create a directed arrow from `source_id` to `target_id` in the current board scope.
+
+        Use this to express hierarchy (parent -> child), order (step A -> step B),
+        causal or logical relations, or decision branches. The link is a primitive
+        edge between two existing notes; it does not modify either note's content.
+        Positions of the connected notes are arranged automatically at the end of the
+        turn, so you do not need to think about layout when choosing what to link.
+
+        Args:
+            source_id (str): Exact id of the note the arrow starts from.
+            target_id (str): Exact id of the note the arrow points to.
+            label (str | None): Optional short label rendered on the edge, such as
+                "yes", "no", "then", "reads", or "causes".
+
+        """
+        if source_id == target_id:
+            raise ValueError("source_id and target_id must refer to different notes.")
+
+        existing_notes = await graph_store.get_nodes([source_id, target_id])
+        existing_by_id = {note.id: note for note in existing_notes}
+
+        missing = [nid for nid in (source_id, target_id) if nid not in existing_by_id]
+        if missing:
+            raise ValueError(f"Note(s) not found: {', '.join(missing)}.")
+
+        for nid in (source_id, target_id):
+            if existing_by_id[nid].graph_uid != graph_uid:
+                raise ValueError(f"Note {nid} does not belong to the current board scope.")
+
+        link = Link(
+            source=source_id,
+            target=target_id,
+            graph_uid=graph_uid,
+            label=RichText(markdown=label) if label else None,
+        )
+        await graph_store.add_links([link])
+
+        return LinkNotesOutput(
+            link_id=link.id,
+            source_id=source_id,
+            target_id=target_id,
+            graph_uid=graph_uid,
+            label=label,
+        )
+
+    return ToolHandler.convert_func_to_tool(
+        link_notes,
+        tool_name=AgentToolName.LINK_NOTES,
         tool_description=None,
     )
