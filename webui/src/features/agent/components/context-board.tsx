@@ -60,7 +60,6 @@ export const ContextBoard = ({ contextBoardId, boardAsContext }: ContextBoardPro
         <span>{label}</span>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value="-1">No Context</SelectItem>
         {boards.map((b) => (
           <SelectItem key={b.uid} value={b.uid}>
             {b.label || UNTITLED_LABEL}

@@ -284,8 +284,8 @@ export const ToolStepRow = ({
   return (
     <div className='w-full flex flex-col'>
       <div className='w-full p-1'>
-        <div className='rounded-md border border-sidebar-border overflow-hidden flex flex-col'>
-          <div className='bg-gradient-to-r from-secondary/30 via-muted to-muted px-2 py-1 flex flex-row items-center gap-2'>
+        <div className='rounded-lg border border-sidebar-border overflow-hidden flex flex-col'>
+          <div className='bg-sidebar px-2 py-1 flex flex-row items-center gap-2'>
             {isLoading ? (
               <CircleNotchIcon className={cn(iconClass, 'shrink-0 text-secondary-foreground animate-spin')} strokeWidth={2} />
             ) : (
@@ -314,14 +314,14 @@ export const ToolStepRow = ({
             )}
           </div>
           {canExpand && viewMore && (
-            <div className='bg-sidebar px-3 py-3 flex flex-col gap-2 w-full min-w-0'>
+            <div className='bg-sidebar px-3 py-3 flex flex-col gap-2 w-full min-w-0 border-t border-sidebar-border'>
               {inlineDetail}
               {step.name !== "code_interpreter" && (
                 <ToolArgsRows args={rawArgs} stepName={step.name} />
               )}
               {input && step.name === "code_interpreter" && (
                 <button
-                  className='w-full text-left rounded-md border border-sidebar-border bg-background/60 p-3 font-mono text-xs leading-5 whitespace-pre-wrap break-words hover:bg-background/80 transition-colors'
+                  className='w-full text-left rounded-lg border border-sidebar-border bg-background/60 p-3 font-mono text-xs leading-5 whitespace-pre-wrap break-words hover:bg-background/80 transition-colors'
                   onClick={() => void handleCopy(input)}
                   title='Copy code'
                 >

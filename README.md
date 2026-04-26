@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/dim0-icon.png" alt="Dim0 icon" width="96" />
+  <img src="docs/images/affiche.png" alt="Dim0 — Your canvas thinks back" width="720" />
 </p>
 
 <h1 align="center">Dim0 - The Thinking Canvas</h1>
@@ -9,11 +9,7 @@
 </p>
 
 <p align="center">
-  For the ones who think in **connections**, not bullet points.
-</p>
-
-<p align="center">
-  <a href="https://dim0.net">🌐 Website</a> · <a href="https://app.dim0.net">🚀 Live App</a> · <a href="https://www.dim0.net/demo.mp4">🎥 Watch Demo</a> · 📄 MIT License
+  <a href="https://dim0.net">🌐 Website</a> · <a href="https://app.dim0.net">🚀 Live App</a> · 📄 MIT License
 </p>
 
 <p align="center">

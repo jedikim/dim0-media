@@ -26,7 +26,7 @@ interface ListChatsResponse {
 export async function listChats(
   offset: number = 0,
   limit: number = 100,
-  graphUid: string | "none" | null = "none"
+  graphUid: string | "none" | "any" | null = "none"
 ): Promise<Chat[]> {
   if (graphUid === undefined) {
     graphUid = "none"
@@ -57,7 +57,7 @@ export const useListChats = ({
   userId: string,
   offset?: number,
   limit?: number,
-  graphUid?: string | "none" | null
+  graphUid?: string | "none" | "any" | null
 }) => {
   return useQuery<Chat[]>({
     queryKey: ["listChats", userId, offset, limit, graphUid],
@@ -76,11 +76,11 @@ export const useInfiniteChats = ({
   pageSize = 20
 }: {
   userId: string,
-  graphUid?: string | "none" | null,
+  graphUid?: string | "none" | "any" | null,
   pageSize?: number
 }) => {
   const normalizedGraphUid = graphUid ?? "none"
-  return useInfiniteQuery<Chat[], Error, InfiniteData<Chat[]>, [string, string, string, string | "none", number], number>({
+  return useInfiniteQuery<Chat[], Error, InfiniteData<Chat[]>, [string, string, string, string, number], number>({
     queryKey: ["listChats", userId, "infinite", normalizedGraphUid, pageSize],
     initialPageParam: 0,
     queryFn: ({ pageParam = 0 }) => listChats(pageParam, pageSize, normalizedGraphUid),

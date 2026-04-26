@@ -32,7 +32,7 @@ export const SourcesView = ({ answer }: { answer: AgentResponse }) => {
           <Button
             variant='outline'
             size='sm'
-            className='rounded-md !p-2 gap-1 !bg-transparent hover:bg-accent/60 border-border/60 shadow-none mb-1 ml-1'
+            className='rounded-lg !p-2 gap-1 !bg-transparent hover:bg-accent/60 border-border/60 shadow-none mb-1 ml-1'
             title='Open sources'
           >
             <LinksIcon className='size-4 shrink-0 text-primary' strokeWidth={2} />

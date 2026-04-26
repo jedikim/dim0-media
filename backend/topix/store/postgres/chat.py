@@ -111,7 +111,7 @@ async def _dangerous_hard_delete_chat_by_uid(
 async def list_chats_by_user_uid(
     conn: asyncpg.Connection,
     user_uid: str,
-    graph_uid: str | Literal["none"] | None = None,
+    graph_uid: str | Literal["none", "any"] | None = None,
     offset: int = 0,
     limit: int = 100
 ) -> list[Chat]:
@@ -120,8 +120,8 @@ async def list_chats_by_user_uid(
     Args:
         conn: asyncpg.Connection - Active database connection.
         user_uid: str - User UID to filter chats.
-        graph_uid: str | Literal["none"] | None - Optional Graph UID to filter chats.
-            "none" filters for chats without a graph.
+        graph_uid: str | Literal["none", "any"] | None - Optional Graph UID to filter chats.
+            "none" filters for chats without a graph; "any" for chats with any graph attached.
         offset: int - Pagination offset.
         limit: int - Pagination limit.
 
@@ -135,6 +135,17 @@ async def list_chats_by_user_uid(
             "graph_uid, created_at, updated_at, deleted_at "
             "FROM chats WHERE user_uid = $1 "
             "AND graph_uid IS NULL "
+            "AND deleted_at IS NULL "
+            "ORDER BY COALESCE(updated_at, created_at) DESC "
+            "LIMIT $2 OFFSET $3"
+        )
+        rows = await conn.fetch(query, user_uid, limit, offset)
+    elif graph_uid == "any":
+        query = (
+            "SELECT id, uid, label, user_uid, "
+            "graph_uid, created_at, updated_at, deleted_at "
+            "FROM chats WHERE user_uid = $1 "
+            "AND graph_uid IS NOT NULL "
             "AND deleted_at IS NULL "
             "ORDER BY COALESCE(updated_at, created_at) DESC "
             "LIMIT $2 OFFSET $3"

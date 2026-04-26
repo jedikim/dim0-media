@@ -24,6 +24,7 @@ type ChatProps = {
   showHistoricalChats?: boolean
   preferChatRoute?: boolean
   enableSelectionContext?: boolean
+  autoCreateBoard?: boolean
 }
 
 const formatChatDate = (value?: string) => {
@@ -161,6 +162,7 @@ const ChatBody = ({
   showHistoricalChats = false,
   preferChatRoute = false,
   enableSelectionContext = false,
+  autoCreateBoard = false,
 }: ChatProps) => {
   const { chatId, setChatId } = useChat()
   const userId = useAppStore(s => s.userId)
@@ -264,6 +266,7 @@ const ChatBody = ({
         layout={showHistoricalChats ? "docked" : "floating"}
         preferChatRoute={preferChatRoute}
         enableSelectionContext={enableSelectionContext}
+        autoCreateBoard={autoCreateBoard}
       />
     </div>
   )

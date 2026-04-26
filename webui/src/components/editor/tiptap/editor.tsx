@@ -10,6 +10,7 @@ import { TocPanel } from "./toc"
 import { TagPanel } from "./tag/tag-panel"
 import { scanTags } from "./tag/tag-utils"
 import type { TagGroup } from "./tag/tag-utils"
+import { MathEditPopover } from "./math/math-edit-popover"
 import { sanitizeMathDelimiters } from "@/components/markdown/sanitize-math"
 import "./editor.css"
 
@@ -73,6 +74,7 @@ export function TipTapEditor({ markdown, onSave, placeholder, className }: MdEdi
           <EditorBubbleMenu editor={editor} />
           <TableMenu editor={editor} />
           <BlockHandle editor={editor} />
+          <MathEditPopover editor={editor} />
           <TagPanel tags={tags} />
           <EditorContent editor={editor} />
         </div>

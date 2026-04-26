@@ -13,6 +13,37 @@ import { cn } from "@/lib/utils"
 type Props = { editor: Editor }
 
 
+/**
+ * After a row insert, ensure non-first rows have only `tableCell` cells.
+ * tiptap-markdown's GFM table serializer falls back to "[table]" when any
+ * body row contains a `tableHeader`, which is exactly what prosemirror-tables
+ * produces if the cursor was in the header row when adding above/below.
+ */
+function normalizeBodyRows(editor: Editor): void {
+  const { state, view } = editor
+  const cellType = state.schema.nodes.tableCell
+  const headerType = state.schema.nodes.tableHeader
+  if (!cellType || !headerType) return
+
+  const tr = state.tr
+  let mutated = false
+  state.doc.descendants((node, pos) => {
+    if (node.type.name !== "table") return true
+    node.forEach((row, rowOffset, rowIdx) => {
+      const expected = rowIdx === 0 ? headerType : cellType
+      row.forEach((cell, cellOffset) => {
+        if (cell.type === expected) return
+        const cellPos = pos + 1 + rowOffset + 1 + cellOffset
+        tr.setNodeMarkup(cellPos, expected, cell.attrs, cell.marks)
+        mutated = true
+      })
+    })
+    return false
+  })
+  if (mutated) view.dispatch(tr)
+}
+
+
 function TBtn({
   onClick,
   tooltip,
@@ -62,13 +93,19 @@ export function TableMenu({ editor }: Props) {
       {/* ── rows ──────────────────────────────────────── */}
       <TBtn
         tooltip="Insert row above"
-        onClick={() => editor.chain().focus().addRowBefore().run()}
+        onClick={() => {
+          editor.chain().focus().addRowBefore().run()
+          normalizeBodyRows(editor)
+        }}
       >
         <RowsPlusTop size={15} />
       </TBtn>
       <TBtn
         tooltip="Insert row below"
-        onClick={() => editor.chain().focus().addRowAfter().run()}
+        onClick={() => {
+          editor.chain().focus().addRowAfter().run()
+          normalizeBodyRows(editor)
+        }}
       >
         <RowsPlusBottom size={15} />
       </TBtn>

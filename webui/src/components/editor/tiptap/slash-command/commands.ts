@@ -1,5 +1,6 @@
 import type { Editor, Range } from "@tiptap/core"
 import type { Icon } from "@phosphor-icons/react"
+import { openMathEditor } from "../math/math-edit-popover"
 import {
   TextT,
   TextHOne,
@@ -111,8 +112,15 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     keywords: ["math", "latex", "equation", "formula", "katex"],
     icon: MathOperationsIcon,
     group: "basic",
-    action: (editor, range) =>
-      editor.chain().focus().deleteRange(range).insertContent({ type: "blockMath", content: [{ type: "text", text: "" }] }).run(),
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range)
+        .insertContent({ type: "blockMath", attrs: { latex: "" } }).run()
+      // After insertion the cursor sits just after the new atom; the block
+      // itself is at selection.from - 1. Defer one tick so the NodeView DOM
+      // exists before the popover anchors to it.
+      const pos = Math.max(0, editor.state.selection.from - 1)
+      requestAnimationFrame(() => openMathEditor({ pos, latex: "", isInline: false }))
+    },
   },
   {
     title: "Table",

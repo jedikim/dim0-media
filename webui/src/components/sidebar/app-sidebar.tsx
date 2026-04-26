@@ -8,18 +8,16 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
-  SidebarMenuSubItem,
 } from '@/components/ui/sidebar'
 import { useInfiniteChats } from '@/features/agent/api/list-chats'
 import { useAppStore } from '@/store'
 import { useListBoards } from '@/features/board/api/list-boards'
-import { Collapsible, CollapsibleTrigger } from '../ui/collapsible'
-import { CollapsibleContent } from '@radix-ui/react-collapsible'
 import { ChatMenuItem, NewChatItem } from './chat'
 import { BoardItem, DashboardMenuItem, NewBoardItem } from './board'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { ChatsDialog } from './chats-dialog'
+import { useMemo, useState } from 'react'
 import type { Chat } from '@/features/agent/types/chat'
-import { AwardIcon, ChatHistoryIcon, InstallAppIcon, LogoutIcon, MinusIcon, PlusIcon, UserProfileIcon } from '@/components/icons'
+import { AwardIcon, ChatHistoryIcon, InstallAppIcon, LogoutIcon, UserProfileIcon } from '@/components/icons'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -30,7 +28,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ModeToggle } from '@/components/mode-toggle'
 import { HomeMenuItem } from './home'
-import { useCheckEleInView } from '@/hooks/use-check-ele-in-view'
 import { useNavigate } from '@tanstack/react-router'
 import { BILLING_ENABLED } from '@/config/billing'
 import { TierBadge } from '@/features/user-settings/components/tier-badge'
@@ -63,33 +60,19 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
     return name.slice(0, 2).toUpperCase()
   }, [userEmail])
 
-  const [scrollViewport, setScrollViewport] = useState<HTMLDivElement | null>(null)
-  const handleScrollAreaRef = useCallback((node: HTMLDivElement | null) => {
-    setScrollViewport(node)
-  }, [])
+  const [chatsDialogOpen, setChatsDialogOpen] = useState(false)
 
-  const { data: chatPagesData, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteChats({
+  const { data: chatPagesData } = useInfiniteChats({
     pageSize: CHAT_HISTORY_PAGE_SIZE,
-    graphUid: "none",
+    graphUid: "any",
     userId
   })
   const { data: boards = [] } = useListBoards(userId)
-  const { ref: sentinelRef, inView: isSentinelInView } = useCheckEleInView<HTMLDivElement>({
-    root: scrollViewport,
-    margin: '0px 0px -20% 0px'
-  })
 
   const chatHistoryItems = useMemo<Chat[]>(
     () => chatPagesData?.pages.flat() ?? [],
     [chatPagesData]
   )
-
-  useEffect(() => {
-    if (!isSentinelInView) return
-    if (!hasNextPage) return
-    if (isFetchingNextPage) return
-    fetchNextPage()
-  }, [isSentinelInView, hasNextPage, isFetchingNextPage, fetchNextPage])
 
   const chatItems = useMemo(
     () => chatHistoryItems.map(chat => (
@@ -140,14 +123,13 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        <div ref={handleScrollAreaRef} className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
           <div className="pb-0">
             <SidebarGroup>
               <SidebarGroupLabel><span>WORKSPACE</span></SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
                   <HomeMenuItem />
-                  {/* <SubscriptionsMenuItem /> */}
                   <DashboardMenuItem />
                   <NewBoardItem />
                   {boardItems}
@@ -160,31 +142,25 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
               <SidebarGroupContent>
                 <SidebarMenu>
                   <NewChatItem />
-                  <Collapsible className="group/collapsible w-full">
-                    <CollapsibleTrigger asChild>
-                      <SidebarMenuItem>
-                        <SidebarMenuButton className="font-medium text-xs flex flex-row items-center w-full">
-                          <ChatHistoryIcon className="size-4 shrink-0" strokeWidth={2} />
-                          <span>Chat History</span>
-                          <PlusIcon className="ml-auto group-data-[state=open]/collapsible:hidden" strokeWidth={2} />
-                          <MinusIcon className="ml-auto group-data-[state=closed]/collapsible:hidden" strokeWidth={2} />
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent>
-                      <SidebarMenuSub>
-                        {chatItems}
-                        <SidebarMenuSubItem aria-hidden className="pointer-events-none">
-                          <div ref={sentinelRef} className="h-4 w-full opacity-0" />
-                        </SidebarMenuSubItem>
-                      </SidebarMenuSub>
-                    </CollapsibleContent>
-                  </Collapsible>
+                  <SidebarMenuSub>
+                    {chatItems}
+                  </SidebarMenuSub>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      onClick={() => setChatsDialogOpen(true)}
+                      className="font-medium text-xs"
+                    >
+                      <ChatHistoryIcon className="size-4 shrink-0" strokeWidth={2} />
+                      <span>View all chats</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
           </div>
         </div>
+
+        <ChatsDialog open={chatsDialogOpen} onOpenChange={setChatsDialogOpen} />
 
         <SidebarGroup className="shrink-0 border-t border-sidebar-border/50 pt-2">
           <SidebarGroupContent>

@@ -344,24 +344,75 @@
 
 /* ── math (KaTeX) ───────────────────────────────────────────────────────── */
 
-.tiptap-editor .ProseMirror .Tiptap-mathematics-editor {
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
-  background: var(--muted);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 0.1em 0.35em;
-}
-
-.tiptap-editor .ProseMirror .Tiptap-mathematics-render {
+.tiptap-editor .ProseMirror .tiptap-mathematics-render {
   cursor: pointer;
   padding: 0.1em 0.2em;
   border-radius: 3px;
-  transition: background 0.1s;
+  transition: background 0.1s, border-color 0.1s;
 }
 
-.tiptap-editor .ProseMirror .Tiptap-mathematics-render:hover {
+.tiptap-editor .ProseMirror .tiptap-mathematics-render:hover {
   background: var(--muted);
+}
+
+/* Block math wrapper: full-width so the drag handle's mousemove can target it */
+.tiptap-editor .ProseMirror [data-type="block-math"] {
+  display: block;
+  margin: 1rem 0;
+  cursor: pointer;
+}
+
+/* Inner box: bordered card, centered content, accent stripe */
+.tiptap-editor .ProseMirror [data-type="block-math"] .block-math-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--secondary-foreground);
+  border-radius: 8px;
+  background: var(--muted);
+  min-height: 2.5rem;
+}
+
+/* Empty block math: show a faded placeholder inside the bordered box */
+.tiptap-editor .ProseMirror [data-type="block-math"][data-latex=""] .block-math-inner::before {
+  content: "Click to edit equation";
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+/* ── math edit popover ─────────────────────────────────────────────────── */
+
+.math-edit-popover {
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  max-width: 480px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-sans);
+  overflow: hidden;
+}
+
+.math-edit-textarea {
+  width: 100%;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0.6rem 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--foreground);
+}
+
+.math-edit-textarea::placeholder {
+  color: var(--muted-foreground);
 }
 
 /* ── tables ─────────────────────────────────────────────────────────────── */

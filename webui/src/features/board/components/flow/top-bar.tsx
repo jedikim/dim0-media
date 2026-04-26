@@ -95,7 +95,7 @@ export const TopBar = memo(function TopBar({
   const currentFolderDepth = useGraphStore(state => state.currentFolderDepth)
   const maxFolderDepth = useGraphStore(state => state.maxFolderDepth)
   const isAtMaxFolderDepth = currentFolderDepth >= maxFolderDepth
-  const normalButtonClass = 'transition-colors text-card-foreground hover:bg-secondary hover:text-secondary-foreground !p-2.5 rounded-md flex items-center justify-center gap-2'
+  const normalButtonClass = 'transition-colors text-card-foreground hover:bg-secondary hover:text-secondary-foreground !p-2.5 rounded-lg flex items-center justify-center gap-2'
   const activeButtonClass = clsx(normalButtonClass, 'bg-secondary text-secondary-foreground')
   const [openShareDialog, setOpenShareDialog] = useState(false)
   const [isUpdatingSharing, setIsUpdatingSharing] = useState(false)
@@ -184,7 +184,7 @@ export const TopBar = memo(function TopBar({
 
   return (
     <div
-      className='absolute z-50 border border-border/60 shadow-md backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/80 backdrop-saturate-150 bg-sidebar text-sidebar-foreground rounded-lg p-1 flex gap-1 right-2 top-1/2 -translate-y-1/2 flex-col items-center max-h-[82vh] overflow-y-auto md:left-1/2 md:right-auto md:top-2 md:-translate-x-1/2 md:-translate-y-0 md:flex-row md:items-center md:max-h-none md:overflow-visible'
+      className='absolute z-50 border border-border/60 shadow-md backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/80 backdrop-saturate-150 bg-sidebar text-sidebar-foreground rounded-xl p-1 flex gap-1 right-2 top-1/2 -translate-y-1/2 flex-col items-center max-h-[82vh] overflow-y-auto md:left-1/2 md:right-auto md:top-2 md:-translate-x-1/2 md:-translate-y-0 md:flex-row md:items-center md:max-h-none md:overflow-visible'
       role='toolbar'
       aria-label='Board top bar'
     >

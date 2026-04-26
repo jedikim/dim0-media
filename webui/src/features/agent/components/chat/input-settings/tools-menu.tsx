@@ -14,7 +14,7 @@ type ToolsMenuProps = {
 
 export const ToolsMenu = ({ memorySearchAvailable = true }: ToolsMenuProps) => {
   const buttonClass = clsx(
-    "transition-all shrink-0 my-icon p-2 rounded-md",
+    "transition-all shrink-0 my-icon p-2 rounded-lg",
     "hover:bg-accent dark:bg-input/30 dark:hover:bg-accent/50",
     "border border-transparent hover:border-border transition-colors",
     "text-muted-foreground"
@@ -23,7 +23,7 @@ export const ToolsMenu = ({ memorySearchAvailable = true }: ToolsMenuProps) => {
   return (
     <Dialog>
       <Tooltip delayDuration={400}>
-        <div className="rounded-md bg-background backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/50">
+        <div className="rounded-lg bg-background backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/50">
           <TooltipTrigger asChild>
             <DialogTrigger asChild>
               <button

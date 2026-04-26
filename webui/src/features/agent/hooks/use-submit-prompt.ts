@@ -8,6 +8,8 @@ import { useCreateChat } from "../api/create-chat"
 import { useUpdateChat } from "../api/update-chat"
 import { useSendMessage } from "../api/send-message"
 import { useDescribeChat } from "../api/describe-chat"
+import { useCreateBoard } from "@/features/board/api/create-board"
+import { useDescribeBoard } from "@/features/board/api/describe-board"
 import { ChatUrl } from "@/routes"
 import { generateUuid, trimText } from "@/lib/common"
 import type { SendMessageRequestPayload } from "../api/types"
@@ -18,6 +20,12 @@ type SubmitOptions = {
   attachedBoardId?: string
   preferChatRoute?: boolean
   messageContext?: string
+  /**
+   * If set, a new board is created before the chat and the user is taken to it.
+   * Used by the home composer where every prompt starts a fresh board.
+   * Ignored when `attachedBoardId` is already set or an existing chat is being continued.
+   */
+  autoCreateBoard?: boolean
 }
 
 
@@ -39,6 +47,8 @@ export const useSubmitPrompt = () => {
   const { updateChatAsync } = useUpdateChat()
   const { sendMessageAsync } = useSendMessage()
   const { describeChatAsync } = useDescribeChat()
+  const { createBoardAsync } = useCreateBoard()
+  const { describeBoardAsync } = useDescribeBoard()
 
   const navigate = useNavigate()
   const routerLocation = useRouterState({ select: (s) => s.location })
@@ -53,14 +63,28 @@ export const useSubmitPrompt = () => {
         attachedBoardId,
         preferChatRoute = false,
         messageContext,
+        autoCreateBoard = false,
       } = options
 
       const trimmed = text.trim()
       if (!trimmed) return
 
-      const settingsBoardId = attachedBoardId ?? boardRouteId
-
       const createNewChat = forceNewChat || !chatId
+
+      // When the home composer submits, spin up a fresh board first so the new
+      // chat lives inside it. Skipped if a board is already attached or we're
+      // continuing an existing chat.
+      let createdBoardId: string | undefined
+      if (autoCreateBoard && createNewChat && !attachedBoardId && !boardRouteId) {
+        try {
+          createdBoardId = await createBoardAsync()
+        } catch {
+          // The mutation surfaces its own toast (e.g. plan-limit reached).
+          return
+        }
+      }
+
+      const settingsBoardId = createdBoardId ?? attachedBoardId ?? boardRouteId
       let id: string
 
       if (createNewChat) {
@@ -68,7 +92,7 @@ export const useSubmitPrompt = () => {
         await createChatAsync({ userId, boardId: settingsBoardId, chatId: newChatId })
         void updateChatAsync({ chatId: newChatId, chatData: { label: trimText(trimmed, 20) } }).catch(() => {})
 
-        if (!preferChatRoute && isBoardRoute && settingsBoardId) {
+        if (!preferChatRoute && (isBoardRoute || createdBoardId) && settingsBoardId) {
           navigate({
             to: "/boards/$id",
             params: { id: settingsBoardId },
@@ -104,6 +128,9 @@ export const useSubmitPrompt = () => {
 
       if (createNewChat) {
         void describeChatAsync({ chatId: id, userId }).catch(() => {})
+        if (settingsBoardId) {
+          void describeBoardAsync({ boardId: settingsBoardId, chatId: id }).catch(() => {})
+        }
       }
     },
     [
@@ -122,6 +149,8 @@ export const useSubmitPrompt = () => {
       updateChatAsync,
       sendMessageAsync,
       describeChatAsync,
+      createBoardAsync,
+      describeBoardAsync,
       navigate,
     ]
   )

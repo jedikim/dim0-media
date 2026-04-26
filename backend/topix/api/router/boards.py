@@ -6,6 +6,10 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Res
 from fastapi.params import Body, Path
 
 from topix.agents.assistant.code import execute_python_code
+from topix.agents.datatypes.context import Context
+from topix.agents.describe_board import DescribeBoard
+from topix.agents.run import AgentRunner
+from topix.agents.sessions import AssistantSession
 from topix.api.datatypes.requests import (
     AddLinksRequest,
     AddNotesRequest,
@@ -23,6 +27,7 @@ from topix.api.utils.security import (
 from topix.api.utils.thumbnail import load_png_as_data_url, save_thumbnail
 from topix.datatypes.graph.graph import Graph
 from topix.datatypes.note.style import NodeType
+from topix.store.chat import ChatStore
 from topix.store.graph import GraphStore
 
 router = APIRouter(
@@ -62,6 +67,72 @@ async def update_graph(
     """Update an existing graph by its ID."""
     store: GraphStore = request.app.graph_store
     return await store.update_graph(graph_uid=graph_id, data=body.data)
+
+
+@router.get("/{graph_id}/contents/", include_in_schema=False)
+@router.get("/{graph_id}/contents")
+@with_standard_response
+async def list_board_contents(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_read_access)],
+    parent_id: Annotated[str | None, Query(description="Folder ID to list children of; omit for top level")] = None,
+):
+    """List a board's surface-kind nodes (sheet/folder/code-sandbox/widget) at one level."""
+    store: GraphStore = request.app.graph_store
+    graph = await store.get_graph(graph_uid=graph_id, root_id=parent_id)
+    if not graph:
+        return {"items": []}
+
+    surface_kinds = {"sheet", "folder", "code-sandbox", "widget"}
+    items = []
+    for node in graph.nodes:
+        kind = node.style.type if node.style else None
+        if kind not in surface_kinds:
+            continue
+        items.append({
+            "id": node.id,
+            "label": node.label.markdown if node.label else None,
+            "kind": kind,
+            "parent_id": node.parent_id,
+        })
+    return {"items": items}
+
+
+@router.post("/{graph_id}:describe/", include_in_schema=False)
+@router.post("/{graph_id}:describe")
+@with_standard_response
+async def describe_board(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_member)],
+    chat_id: Annotated[str, Query(description="Chat ID to summarize for the board label")],
+):
+    """Auto-label a board from a chat. No-op if the board already has a non-default label."""
+    graph_store: GraphStore = request.app.graph_store
+    chat_store: ChatStore = request.app.chat_store
+
+    metadata = await graph_store.get_graph_metadata(graph_uid=graph_id)
+    current_label = (metadata.label if metadata else "") or ""
+    if current_label.strip() and current_label.strip().lower() != "untitled":
+        return {"label": current_label}
+
+    chat = await chat_store.get_chat(chat_id)
+    if not chat or chat.user_uid != user_id or chat.graph_uid != graph_id:
+        raise HTTPException(status_code=403, detail="Chat does not belong to this board.")
+
+    context = Context()
+    session = AssistantSession(session_id=chat_id, chat_store=chat_store)
+    board_describer = DescribeBoard()
+    label = await AgentRunner.run(board_describer, await session.get_items(), context=context)
+
+    if label:
+        await graph_store.update_graph(graph_uid=graph_id, data={"label": label})
+    return {"label": label}
 
 
 @router.delete("/{graph_id}/", include_in_schema=False)

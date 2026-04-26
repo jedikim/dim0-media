@@ -1,16 +1,18 @@
 import { useCreateBoard } from "@/features/board/api/create-board"
-import { SidebarMenuAction, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub } from "../ui/sidebar"
+import { SidebarMenuAction, SidebarMenuButton, SidebarMenuItem } from "../ui/sidebar"
 import { useDeleteBoard } from "@/features/board/api/delete-board"
 import { trimText } from "@/lib/common"
+import { cn } from "@/lib/utils"
 import { UNTITLED_LABEL } from "@/features/board/const"
-import { useNavigate, useParams, useRouterState, useSearch } from "@tanstack/react-router"
+import { useNavigate, useRouterState } from "@tanstack/react-router"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "../ui/context-menu"
-import { BoardContextIcon, DashboardAddIcon, DeleteIcon, EditIcon, MinusIcon, PlusIcon } from "@/components/icons"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../ui/collapsible"
-import { ChatMenuItem, NewChatItem } from "./chat"
+import { Collapsible, CollapsibleContent } from "../ui/collapsible"
+import { BoardContextIcon, ChatHistoryIcon, ChevronRightIcon, DashboardAddIcon, DeleteIcon, EditIcon } from "@/components/icons"
+import { ChatsDialog } from "./chats-dialog"
 import { ConfirmDeleteBoardAlert } from "./confirm-delete-board"
-import { useEffect, useState } from "react"
-import { useListChats } from "@/features/agent/api/list-chats"
+import { BoardTreeNode } from "./board-tree-node"
+import { useBoardContents } from "@/features/board/api/list-board-contents"
+import { useState, type MouseEvent } from "react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
 import { useAppStore } from "@/store"
 import { FREE_PLAN_BOARD_LIMIT_TOOLTIP, isBoardCreationLimited } from "@/features/board/lib/board-limit"
@@ -100,33 +102,31 @@ export function NewBoardItem() {
 /** Existing board item */
 export function BoardItem({ boardId, label }: { boardId: string, label?: string }) {
   const { deleteBoard } = useDeleteBoard()
-  const userId = useAppStore(s => s.userId)
   const navigate = useNavigate()
   const pathname = useRouterState({ select: s => s.location.pathname })
-  const chatParams = useParams({ from: "/chats/$id", shouldThrow: false })
-  const boardSearch = useSearch({
-    from: "/boards/$id",
-    select: (s: { current_chat_id?: string }) => s.current_chat_id,
-    shouldThrow: false
-  })
 
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+  const [chatsDialogOpen, setChatsDialogOpen] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
-  const { data: chats = [] } = useListChats({ graphUid: boardId, userId })
-  const activeChatId = chatParams?.id ?? boardSearch
 
   const isActive =
     pathname === `/boards/${boardId}` ||
     pathname.startsWith(`/boards/${boardId}/`)
-  const hasActiveBoardChat = Boolean(activeChatId && chats.some(chat => chat.uid === activeChatId))
 
-  useEffect(() => {
-    if (!hasActiveBoardChat) return
-    setIsOpen(true)
-  }, [hasActiveBoardChat])
+  const { data: rootContents = [], isLoading: isLoadingContents } = useBoardContents(
+    boardId,
+    undefined,
+    { enabled: isOpen },
+  )
 
   const handleClick = () => {
     navigate({ to: "/boards/$id", params: { id: boardId } })
+  }
+
+  const handleToggle = (e: MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setIsOpen((v) => !v)
   }
 
   const handleDelete = () => {
@@ -151,21 +151,34 @@ export function BoardItem({ boardId, label }: { boardId: string, label?: string 
   return (
     <SidebarMenuItem>
       <ContextMenu>
-        <Collapsible
-          open={isOpen}
-          onOpenChange={setIsOpen}
-          className="group/collapsible w-full"
-        >
+        <Collapsible open={isOpen} onOpenChange={setIsOpen}>
           <Tooltip>
             <TooltipTrigger asChild>
               <ContextMenuTrigger asChild>
                 <SidebarMenuButton
                   onClick={handleClick}
-                className="text-xs font-medium truncate"
-                isActive={isActive}
-              >
-                  <BoardContextIcon className="shrink-0 size-4" weight={isActive ? 'fill' : undefined} />
-                  <span>{boardDisplayLabel}</span>
+                  className="group/board-row text-xs font-medium truncate"
+                  isActive={isActive}
+                >
+                  <span
+                    role="button"
+                    aria-label={isOpen ? "Collapse board" : "Expand board"}
+                    onClick={handleToggle}
+                    className="size-4 shrink-0 grid place-items-center cursor-pointer"
+                  >
+                    <BoardContextIcon
+                      className="size-4 group-hover/board-row:hidden"
+                      weight={isActive ? 'fill' : undefined}
+                    />
+                    <ChevronRightIcon
+                      className={cn(
+                        "size-4 hidden group-hover/board-row:block transition-transform",
+                        isOpen && "rotate-90",
+                      )}
+                      strokeWidth={2}
+                    />
+                  </span>
+                  <span className="truncate">{boardDisplayLabel}</span>
                 </SidebarMenuButton>
               </ContextMenuTrigger>
             </TooltipTrigger>
@@ -176,7 +189,6 @@ export function BoardItem({ boardId, label }: { boardId: string, label?: string 
 
           <ContextMenuContent className="w-44">
             <ContextMenuItem
-              // let Radix close the menu naturally
               onSelect={() => handleRequestDelete()}
               variant="destructive"
               className="text-xs flex flex-row items-center"
@@ -186,27 +198,38 @@ export function BoardItem({ boardId, label }: { boardId: string, label?: string 
             </ContextMenuItem>
           </ContextMenuContent>
 
-          <CollapsibleTrigger asChild>
-            <SidebarMenuAction className="right-1.5">
-              <PlusIcon className="group-data-[state=open]/collapsible:hidden" strokeWidth={2} />
-              <MinusIcon className="group-data-[state=closed]/collapsible:hidden" strokeWidth={2} />
-            </SidebarMenuAction>
-          </CollapsibleTrigger>
-
           <CollapsibleContent>
-            <SidebarMenuSub>
-              {
-                chats?.map(chat => (
-                  <ChatMenuItem key={chat.uid} chatId={chat.uid} label={chat.label} />
-                )) || []
-              }
-              <NewChatItem initialBoardId={boardId} isSubMenuItem />
-            </SidebarMenuSub>
+            {isLoadingContents && rootContents.length === 0 ? (
+              <p className="pl-7 py-1 text-[11px] italic text-muted-foreground">Loading…</p>
+            ) : rootContents.length === 0 ? (
+              <p className="pl-7 py-1 text-[11px] italic text-muted-foreground">Empty</p>
+            ) : (
+              <ul className="flex flex-col">
+                {rootContents.map((item) => (
+                  <BoardTreeNode key={item.id} boardId={boardId} item={item} depth={1} />
+                ))}
+              </ul>
+            )}
           </CollapsibleContent>
         </Collapsible>
       </ContextMenu>
 
-      {/* Alert lives OUTSIDE the ContextMenu, controlled by state */}
+      <SidebarMenuAction
+        className="right-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-transparent"
+        onClick={() => setChatsDialogOpen(true)}
+        title="View chats in this board"
+        aria-label="View chats in this board"
+      >
+        <ChatHistoryIcon className="size-4" strokeWidth={2} />
+      </SidebarMenuAction>
+
+      <ChatsDialog
+        open={chatsDialogOpen}
+        onOpenChange={setChatsDialogOpen}
+        boardId={boardId}
+        title={`Chats — ${boardDisplayLabel}`}
+      />
+
       <ConfirmDeleteBoardAlert
         open={isConfirmOpen}
         onOpenChange={setIsConfirmOpen}

@@ -9,7 +9,8 @@ import { useNavigate, useParams, useRouterState, useSearch } from "@tanstack/rea
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
 
 /**
- * New chat item component
+ * New chat item — top-level routes to home (where the composer auto-creates
+ * a board on submit); sub-menu variant still scopes to its parent board.
  */
 export function NewChatItem({
   isSubMenuItem = false,
@@ -19,22 +20,25 @@ export function NewChatItem({
   initialBoardId?: string
 }) {
   const navigate = useNavigate()
-
-  const queryParams = useSearch({ from: '/chats', select: (s: { board_id?: string }) => s, shouldThrow: false })
-  const boardId = queryParams?.board_id
   const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const searchBoardId = useSearch({
+    from: '/chats',
+    select: (s: { board_id?: string }) => s?.board_id,
+    shouldThrow: false,
+  })
 
-  const isActive =
-    pathname === '/chats' &&
-    (initialBoardId ? boardId === initialBoardId : !boardId)
+  const isActive = isSubMenuItem
+    ? pathname === '/chats' && searchBoardId === initialBoardId
+    : pathname === '/'
 
   const handleClick = () => {
-    if (initialBoardId) {
+    if (isSubMenuItem && initialBoardId) {
       navigate({ to: '/chats', search: { board_id: initialBoardId } })
     } else {
-      navigate({ to: '/chats' })
+      navigate({ to: '/' })
     }
   }
+
   if (isSubMenuItem) {
     return (
       <SidebarMenuSubItem>

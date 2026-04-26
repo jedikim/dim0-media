@@ -70,7 +70,7 @@ class ChatStore:
     async def list_chats(
         self,
         user_uid: str,
-        graph_uid: str | Literal["none"] | None = None,
+        graph_uid: str | Literal["none", "any"] | None = None,
         offset: int = 0,
         limit: int = 100
     ) -> list[Chat]:
@@ -78,8 +78,8 @@ class ChatStore:
 
         Args:
             user_uid: str - User UID to filter chats.
-            graph_uid: str | Literal["none"] | None - Optional Graph UID to filter chats.
-                "none" filters for chats without a graph.
+            graph_uid: str | Literal["none", "any"] | None - Optional Graph UID to filter chats.
+                "none" filters for chats without a graph; "any" for chats with any graph attached.
             offset: int - Pagination offset.
             limit: int - Pagination limit.
 

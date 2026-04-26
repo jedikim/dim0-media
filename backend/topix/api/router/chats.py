@@ -117,8 +117,8 @@ async def list_chats(
     offset: Annotated[int, Query(description="Pagination offset")] = 0,
     limit: Annotated[int, Query(description="Pagination limit")] = 100,
     graph_uid: Annotated[
-        str | Literal["none"] | None,
-        Query(description="Optional Graph UID")
+        str | Literal["none", "any"] | None,
+        Query(description="Optional Graph UID. 'none' = orphan chats; 'any' = chats with any board.")
     ] = None,
 ):
     """List all chats for the user."""

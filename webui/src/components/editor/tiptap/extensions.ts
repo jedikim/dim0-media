@@ -16,6 +16,7 @@ import { DetailsMarkdown, DetailsSummaryMarkdown, DetailsContentMarkdown } from 
 import { TableKit } from "@tiptap/extension-table"
 import { ShikiCodeBlock } from "./code-block/code-block-extension"
 import { InlineMathMarkdown, BlockMathMarkdown } from "./math/math-extensions"
+import { openMathEditor } from "./math/math-edit-popover"
 import { TagDecoration } from "./tag/tag-decoration"
 import { slashSuggestion } from "./slash-command/suggestion"
 import "katex/dist/katex.min.css"
@@ -76,8 +77,14 @@ export function getExtensions(placeholder = "Start writing…") {
       codeBlock: false, // replaced by ShikiCodeBlock
     }),
     ShikiCodeBlock,
-    InlineMathMarkdown,
-    BlockMathMarkdown,
+    InlineMathMarkdown.configure({
+      onClick: (node, pos) =>
+        openMathEditor({ pos, latex: node.attrs.latex ?? "", isInline: true }),
+    }),
+    BlockMathMarkdown.configure({
+      onClick: (node, pos) =>
+        openMathEditor({ pos, latex: node.attrs.latex ?? "", isInline: false }),
+    }),
     Highlight.configure({ multicolor: false }),
     DetailsMarkdown,
     DetailsSummaryMarkdown,

@@ -16,11 +16,13 @@ import { useGraphStore } from '@/features/board/store/graph-store'
 import { useShallow } from 'zustand/shallow'
 import type { NoteNode } from '@/features/board/types/flow'
 import { buildContextTextFromNodes } from '@/features/board/utils/context-text'
+import { useIsBoardCreationLimited, FREE_PLAN_BOARD_LIMIT, FREE_PLAN_BOARD_LIMIT_TOOLTIP } from '@/features/board/lib/board-limit'
 
 // shadcn/ui
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AlertIcon } from '@/components/icons'
 import { toast } from 'sonner'
 
@@ -29,6 +31,8 @@ export interface InputBarProps {
   layout?: "floating" | "docked"
   preferChatRoute?: boolean
   enableSelectionContext?: boolean
+  /** When true (e.g. on home), submitting creates a fresh board and routes to it. */
+  autoCreateBoard?: boolean
 }
 
 
@@ -80,6 +84,7 @@ export const InputBar = ({
   layout = "floating",
   preferChatRoute = false,
   enableSelectionContext = false,
+  autoCreateBoard = false,
 }: InputBarProps) => {
   const { chatId } = useChat()
 
@@ -130,6 +135,17 @@ export const InputBar = ({
   const settingsBoardId = attachedBoardId ?? boardRouteId
   const memorySearchAvailable = Boolean(settingsBoardId)
 
+  const isBoardCreationLimited = useIsBoardCreationLimited()
+  // Only the home composer (autoCreateBoard) is gated by the limit; existing
+  // boards can still receive new chats even when the user is at the cap.
+  const showBoardLimitGate = autoCreateBoard && isBoardCreationLimited
+  const showBoardChip = autoCreateBoard || Boolean(attachedBoardId)
+  const placeholder = showBoardLimitGate
+    ? `You've used ${FREE_PLAN_BOARD_LIMIT}/${FREE_PLAN_BOARD_LIMIT} boards on the free plan`
+    : autoCreateBoard
+      ? 'Start a new board with a question…'
+      : 'Ask anything...'
+
   const proceedSend = async (text: string, forceNewChat = false) => {
     const trimmed = text.trim()
     if (!trimmed) return
@@ -142,6 +158,7 @@ export const InputBar = ({
         attachedBoardId,
         preferChatRoute,
         messageContext,
+        autoCreateBoard,
       })
     } catch (error) {
       if (error instanceof SendMessageError && error.status === 429) {
@@ -219,13 +236,57 @@ export const InputBar = ({
   )
 
   const inboxClass = clsx(
-    'rounded-xl relative flex flex-col text-card-foreground text-base p-2 border transition-colors transition-shadow',
-    chatId ? 'bg-accent backdrop-blur-lg supports-[backdrop-filter]:bg-accent/70 dark:border dark:border-border/50 shadow-lg' :
-      'bg-accent text-base shadow-xl',
-    'border-transparent hover:border-secondary-foreground/50',
-    'focus-within:border-secondary-foreground/50 focus-within:ring-2 focus-within:ring-secondary-foreground/10'
+    'rounded-2xl relative flex flex-col text-card-foreground text-base p-3 gap-2 border transition-[box-shadow,border-color,opacity]',
+    'bg-card backdrop-blur-md backdrop-saturate-150 supports-[backdrop-filter]:bg-card/70 shadow-md',
+    'border-border hover:border-secondary-foreground/50',
+    'focus-within:border-secondary-foreground/50 focus-within:ring-2 focus-within:ring-secondary-foreground/10',
+    showBoardLimitGate && 'opacity-60 hover:border-border focus-within:border-border focus-within:ring-0',
   )
-  const showStarterPrompts = !chatId && !isStreaming && Boolean(attachedBoardId)
+  const showStarterPrompts = !chatId && !isStreaming && Boolean(attachedBoardId) && !showBoardLimitGate
+
+  const inboxBody = (
+    <div className={inboxClass}>
+      <div className="flex items-start gap-2 p-0">
+        {showBoardChip && (
+          <span className="mt-1 shrink-0 rounded bg-secondary px-2 py-0.5 font-mono text-xs text-secondary-foreground">
+            @board
+          </span>
+        )}
+        <TextareaAutosize
+          onKeyDown={handleKeyDown}
+          onChange={(e) => setInput(e.target.value)}
+          value={input}
+          minRows={1}
+          maxRows={15}
+          placeholder={placeholder}
+          disabled={showBoardLimitGate}
+          className="flex-1 min-w-0 resize-none border-none outline-none bg-transparent text-base disabled:cursor-not-allowed"
+          autoFocus
+        />
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
+          <InputSettings
+            showBoardContextOption={enableSelectionContext}
+            memorySearchAvailable={memorySearchAvailable}
+          />
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="hidden select-none px-1 font-mono text-sm text-muted-foreground/70 sm:inline">
+            ⌘↵
+          </span>
+          <SendButton
+            loadingStatus={isStreaming ? 'loading' : 'loaded'}
+            disabled={isStreaming || showBoardLimitGate}
+            onClick={handlePrimarySend}
+            className={commandIconClass}
+          />
+        </div>
+      </div>
+    </div>
+  )
 
   return (
     <div className={className}>
@@ -240,36 +301,14 @@ export const InputBar = ({
         isFloating ? '' : 'max-w-[900px] mx-auto'
       )}>
         <div className="relative w-full max-w-[800px] mx-auto">
-          <div className={inboxClass}>
-            <div className="flex-1 p-2">
-              <TextareaAutosize
-                onKeyDown={handleKeyDown}
-                onChange={(e) => setInput(e.target.value)}
-                value={input}
-                minRows={1}
-                maxRows={15}
-                placeholder="Ask anything..."
-                className="w-full h-full resize-none border-none outline-none bg-transparent text-base"
-                autoFocus
-              />
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 flex-wrap items-center gap-1">
-                <InputSettings
-                  showBoardContextOption={enableSelectionContext}
-                  memorySearchAvailable={memorySearchAvailable}
-                />
-              </div>
-
-              <SendButton
-                loadingStatus={isStreaming ? 'loading' : 'loaded'}
-                disabled={isStreaming}
-                onClick={handlePrimarySend}
-                className={commandIconClass}
-              />
-            </div>
-          </div>
+          {showBoardLimitGate ? (
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>{inboxBody}</TooltipTrigger>
+              <TooltipContent className="max-w-xs text-center">
+                {FREE_PLAN_BOARD_LIMIT_TOOLTIP}
+              </TooltipContent>
+            </Tooltip>
+          ) : inboxBody}
 
           <p className="p-1.5 sm:p-2 text-center text-[11px] text-muted-foreground/80 bg-auto">
             AI can make mistakes. Verify important details carefully.
