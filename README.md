@@ -19,6 +19,10 @@
 ![Dim0 app screenshot](docs/images/app-screenshot.png)
 *A board with notes, charts, visual explainers, and the agent - all in the same workspace.*
 
+https://github.com/user-attachments/assets/6848ae85-eba9-41d2-8c09-38063fcbe90a
+
+
+
 ## What it is
 
 Most AI tools start with a chat box and bolt the rest of the product on around it. Dim0 goes the other way - the board is the workspace, and the agent is one of the things living on it.
@@ -46,7 +50,7 @@ Everything on the board is a node:
 - **Nested boards** - for when one board isn't enough
 - **Frames** - turn the canvas into a presentation
 
-https://github.com/user-attachments/assets/52f70d3f-8ca6-41d7-9d37-aa05f97b0fe2
+https://github.com/user-attachments/assets/ad5de9f4-6f44-43a2-b59a-5279232d7f60
 
 ## Agent layer
 
