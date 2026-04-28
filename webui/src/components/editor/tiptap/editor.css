@@ -308,6 +308,7 @@
   overflow: visible !important;
 }
 
+
 /* Override the general pre styles inside the node view */
 .tiptap-editor .ProseMirror .code-block-edit-pre {
   margin: 0 !important;
@@ -329,6 +330,7 @@
   color: transparent !important;
   caret-color: var(--foreground);
 }
+
 
 .code-block-editable {
   display: block;
@@ -654,12 +656,50 @@
   display: none !important;
 }
 
+/* ── images ─────────────────────────────────────────────────────────────── */
+
+.tiptap-editor .ProseMirror .editor-image-wrap {
+  display: block;
+  margin: 0.75rem 0;
+}
+
+.tiptap-editor .ProseMirror img.editor-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.tiptap-editor .ProseMirror .editor-image-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80px;
+  width: 100%;
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--muted-foreground);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+
 /* ── block drag handle ──────────────────────────────────────────────────── */
 
 .block-handle-wrap {
   display: flex;
   align-items: center;
   gap: 1px;
+}
+
+/* For list items, shift the handle further left to clear the bullet/number
+   that lives inside the parent <ul>/<ol>'s padding. */
+.block-handle-wrap--list {
+  margin-left: -1.6rem;
 }
 
 .block-handle-btn {

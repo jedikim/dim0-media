@@ -95,7 +95,6 @@ export function BlockHandle({ editor }: { editor: Editor }) {
     <DragHandle
       editor={editor}
       onNodeChange={handleNodeChange}
-      nested
       computePositionConfig={computePositionConfig}
     >
       <div className="block-handle-wrap">

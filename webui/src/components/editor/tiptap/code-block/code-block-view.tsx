@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react"
 import { NodeViewWrapper, NodeViewContent } from "@tiptap/react"
 import type { NodeViewProps } from "@tiptap/react"
 import { CopySimple, Check, CaretDown } from "@phosphor-icons/react"
-import { highlightCode, LANGUAGE_OPTIONS } from "./shiki"
+import { highlightCodeSync, ensureLanguage, LANGUAGE_OPTIONS } from "./shiki"
 
 
 export function CodeBlockView({ node, updateAttributes }: NodeViewProps) {
@@ -14,19 +14,31 @@ export function CodeBlockView({ node, updateAttributes }: NodeViewProps) {
   // Direct DOM refs — avoid React state updates so ProseMirror's cursor is never disturbed
   const shikiLayerRef = useRef<HTMLDivElement>(null)
   const editPreRef = useRef<HTMLPreElement>(null)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    if (timerRef.current) clearTimeout(timerRef.current)
-    // Short debounce to batch rapid keystrokes, but no React state → no re-render → no cursor jump
-    timerRef.current = setTimeout(() => {
-      highlightCode(code, lang).then((html) => {
-        if (shikiLayerRef.current) shikiLayerRef.current.innerHTML = html
-        // Add class once to make editable text transparent; only one DOM write needed
+    // Try synchronous highlight first — keeps zero latency between keystroke
+    // and visible token color, so the user never sees a "flash" between plain
+    // text and highlighted text.
+    const html = highlightCodeSync(code, lang)
+    if (html != null) {
+      if (shikiLayerRef.current) shikiLayerRef.current.innerHTML = html
+      editPreRef.current?.classList.add("shiki-loaded")
+      return
+    }
+    // First-load path: highlighter or grammar isn't ready yet. Show the
+    // editable text in the foreground meanwhile; once the grammar lands,
+    // re-render and swap to Shiki.
+    editPreRef.current?.classList.remove("shiki-loaded")
+    let cancelled = false
+    ensureLanguage(lang, () => {
+      if (cancelled) return
+      const ready = highlightCodeSync(code, lang)
+      if (ready != null && shikiLayerRef.current) {
+        shikiLayerRef.current.innerHTML = ready
         editPreRef.current?.classList.add("shiki-loaded")
-      })
-    }, 80)
-    return () => { if (timerRef.current) clearTimeout(timerRef.current) }
+      }
+    })
+    return () => { cancelled = true }
   }, [code, lang])
 
   function copyCode() {

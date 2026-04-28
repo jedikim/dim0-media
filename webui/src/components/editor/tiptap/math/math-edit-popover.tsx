@@ -1,22 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import type { Editor } from "@tiptap/react"
-
-
-export type MathEditOpts = {
-  pos: number
-  latex: string
-  isInline: boolean
-}
-
-
-let _openFn: ((opts: MathEditOpts) => void) | null = null
-
-
-/** Trigger the floating math editor for the math node at `pos`. */
-export function openMathEditor(opts: MathEditOpts): void {
-  _openFn?.(opts)
-}
+import { registerMathEditorOpener, type MathEditOpts } from "./math-edit-trigger"
 
 
 export function MathEditPopover({ editor }: { editor: Editor }) {
@@ -25,26 +10,27 @@ export function MathEditPopover({ editor }: { editor: Editor }) {
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    _openFn = (opts) => {
+    return registerMathEditorOpener((opts) => {
       setState(opts)
       setDraft(opts.latex)
-    }
-    return () => {
-      _openFn = null
-    }
+    })
   }, [])
 
-  // Live update: dispatch each keystroke as `addToHistory: false` so the math
-  // node re-renders in place without polluting the undo stack. The final
-  // committing transaction in close() is the only history entry.
+  // Live update (debounced): dispatch each draft change after a short pause
+  // so KaTeX rendering doesn't fire on every keystroke. The transaction is
+  // marked `addToHistory: false` so the undo stack stays clean — only the
+  // final transaction in close() is kept as a history entry.
   useEffect(() => {
     if (!state) return
-    const tr = editor.state.tr.setNodeMarkup(state.pos, null, {
-      ...editor.state.doc.nodeAt(state.pos)?.attrs,
-      latex: draft,
-    })
-    tr.setMeta("addToHistory", false)
-    editor.view.dispatch(tr)
+    const timer = setTimeout(() => {
+      const tr = editor.state.tr.setNodeMarkup(state.pos, null, {
+        ...editor.state.doc.nodeAt(state.pos)?.attrs,
+        latex: draft,
+      })
+      tr.setMeta("addToHistory", false)
+      editor.view.dispatch(tr)
+    }, 70)
+    return () => clearTimeout(timer)
   }, [draft, state, editor])
 
   const close = useCallback(() => {

@@ -1,60 +1,101 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useUpdateNodeInternals } from '@xyflow/react'
+import { subscribeMarkdownFontEpoch } from '@/components/markdown/canvas-lite-markdown'
+import type { FontFamily, FontSize, NodeType, TextStyle } from '../types/style'
+import { contentWidthFromNode, nodeHeightFromContent } from '../utils/note-box'
+import { estimateNoteContentHeight } from '../utils/markdown-height-estimate'
 
 
-type UseContentMinHeightOptions = {
+type UseNoteMinHeightOptions = {
+  text: string
+  nodeWidth: number | undefined
+  nodeType: NodeType
+  fontFamily: FontFamily
+  fontSize: FontSize
+  textStyle: TextStyle
+  floor?: number
+  // When false, the hook is a no-op — used for node types that render custom UI
+  // (sheets, folders, sandboxes, widgets, etc.) and don't want a text-driven floor.
   enabled?: boolean
 }
 
+
+const DEFAULT_FLOOR = 20
+const APPLY_THRESHOLD_PX = 2
+
+
 /**
- * Custom hook to manage and set the minimum height of a node based on its content.
- * It uses a ResizeObserver to monitor changes in the content's height and updates
- * the node's minHeight style property accordingly. It also notifies React Flow
- * to update the node internals when the minHeight changes.
+ * Pure-compute min-height for note nodes. Replaces the old ResizeObserver hook —
+ * the canvas markdown renderer is bitmap-backed and the DOM mirror was either
+ * absent (display mode) or in a feedback loop with the rendered size, so the
+ * observer never returned useful information. We instead estimate the content
+ * height directly from text + style + width using the same tokenize/layout
+ * pipeline the renderer uses, mapped through the shared note-box padding helper.
  *
- * @param nodeId - The ID of the node to manage.
- * @param extra - Additional pixels to add to the content height for padding (default is 24).
- * @param floor - Minimum height floor value (default is 100).
- * @param scale - Divider used when content is visually scaled down in the node.
- * @param options - Optional controls for enabling/disabling measurement work.
- * @returns An object containing a ref to attach to the content element and the computed minimum height.
+ * The hook applies `style.minHeight` to the React Flow node element so RF's own
+ * measurement loop picks it up, and re-runs on font load via the canvas font
+ * epoch (canvas measureText returns fallback metrics until custom fonts settle).
  */
-export function useContentMinHeight(
-  nodeId: string,
-  extra = 0,
-  floor = 100,
-  scale = 1,
-  options: UseContentMinHeightOptions = {},
-) {
-  const { enabled = true } = options
+export function useContentMinHeight(nodeId: string, options: UseNoteMinHeightOptions) {
+  const {
+    text,
+    nodeWidth,
+    nodeType,
+    fontFamily,
+    fontSize,
+    textStyle,
+    floor = DEFAULT_FLOOR,
+    enabled = true,
+  } = options
   const updateNodeInternals = useUpdateNodeInternals()
-  const contentRef = useRef<HTMLDivElement | null>(null)
+  const [fontEpoch, setFontEpoch] = useState(0)
   const nodeRef = useRef<HTMLElement | null>(null)
   const lastAppliedMinH = useRef<number | null>(null)
-  const [contentH, setContentH] = useState(0)
 
-  const computedMinH = Math.max(floor, Math.ceil(contentH / scale + extra))
-
-  // measure content
-  useLayoutEffect(() => {
+  useEffect(() => {
     if (!enabled) return
-    if (!contentRef.current) return
-    const ro = new ResizeObserver(([entry]) => {
-      setContentH(Math.ceil(entry.contentRect.height))
-    })
-    ro.observe(contentRef.current)
-    return () => ro.disconnect()
+    return subscribeMarkdownFontEpoch(setFontEpoch)
   }, [enabled])
 
-  // set wrapper's minHeight imperatively + notify RF
+  const computedMinH = useMemo(() => {
+    if (!enabled) return floor
+    if (!nodeWidth || nodeWidth <= 0) return floor
+
+    const contentWidth = contentWidthFromNode({ nodeType, nodeWidth })
+    const contentHeight = estimateNoteContentHeight({
+      text,
+      width: contentWidth,
+      fontFamily,
+      fontSize,
+      textStyle,
+    })
+    if (contentHeight <= 0) return floor
+
+    const required = nodeHeightFromContent({ nodeType, contentHeight })
+    return Math.max(floor, required)
+    // fontEpoch participates as an invalidation key only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, text, nodeWidth, nodeType, fontFamily, fontSize, textStyle, floor, fontEpoch])
+
   useLayoutEffect(() => {
-    if (!enabled) return
-    const previousMinH = lastAppliedMinH.current
-    if (previousMinH !== null && Math.abs(previousMinH - computedMinH) < 2) return
+    if (!enabled) {
+      // If the hook was previously enabled and applied a min-height, clear it
+      // so a node that flips from text-shape to a custom-UI type does not keep
+      // a stale inline floor. In practice nodeType is stable so this is a
+      // safety net rather than a hot path.
+      if (lastAppliedMinH.current !== null && nodeRef.current) {
+        nodeRef.current.style.minHeight = ''
+      }
+      lastAppliedMinH.current = null
+      return
+    }
+
+    const previous = lastAppliedMinH.current
+    if (previous !== null && Math.abs(previous - computedMinH) < APPLY_THRESHOLD_PX) return
 
     if (!nodeRef.current) {
-      const sel = `.react-flow__node[data-id="${CSS?.escape ? CSS.escape(nodeId) : nodeId}"]`
-      nodeRef.current = document.querySelector<HTMLElement>(sel)
+      const selector = `.react-flow__node[data-id="${CSS?.escape ? CSS.escape(nodeId) : nodeId}"]`
+      nodeRef.current = document.querySelector<HTMLElement>(selector)
     }
     const el = nodeRef.current
     if (el) el.style.minHeight = `${computedMinH}px`
@@ -62,13 +103,5 @@ export function useContentMinHeight(
     updateNodeInternals(nodeId)
   }, [enabled, nodeId, computedMinH, updateNodeInternals])
 
-  // clear stale inline minHeight when measurement is disabled
-  useLayoutEffect(() => {
-    if (enabled) return
-    nodeRef.current = null
-    lastAppliedMinH.current = null
-    updateNodeInternals(nodeId)
-  }, [enabled, nodeId, updateNodeInternals])
-
-  return { contentRef, computedMinH }
+  return { computedMinH }
 }

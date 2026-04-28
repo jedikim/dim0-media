@@ -151,6 +151,21 @@ const subscribeFontEpoch = (listener: (epoch: number) => void) => {
   }
 }
 
+
+/**
+ * Public subscription hook used by min-height estimators so they can recompute
+ * once custom fonts settle (canvas measureText returns fallback metrics until then).
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export const subscribeMarkdownFontEpoch = (listener: (epoch: number) => void) => {
+  initFontTracking()
+  return subscribeFontEpoch(listener)
+}
+
+
+// eslint-disable-next-line react-refresh/only-export-components
+export const getMarkdownLineHeightPx = (fontSize: FontSize): number => LINE_HEIGHT_MAP[fontSize]
+
 const initFontTracking = () => {
   if (fontTrackingInitialized) return
   fontTrackingInitialized = true

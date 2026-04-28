@@ -6,7 +6,7 @@ import { IconShape } from './icon-shape'
 import { ImageShape } from './image-shape'
 import { LiteMarkdown } from '@/components/markdown/lite-markdown'
 import { CanvasLiteMarkdown } from '@/components/markdown/canvas-lite-markdown'
-import { getShapeContentScale } from '../../utils/shape-content-scale'
+import { getEffectiveContentScale, contentBoxFromNode } from '../../utils/note-box'
 import { useGraphStore } from '../../store/graph-store'
 import { useTheme } from '@/components/theme-provider'
 
@@ -33,7 +33,6 @@ interface ShapeProps {
     font: string
     size: string
   }
-  contentRef: RefObject<HTMLDivElement | null>
   icon?: string
   imageUrl?: string
   renderWidth?: number
@@ -130,17 +129,16 @@ const ImageNodeView = memo(function ImageNodeView({
  */
 type IconNodeViewProps = {
   icon?: string
-  contentRef: RefObject<HTMLDivElement | null>
 }
 
 
 /**
  * Icon node renderer with centered icon preview.
  */
-const IconNodeView = memo(function IconNodeView({ icon, contentRef }: IconNodeViewProps) {
+const IconNodeView = memo(function IconNodeView({ icon }: IconNodeViewProps) {
   return (
     <div className='w-full h-full flex items-center justify-center'>
-      <div className='w-full' ref={contentRef}>
+      <div className='w-full'>
         {icon && <IconShape iconName={icon} />}
       </div>
     </div>
@@ -155,7 +153,6 @@ type TextNodeViewProps = {
   value: string
   labelEditing: boolean
   isResizingNode: boolean
-  contentRef: RefObject<HTMLDivElement | null>
   contentSize: string
   baseClassName: string
   notEditingSpanClass: string
@@ -183,7 +180,6 @@ const TextNodeView = memo(function TextNodeView({
   value,
   labelEditing,
   isResizingNode,
-  contentRef,
   contentSize,
   baseClassName,
   notEditingSpanClass,
@@ -219,7 +215,6 @@ const TextNodeView = memo(function TextNodeView({
       <div
         className='flex items-center justify-center'
         style={{ width: contentSize }}
-        ref={contentRef}
       >
         {labelEditing ? (
           <TextareaInput
@@ -284,7 +279,6 @@ export const Shape = memo(function Shape({
   textareaRef,
   textAlign,
   styleHelpers,
-  contentRef,
   icon,
   imageUrl,
   renderWidth,
@@ -310,20 +304,13 @@ export const Shape = memo(function Shape({
   const isImageNode = nodeType === 'image'
   const isIconNode = nodeType === 'icon'
   const placeHolder = nodeType === 'text' ? 'Add text...' : isImageNode ? 'Add caption...' : ''
-  const contentScale = getShapeContentScale(nodeType)
+  const contentScale = getEffectiveContentScale(nodeType)
   const contentSize = contentScale < 1 ? `${contentScale * 100}%` : '100%'
-  const outerContainerPaddingPx = nodeType === 'text' ? 0 : 8
-  const horizontalPaddingPx = nodeType === 'text' ? 0 : 16
-  const verticalPaddingPx = 16
-  const descenderAllowancePx = 4
-  const scaledRenderWidth = renderWidth ? Math.floor(renderWidth * Math.min(1, contentScale)) : undefined
-  const scaledRenderHeight = renderHeight ? Math.floor(renderHeight * Math.min(1, contentScale)) : undefined
-  const innerRenderWidth = scaledRenderWidth
-    ? Math.max(1, scaledRenderWidth - outerContainerPaddingPx - horizontalPaddingPx)
+  const innerBox = renderWidth && renderHeight
+    ? contentBoxFromNode({ nodeType, nodeWidth: renderWidth, nodeHeight: renderHeight })
     : undefined
-  const innerRenderHeight = scaledRenderHeight
-    ? Math.max(1, scaledRenderHeight - outerContainerPaddingPx - verticalPaddingPx + descenderAllowancePx)
-    : undefined
+  const innerRenderWidth = innerBox?.width
+  const innerRenderHeight = innerBox?.height
   const notEditingSpanClass = value.trim() ? '' : 'text-muted-foreground/50'
 
   const handleTextareaKeyDown = useCallback((event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
@@ -348,7 +335,7 @@ export const Shape = memo(function Shape({
   }
 
   if (isIconNode) {
-    return <IconNodeView icon={icon} contentRef={contentRef} />
+    return <IconNodeView icon={icon} />
   }
 
   return (
@@ -356,7 +343,6 @@ export const Shape = memo(function Shape({
       value={value}
       labelEditing={labelEditing}
       isResizingNode={isResizingNode}
-      contentRef={contentRef}
       contentSize={contentSize}
       baseClassName={base}
       notEditingSpanClass={notEditingSpanClass}

@@ -1,6 +1,6 @@
 import type { Editor, Range } from "@tiptap/core"
 import type { Icon } from "@phosphor-icons/react"
-import { openMathEditor } from "../math/math-edit-popover"
+import { openMathEditor } from "../math/math-edit-trigger"
 import {
   TextT,
   TextHOne,
@@ -15,7 +15,9 @@ import {
   MathOperationsIcon,
   TableIcon,
   CaretRightIcon,
+  ImageIcon,
 } from "@phosphor-icons/react"
+import { pickAndInsertImage } from "../image/insert-image"
 
 export interface SlashCommand {
   title: string
@@ -137,6 +139,16 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     group: "basic",
     action: (editor, range) =>
       editor.chain().focus().deleteRange(range).setHorizontalRule().run(),
+  },
+  {
+    title: "Image",
+    keywords: ["image", "img", "picture", "photo", "upload"],
+    icon: ImageIcon,
+    group: "basic",
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).run()
+      pickAndInsertImage(editor)
+    },
   },
 ]
 

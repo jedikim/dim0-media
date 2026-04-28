@@ -8,8 +8,8 @@ import { generateUuid } from '@/lib/common'
 import type { LinkEdge, NoteNode } from '../types/flow'
 import { useFitNodes } from '../hooks/use-fit-nodes'
 import { useShallow } from 'zustand/react/shallow'
-import { estimateMarkdownContentHeight } from '../utils/markdown-height-estimate'
-import { getShapeContentScale } from '../utils/shape-content-scale'
+import { estimateNoteContentHeight } from '../utils/markdown-height-estimate'
+import { contentWidthFromNode, nodeHeightFromContent } from '../utils/note-box'
 
 const isAutoSizedTextNode = (node: NoteNode) => {
   const kind = (node.data as { kind?: string }).kind
@@ -25,10 +25,8 @@ const applyAutoHeightForMindMapNodes = (nodes: NoteNode[]) =>
 
     const markdown = node.data.content?.markdown ?? node.data.label?.markdown ?? ''
     if (!markdown.trim()) return node
-    if (markdown.includes('$$')) return node
 
     const nodeType = node.data.style.type
-    const contentScale = getShapeContentScale(nodeType)
     const persistedSize = node.data.properties.nodeSize.size
     const width = typeof node.width === 'number' && Number.isFinite(node.width)
       ? node.width
@@ -37,16 +35,15 @@ const applyAutoHeightForMindMapNodes = (nodes: NoteNode[]) =>
       ? node.height
       : persistedSize?.height ?? 20
 
-    const contentWidth = Math.max(40, Math.floor(width * Math.min(1, contentScale)))
-    const estimatedContentH = estimateMarkdownContentHeight({
+    const contentWidth = contentWidthFromNode({ nodeType, nodeWidth: width })
+    const estimatedContentH = estimateNoteContentHeight({
       text: markdown,
       width: contentWidth,
       fontFamily: node.data.style.fontFamily,
       fontSize: node.data.style.fontSize,
       textStyle: node.data.style.textStyle,
     })
-    const contentPaddingY = nodeType === 'text' ? 0 : 16
-    const estimatedNodeH = Math.max(20, Math.ceil((estimatedContentH + contentPaddingY) / contentScale))
+    const estimatedNodeH = Math.max(20, nodeHeightFromContent({ nodeType, contentHeight: estimatedContentH }))
     if (estimatedNodeH <= currentHeight) return node
 
     node.height = estimatedNodeH

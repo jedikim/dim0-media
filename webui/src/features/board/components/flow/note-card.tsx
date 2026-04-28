@@ -21,7 +21,6 @@ type NodeCardProps = {
   dragging?: boolean
   onLabelEditingChange?: (editing: boolean) => void
   isDark: boolean
-  contentRef: React.RefObject<HTMLDivElement | null>
   nodeWidth?: number
   nodeHeight?: number
   onCanvasRenderReadyChange?: (ready: boolean) => void
@@ -41,7 +40,6 @@ type NoteDisplayContentProps = {
   labelDraft: string
   textareaRef: React.RefObject<HTMLTextAreaElement | null>
   onLabelChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void
-  contentRef: React.RefObject<HTMLDivElement | null>
   textColor?: string
   nodeWidth?: number
   nodeHeight?: number
@@ -81,7 +79,6 @@ const NoteDisplayContent = memo(function NoteDisplayContent({
   labelDraft,
   textareaRef,
   onLabelChange,
-  contentRef,
   textColor,
   nodeWidth,
   nodeHeight,
@@ -109,7 +106,6 @@ const NoteDisplayContent = memo(function NoteDisplayContent({
         font: fontFamilyToTwClass(fontFamily),
         size: fontSizeToTwClass(note.style.fontSize),
       }}
-      contentRef={contentRef}
       icon={icon}
       imageUrl={imageUrl}
       renderWidth={renderWidth}
@@ -133,7 +129,6 @@ export const NodeCard = memo(function NodeCard({
   dragging,
   onLabelEditingChange,
   isDark,
-  contentRef,
   nodeWidth,
   nodeHeight,
   onCanvasRenderReadyChange,
@@ -349,7 +344,6 @@ export const NodeCard = memo(function NodeCard({
               labelDraft={labelDraft}
               textareaRef={textareaRef}
               onLabelChange={handleLabelChange}
-              contentRef={contentRef}
               textColor={textColor}
               nodeWidth={nodeWidth}
               nodeHeight={nodeHeight}
@@ -374,7 +368,6 @@ export const NodeCard = memo(function NodeCard({
           labelDraft={labelDraft}
           textareaRef={textareaRef}
           onLabelChange={handleLabelChange}
-          contentRef={contentRef}
           textColor={textColor}
           nodeWidth={nodeWidth}
           nodeHeight={nodeHeight}
