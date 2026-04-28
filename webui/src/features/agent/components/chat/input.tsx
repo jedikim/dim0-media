@@ -239,7 +239,7 @@ export const InputBar = ({
     'rounded-2xl relative flex flex-col text-card-foreground text-base p-3 gap-2 border transition-[box-shadow,border-color,opacity]',
     'bg-card backdrop-blur-md backdrop-saturate-150 supports-[backdrop-filter]:bg-card/70 shadow-md',
     'border-border hover:border-secondary-foreground/50',
-    'focus-within:border-secondary-foreground/50 focus-within:ring-2 focus-within:ring-secondary-foreground/10',
+    'focus-within:border-secondary-foreground/50 focus-within:ring-4 focus-within:ring-secondary-foreground/10',
     showBoardLimitGate && 'opacity-60 hover:border-border focus-within:border-border focus-within:ring-0',
   )
   const showStarterPrompts = !chatId && !isStreaming && Boolean(attachedBoardId) && !showBoardLimitGate
