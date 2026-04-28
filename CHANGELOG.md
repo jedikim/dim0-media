@@ -1,3 +1,9 @@
+## v0.2.5 (2026-04-28)
+
+### Fix
+
+- improve node layout and fix image-related issues in rich-text nodes (#59)
+
 ## v0.2.4 (2026-04-28)
 
 ### Feat
