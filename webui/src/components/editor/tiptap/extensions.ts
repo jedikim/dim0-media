@@ -11,6 +11,8 @@ import { Extension } from "@tiptap/core"
 import Suggestion from "@tiptap/suggestion"
 import { keymap } from "@tiptap/pm/keymap"
 import { sinkListItem, liftListItem } from "@tiptap/pm/schema-list"
+import type { EditorState } from "@tiptap/pm/state"
+import type { Node as PMNode } from "@tiptap/pm/model"
 import Highlight from "@tiptap/extension-highlight"
 import { DetailsMarkdown, DetailsSummaryMarkdown, DetailsContentMarkdown } from "./toggle/toggle-extensions"
 import { TableKit } from "@tiptap/extension-table"
@@ -34,21 +36,42 @@ const SlashCommand = Extension.create({
   },
 })
 
-/** Traps Tab inside the editor using a raw ProseMirror keymap for reliability. */
+const CODE_INDENT = "  "
+const BRACE_INDENT_LANGS = new Set([
+  "typescript", "javascript", "tsx", "jsx",
+  "java", "c", "cpp", "csharp", "rust", "go",
+  "css", "scss", "json",
+])
+const COLON_INDENT_LANGS = new Set(["python", "yaml"])
+
+
+/** Find the codeBlock node containing the selection's $from, or null. */
+function findCodeBlockAncestor(state: EditorState): PMNode | null {
+  const { $from } = state.selection
+  for (let d = $from.depth; d >= 0; d--) {
+    const n = $from.node(d)
+    if (n.type.name === "codeBlock") return n
+  }
+  return null
+}
+
+
+/**
+ * Trap Tab inside the editor and add smart indentation inside code blocks
+ * (Tab inserts 2 spaces; Enter preserves the current line's indent and adds
+ * one extra level after `:` for Python/YAML or `{` for brace-style langs).
+ */
 const TabHandler = Extension.create({
   name: "tabHandler",
   addProseMirrorPlugins() {
     return [
       keymap({
         Tab: (state, dispatch) => {
-          const { $from } = state.selection
-
-          // Walk ancestors — reliable check regardless of NodeView context
-          for (let d = $from.depth; d >= 0; d--) {
-            if ($from.node(d).type.name === "codeBlock") {
-              if (dispatch) dispatch(state.tr.insertText("\t"))
-              return true
-            }
+          // Inside a code block: insert two spaces (consistent with the
+          // canvas code-snippet editor and most modern toolchains).
+          if (findCodeBlockAncestor(state)) {
+            if (dispatch) dispatch(state.tr.insertText(CODE_INDENT))
+            return true
           }
 
           // List items via prosemirror-schema-list commands
@@ -64,6 +87,34 @@ const TabHandler = Extension.create({
           const ti = state.schema.nodes.taskItem
           if (li && liftListItem(li)(state, dispatch)) return true
           if (ti && liftListItem(ti)(state, dispatch)) return true
+          return true
+        },
+        Enter: (state, dispatch) => {
+          const codeBlock = findCodeBlockAncestor(state)
+          if (!codeBlock) return false // let other handlers (lists, etc.) run
+
+          const { $from } = state.selection
+          const text = codeBlock.textContent
+          const offset = $from.parentOffset
+          const beforeCursor = text.slice(0, offset)
+          const lineStart = beforeCursor.lastIndexOf("\n") + 1
+          const currentLine = beforeCursor.slice(lineStart)
+
+          const indentMatch = currentLine.match(/^[\t ]*/)
+          const indent = indentMatch?.[0] ?? ""
+
+          const lang = (codeBlock.attrs.language as string | null) ?? "plaintext"
+          const trimmed = currentLine.trimEnd()
+          const lastChar = trimmed.slice(-1)
+          const extra =
+            (BRACE_INDENT_LANGS.has(lang) && lastChar === "{") ||
+            (COLON_INDENT_LANGS.has(lang) && lastChar === ":")
+              ? CODE_INDENT
+              : ""
+
+          if (dispatch) {
+            dispatch(state.tr.insertText(`\n${indent}${extra}`))
+          }
           return true
         },
       }),

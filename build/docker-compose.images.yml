@@ -53,6 +53,7 @@ services:
     container_name: dim0-backend
     volumes:
       - ../${ENVFILE:-.env}:/.env:ro
+      - backend_data:/app/data
     environment:
       DOPPLER_TOKEN: ${DOPPLER_TOKEN}
       API_HOST: 0.0.0.0
@@ -86,3 +87,4 @@ volumes:
   qdrant_data:
   pg_data:
   redis_data:
+  backend_data:

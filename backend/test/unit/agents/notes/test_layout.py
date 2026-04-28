@@ -1,4 +1,4 @@
-"""Tests for the post-turn flex-wrap / tree rearrange pipeline."""
+"""Tests for the post-turn flex-wrap / Sugiyama rearrange pipeline."""
 
 from __future__ import annotations
 
@@ -7,13 +7,8 @@ from dataclasses import dataclass, field
 import pytest
 
 from topix.agents.notes.layout import (
-    H_GAP,
-    NODE_SEP,
-    RANK_SEP,
-    V_GAP,
-    _classify_tree,
+    TILE_GAP_X,
     _connected_components,
-    _layout_tree_lr,
     rearrange_created_notes,
 )
 from topix.datatypes.note.link import Link
@@ -78,74 +73,24 @@ class _FakeGraphStore:
         return note
 
 
+def _patched_position(store: _FakeGraphStore, note_id: str) -> dict[str, float]:
+    """Read the (last) position written to a note via patch_note."""
+    for nid, data in reversed(store.patches):
+        if nid == note_id:
+            return data["properties"]["node_position"]["position"]
+    raise AssertionError(f"note {note_id} was never patched")
+
+
 # -----------------------------
-# Component + tree helpers
+# Component discovery
 # -----------------------------
 
 def test_connected_components_preserves_input_order() -> None:
     """Components should be returned in the order their first member appears in the input."""
-    links = [Link(source="a", target="b", graph_uid="g"), Link(source="c", target="d", graph_uid="g")]
-    comps = _connected_components(["a", "b", "c", "d", "e"], links)
+    edges = [("a", "b"), ("c", "d")]
+    comps = _connected_components(["a", "b", "c", "d", "e"], edges)
 
     assert comps == [["a", "b"], ["c", "d"], ["e"]]
-
-
-def test_classify_tree_accepts_simple_tree() -> None:
-    """A component with a single root and no multi-parenting is recognized as a tree."""
-    links = [
-        Link(source="root", target="a", graph_uid="g"),
-        Link(source="root", target="b", graph_uid="g"),
-        Link(source="a", target="a1", graph_uid="g"),
-    ]
-
-    is_tree, root, children = _classify_tree(["root", "a", "b", "a1"], links)
-
-    assert is_tree is True
-    assert root == "root"
-    assert set(children["root"]) == {"a", "b"}
-    assert children["a"] == ["a1"]
-
-
-def test_classify_tree_rejects_multi_parent_dag() -> None:
-    """A node with two incoming edges is not a tree."""
-    links = [
-        Link(source="a", target="c", graph_uid="g"),
-        Link(source="b", target="c", graph_uid="g"),
-    ]
-
-    is_tree, *_ = _classify_tree(["a", "b", "c"], links)
-
-    assert is_tree is False
-
-
-def test_classify_tree_rejects_cycle() -> None:
-    """A cycle in the component disqualifies the tree classifier."""
-    links = [
-        Link(source="a", target="b", graph_uid="g"),
-        Link(source="b", target="c", graph_uid="g"),
-        Link(source="c", target="a", graph_uid="g"),
-    ]
-
-    is_tree, *_ = _classify_tree(["a", "b", "c"], links)
-
-    assert is_tree is False
-
-
-def test_layout_tree_lr_centers_children_around_parent() -> None:
-    """A parent with two same-sized children is placed at the subtree's vertical center."""
-    children = {"root": ["a", "b"]}
-    size_of = {"root": (200.0, 100.0), "a": (200.0, 100.0), "b": (200.0, 100.0)}
-
-    positions = _layout_tree_lr("root", children, size_of, rank_sep=100.0, node_sep=50.0)
-
-    # root spans a subtree height of 100 + 50 + 100 = 250; its center sits at y = 75.
-    assert positions["root"] == (0.0, 75.0)
-    # children share the same x column, start just to the right of root.
-    assert positions["a"][0] == 300.0
-    assert positions["b"][0] == 300.0
-    # stacked by node_sep, first child at y=0, second at y=150.
-    assert positions["a"][1] == 0.0
-    assert positions["b"][1] == 150.0
 
 
 # -----------------------------
@@ -177,7 +122,6 @@ async def test_rearrange_skips_when_notes_absent_from_scope() -> None:
 @pytest.mark.asyncio
 async def test_rearrange_flex_wraps_singletons_into_rows() -> None:
     """Wide enough tiles should wrap onto a new row once the row-width budget is exceeded."""
-    # Eight 1000x100 notes with h_gap=80 and max_row_width=3500 -> 3 per row, then wrap.
     note_ids = [f"n{i}" for i in range(8)]
     store = _FakeGraphStore(
         notes={nid: _make_note(nid, width=1000.0, height=100.0) for nid in note_ids},
@@ -188,14 +132,15 @@ async def test_rearrange_flex_wraps_singletons_into_rows() -> None:
     )
 
     assert set(moved) == set(note_ids)
-    by_id = {nid: data["properties"]["node_position"]["position"] for nid, data in store.patches}
-    # Row 1: n0 at x=0, n1 at x=1080, n2 at x=2160, all y=0
-    assert by_id["n0"] == {"x": 0.0, "y": 0.0}
-    assert by_id["n1"] == {"x": 1080.0, "y": 0.0}
-    assert by_id["n2"] == {"x": 2160.0, "y": 0.0}
-    # n3 would reach x=3240; adding comp_w=1000 -> row_width 4320 > 3500, so n3 wraps to a new row.
-    assert by_id["n3"]["x"] == 0.0
-    assert by_id["n3"]["y"] == pytest.approx(140.0)  # 100 row height + 40 v_gap
+    by_id = {nid: _patched_position(store, nid) for nid in note_ids}
+    # Row 1: n0, n1, n2 share the same y.
+    assert by_id["n0"]["y"] == by_id["n1"]["y"] == by_id["n2"]["y"]
+    # n3 wraps to a new row (row_width 4320 > 3500).
+    assert by_id["n3"]["y"] > by_id["n2"]["y"]
+    assert by_id["n3"]["y"] == pytest.approx(by_id["n2"]["y"] + 100.0 + 40.0)
+    # Each row tiles increase x.
+    assert by_id["n1"]["x"] > by_id["n0"]["x"]
+    assert by_id["n2"]["x"] > by_id["n1"]["x"]
 
 
 @pytest.mark.asyncio
@@ -215,16 +160,13 @@ async def test_rearrange_never_moves_notes_outside_created_ids() -> None:
     touched_ids = {nid for nid, _ in store.patches}
     assert "keep-me" not in touched_ids
     assert touched_ids == {"new-a", "new-b"}
-    # Position of the untouched note is unchanged.
     assert untouched.properties.node_position.position.x == 5000.0
     assert untouched.properties.node_position.position.y == 5000.0
 
 
 @pytest.mark.asyncio
-async def test_rearrange_layouts_tree_component_as_one_tile() -> None:
-    """A tree component is laid out internally, then treated as one tile for flex-wrap."""
-    # Three-node tree with two singletons; expect the tree to occupy one tile to the left,
-    # singletons to flex-wrap after it along the same row.
+async def test_rearrange_layouts_two_child_tree_bidirectionally() -> None:
+    """A tree with >=2 children of root splits left/right of the center node."""
     link_a = Link(source="root", target="a", graph_uid="graph-1")
     link_b = Link(source="root", target="b", graph_uid="graph-1")
     store = _FakeGraphStore(
@@ -238,27 +180,80 @@ async def test_rearrange_layouts_tree_component_as_one_tile() -> None:
     moved = await rearrange_created_notes(
         store, "graph-1", ["root", "a", "b", "solo1", "solo2"],
         created_link_ids=[link_a.id, link_b.id],
-        max_row_width=10000.0, h_gap=H_GAP, v_gap=V_GAP,
+        max_row_width=10000.0,
     )
 
     assert set(moved) == {"root", "a", "b", "solo1", "solo2"}
-    by_id = {nid: data["properties"]["node_position"]["position"] for nid, data in store.patches}
-    # Tree tile: width = root(200) + rank_sep(150) + child(200) = 550.
-    # Height: 2 children of 100 each + node_sep(75) = 275.
-    assert by_id["root"]["x"] == 0.0
-    assert by_id["a"]["x"] == 200.0 + RANK_SEP
-    assert by_id["b"]["x"] == 200.0 + RANK_SEP
-    # Children stacked by node_sep at y=0 and y=100+75=175.
-    child_ys = sorted([by_id["a"]["y"], by_id["b"]["y"]])
-    assert child_ys == [0.0, 100.0 + NODE_SEP]
-    # Singletons start after the tree: tree bbox width 550 + h_gap.
-    assert by_id["solo1"]["x"] == 550.0 + H_GAP
+    by_id = {nid: _patched_position(store, nid) for nid in moved}
+    # Bidirectional: one child sits to the right of root, the other to the left.
+    sides = {nid: by_id[nid]["x"] - by_id["root"]["x"] for nid in ("a", "b")}
+    assert (sides["a"] > 0 and sides["b"] < 0) or (sides["a"] < 0 and sides["b"] > 0)
 
 
 @pytest.mark.asyncio
-async def test_rearrange_falls_back_to_horizontal_row_for_dag_component() -> None:
-    """Multi-parent components use the simple horizontal-row fallback for now."""
-    # a and b both point to c -> multi-parent DAG, not a tree.
+async def test_rearrange_balances_subtrees_across_sides() -> None:
+    """Greedy balance: a 4-child root with one heavy + three light subtrees splits ~evenly."""
+    # Root → big_branch → big_a, big_b (subtree size 3); root → c, d, e (each size 1).
+    links = [
+        Link(source="root", target="big_branch", graph_uid="graph-1"),
+        Link(source="big_branch", target="big_a", graph_uid="graph-1"),
+        Link(source="big_branch", target="big_b", graph_uid="graph-1"),
+        Link(source="root", target="c", graph_uid="graph-1"),
+        Link(source="root", target="d", graph_uid="graph-1"),
+        Link(source="root", target="e", graph_uid="graph-1"),
+    ]
+    store = _FakeGraphStore(
+        notes={
+            nid: _make_note(nid, width=200.0, height=100.0)
+            for nid in ["root", "big_branch", "big_a", "big_b", "c", "d", "e"]
+        },
+        links=links,
+    )
+
+    await rearrange_created_notes(
+        store, "graph-1",
+        ["root", "big_branch", "big_a", "big_b", "c", "d", "e"],
+        created_link_ids=[link.id for link in links],
+    )
+
+    by_id = {nid: _patched_position(store, nid)["x"] for nid in ["root", "big_branch", "c", "d", "e"]}
+    # Big branch (size 3) takes one side; the three singletons share the other.
+    big_side = "right" if by_id["big_branch"] > by_id["root"] else "left"
+    singleton_xs = [by_id["c"], by_id["d"], by_id["e"]]
+    if big_side == "right":
+        assert all(x < by_id["root"] for x in singleton_xs)
+    else:
+        assert all(x > by_id["root"] for x in singleton_xs)
+
+
+@pytest.mark.asyncio
+async def test_rearrange_keeps_lr_for_single_child_chain() -> None:
+    """A chain (root → a → b) stays in single-direction LR; mindmap mode is gated on >=2 children."""
+    links = [
+        Link(source="root", target="a", graph_uid="graph-1"),
+        Link(source="a", target="b", graph_uid="graph-1"),
+    ]
+    store = _FakeGraphStore(
+        notes={
+            nid: _make_note(nid, width=200.0, height=100.0)
+            for nid in ["root", "a", "b"]
+        },
+        links=links,
+    )
+
+    await rearrange_created_notes(
+        store, "graph-1", ["root", "a", "b"],
+        created_link_ids=[link.id for link in links],
+    )
+
+    by_id = {nid: _patched_position(store, nid)["x"] for nid in ["root", "a", "b"]}
+    # All three flow strictly rightward.
+    assert by_id["root"] < by_id["a"] < by_id["b"]
+
+
+@pytest.mark.asyncio
+async def test_rearrange_lays_out_dag_component_as_layered_ranks() -> None:
+    """Multi-parent DAGs are laid out by Sugiyama, not collapsed to a single line."""
     link_ac = Link(source="a", target="c", graph_uid="graph-1")
     link_bc = Link(source="b", target="c", graph_uid="graph-1")
     store = _FakeGraphStore(
@@ -274,12 +269,39 @@ async def test_rearrange_falls_back_to_horizontal_row_for_dag_component() -> Non
         created_link_ids=[link_ac.id, link_bc.id],
     )
 
-    by_id = {nid: data["properties"]["node_position"]["position"] for nid, data in store.patches}
-    ys = {by_id["a"]["y"], by_id["b"]["y"], by_id["c"]["y"]}
-    assert ys == {0.0}  # single horizontal row
-    xs = sorted([by_id["a"]["x"], by_id["b"]["x"], by_id["c"]["x"]])
-    assert xs[1] - xs[0] == pytest.approx(200.0 + H_GAP)
-    assert xs[2] - xs[1] == pytest.approx(200.0 + H_GAP)
+    by_id = {nid: _patched_position(store, nid) for nid in ["a", "b", "c"]}
+    # In LR Sugiyama, a and b feed c → c sits to the right of both.
+    assert by_id["c"]["x"] > by_id["a"]["x"]
+    assert by_id["c"]["x"] > by_id["b"]["x"]
+    # a and b share a rank (same x), distinct y.
+    assert by_id["a"]["x"] == pytest.approx(by_id["b"]["x"])
+    assert by_id["a"]["y"] != by_id["b"]["y"]
+
+
+@pytest.mark.asyncio
+async def test_rearrange_handles_cycle_via_feedback_arc_set() -> None:
+    """A cycle (a→b→c→a) is laid out by Sugiyama instead of collapsing to one line."""
+    link_ab = Link(source="a", target="b", graph_uid="graph-1")
+    link_bc = Link(source="b", target="c", graph_uid="graph-1")
+    link_ca = Link(source="c", target="a", graph_uid="graph-1")
+    store = _FakeGraphStore(
+        notes={
+            nid: _make_note(nid, width=200.0, height=100.0)
+            for nid in ["a", "b", "c"]
+        },
+        links=[link_ab, link_bc, link_ca],
+    )
+
+    await rearrange_created_notes(
+        store, "graph-1", ["a", "b", "c"],
+        created_link_ids=[link_ab.id, link_bc.id, link_ca.id],
+    )
+
+    by_id = {nid: _patched_position(store, nid) for nid in ["a", "b", "c"]}
+    # Sugiyama removes a feedback arc, so the three nodes occupy at least two distinct
+    # ranks (xs) — they no longer pile up on a single horizontal line.
+    distinct_xs = {round(by_id[nid]["x"], 4) for nid in ["a", "b", "c"]}
+    assert len(distinct_xs) >= 2
 
 
 @pytest.mark.asyncio
@@ -295,22 +317,20 @@ async def test_rearrange_ignores_links_not_in_created_link_ids() -> None:
             nid: _make_note(nid, width=200.0, height=100.0)
             for nid in ["a", "b"]
         },
-        links=[existing_link],  # present on the board, but NOT passed as created
+        links=[existing_link],
     )
 
-    await rearrange_created_notes(store, "graph-1", ["a", "b"])  # no created_link_ids
+    await rearrange_created_notes(store, "graph-1", ["a", "b"])
 
-    by_id = {nid: data["properties"]["node_position"]["position"] for nid, data in store.patches}
+    by_id = {nid: _patched_position(store, nid) for nid in ["a", "b"]}
     # Two singletons side by side, not a 2-node connected component.
     assert by_id["a"]["y"] == by_id["b"]["y"]
-    assert abs(by_id["a"]["x"] - by_id["b"]["x"]) == pytest.approx(200.0 + H_GAP)
+    assert abs(by_id["a"]["x"] - by_id["b"]["x"]) == pytest.approx(200.0 + TILE_GAP_X)
 
 
 @pytest.mark.asyncio
 async def test_rearrange_anchors_below_existing_board_content() -> None:
     """New tiles must land below the existing board's bottom edge, not on top of it."""
-    # Existing content bottom edge at y=250 (pos y=150, height=100); created notes should
-    # start at y > 250 + DEFAULT_NOTE_GAP.
     from topix.agents.notes.service import DEFAULT_NOTE_GAP
 
     store = _FakeGraphStore(
@@ -323,7 +343,60 @@ async def test_rearrange_anchors_below_existing_board_content() -> None:
 
     await rearrange_created_notes(store, "graph-1", ["a", "b"])
 
-    positions = {nid: data["properties"]["node_position"]["position"] for nid, data in store.patches}
+    positions = {nid: _patched_position(store, nid) for nid in ["a", "b"]}
     assert positions["a"]["x"] == pytest.approx(100.0)  # anchor min_x
     assert positions["a"]["y"] == pytest.approx(250.0 + DEFAULT_NOTE_GAP)
     assert positions["b"]["y"] == pytest.approx(positions["a"]["y"])  # same row
+
+
+# -----------------------------
+# Anchor (old node) handling
+# -----------------------------
+
+@pytest.mark.asyncio
+async def test_rearrange_pins_layout_to_old_anchor_position() -> None:
+    """When a created link touches an old node, the layout pins to its real position."""
+    old_anchor = _make_note("old", x=2000.0, y=1000.0, width=200.0, height=100.0)
+    new_a = _make_note("new-a", width=200.0, height=100.0)
+    new_b = _make_note("new-b", width=200.0, height=100.0)
+    link_oa = Link(source="old", target="new-a", graph_uid="graph-1")
+    link_ob = Link(source="old", target="new-b", graph_uid="graph-1")
+    store = _FakeGraphStore(
+        notes={"old": old_anchor, "new-a": new_a, "new-b": new_b},
+        links=[link_oa, link_ob],
+    )
+
+    moved = await rearrange_created_notes(
+        store, "graph-1", ["new-a", "new-b"],
+        created_link_ids=[link_oa.id, link_ob.id],
+    )
+
+    assert set(moved) == {"new-a", "new-b"}
+    # The anchor must never appear in patches.
+    assert "old" not in {nid for nid, _ in store.patches}
+    # New nodes land to the right of the anchor (LR layout).
+    by_id = {nid: _patched_position(store, nid) for nid in moved}
+    assert by_id["new-a"]["x"] > 2000.0
+    assert by_id["new-b"]["x"] > 2000.0
+
+
+@pytest.mark.asyncio
+async def test_rearrange_does_not_move_anchor_node() -> None:
+    """The anchor's stored position is unchanged after rearrange runs."""
+    old_anchor = _make_note("old", x=2000.0, y=1000.0)
+    new_a = _make_note("new-a")
+    new_b = _make_note("new-b")
+    link = Link(source="old", target="new-a", graph_uid="graph-1")
+    store = _FakeGraphStore(
+        notes={"old": old_anchor, "new-a": new_a, "new-b": new_b},
+        links=[link],
+    )
+
+    await rearrange_created_notes(
+        store, "graph-1", ["new-a", "new-b"],
+        created_link_ids=[link.id],
+    )
+
+    # Anchor's persisted position stays put.
+    assert old_anchor.properties.node_position.position.x == 2000.0
+    assert old_anchor.properties.node_position.position.y == 1000.0

@@ -218,6 +218,7 @@ services:
     profiles: ["local"]
     volumes:
       - ../${ENVFILE:-.env}:/.env:ro
+      - backend_data_local:/app/data
     environment:
       DOPPLER_TOKEN: ${DOPPLER_TOKEN}
       API_HOST: 0.0.0.0
@@ -261,6 +262,7 @@ services:
     profiles: ["dev"]
     volumes:
       - ../${ENVFILE:-.env}:/.env:ro
+      - backend_data_dev:/app/data
     environment:
       DOPPLER_TOKEN: ${DOPPLER_TOKEN}
       API_HOST: 0.0.0.0
@@ -302,6 +304,7 @@ services:
     profiles: ["test"]
     volumes:
       - ../${ENVFILE:-.env}:/.env:ro
+      - backend_data_test:/app/data
     environment:
       DOPPLER_TOKEN: ${DOPPLER_TOKEN}
       API_HOST: 0.0.0.0
@@ -342,6 +345,7 @@ services:
     profiles: ["staging"]
     volumes:
       - ../${ENVFILE:-.env}:/.env:ro
+      - backend_data_staging:/app/data
     environment:
       DOPPLER_TOKEN: ${DOPPLER_TOKEN}
       API_HOST: 0.0.0.0
@@ -382,6 +386,7 @@ services:
     profiles: ["prod"]
     volumes:
       - ../${ENVFILE:-.env}:/.env:ro
+      - backend_data_prod:/app/data
     environment:
       DOPPLER_TOKEN: ${DOPPLER_TOKEN}
       API_HOST: 0.0.0.0
@@ -430,3 +435,8 @@ volumes:
   qdrant_data_prod:
   pg_data_prod:
   redis_data_prod:
+  backend_data_local:
+  backend_data_dev:
+  backend_data_test:
+  backend_data_staging:
+  backend_data_prod:

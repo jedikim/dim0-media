@@ -269,8 +269,8 @@
 
   /* ── ring pulse soft (ongoing heartbeat for thinking state) ── */
   @keyframes ring-pulse-soft {
-    0%, 100% { box-shadow: 0 0 0 0 oklch(from var(--secondary-foreground) l c h / 0.15); }
-    50%      { box-shadow: 0 0 0 5px oklch(from var(--secondary-foreground) l c h / 0.10); }
+    0%, 100% { box-shadow: 0 0 0 0 oklch(from var(--secondary-foreground) l c h / 0.3); }
+    50%      { box-shadow: 0 0 0 6px oklch(from var(--secondary-foreground) l c h / 0.1); }
   }
   .animate-ring-pulse-soft {
     animation: ring-pulse-soft 1.8s ease-in-out infinite;
