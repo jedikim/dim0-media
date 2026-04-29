@@ -1,3 +1,9 @@
+## v0.2.7 (2026-04-29)
+
+### Fix
+
+- **webui**: preserve transparent picks for node colors (#63)
+
 ## v0.2.6 (2026-04-29)
 
 ### Fix
