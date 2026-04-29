@@ -1,3 +1,9 @@
+## v0.2.6 (2026-04-29)
+
+### Fix
+
+- **agents**: inherit root_id as parent_id for new links (#62)
+
 ## v0.2.5 (2026-04-28)
 
 ### Fix
