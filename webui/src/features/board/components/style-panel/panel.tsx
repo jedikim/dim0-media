@@ -2,6 +2,7 @@ import { useReactFlow } from '@xyflow/react'
 import {
   SloppyPresets,
   StrokeWidthPresets,
+  TRANSPARENT_HEX,
   type FillStyle,
   type FontFamily,
   type FontSize,
@@ -319,7 +320,7 @@ export function StylePanel<T extends StyleLike>({
   )
 
   function pickColor<K extends keyof T>(key: K, v: T[K] | null): void {
-    const next = { [key]: (v ?? undefined) } as Partial<T>
+    const next = { [key]: (v ?? TRANSPARENT_HEX) } as Partial<T>
     onStyleChange(next)
   }
   const settingContent: Record<SettingKey, React.ReactNode> = {

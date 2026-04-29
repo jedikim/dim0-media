@@ -171,7 +171,7 @@ export interface LinkStyle extends BaseStyle {
 }
 
 
-const TRANSPARENT_HEX = "#00000000"
+export const TRANSPARENT_HEX = "#00000000"
 
 
 const BLACK_HEX = "#000000"
