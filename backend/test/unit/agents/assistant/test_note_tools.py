@@ -393,8 +393,33 @@ async def test_link_notes_tool_creates_link_with_label() -> None:
     assert created_link.source == "src"
     assert created_link.target == "dst"
     assert created_link.graph_uid == "graph-1"
+    assert created_link.parent_id is None  # no folder scope -> top-level
     assert created_link.label is not None
     assert created_link.label.markdown == "causes"
+
+
+@pytest.mark.asyncio
+async def test_link_notes_tool_inherits_root_id_as_parent() -> None:
+    """The new link must inherit root_id as its parent_id when a folder scope is set.
+
+    Without this the link is filtered by the board's scope query on reload and only
+    appears at the top-level board, even though both endpoints live in the folder.
+    """
+    graph_store = DummyGraphStore()
+    graph_store.get_nodes.return_value = [
+        Note(id="src", graph_uid="graph-1"),
+        Note(id="dst", graph_uid="graph-1"),
+    ]
+
+    tool = create_link_notes_tool(graph_store, "graph-1", root_id="folder-1")
+    await tool.on_invoke_tool(
+        RunContextWrapper(Context()),
+        json.dumps({"source_id": "src", "target_id": "dst"}),
+    )
+
+    created_link = graph_store.add_links.await_args.args[0][0]
+    assert created_link.parent_id == "folder-1"
+    assert created_link.graph_uid == "graph-1"
 
 
 @pytest.mark.asyncio

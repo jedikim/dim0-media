@@ -296,8 +296,9 @@ def create_get_note_tool(
 def create_link_notes_tool(
     graph_store: GraphStore,
     graph_uid: str,
+    root_id: str | None = None,
 ) -> FunctionTool:
-    """Build a link-notes tool bound to the current board scope."""
+    """Build a link-notes tool bound to the current board and folder scope."""
 
     async def link_notes(
         _wrapper: RunContextWrapper[Context],
@@ -338,6 +339,7 @@ def create_link_notes_tool(
             source=source_id,
             target=target_id,
             graph_uid=graph_uid,
+            parent_id=root_id,
             label=RichText(markdown=label) if label else None,
         )
         await graph_store.add_links([link])

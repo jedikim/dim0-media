@@ -89,7 +89,7 @@ class Plan(BaseAgent):
             tools.append(create_write_note_tool(graph_store, graph_uid, root_id=root_id))
             tools.append(create_edit_note_tool(graph_store, graph_uid))
             tools.append(create_get_note_tool(graph_store, graph_uid))
-            tools.append(create_link_notes_tool(graph_store, graph_uid))
+            tools.append(create_link_notes_tool(graph_store, graph_uid, root_id=root_id))
 
         if config.navigate:
             tools.append(fetch_url_content_tool)
