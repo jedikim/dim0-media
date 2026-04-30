@@ -94,19 +94,24 @@
   margin: 0.5rem 0;
 }
 
+/* Notion-style nested bullet variants by depth: disc → circle → square */
+.tiptap-editor .ProseMirror ul ul { list-style-type: circle; }
+.tiptap-editor .ProseMirror ul ul ul { list-style-type: square; }
+
 .tiptap-editor .ProseMirror ol {
   list-style-type: decimal;
   padding-left: 1.5rem;
   margin: 0.5rem 0;
 }
 
+/* Nested ordered variants: 1. → a. → i. */
+.tiptap-editor .ProseMirror ol ol { list-style-type: lower-alpha; }
+.tiptap-editor .ProseMirror ol ol ol { list-style-type: lower-roman; }
+
 .tiptap-editor .ProseMirror li {
   margin: 0.2rem 0;
 }
 
-.tiptap-editor .ProseMirror li > p {
-  margin: 0;
-}
 
 /* ── task list ──────────────────────────────────────────────────────────── */
 
@@ -357,33 +362,51 @@
   background: var(--muted);
 }
 
-/* Block math wrapper: full-width so the drag handle's mousemove can target it */
+/* Block math wrapper: bordered card on the wrapper itself so it survives all
+   three NodeView states — success (wrapper > inner > KaTeX), empty
+   (wrapper > inner empty), and error (KaTeX overwrites wrapper.textContent
+   with the raw LaTeX, deleting inner). */
 .tiptap-editor .ProseMirror [data-type="block-math"] {
-  display: block;
-  margin: 1rem 0;
-  cursor: pointer;
-}
-
-/* Inner box: bordered card, centered content, accent stripe */
-.tiptap-editor .ProseMirror [data-type="block-math"] .block-math-inner {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin: 1rem 0;
   padding: 1rem 1.25rem;
   border: 1px solid var(--border);
   border-left: 3px solid var(--secondary-foreground);
   border-radius: 8px;
   background: var(--muted);
   min-height: 2.5rem;
+  cursor: pointer;
 }
 
-/* Empty block math: show a faded placeholder inside the bordered box */
-.tiptap-editor .ProseMirror [data-type="block-math"][data-latex=""] .block-math-inner::before {
+/* Empty: faded placeholder, accent stripe stays muted-foreground tone */
+.tiptap-editor .ProseMirror [data-type="block-math"][data-latex=""] {
+  border-left-color: var(--muted-foreground);
+}
+
+.tiptap-editor .ProseMirror [data-type="block-math"][data-latex=""]::before {
   content: "Click to edit equation";
   color: var(--muted-foreground);
   font-family: var(--font-sans);
   font-size: 0.875rem;
   font-style: italic;
+}
+
+/* Error (invalid LaTeX): KaTeX has set wrapper.textContent = raw latex.
+   Show that raw text in red within the same bordered card, with a red
+   accent stripe so the state is clearly distinguishable. Skip when latex
+   is empty — that's the placeholder state, not an error to highlight. */
+.tiptap-editor .ProseMirror [data-type="block-math"].block-math-error:not([data-latex=""]) {
+  color: oklch(0.55 0.20 25);
+  border-left-color: oklch(0.55 0.20 25);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+}
+
+.dark .tiptap-editor .ProseMirror [data-type="block-math"].block-math-error:not([data-latex=""]) {
+  color: oklch(0.72 0.18 25);
+  border-left-color: oklch(0.72 0.18 25);
 }
 
 /* ── math edit popover ─────────────────────────────────────────────────── */
@@ -616,7 +639,7 @@
 
 .tiptap-editor .ProseMirror [data-type="details"] > button::before {
   content: "▶";
-  font-size: 0.55rem;
+  font-size: 0.75rem;
 }
 
 .tiptap-editor .ProseMirror [data-type="details"].is-open > button {
@@ -641,9 +664,10 @@
 .tiptap-editor .ProseMirror summary::-webkit-details-marker,
 .tiptap-editor .ProseMirror summary::marker { display: none; content: ""; }
 
-/* Content area indentation */
+/* Content area: align with the summary text (same column), like a bullet's
+   continuation paragraph aligns with its bullet text. */
 .tiptap-editor .ProseMirror [data-type="detailsContent"] {
-  padding-left: 0.25rem;
+  padding-left: 0;
   margin-top: 0.25rem;
 }
 
@@ -651,9 +675,13 @@
   margin-top: 0;
 }
 
-/* Ensure [hidden] hides content (NodeView toggles this attribute) */
-.tiptap-editor .ProseMirror [data-type="detailsContent"][hidden] {
-  display: none !important;
+/* Hide content when the parent toggle is closed. Drive visibility from the
+   wrapper's `is-open` class (which mirrors the schema's `open` attribute)
+   rather than the NodeView-managed `hidden` attribute on detailsContent —
+   that way programmatic open (e.g. Mod-Enter) makes the content actually
+   visible so the caret can land inside it. */
+.tiptap-editor .ProseMirror [data-type="details"]:not(.is-open) [data-type="detailsContent"] {
+  display: none;
 }
 
 /* ── images ─────────────────────────────────────────────────────────────── */

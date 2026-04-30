@@ -8,6 +8,7 @@ import Underline from "@tiptap/extension-underline"
 import Typography from "@tiptap/extension-typography"
 import { Markdown } from "tiptap-markdown"
 import { Extension } from "@tiptap/core"
+import { Blockquote } from "@tiptap/extension-blockquote"
 import Suggestion from "@tiptap/suggestion"
 import { keymap } from "@tiptap/pm/keymap"
 import { sinkListItem, liftListItem } from "@tiptap/pm/schema-list"
@@ -56,6 +57,26 @@ function findCodeBlockAncestor(state: EditorState): PMNode | null {
 }
 
 
+/** True when $from is inside a listItem or taskItem. */
+function isInsideListItem(state: EditorState): boolean {
+  const { $from } = state.selection
+  for (let d = $from.depth; d >= 0; d--) {
+    const name = $from.node(d).type.name
+    if (name === "listItem" || name === "taskItem") return true
+  }
+  return false
+}
+
+
+/** Blockquote without the `> ` input rule — that prefix now triggers the
+ * toggle. Blockquotes are still reachable via the slash command. */
+const BlockquoteNoShortcut = Blockquote.extend({
+  addInputRules() {
+    return []
+  },
+})
+
+
 /**
  * Trap Tab inside the editor and add smart indentation inside code blocks
  * (Tab inserts 2 spaces; Enter preserves the current line's indent and adds
@@ -87,6 +108,18 @@ const TabHandler = Extension.create({
           const ti = state.schema.nodes.taskItem
           if (li && liftListItem(li)(state, dispatch)) return true
           if (ti && liftListItem(ti)(state, dispatch)) return true
+          return true
+        },
+        "Shift-Enter": (state, dispatch) => {
+          // Inside a list item: split the current paragraph at the cursor so a
+          // continuation paragraph lands in the same listItem (numbering stays
+          // correct). Outside of lists, fall through to the default hardBreak.
+          if (!isInsideListItem(state)) return false
+          if (findCodeBlockAncestor(state)) return false // code blocks own \n
+          if (dispatch) {
+            const { $from } = state.selection
+            dispatch(state.tr.split($from.pos).scrollIntoView())
+          }
           return true
         },
         Enter: (state, dispatch) => {
@@ -127,7 +160,9 @@ export function getExtensions(placeholder = "Start writing…") {
     StarterKit.configure({
       // Phase 1: undo/redo enabled. When adding Yjs: set undoRedo: false and add @tiptap/extension-collaboration
       codeBlock: false, // replaced by ShikiCodeBlock
+      blockquote: false, // replaced by BlockquoteNoShortcut so `> ` triggers toggle
     }),
+    BlockquoteNoShortcut,
     ShikiCodeBlock,
     InlineMathMarkdown.configure({
       onClick: (node, pos) =>
