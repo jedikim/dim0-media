@@ -1,3 +1,9 @@
+## v0.2.8 (2026-04-30)
+
+### Fix
+
+- minor fixes improving md editor typing exp (#64)
+
 ## v0.2.7 (2026-04-29)
 
 ### Fix
