@@ -1,7 +1,7 @@
 import { memo, type CSSProperties, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { RoughTag } from '@/components/rough/tag'
-import type { FillStyle, StrokeStyle, StrokeWidth } from '../../../types/style'
+import type { StrokeStyle, StrokeWidth } from '../../../types/style'
 
 type TagShapeProps = {
   minHeight: number
@@ -11,7 +11,6 @@ type TagShapeProps = {
   heightPx?: number
   roughness?: number
   fill?: string
-  fillStyle?: FillStyle
   stroke?: string
   strokeStyle?: StrokeStyle
   strokeWidth?: StrokeWidth
@@ -27,7 +26,6 @@ export const TagShape = memo(({
   heightPx,
   roughness,
   fill,
-  fillStyle,
   stroke,
   strokeStyle,
   strokeWidth,
@@ -39,7 +37,6 @@ export const TagShape = memo(({
       <RoughTag
         roughness={roughness}
         fill={fill}
-        fillStyle={fillStyle}
         stroke={stroke}
         strokeStyle={strokeStyle}
         strokeWidth={strokeWidth}

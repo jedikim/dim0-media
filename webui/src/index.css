@@ -162,6 +162,10 @@
 
   --tracking-normal: 0rem;
   --spacing: 0.25rem;
+
+  /* shape fill misregistration — print-style offset between fill and stroke. */
+  --shape-misregister-x: -3px;
+  --shape-misregister-y: -2px;
 }
 
 /* ============================================================
@@ -352,6 +356,24 @@
       0 10px 20px hsl(0 0% 0% / 0.32);
   }
 
+  /* ── board paper grain (viewport-fixed substrate) ───────── */
+  .board-paper-grain {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+    mix-blend-mode: multiply;
+    opacity: 0.22;
+    background-image: url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.3 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' fill='black'/%3E%3C/svg%3E");
+    background-size: 220px 220px;
+    background-repeat: repeat;
+  }
+  .dark .board-paper-grain {
+    mix-blend-mode: screen;
+    opacity: 0.10;
+    filter: invert(1);
+  }
+
   /* ── paper note texture ─────────────────────────────────── */
   .paper-note-texture {
     isolation: isolate;
@@ -434,4 +456,19 @@
 
 [data-streamdown="code-block-body"] {
   border-top: none !important;
+}
+
+
+/* ============================================================
+   SHEET DIALOG STACK (depth-of-current-page affordance)
+   ============================================================ */
+
+.sheet-stack-layer {
+  position: absolute;
+  inset: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
 }

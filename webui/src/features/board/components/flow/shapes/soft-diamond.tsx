@@ -3,7 +3,7 @@ import clsx from 'clsx'
 import { RoughDiamond } from '@/components/rough/diam'
 import { useTheme } from '@/components/theme-provider'
 import { darkerDisplayHex, lighterDisplayHex } from '../../../lib/colors/dark-variants'
-import type { FillStyle, StrokeStyle, StrokeWidth } from '../../../types/style'
+import type { StrokeStyle, StrokeWidth } from '../../../types/style'
 
 type SoftDiamondProps = {
   rounded: 'none' | 'rounded-2xl'
@@ -13,7 +13,6 @@ type SoftDiamondProps = {
   heightPx?: number
   roughness?: number
   fill?: string
-  fillStyle?: FillStyle
   stroke?: string
   strokeStyle?: StrokeStyle
   strokeWidth?: StrokeWidth
@@ -29,7 +28,6 @@ export const SoftDiamond = memo(({
   heightPx,
   roughness,
   fill,
-  fillStyle,
   stroke,
   strokeStyle,
   strokeWidth,
@@ -44,7 +42,6 @@ export const SoftDiamond = memo(({
     rounded,
     roughness,
     fill,
-    fillStyle,
     stroke,
     strokeStyle,
     strokeWidth,

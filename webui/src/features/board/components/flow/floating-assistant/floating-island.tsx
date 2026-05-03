@@ -6,6 +6,7 @@ import { ThinkingIndicator } from "@/components/animations/thinking-indicator"
 import { cn } from "@/lib/utils"
 import { SendMessageError } from "@/features/agent/api/send-message"
 import { useSubmitPrompt } from "@/features/agent/hooks/use-submit-prompt"
+import { useMessageContext } from "@/features/agent/hooks/use-message-context"
 import { ProgressLine } from "./progress-line"
 import { useCurrentAssistantMessage } from "./use-current-assistant-message"
 
@@ -25,6 +26,7 @@ export const FloatingIsland = ({ boardId, onOpenFullSheet }: FloatingIslandProps
   const latestAssistantMessage = useCurrentAssistantMessage()
   const isStreaming = latestAssistantMessage?.streaming === true
   const submit = useSubmitPrompt()
+  const { messageContext, selectedNodeCount } = useMessageContext()
 
   const handleSubmit = async () => {
     if (isStreaming) return
@@ -32,7 +34,7 @@ export const FloatingIsland = ({ boardId, onOpenFullSheet }: FloatingIslandProps
     if (!trimmed) return
     setInput("")
     try {
-      await submit(trimmed, { attachedBoardId: boardId })
+      await submit(trimmed, { attachedBoardId: boardId, messageContext })
     } catch (error) {
       const message = error instanceof SendMessageError
         ? error.message
@@ -79,6 +81,14 @@ export const FloatingIsland = ({ boardId, onOpenFullSheet }: FloatingIslandProps
           <span className='text-xs font-mono px-2 py-0.5 rounded bg-secondary text-secondary-foreground shrink-0'>
             @board
           </span>
+          {messageContext && selectedNodeCount > 0 && (
+            <span
+              className='text-xs font-mono px-2 py-0.5 rounded bg-secondary/60 text-secondary-foreground/80 shrink-0'
+              title={`${selectedNodeCount} selected node${selectedNodeCount === 1 ? "" : "s"} included as context`}
+            >
+              · {selectedNodeCount} selected
+            </span>
+          )}
           <TextareaAutosize
             value={input}
             onChange={(e) => setInput(e.target.value)}

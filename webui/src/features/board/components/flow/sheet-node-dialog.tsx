@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 
 import { CancelPlainIcon, DownloadIcon, SheetExternalLinkIcon } from "@/components/icons"
@@ -8,6 +8,13 @@ import { SheetUrl } from "@/routes"
 
 import { useGraphStore } from "../../store/graph-store"
 import { SheetEditor } from "../sheet/sheet-editor"
+import { createBoardPageProvider } from "../../providers/board-page-provider"
+import { useGetNote } from "../../api/get-note"
+import { useGetNotePath } from "../../api/get-note-path"
+import { useUpdateNote } from "../../api/update-note"
+import type { Note } from "../../types/note"
+import { SheetBreadcrumb } from "../sheet/sheet-breadcrumb"
+import { SheetStackBackground } from "../sheet/sheet-stack-background"
 
 
 type SheetNodeDialogProps = {
@@ -22,9 +29,56 @@ export const SheetNodeDialog = memo(function SheetNodeDialog({
   nodeId,
 }: SheetNodeDialogProps) {
   const navigate = useNavigate()
-  const note = useGraphStore((state) => state.nodesById.get(nodeId)?.data)
+  const localNote = useGraphStore((state) => state.nodesById.get(nodeId)?.data)
+  const activeBoardId = useGraphStore((state) => state.boardId)
   const updateNodeByIdPersist = useGraphStore((state) => state.updateNodeByIdPersist)
   const closeNodeSurface = useGraphStore((state) => state.closeNodeSurface)
+  const openNodeSurface = useGraphStore((state) => state.openNodeSurface)
+
+  // Sub-pages don't live on the canvas (no entry in nodesById), so when
+  // the dialog is opened on a note we don't have locally, fall back to the
+  // API. The fetched note becomes the source of truth; saves go through
+  // the PATCH endpoint instead of the canvas-store mutation.
+  const isLocalNote = !!localNote
+  const { data: fetchedNote, isLoading: isFetchingNote } = useGetNote({
+    boardId: activeBoardId,
+    noteId: nodeId,
+    enabled: !isLocalNote && !!activeBoardId,
+  })
+  const note: Note | undefined = localNote ?? fetchedNote
+  const boardId = note?.graphUid ?? activeBoardId
+
+  // Ancestor chain for the breadcrumb. The path query is shared across the
+  // dialog and full-page view; React Query caches per (boardId, noteId) so
+  // jumping to an ancestor is instant after the first load.
+  const { data: notePath = [] } = useGetNotePath({
+    boardId,
+    noteId: nodeId,
+    enabled: !!boardId,
+  })
+  const ancestors = notePath.slice(0, -1)
+
+  const { mutate: updateNoteMutate } = useUpdateNote()
+  const persistRemote = useCallback(
+    (patch: Partial<Note>) => {
+      if (!boardId) return
+      updateNoteMutate({ boardId, noteId: nodeId, noteData: patch })
+    },
+    [boardId, nodeId, updateNoteMutate],
+  )
+
+  // Real backend-backed PageProvider for the editor's @-mention picker.
+  // Resolves "pages" against the same board the current note lives in;
+  // navigation reuses the graph store's openNodeSurface so following a
+  // chip simply swaps the dialog to the target sheet.
+  const pageProvider = useMemo(() => {
+    if (!note?.graphUid) return null
+    return createBoardPageProvider({
+      boardId: note.graphUid,
+      parentNoteId: note.id,
+      onNavigate: (id) => openNodeSurface(id, "sheet"),
+    })
+  }, [note?.graphUid, note?.id, openNodeSurface])
 
   const [titleEditing, setTitleEditing] = useState(false)
   const [titleDraft, setTitleDraft] = useState(note?.label?.markdown || "")
@@ -47,14 +101,18 @@ export const SheetNodeDialog = memo(function SheetNodeDialog({
 
   const persistTitle = useCallback((title: string) => {
     if (!note) return
-    updateNodeByIdPersist(note.id, (node) => ({
-      ...node,
-      data: {
-        ...node.data,
-        label: { markdown: title },
-      },
-    }))
-  }, [note, updateNodeByIdPersist])
+    if (isLocalNote) {
+      updateNodeByIdPersist(note.id, (node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          label: { markdown: title },
+        },
+      }))
+      return
+    }
+    persistRemote({ label: { markdown: title } })
+  }, [note, isLocalNote, persistRemote, updateNodeByIdPersist])
 
   const stopTitleEdit = useCallback((save: boolean) => {
     if (!note) return
@@ -76,14 +134,18 @@ export const SheetNodeDialog = memo(function SheetNodeDialog({
 
   const handleNoteChange = useCallback((markdown: string) => {
     if (!note) return
-    updateNodeByIdPersist(note.id, (node) => ({
-      ...node,
-      data: {
-        ...node.data,
-        content: { markdown },
-      },
-    }))
-  }, [note, updateNodeByIdPersist])
+    if (isLocalNote) {
+      updateNodeByIdPersist(note.id, (node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          content: { markdown },
+        },
+      }))
+      return
+    }
+    persistRemote({ content: { markdown } })
+  }, [note, isLocalNote, persistRemote, updateNodeByIdPersist])
 
   const handleOpenFullView = useCallback(() => {
     if (!note?.graphUid) return
@@ -114,15 +176,56 @@ export const SheetNodeDialog = memo(function SheetNodeDialog({
     URL.revokeObjectURL(url)
   }, [note?.content?.markdown, note?.label?.markdown])
 
-  if (!note) return null
+  // Loading and not-found states for sub-pages (which start empty in the
+  // canvas store). Local notes always have `note` already, so these only
+  // ever render for the API-loaded path.
+  if (!note) {
+    if (isFetchingNote) {
+      return (
+        <Dialog open onOpenChange={handleOpenChange}>
+          <DialogContent
+            className="sm:max-w-4xl h-3/4 flex items-center justify-center text-sm text-muted-foreground"
+            showCloseButton={false}
+          >
+            <DialogTitle className="sr-only">Loading sheet</DialogTitle>
+            Loading note…
+          </DialogContent>
+        </Dialog>
+      )
+    }
+    return (
+      <Dialog open onOpenChange={handleOpenChange}>
+        <DialogContent
+          className="sm:max-w-4xl h-3/4 flex flex-col items-center justify-center gap-3 text-sm text-muted-foreground"
+          showCloseButton={false}
+        >
+          <DialogTitle className="sr-only">Note unavailable</DialogTitle>
+          <p>This note doesn’t exist or you don’t have access.</p>
+          <Button variant="outline" size="sm" onClick={() => closeNodeSurface()}>
+            Close
+          </Button>
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
   const displayTitle = note.label?.markdown?.trim() || "Untitled note"
 
+  const stackDepth = Math.max(0, ancestors.length)
+
   return (
     <Dialog open onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-4xl h-3/4 flex flex-col items-center text-left p-2" showCloseButton={false}>
+      <DialogContent
+        className="sm:max-w-4xl h-3/4 flex flex-col items-center text-left p-2 overflow-visible"
+        showCloseButton={false}
+      >
+        <SheetStackBackground depth={stackDepth} />
         <div className="w-full flex items-center justify-between gap-2 px-2 pt-1">
-          <div className="min-w-0 flex-1 pr-2">
+          <div className="min-w-0 flex-1 pr-2 flex flex-col gap-0.5">
+            <SheetBreadcrumb
+              ancestors={ancestors}
+              onSegmentClick={(id) => openNodeSurface(id, "sheet")}
+            />
             {titleEditing ? (
               <input
                 ref={titleInputRef}
@@ -176,7 +279,16 @@ export const SheetNodeDialog = memo(function SheetNodeDialog({
 
         <div className="flex-1 flex items-center w-full h-full min-h-0 min-w-0">
           <div className="h-full w-full min-w-0 overflow-y-auto overflow-x-hidden scrollbar-thin">
-            <SheetEditor value={note.content?.markdown || ""} onSave={handleNoteChange} />
+            <SheetEditor
+              // Each note is a distinct document; remount the editor when
+              // navigating between sheets (e.g. clicking a subpage card)
+              // so TipTap re-initializes with the target note's content.
+              key={note.id}
+              value={note.content?.markdown || ""}
+              onSave={handleNoteChange}
+              pageProvider={pageProvider}
+              parentNoteId={note.id}
+            />
           </div>
         </div>
       </DialogContent>

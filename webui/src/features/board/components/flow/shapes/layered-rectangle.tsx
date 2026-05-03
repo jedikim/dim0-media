@@ -3,7 +3,7 @@ import clsx from 'clsx'
 import { RoughRect } from '@/components/rough/rect'
 import { useTheme } from '@/components/theme-provider'
 import { darkerDisplayHex, lighterDisplayHex } from '../../../lib/colors/dark-variants'
-import type { FillStyle, StrokeStyle, StrokeWidth } from '../../../types/style'
+import type { StrokeStyle, StrokeWidth } from '../../../types/style'
 
 type LayeredRectangleProps = {
   rounded: 'none' | 'rounded-2xl'
@@ -13,7 +13,6 @@ type LayeredRectangleProps = {
   heightPx?: number
   roughness?: number
   fill?: string
-  fillStyle?: FillStyle
   stroke?: string
   strokeStyle?: StrokeStyle
   strokeWidth?: StrokeWidth
@@ -29,7 +28,6 @@ export const LayeredRectangle = memo(({
   heightPx,
   roughness,
   fill,
-  fillStyle,
   stroke,
   strokeStyle,
   strokeWidth,
@@ -45,7 +43,6 @@ export const LayeredRectangle = memo(({
     rounded,
     roughness,
     fill,
-    fillStyle,
     stroke,
     strokeStyle,
     strokeWidth,

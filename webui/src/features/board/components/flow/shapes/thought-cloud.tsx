@@ -2,7 +2,7 @@ import { memo, type CSSProperties, type ReactNode } from 'react'
 import clsx from 'clsx'
 import { RoughCircle } from '@/components/rough/circ'
 import { RoughRect } from '@/components/rough/rect'
-import type { FillStyle, StrokeStyle, StrokeWidth } from '../../../types/style'
+import type { StrokeStyle, StrokeWidth } from '../../../types/style'
 
 type ThoughtCloudProps = {
   rounded: 'none' | 'rounded-2xl'
@@ -12,7 +12,6 @@ type ThoughtCloudProps = {
   heightPx?: number
   roughness?: number
   fill?: string
-  fillStyle?: FillStyle
   stroke?: string
   strokeStyle?: StrokeStyle
   strokeWidth?: StrokeWidth
@@ -29,7 +28,6 @@ export const ThoughtCloud = memo(({
   heightPx,
   roughness,
   fill,
-  fillStyle,
   stroke,
   strokeStyle,
   strokeWidth,
@@ -45,7 +43,6 @@ export const ThoughtCloud = memo(({
     rounded,
     roughness,
     fill,
-    fillStyle,
     stroke,
     strokeStyle,
     strokeWidth,

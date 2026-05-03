@@ -1,9 +1,10 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react'
+import React, { memo, useCallback, useEffect, useRef } from 'react'
 import { RoughCanvas } from 'roughjs/bin/canvas'
-import type { Options as RoughOptions } from 'roughjs/bin/core'
 import clsx from 'clsx'
 import type { StrokeStyle } from '@/features/board/types/style'
 import { getCachedCanvas, serializeCacheKey } from './cache'
+import { tagPath } from './paths'
+import { FillLayer } from './fill-layer'
 import { useGraphStore } from '@/features/board/store/graph-store'
 
 type RoughShapeProps = {
@@ -13,7 +14,6 @@ type RoughShapeProps = {
   strokeStyle?: StrokeStyle // 'solid' | 'dashed' | 'dotted'
   strokeWidth?: number
   fill?: string
-  fillStyle?: RoughOptions['fillStyle']
   className?: string
   seed?: number
   widthPx?: number
@@ -28,8 +28,6 @@ type DrawConfig = {
   stroke: string
   strokeStyle: StrokeStyle
   strokeWidth: number
-  fill?: string
-  fillStyle?: RoughOptions['fillStyle']
   seed: number
   dpr: number
   renderScale: number
@@ -39,43 +37,37 @@ type SimplifiedTagOverlayProps = {
   stroke?: string
   strokeStyle?: StrokeStyle
   strokeWidth?: number
-  fill?: string
-  viewBoxWidth: number
-  viewBoxHeight: number
+  fillInset: number
+  widthPx: number
+  heightPx: number
 }
 
 const SimplifiedTagOverlay = memo(function SimplifiedTagOverlay({
   stroke,
   strokeStyle,
   strokeWidth,
-  fill,
-  viewBoxWidth,
-  viewBoxHeight
+  fillInset,
+  widthPx,
+  heightPx
 }: SimplifiedTagOverlayProps) {
   const { strokeLineDash, lineCap } = mapStrokeStyle(strokeStyle, strokeWidth)
   const dashArray = strokeLineDash ? strokeLineDash.join(' ') : undefined
-  const viewBoxW = Math.max(1, viewBoxWidth)
-  const viewBoxH = Math.max(1, viewBoxHeight)
-  const notch = Math.min(viewBoxH * 0.45, viewBoxW * 0.3)
-  const radius = Math.min(viewBoxH / 2, viewBoxW / 4, 18)
-  const pathData = tagPath(viewBoxW, viewBoxH, notch, radius)
+  const innerW = Math.max(1, widthPx - fillInset * 2)
+  const innerH = Math.max(1, heightPx - fillInset * 2)
+  const notch = Math.min(innerH * 0.45, innerW * 0.3)
+  const radius = Math.min(innerH / 2, innerW / 4, 18)
+  const pathData = tagPath(innerW, innerH, notch, radius)
 
   return (
     <svg
-      className='absolute pointer-events-none m-0.75'
-      style={{
-        inset: 0,
-        zIndex: 10,
-        overflow: 'visible',
-        width: 'calc(100% - 0.375rem)',
-        height: 'calc(100% - 0.375rem)',
-      }}
-      viewBox={`0 0 ${viewBoxW} ${viewBoxH}`}
+      className='absolute pointer-events-none'
+      style={{ top: fillInset, right: fillInset, bottom: fillInset, left: fillInset, width: 'auto', height: 'auto', zIndex: 10, overflow: 'visible' }}
+      viewBox={`0 0 ${innerW} ${innerH}`}
       preserveAspectRatio="none"
     >
       <path
         d={pathData}
-        fill={fill || 'transparent'}
+        fill='transparent'
         stroke={stroke || 'transparent'}
         strokeWidth={strokeWidth ?? 1}
         strokeDasharray={dashArray}
@@ -97,8 +89,6 @@ const drawConfigEqual = (a: DrawConfig | null, b: DrawConfig) => {
     a.stroke === b.stroke &&
     a.strokeStyle === b.strokeStyle &&
     a.strokeWidth === b.strokeWidth &&
-    a.fill === b.fill &&
-    a.fillStyle === b.fillStyle &&
     a.seed === b.seed &&
     a.dpr === b.dpr &&
     a.renderScale === b.renderScale
@@ -151,98 +141,6 @@ function mapStrokeStyle(
   }
 }
 
-// Single-path tag: notch (triangle-ish) leading into rounded body.
-function tagPath(
-  w: number,
-  h: number,
-  notch: number,
-  radius: number,
-  tipRadius: number = 6
-): string {
-  const tipX = 0
-  const tipY = h / 2
-
-  const bodyLeft = Math.max(0, Math.min(notch, w))
-  const right = w
-  const bottom = h
-
-  const rBody = Math.min(radius, h / 2, (right - bodyLeft) / 2)
-  const rJoin = Math.min(radius, h * 0.45, bodyLeft * 0.8)
-
-  if (bodyLeft <= 0.001) {
-    const r = Math.min(radius, h / 2, w / 2)
-    return [
-      `M ${r} 0`,
-      `L ${w - r} 0`,
-      `Q ${w} 0 ${w} ${r}`,
-      `L ${w} ${h - r}`,
-      `Q ${w} ${h} ${w - r} ${h}`,
-      `L ${r} ${h}`,
-      `Q 0 ${h} 0 ${h - r}`,
-      `L 0 ${r}`,
-      `Q 0 0 ${r} 0`,
-      `Z`,
-    ].join(" ")
-  }
-
-  const pTop = { x: bodyLeft, y: rJoin }
-  const pBot = { x: bodyLeft, y: bottom - rJoin }
-
-  const unit = (ax: number, ay: number, bx: number, by: number) => {
-    const dx = bx - ax
-    const dy = by - ay
-    const len = Math.hypot(dx, dy) || 1
-    return { x: dx / len, y: dy / len, len }
-  }
-
-  // directions from join points -> tip
-  const dTop = unit(pTop.x, pTop.y, tipX, tipY)
-  const dBot = unit(pBot.x, pBot.y, tipX, tipY)
-
-  // how much we can round without overshooting the diagonals
-  const maxTipRound = Math.min(dTop.len, dBot.len) * 0.49
-  const t = Math.max(0, Math.min(tipRadius, maxTipRound))
-
-  // points on the diagonals, "t" away from the tip
-  const tipEnter = { x: tipX - dBot.x * t, y: tipY - dBot.y * t } // coming from bottom side
-  const tipExit = { x: tipX - dTop.x * t, y: tipY - dTop.y * t }  // leaving to top side
-
-  const k = rJoin * 0.65
-  const topStart = { x: bodyLeft + rBody, y: 0 }
-  const botEnd = { x: bodyLeft + rBody, y: bottom }
-
-  return [
-    // top edge
-    `M ${topStart.x} ${topStart.y}`,
-    `L ${right - rBody} 0`,
-    `Q ${right} 0 ${right} ${rBody}`,
-
-    // right edge
-    `L ${right} ${bottom - rBody}`,
-    `Q ${right} ${bottom} ${right - rBody} ${bottom}`,
-
-    // bottom edge back left
-    `L ${botEnd.x} ${botEnd.y}`,
-
-    // bottom edge -> bottom join (smooth)
-    `C ${botEnd.x - k} ${bottom} ${pBot.x - dBot.x * k} ${pBot.y - dBot.y * k} ${pBot.x} ${pBot.y}`,
-
-    // bottom join -> (near) tip
-    `L ${t > 0 ? tipEnter.x : tipX} ${t > 0 ? tipEnter.y : tipY}`,
-
-    // rounded tip (if t>0) using a quadratic curve with control at the true tip
-    ...(t > 0 ? [`Q ${tipX} ${tipY} ${tipExit.x} ${tipExit.y}`] : []),
-
-    // (near) tip -> top join
-    `L ${pTop.x} ${pTop.y}`,
-
-    // top join -> top edge (smooth)
-    `C ${pTop.x + (-dTop.x) * k} ${pTop.y + (-dTop.y) * k} ${topStart.x - k} 0 ${topStart.x} 0`,
-
-    `Z`,
-  ].join(" ")
-}
-
 export const RoughTag: React.FC<RoughShapeProps> = ({
   children,
   roughness = 1.2,
@@ -250,7 +148,6 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
   strokeStyle = 'solid',
   strokeWidth = 1,
   fill,
-  fillStyle = 'solid',
   className,
   seed = 1337,
   widthPx,
@@ -293,8 +190,10 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
     if (canvas.width !== pixelW) canvas.width = pixelW
     if (canvas.height !== pixelH) canvas.height = pixelH
 
-    canvas.style.width = cssW + 'px'
-    canvas.style.height = cssH + 'px'
+    canvas.style.width = paddedWidth + 'px'
+    canvas.style.height = paddedHeight + 'px'
+    canvas.style.left = (-bleed) + 'px'
+    canvas.style.top = (-bleed) + 'px'
 
     const config: DrawConfig = {
       cssW,
@@ -304,8 +203,6 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
       stroke,
       strokeStyle,
       strokeWidth,
-      fill,
-      fillStyle,
       seed,
       dpr,
       renderScale
@@ -322,7 +219,7 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
 
     const { strokeLineDash, lineCap } = mapStrokeStyle(strokeStyle, strokeWidth)
     const apparentSize = Math.max(cssW, cssH) * Math.min(1, effectiveZoom)
-    const { curveStepCount, maxRandomnessOffset, hachureGap } = detailForSize(apparentSize)
+    const { curveStepCount, maxRandomnessOffset } = detailForSize(apparentSize)
 
     const cacheKey = serializeCacheKey([
       'tag',
@@ -330,8 +227,6 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
       visibleStroke,
       strokeStyle,
       strokeWidth,
-      fill || '',
-      fillStyle || '',
       seed,
       effectiveZoom,
       renderScale,
@@ -353,9 +248,6 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
         roughness,
         stroke: visibleStroke,
         strokeWidth: strokeWidth ?? 1,
-        fill,
-        fillStyle,
-        fillWeight: 1,
         bowing: 2,
         curveStepCount,
         maxRandomnessOffset,
@@ -364,9 +256,7 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
         strokeLineDashOffset: 0,
         dashOffset: 8,
         dashGap: 16,
-        hachureGap,
         disableMultiStroke: true,
-        disableMultiStrokeFill: true,
         preserveVertices: true,
       })
 
@@ -380,8 +270,10 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
     if (canvas.width !== offscreen.width) canvas.width = offscreen.width
     if (canvas.height !== offscreen.height) canvas.height = offscreen.height
 
-    canvas.style.width = cssW + 'px'
-    canvas.style.height = cssH + 'px'
+    canvas.style.width = paddedWidth + 'px'
+    canvas.style.height = paddedHeight + 'px'
+    canvas.style.left = (-bleed) + 'px'
+    canvas.style.top = (-bleed) + 'px'
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -391,7 +283,7 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
     ctx.drawImage(offscreen, 0, 0)
 
     lastConfigRef.current = config
-  }, [roughness, stroke, strokeWidth, fill, fillStyle, effectiveZoom, seed, strokeStyle, isMoving, isResizing, widthPx, heightPx])
+  }, [roughness, stroke, strokeWidth, fill, effectiveZoom, seed, strokeStyle, isMoving, isResizing, widthPx, heightPx])
 
   const scheduleRedraw = useCallback(() => {
     if (rafRef.current !== null) return
@@ -407,13 +299,9 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
 
   const mainDivClass = clsx('relative', className || '')
   const isSimplified = isMoving && !isResizing
-  const overlayViewBox = useMemo(() => {
-    const inset = 6
-    return {
-      width: Math.max(1, resolvedWidth - inset),
-      height: Math.max(1, resolvedHeight - inset),
-    }
-  }, [resolvedHeight, resolvedWidth])
+  const renderEffectiveStrokeWidth = stroke === 'transparent' ? 0 : (strokeWidth ?? 1)
+  // Tag path runs to wrapper edges; fill stays at wrapper edges, stroke center at wrapper edge.
+  const fillInset = renderEffectiveStrokeWidth / 2
 
   useEffect(() => {
     if (!isSimplified) {
@@ -433,19 +321,26 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
 
   return (
     <div ref={wrapperRef} className={mainDivClass}>
+      <FillLayer
+        kind='tag'
+        fill={fill}
+        widthPx={resolvedWidth}
+        heightPx={resolvedHeight}
+        inset={fillInset}
+      />
       {isSimplified && (
         <SimplifiedTagOverlay
           stroke={stroke}
           strokeStyle={strokeStyle}
           strokeWidth={strokeWidth}
-          fill={fill}
-          viewBoxWidth={overlayViewBox.width}
-          viewBoxHeight={overlayViewBox.height}
+          fillInset={fillInset}
+          widthPx={resolvedWidth}
+          heightPx={resolvedHeight}
         />
       )}
       <canvas
         ref={canvasRef}
-        className='absolute inset-0 w-full h-full pointer-events-none'
+        className='absolute pointer-events-none'
         style={{ zIndex: 10, background: 'transparent', opacity: isSimplified ? 0 : 1 }}
       />
       <div className='relative z-20 w-full h-full'>

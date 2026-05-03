@@ -14,17 +14,11 @@ export function TagPanel({ tags }: Props) {
         <div key={key} className="tag-row">
           <span className="tag-row-key">{key}</span>
           <div className="tag-row-values">
-            {values.length > 0
-              ? values.map((v) => (
-                  <span key={v} className="tag-chip">
-                    {v}
-                  </span>
-                ))
-              : (
-                  <span className="tag-chip tag-chip--plain">
-                    {key}
-                  </span>
-                )}
+            {values.map((v) => (
+              <span key={v} className="tag-chip">
+                {v}
+              </span>
+            ))}
           </div>
         </div>
       ))}

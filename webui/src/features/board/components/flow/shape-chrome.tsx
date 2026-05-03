@@ -10,7 +10,7 @@ import { TagShape } from './shapes/tag-shape'
 import { ThoughtCloud } from './shapes/thought-cloud'
 import { CapsuleShape } from './shapes/capsule'
 import { SoftDiamond } from './shapes/soft-diamond'
-import type { FillStyle, NodeType, StrokeStyle, StrokeWidth } from '../../types/style'
+import type { NodeType, StrokeStyle, StrokeWidth } from '../../types/style'
 
 type ShapeChromeProps = {
   type: NodeType
@@ -23,7 +23,6 @@ type ShapeChromeProps = {
   backgroundColor?: string
   strokeColor?: string
   roughness?: number
-  fillStyle?: FillStyle
   strokeStyle?: StrokeStyle
   strokeWidth?: StrokeWidth
   seed?: number
@@ -42,7 +41,6 @@ export const ShapeChrome = memo(({
   backgroundColor,
   strokeColor,
   roughness,
-  fillStyle,
   strokeStyle,
   strokeWidth,
   seed,
@@ -94,7 +92,6 @@ export const ShapeChrome = memo(({
     rounded,
     roughness,
     fill: backgroundColor,
-    fillStyle,
     stroke: strokeColor,
     strokeStyle,
     strokeWidth,

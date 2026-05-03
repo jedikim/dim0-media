@@ -688,6 +688,7 @@ export default function GraphEditor() {
         onDragOver={handleImageDragOver}
         onDrop={handleImageDrop}
       >
+        <div className="board-paper-grain" aria-hidden="true" />
         {viewMode === 'graph' ? (
           <GraphContextMenu nodes={nodes} setNodesPersist={setNodesPersist}>
             {({ onPaneContextMenu, onNodeContextMenu }) => (

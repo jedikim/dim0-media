@@ -36,6 +36,7 @@ import { updateLink } from "../api/update-link"
 import { updateNote } from "../api/update-note"
 import { removeLink } from "../api/remove-link"
 import { removeNote } from "../api/remove-note"
+import { invalidateBoardContents } from "../api/invalidate-board-contents"
 import {
   loadViewportsFromStorage,
   saveViewportToStorage,
@@ -380,6 +381,13 @@ function scheduleNodeFlush() {
           ),
         ),
       )
+
+      // Refresh sidebar / picker queries for any affected board.
+      const touchedBoards = new Set<string>([
+        ...newByBoard.keys(),
+        ...updatedByBoard.keys(),
+      ])
+      touchedBoards.forEach((boardId) => invalidateBoardContents(boardId))
     } catch (err) {
       console.error("Failed to persist nodes", err)
     }
@@ -581,7 +589,10 @@ function scheduleNodePersistFromDiff(
       removedIds.forEach((id) => {
         pendingNewNodes.delete(id)
         pendingUpdatedNodes.delete(id)
-        void removeNote(boardId, id)
+        void removeNote(boardId, id).then(
+          () => invalidateBoardContents(boardId),
+          () => {},
+        )
       })
     }
 
@@ -725,7 +736,10 @@ function scheduleNodePersistFromChanges(
       removedIds.forEach((id) => {
         pendingNewNodes.delete(id)
         pendingUpdatedNodes.delete(id)
-        void removeNote(boardId, id)
+        void removeNote(boardId, id).then(
+          () => invalidateBoardContents(boardId),
+          () => {},
+        )
       })
     }
 

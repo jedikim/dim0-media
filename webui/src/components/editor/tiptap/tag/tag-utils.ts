@@ -8,17 +8,29 @@ export interface TagGroup {
 }
 
 
-/** Scan raw markdown text and return deduplicated, grouped tags. */
+/** Bucket label for plain `#tag` entries (those without a `:value`). */
+const PLAIN_TAGS_KEY = "tags"
+
+
+/**
+ * Scan raw markdown text and return deduplicated, grouped tags.
+ * Plain `#tag` entries collapse under a single "tags" bucket; `#key:value`
+ * entries group by their key. Both yield rows with values to render.
+ */
 export function scanTags(markdown: string): TagGroup[] {
   const groups = new Map<string, Set<string>>()
   const re = new RegExp(TAG_RE.source, "g")
   let m: RegExpExecArray | null
   while ((m = re.exec(markdown)) !== null) {
-    const key = m[1].toLowerCase()
-    const value = m[2] ?? ""
-    if (!groups.has(key)) groups.set(key, new Set())
-    if (value) groups.get(key)!.add(value)
-    else groups.get(key) // ensure key exists with empty set for plain #tag
+    const name = m[1].toLowerCase()
+    const value = m[2]
+    if (value) {
+      if (!groups.has(name)) groups.set(name, new Set())
+      groups.get(name)!.add(value)
+    } else {
+      if (!groups.has(PLAIN_TAGS_KEY)) groups.set(PLAIN_TAGS_KEY, new Set())
+      groups.get(PLAIN_TAGS_KEY)!.add(name)
+    }
   }
   return Array.from(groups.entries()).map(([key, values]) => ({
     key,

@@ -1,8 +1,9 @@
-import { useMemo, useState, type KeyboardEvent } from 'react'
+import { useState, type KeyboardEvent } from 'react'
 import clsx from 'clsx'
 import { useChatStore } from '../../store/chat-store'
 import { SendMessageError } from '../../api/send-message'
 import { useSubmitPrompt } from '../../hooks/use-submit-prompt'
+import { useMessageContext } from '../../hooks/use-message-context'
 import { useAppStore } from '@/store'
 import { SendButton } from './send-button'
 import TextareaAutosize from 'react-textarea-autosize'
@@ -12,10 +13,6 @@ import { SettingsBillingUrl } from '@/routes'
 import { WelcomeMessage } from './welcome-message'
 import { StarterPromptPills } from './starter-prompts'
 import { InputSettings } from './input-settings/settings'
-import { useGraphStore } from '@/features/board/store/graph-store'
-import { useShallow } from 'zustand/shallow'
-import type { NoteNode } from '@/features/board/types/flow'
-import { buildContextTextFromNodes } from '@/features/board/utils/context-text'
 import { useIsBoardCreationLimited, FREE_PLAN_BOARD_LIMIT, FREE_PLAN_BOARD_LIMIT_TOOLTIP } from '@/features/board/lib/board-limit'
 
 // shadcn/ui
@@ -35,9 +32,6 @@ export interface InputBarProps {
   autoCreateBoard?: boolean
 }
 
-
-const EMPTY_SELECTED_NODES: NoteNode[] = []
-const MAX_MESSAGE_CONTEXT_CHARS = 12000
 
 /**
  * Formats a Retry-After duration into a short user-facing hint.
@@ -92,33 +86,10 @@ export const InputBar = ({
 
   const isStreaming = useChatStore((state) => state.isStreaming)
   const useDeepResearch = useChatStore((state) => state.useDeepResearch)
-  const enableMessageBoardContextSelection = useChatStore((state) => state.enableMessageBoardContextSelection)
 
   const [input, setInput] = useState<string>('')
 
-  const selectedNodes = useGraphStore(
-    useShallow((state) => {
-      if (!enableSelectionContext) {
-        return EMPTY_SELECTED_NODES
-      }
-      return state.nodes.filter((node) => (
-        node.selected &&
-        (node.data as { kind?: string } | undefined)?.kind !== "point"
-      ))
-    })
-  )
-
-  const selectedNodeCount = selectedNodes.length
-  const messageContext = useMemo(() => {
-    if (!enableSelectionContext || !enableMessageBoardContextSelection || selectedNodeCount === 0) {
-      return undefined
-    }
-    const contextText = buildContextTextFromNodes(selectedNodes).trim()
-    if (!contextText) {
-      return undefined
-    }
-    return contextText.slice(0, MAX_MESSAGE_CONTEXT_CHARS)
-  }, [enableSelectionContext, enableMessageBoardContextSelection, selectedNodeCount, selectedNodes])
+  const { messageContext } = useMessageContext({ enabled: enableSelectionContext })
 
   // Deep Research dialog state
   const [showDRDialog, setShowDRDialog] = useState(false)

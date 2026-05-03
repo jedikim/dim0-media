@@ -10,8 +10,11 @@ import {
   Link,
   Quotes,
   NotePencilIcon,
+  Eraser,
 } from "@phosphor-icons/react"
 import { cn } from "@/lib/utils"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { HIGHLIGHT_COLORS } from "./highlight/highlight-extension"
 
 type Props = { editor: Editor }
 
@@ -45,6 +48,64 @@ function BBtn({
 
 function BDivider() {
   return <div className="mx-0.5 h-4 w-px shrink-0 bg-border" />
+}
+
+
+function HighlightPicker({ editor, active }: { editor: Editor; active: boolean }) {
+  return (
+    <Popover modal={false}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          title="Highlight"
+          data-active={active}
+          onMouseDown={(e) => e.preventDefault()}
+          className={cn(
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-[5px] transition-colors",
+            "text-muted-foreground hover:bg-muted hover:text-foreground",
+            active && "bg-secondary text-secondary-foreground",
+          )}
+        >
+          <NotePencilIcon size={14} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        side="top"
+        align="center"
+        sideOffset={6}
+        className="flex w-auto items-center gap-1 p-1.5"
+      >
+        {HIGHLIGHT_COLORS.map((color) => (
+          <button
+            key={color}
+            type="button"
+            title={color}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() =>
+              editor.chain().focus().setMark("highlight", { color }).run()
+            }
+            className="size-5 shrink-0 rounded-md border border-border/60 transition-transform hover:scale-110"
+            style={{ background: `var(--hl-${color})` }}
+          />
+        ))}
+        <div className="mx-0.5 h-4 w-px shrink-0 bg-border" />
+        <button
+          type="button"
+          title="Remove highlight"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() =>
+            editor.chain().focus().unsetMark("highlight").run()
+          }
+          className={cn(
+            "flex size-5 shrink-0 items-center justify-center rounded-md",
+            "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
+        >
+          <Eraser size={12} />
+        </button>
+      </PopoverContent>
+    </Popover>
+  )
 }
 
 export function EditorBubbleMenu({ editor }: Props) {
@@ -136,13 +197,7 @@ export function EditorBubbleMenu({ editor }: Props) {
       <BDivider />
 
       {/* ── inline specials ───────────────────────────────────── */}
-      <BBtn
-        tooltip="Highlight"
-        active={s.isHighlight}
-        onClick={() => editor.chain().focus().toggleHighlight().run()}
-      >
-        <NotePencilIcon size={14} />
-      </BBtn>
+      <HighlightPicker editor={editor} active={s.isHighlight} />
       <BBtn
         tooltip="Inline code"
         active={s.isCode}

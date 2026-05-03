@@ -8,6 +8,12 @@ import { WidgetDialog } from "./widget-dialog"
 
 /**
  * Mounts the currently active rich node surface once at board level.
+ *
+ * Sheets are special: a sub-page is a note whose `parent_id` points at
+ * another note rather than living on the canvas, so it never appears in
+ * `nodesById`. The sheet dialog handles loading from the API for that
+ * case, so we always mount it and let the dialog gate on its own data.
+ * Widgets and code-sandbox surfaces remain canvas-only.
  */
 export const NodeSurfaceHost = memo(function NodeSurfaceHost() {
   const activeNodeSurface = useGraphStore((state) => state.activeNodeSurface)
@@ -17,16 +23,20 @@ export const NodeSurfaceHost = memo(function NodeSurfaceHost() {
   const closeNodeSurface = useGraphStore((state) => state.closeNodeSurface)
 
   useEffect(() => {
-    if (activeNodeSurface && !hasNode) {
+    if (!activeNodeSurface) return
+    // Auto-close only for canvas-bound surfaces; sheets may be sub-pages.
+    if (activeNodeSurface.kind !== "sheet" && !hasNode) {
       closeNodeSurface()
     }
   }, [activeNodeSurface, closeNodeSurface, hasNode])
 
-  if (!activeNodeSurface || !hasNode) return null
+  if (!activeNodeSurface) return null
 
   if (activeNodeSurface.kind === "sheet") {
     return <SheetNodeDialog nodeId={activeNodeSurface.nodeId} />
   }
+
+  if (!hasNode) return null
 
   if (activeNodeSurface.kind === "widget") {
     return <WidgetDialog nodeId={activeNodeSurface.nodeId} />

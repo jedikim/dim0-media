@@ -1,9 +1,10 @@
 import React, { memo, useCallback, useEffect, useRef } from 'react'
 import { RoughCanvas } from 'roughjs/bin/canvas'
-import type { Options as RoughOptions } from 'roughjs/bin/core'
 import clsx from 'clsx'
 import type { StrokeStyle } from '@/features/board/types/style'
 import { getCachedCanvas, serializeCacheKey } from './cache'
+import { excalidrawRoundedRectPath, rectPath } from './paths'
+import { FillLayer } from './fill-layer'
 import { useGraphStore } from '@/features/board/store/graph-store'
 
 type RoundedClass = 'none' | 'rounded-2xl'
@@ -16,7 +17,6 @@ type RoughRectProps = {
   strokeStyle?: StrokeStyle // 'solid' | 'dashed' | 'dotted'
   strokeWidth?: number
   fill?: string
-  fillStyle?: RoughOptions['fillStyle']
   className?: string
   seed?: number
   widthPx?: number
@@ -32,8 +32,6 @@ type DrawConfig = {
   stroke: string
   strokeStyle: StrokeStyle
   strokeWidth: number
-  fill?: string
-  fillStyle?: RoughOptions['fillStyle']
   seed: number
   dpr: number
   renderScale: number
@@ -41,82 +39,54 @@ type DrawConfig = {
 
 type SimplifiedRectOverlayProps = {
   rounded: RoundedClass
-  fill?: string
   stroke?: string
   strokeStyle?: StrokeStyle
   strokeWidth?: number
-  visualInset: number
+  fillInset: number
   widthPx?: number
   heightPx?: number
 }
 
 const SimplifiedRectOverlay = memo(function SimplifiedRectOverlay({
   rounded,
-  fill,
   stroke,
   strokeStyle,
   strokeWidth,
-  visualInset,
+  fillInset,
   widthPx,
   heightPx
 }: SimplifiedRectOverlayProps) {
-  const roundedClass = rounded === 'rounded-2xl' ? 'rounded-[16px]' : 'rounded-none'
-  const hasStroke = stroke && stroke !== 'transparent' && (strokeWidth ?? 1) > 0
-  const useSvgDash = hasStroke && (strokeStyle === 'dashed' || strokeStyle === 'dotted')
   const { strokeLineDash, lineCap } = mapStrokeStyle(strokeStyle, strokeWidth)
   const dashArray = strokeLineDash ? strokeLineDash.join(' ') : undefined
-  const borderInset = Math.max(0, visualInset)
-  const halfStroke = (strokeWidth ?? 1) / 2
-  const shapeInset = borderInset + halfStroke
   const svgWidth = Math.max(1, widthPx ?? 1)
   const svgHeight = Math.max(1, heightPx ?? 1)
-  const rectWidth = Math.max(0, svgWidth - shapeInset * 2)
-  const rectHeight = Math.max(0, svgHeight - shapeInset * 2)
+  const rectWidth = Math.max(0, svgWidth - fillInset * 2)
+  const rectHeight = Math.max(0, svgHeight - fillInset * 2)
   const radius = rounded === 'rounded-2xl' ? 16 : 0
   const cornerRadius = Math.max(0, Math.min(radius, rectWidth / 2, rectHeight / 2))
 
-  if (useSvgDash) {
-    return (
-      <svg
-        className='absolute pointer-events-none m-0.5'
-        style={{
-          inset: visualInset,
-          zIndex: 10,
-          overflow: 'visible',
-          width: 'calc(100% - 0.375rem)',
-          height: 'calc(100% - 0.375rem)',
-        }}
-        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-        preserveAspectRatio="none"
-      >
-        <rect
-          x={shapeInset}
-          y={shapeInset}
-          width={rectWidth}
-          height={rectHeight}
-          rx={cornerRadius}
-          ry={cornerRadius}
-          fill={fill || 'transparent'}
-          stroke={stroke || 'transparent'}
-          strokeWidth={strokeWidth ?? 1}
-          strokeDasharray={dashArray}
-          strokeLinecap={lineCap}
-        />
-      </svg>
-    )
-  }
-
   return (
-    <div
-      className={clsx('absolute pointer-events-none m-0.75', roundedClass)}
-      style={{
-        inset: visualInset,
-        background: fill || 'transparent',
-        border: `${strokeWidth ?? 1}px solid ${stroke || 'transparent'}`,
-        borderStyle: strokeStyle === 'dashed' ? 'dashed' : strokeStyle === 'dotted' ? 'dotted' : 'solid',
-        zIndex: 10,
-      }}
-    />
+    <svg
+      className='absolute pointer-events-none'
+      style={{ inset: 0, width: '100%', height: '100%', zIndex: 10, overflow: 'visible' }}
+      viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+      preserveAspectRatio="none"
+    >
+      <rect
+        x={fillInset}
+        y={fillInset}
+        width={rectWidth}
+        height={rectHeight}
+        rx={cornerRadius}
+        ry={cornerRadius}
+        fill='transparent'
+        stroke={stroke || 'transparent'}
+        strokeWidth={strokeWidth ?? 1}
+        strokeDasharray={dashArray}
+        strokeLinecap={lineCap}
+        vectorEffect='non-scaling-stroke'
+      />
+    </svg>
   )
 })
 
@@ -131,8 +101,6 @@ const drawConfigEqual = (a: DrawConfig | null, b: DrawConfig) => {
     a.stroke === b.stroke &&
     a.strokeStyle === b.strokeStyle &&
     a.strokeWidth === b.strokeWidth &&
-    a.fill === b.fill &&
-    a.fillStyle === b.fillStyle &&
     a.seed === b.seed &&
     a.dpr === b.dpr &&
     a.renderScale === b.renderScale
@@ -209,7 +177,6 @@ export const RoughRect: React.FC<RoughRectProps> = ({
   strokeStyle = 'solid',
   strokeWidth = 1,
   fill,
-  fillStyle = 'solid',
   className,
   seed = 1337,
   widthPx,
@@ -254,8 +221,10 @@ export const RoughRect: React.FC<RoughRectProps> = ({
     if (canvas.width !== pixelW) canvas.width = pixelW
     if (canvas.height !== pixelH) canvas.height = pixelH
 
-    canvas.style.width = cssW + 'px'
-    canvas.style.height = cssH + 'px'
+    canvas.style.width = paddedWidth + 'px'
+    canvas.style.height = paddedHeight + 'px'
+    canvas.style.left = (-bleed) + 'px'
+    canvas.style.top = (-bleed) + 'px'
 
     const config: DrawConfig = {
       cssW,
@@ -266,8 +235,6 @@ export const RoughRect: React.FC<RoughRectProps> = ({
       stroke,
       strokeStyle,
       strokeWidth: effectiveStrokeWidth,
-      fill,
-      fillStyle,
       seed,
       dpr,
       renderScale
@@ -294,7 +261,7 @@ export const RoughRect: React.FC<RoughRectProps> = ({
 
     const { strokeLineDash, lineCap } = mapStrokeStyle(strokeStyle, effectiveStrokeWidth)
     const apparentSize = Math.max(cssW, cssH) * Math.min(1, effectiveZoom)
-    const { curveStepCount, maxRandomnessOffset, hachureGap } = detailForSize(apparentSize)
+    const { curveStepCount, maxRandomnessOffset } = detailForSize(apparentSize)
 
     const cacheKey = serializeCacheKey([
       'rect',
@@ -303,8 +270,6 @@ export const RoughRect: React.FC<RoughRectProps> = ({
       visibleStroke,
       strokeStyle,
       effectiveStrokeWidth,
-      fill || '',
-      fillStyle || '',
       seed,
       effectiveZoom,
       renderScale,
@@ -326,9 +291,6 @@ export const RoughRect: React.FC<RoughRectProps> = ({
         roughness,
         stroke: visibleStroke,
         strokeWidth: effectiveStrokeWidth,
-        fill,
-        fillStyle,
-        fillWeight: 1,
         bowing: 2,
         curveStepCount,
         maxRandomnessOffset,
@@ -337,9 +299,7 @@ export const RoughRect: React.FC<RoughRectProps> = ({
         strokeLineDashOffset: 0,
         dashOffset: 8,
         dashGap: 16,
-        hachureGap,
         disableMultiStroke: true,
-        disableMultiStrokeFill: true,
         preserveVertices: true,
       })
 
@@ -353,8 +313,10 @@ export const RoughRect: React.FC<RoughRectProps> = ({
     if (canvas.width !== offscreen.width) canvas.width = offscreen.width
     if (canvas.height !== offscreen.height) canvas.height = offscreen.height
 
-    canvas.style.width = cssW + 'px'
-    canvas.style.height = cssH + 'px'
+    canvas.style.width = paddedWidth + 'px'
+    canvas.style.height = paddedHeight + 'px'
+    canvas.style.left = (-bleed) + 'px'
+    canvas.style.top = (-bleed) + 'px'
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -364,7 +326,7 @@ export const RoughRect: React.FC<RoughRectProps> = ({
     ctx.drawImage(offscreen, 0, 0)
 
     lastConfigRef.current = config
-  }, [rounded, roughness, stroke, strokeWidth, fill, fillStyle, effectiveZoom, seed, strokeStyle, widthPx, heightPx])
+  }, [rounded, roughness, stroke, strokeWidth, fill, effectiveZoom, seed, strokeStyle, widthPx, heightPx])
 
   const scheduleRedraw = useCallback(() => {
     if (isMoving) return
@@ -403,22 +365,27 @@ export const RoughRect: React.FC<RoughRectProps> = ({
   }, [])
 
   const mainDivClass = clsx('relative', className || '')
-  const hairlineInset = (strokeWidth ?? 1) <= 1.5 ? 0.5 : 0
-  const baseInset = Math.max(0, (strokeWidth ?? 1) / 2)
-  const visualInset = (stroke === 'transparent' || strokeWidth === 0)
-    ? hairlineInset
-    : hairlineInset + baseInset
+  const fillKind = rounded === 'rounded-2xl' ? 'rect-rounded' : 'rect-sharp'
+  const renderEffectiveStrokeWidth = stroke === 'transparent' ? 0 : (strokeWidth ?? 1)
+  const fillInset = 0.5 + renderEffectiveStrokeWidth / 2
 
   if (isSimplified) {
     return (
       <div className={mainDivClass}>
+        <FillLayer
+          kind={fillKind}
+          fill={fill}
+          widthPx={widthPx ?? 1}
+          heightPx={heightPx ?? 1}
+          cornerRadius={16}
+          inset={fillInset}
+        />
         <SimplifiedRectOverlay
           rounded={rounded}
-          fill={fill}
           stroke={stroke}
           strokeStyle={strokeStyle}
           strokeWidth={strokeWidth}
-          visualInset={visualInset}
+          fillInset={fillInset}
           widthPx={widthPx}
           heightPx={heightPx}
         />
@@ -431,10 +398,18 @@ export const RoughRect: React.FC<RoughRectProps> = ({
 
   return (
     <div ref={wrapperRef} className={mainDivClass}>
+      <FillLayer
+        kind={fillKind}
+        fill={fill}
+        widthPx={widthPx ?? 1}
+        heightPx={heightPx ?? 1}
+        cornerRadius={16}
+        inset={fillInset}
+      />
       <canvas
         ref={canvasRef}
         className='absolute pointer-events-none'
-        style={{ inset: hairlineInset, zIndex: 10, background: 'transparent' }}
+        style={{ zIndex: 10, background: 'transparent' }}
       />
       <div className='relative z-20 w-full h-full'>
         {children}
@@ -443,36 +418,3 @@ export const RoughRect: React.FC<RoughRectProps> = ({
   )
 }
 
-// plain rectangle path
-function rectPath(x: number, y: number, w: number, h: number): string {
-  return `M${x},${y} h${w} v${h} h-${w} Z`
-}
-
-// Excalidraw-style curved-corner rectangle using quadratic Béziers
-function excalidrawRoundedRectPath(
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number
-): string {
-  const R = Math.max(0, Math.min(r, Math.min(w, h) / 2))
-  const x0 = x
-  const y0 = y
-  const x1 = x + w
-  const y1 = y + h
-
-  // clockwise: top-left → top-right → bottom-right → bottom-left → close
-  return [
-    `M ${x0 + R} ${y0}`,
-    `L ${x1 - R} ${y0}`,
-    `Q ${x1} ${y0}, ${x1} ${y0 + R}`,
-    `L ${x1} ${y1 - R}`,
-    `Q ${x1} ${y1}, ${x1 - R} ${y1}`,
-    `L ${x0 + R} ${y1}`,
-    `Q ${x0} ${y1}, ${x0} ${y1 - R}`,
-    `L ${x0} ${y0 + R}`,
-    `Q ${x0} ${y0}, ${x0 + R} ${y0}`,
-    `Z`
-  ].join(' ')
-}

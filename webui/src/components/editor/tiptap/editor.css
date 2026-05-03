@@ -512,16 +512,51 @@
 
 /* ── highlight mark ─────────────────────────────────────────────────────── */
 
+/* Highlight palette — vars on :root / .dark (not editor-scoped) so they're
+   also reachable from portaled UI like the bubble-menu color picker that
+   renders outside .tiptap-editor. The Highlight extension emits
+   `data-color="<name>"` only for named colors (no inline style); CSS
+   below paints from the variable, so theme-awareness is implicit.
+   Hex colors keep their own inline style and bypass these vars. */
+:root {
+  --hl-yellow: #fef08a;
+  --hl-green:  #bbf7d0;
+  --hl-blue:   #bfdbfe;
+  --hl-red:    #fecaca;
+  --hl-pink:   #fbcfe8;
+  --hl-purple: #e9d5ff;
+  --hl-orange: #fed7aa;
+  --hl-gray:   #e5e7eb;
+}
+
+.dark {
+  --hl-yellow: rgba(133, 77, 14, 0.55);
+  --hl-green:  rgba(20, 83, 45, 0.55);
+  --hl-blue:   rgba(30, 58, 138, 0.55);
+  --hl-red:    rgba(127, 29, 29, 0.55);
+  --hl-pink:   rgba(131, 24, 67, 0.55);
+  --hl-purple: rgba(88, 28, 135, 0.55);
+  --hl-orange: rgba(124, 45, 18, 0.55);
+  --hl-gray:   rgba(55, 65, 81, 0.55);
+}
+
+/* Default highlight (no color attribute) uses the yellow var, so the same
+   variable indirection drives both default and explicit yellow. */
 .tiptap-editor .ProseMirror mark {
-  background: oklch(0.93 0.12 95 / 0.6);
+  background: var(--hl-yellow);
   color: inherit;
   border-radius: 2px;
   padding: 0.05em 0.1em;
 }
 
-.dark .tiptap-editor .ProseMirror mark {
-  background: oklch(0.75 0.15 85 / 0.3);
-}
+.tiptap-editor .ProseMirror mark[data-color="yellow"] { background: var(--hl-yellow); }
+.tiptap-editor .ProseMirror mark[data-color="green"]  { background: var(--hl-green); }
+.tiptap-editor .ProseMirror mark[data-color="blue"]   { background: var(--hl-blue); }
+.tiptap-editor .ProseMirror mark[data-color="red"]    { background: var(--hl-red); }
+.tiptap-editor .ProseMirror mark[data-color="pink"]   { background: var(--hl-pink); }
+.tiptap-editor .ProseMirror mark[data-color="purple"] { background: var(--hl-purple); }
+.tiptap-editor .ProseMirror mark[data-color="orange"] { background: var(--hl-orange); }
+.tiptap-editor .ProseMirror mark[data-color="gray"]   { background: var(--hl-gray); }
 
 /* ── inline tag chips (decoration) ─────────────────────────────────────── */
 
@@ -580,9 +615,9 @@
 .tag-row-key {
   width: 5rem;
   flex-shrink: 0;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--muted-foreground);
 }
@@ -604,11 +639,6 @@
   font-size: 0.75rem;
   color: var(--foreground);
   line-height: 1.5;
-}
-
-.tag-chip--plain {
-  color: var(--muted-foreground);
-  font-style: italic;
 }
 
 /* ── toggle (details) ───────────────────────────────────────────────────── */
@@ -683,6 +713,274 @@
 .tiptap-editor .ProseMirror [data-type="details"]:not(.is-open) [data-type="detailsContent"] {
   display: none;
 }
+
+/* ── table of contents block ────────────────────────────────────────────── */
+
+.tiptap-editor .ProseMirror .toc-block {
+  display: block;
+  margin: 1rem 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--secondary-foreground);
+  border-radius: 8px;
+  background: var(--muted);
+  user-select: none;
+}
+
+.toc-block-title {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.toc-block-empty {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-style: italic;
+  color: var(--muted-foreground);
+}
+
+.toc-block-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.toc-block-item {
+  margin: 0;
+  padding: 0;
+}
+
+.toc-block-item--h2 .toc-block-link { padding-left: 1.25rem; }
+.toc-block-item--h3 .toc-block-link { padding-left: 2.25rem; }
+
+.toc-block-link {
+  display: block;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0.2rem 0.25rem;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  text-align: left;
+  color: var(--foreground);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.1s, color 0.1s;
+}
+
+.toc-block-link:hover {
+  background: var(--background);
+  color: var(--secondary-foreground);
+}
+
+
+/* ── page reference chip ────────────────────────────────────────────────── */
+
+.tiptap-editor .ProseMirror .page-ref-wrap {
+  display: inline;
+  white-space: nowrap;
+}
+
+.tiptap-editor .ProseMirror .page-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.05em 0.25rem;
+  margin: 0 -0.1em; /* hover bg bleeds slightly past the icon/text */
+  border: none;
+  background: transparent;
+  border-radius: 3px;
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.tiptap-editor .ProseMirror .page-ref:hover {
+  background: var(--muted);
+}
+
+.page-ref-prefix {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+
+.page-ref-icon {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.page-ref-title {
+  text-decoration: underline;
+  text-decoration-color: var(--muted-foreground);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+.page-ref--deleted {
+  color: var(--muted-foreground);
+  cursor: not-allowed;
+}
+
+.page-ref--deleted .page-ref-title {
+  text-decoration: line-through;
+  text-decoration-color: var(--muted-foreground);
+}
+
+.page-ref--deleted:hover {
+  background: transparent;
+}
+
+.page-ref-suffix {
+  font-size: 0.75em;
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+
+
+/* ── subpage link (block-level page embed, Notion-style) ────────────────── */
+
+.tiptap-editor .ProseMirror .subpage-card-wrap {
+  display: block;
+  margin: 0.25rem 0;
+}
+
+.tiptap-editor .ProseMirror .subpage-card {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  max-width: 100%;
+  padding: 0.2rem 0.35rem;
+  margin: 0 -0.35rem; /* hover bg bleeds slightly past the icon/text */
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  font-family: inherit;
+  font-size: inherit;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.1s;
+}
+
+.tiptap-editor .ProseMirror .subpage-card:hover {
+  background: var(--muted);
+}
+
+.subpage-card-icon {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+}
+
+.subpage-card-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: var(--muted-foreground);
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+
+.subpage-card-suffix {
+  font-size: 0.85em;
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+
+.subpage-card--deleted {
+  cursor: not-allowed;
+  color: var(--muted-foreground);
+}
+
+.subpage-card--deleted .subpage-card-title {
+  text-decoration: line-through;
+  text-decoration-color: var(--muted-foreground);
+}
+
+.subpage-card--deleted:hover {
+  background: transparent;
+}
+
+
+/* ── @-mention search menu ──────────────────────────────────────────────── */
+
+.page-search-menu {
+  min-width: 240px;
+  max-width: 320px;
+  max-height: 320px;
+  overflow-y: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--card);
+  padding: 4px;
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-sans);
+}
+
+.page-search-section {
+  margin: 0;
+  padding: 0.4rem 0.6rem 0.2rem;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+.page-search-empty {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.85rem;
+  font-style: italic;
+  color: var(--muted-foreground);
+}
+
+.page-search-divider {
+  margin: 0.25rem 0.25rem;
+  height: 1px;
+  background: var(--border);
+}
+
+.page-search-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: var(--foreground);
+  text-align: left;
+}
+
+.page-search-item:hover {
+  background: var(--muted);
+}
+
+.page-search-item--active {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
+}
+
+.page-search-item-icon {
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
 
 /* ── images ─────────────────────────────────────────────────────────────── */
 

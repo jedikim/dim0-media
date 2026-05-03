@@ -3,7 +3,7 @@ import clsx from 'clsx'
 import { RoughCircle } from '@/components/rough/circ'
 import { useTheme } from '@/components/theme-provider'
 import { darkerDisplayHex, lighterDisplayHex } from '../../../lib/colors/dark-variants'
-import type { FillStyle, StrokeStyle, StrokeWidth } from '../../../types/style'
+import type { StrokeStyle, StrokeWidth } from '../../../types/style'
 
 type LayeredCircleProps = {
   wrapperClass: string
@@ -12,7 +12,6 @@ type LayeredCircleProps = {
   heightPx?: number
   roughness?: number
   fill?: string
-  fillStyle?: FillStyle
   stroke?: string
   strokeStyle?: StrokeStyle
   strokeWidth?: StrokeWidth
@@ -27,7 +26,6 @@ export const LayeredCircle = memo(({
   heightPx,
   roughness,
   fill,
-  fillStyle,
   stroke,
   strokeStyle,
   strokeWidth,
@@ -41,7 +39,6 @@ export const LayeredCircle = memo(({
   const commonProps = {
     roughness,
     fill,
-    fillStyle,
     stroke,
     strokeStyle,
     strokeWidth,

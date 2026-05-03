@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 import {
   ChevronRightIcon,
   FolderIcon,
-  DocumentIcon,
+  NotepadIcon,
   CodeFileIcon,
   StockWidgetIcon,
   type AppIconComponent,
@@ -22,7 +22,7 @@ const BASE_PADDING_PX = 8
 
 const ICON_BY_KIND: Record<BoardContentKind, AppIconComponent> = {
   folder: FolderIcon,
-  sheet: DocumentIcon,
+  sheet: NotepadIcon,
   "code-sandbox": CodeFileIcon,
   widget: StockWidgetIcon,
 }
@@ -37,15 +37,18 @@ type BoardTreeNodeProps = {
 
 /**
  * Recursive sidebar row for a board's surface node (sheet/folder/code-sandbox/widget).
- * Folders show their kind icon by default and morph to a chevron on row-hover so
- * the user can expand/collapse without leaving the current view; clicking the
- * label navigates (into the folder, sheet, or board).
+ * Folders and sheets are both expandable — sheets reveal sub-pages
+ * (`parent_id` of another note) on disclosure; folders reveal their
+ * canvas children. The kind icon morphs to a chevron on row-hover so
+ * the user can expand/collapse without leaving the current view.
  */
 export function BoardTreeNode({ boardId, item, depth }: BoardTreeNodeProps) {
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(false)
 
   const isFolder = item.kind === "folder"
+  const isSheet = item.kind === "sheet"
+  const isExpandable = isFolder || isSheet
   const KindIcon = ICON_BY_KIND[item.kind]
 
   const visualDepth = Math.min(depth, MAX_VISUAL_DEPTH)
@@ -55,7 +58,7 @@ export function BoardTreeNode({ boardId, item, depth }: BoardTreeNodeProps) {
   const displayLabel = trimText(fullLabel, 40)
 
   const { data: children = [], isLoading } = useBoardContents(boardId, item.id, {
-    enabled: isFolder && expanded,
+    enabled: isExpandable && expanded,
   })
 
   const handleNavigate = () => {
@@ -98,21 +101,27 @@ export function BoardTreeNode({ boardId, item, depth }: BoardTreeNodeProps) {
           }
         }}
       >
-        {isFolder ? (
+        {isExpandable ? (
           <button
             type="button"
             onClick={handleToggle}
             className="size-5 shrink-0 grid place-items-center rounded hover:bg-sidebar-accent-foreground/10"
-            aria-label={expanded ? "Collapse folder" : "Expand folder"}
+            aria-label={expanded ? `Collapse ${item.kind}` : `Expand ${item.kind}`}
           >
-            <FolderIcon
-              className="size-4 text-muted-foreground group-hover/tree-row:hidden"
+            <KindIcon
+              className={cn(
+                "size-4 text-muted-foreground transition-opacity",
+                "group-hover/tree-row:hidden",
+                expanded && "hidden",
+              )}
               strokeWidth={2}
             />
             <ChevronRightIcon
               className={cn(
-                "size-4 text-muted-foreground hidden group-hover/tree-row:block transition-transform",
-                expanded && "rotate-90",
+                "size-4 text-muted-foreground transition-transform",
+                expanded
+                  ? "block rotate-90"
+                  : "hidden group-hover/tree-row:block",
               )}
               strokeWidth={2}
             />
@@ -133,7 +142,7 @@ export function BoardTreeNode({ boardId, item, depth }: BoardTreeNodeProps) {
         </Tooltip>
       </div>
 
-      {isFolder && expanded && (
+      {isExpandable && expanded && (
         <ul className="flex flex-col">
           {isLoading && children.length === 0 ? (
             <li
@@ -147,7 +156,7 @@ export function BoardTreeNode({ boardId, item, depth }: BoardTreeNodeProps) {
               className="py-1 text-[11px] italic text-muted-foreground"
               style={{ paddingLeft: paddingLeft + INDENT_PX_PER_LEVEL + 20 }}
             >
-              Empty
+              {isSheet ? "No sub-pages" : "Empty"}
             </li>
           ) : (
             children.map((child) => (

@@ -16,8 +16,12 @@ import {
   TableIcon,
   CaretRightIcon,
   ImageIcon,
+  ListDashes,
+  Notepad,
 } from "@phosphor-icons/react"
 import { pickAndInsertImage } from "../image/insert-image"
+import { primePageCache } from "../page/page-cache"
+import type { PageProvider } from "../page/types"
 
 export interface SlashCommand {
   title: string
@@ -148,6 +152,52 @@ export const SLASH_COMMANDS: SlashCommand[] = [
     action: (editor, range) => {
       editor.chain().focus().deleteRange(range).run()
       pickAndInsertImage(editor)
+    },
+  },
+  {
+    title: "Table of contents",
+    keywords: ["toc", "outline", "headings", "contents", "summary"],
+    icon: ListDashes,
+    group: "basic",
+    action: (editor, range) =>
+      editor.chain().focus().deleteRange(range).insertContent({ type: "tableOfContents" }).run(),
+  },
+  {
+    title: "Sub-page",
+    keywords: ["subpage", "sub-page", "page", "child", "embed"],
+    icon: Notepad,
+    group: "basic",
+    action: (editor, range) => {
+      // Read provider + the host note id from the editor's storage and
+      // create a child page; the new id gets stamped on a `subpage` block.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const storage = (editor.storage as any).pageProvider as
+        | { provider: PageProvider | null; parentNoteId: string | null }
+        | undefined
+      const provider = storage?.provider
+      const parentNoteId = storage?.parentNoteId ?? undefined
+      if (!provider) return
+      editor.chain().focus().deleteRange(range).run()
+      void (async () => {
+        try {
+          const page = await provider.create({
+            title: "Untitled",
+            parentId: parentNoteId,
+          })
+          primePageCache(page)
+          editor
+            .chain()
+            .focus()
+            .insertContent({
+              type: "subpage",
+              attrs: { pageId: page.id, title: page.title || "Untitled" },
+            })
+            .run()
+          provider.onNavigate?.(page.id)
+        } catch (err) {
+          console.error("[/subpage] create failed", err)
+        }
+      })()
     },
   },
 ]

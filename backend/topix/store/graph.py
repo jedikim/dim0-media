@@ -123,15 +123,30 @@ class GraphStore:
         await self._content_store.update([data])
 
     async def delete_node(self, node_id: str, hard_delete: bool = True, user_uid: str | None = None):
-        """Delete a node from the graph."""
-        # TODO(folder): cascade-delete descendants when folder/subtree semantics are enabled.
-        # For now this deletes only the requested node.
-        existing_nodes = await self.get_nodes([node_id])
-        if existing_nodes and self._note_revision_store is not None:
-            await self._note_revision_store.save_note_snapshot(existing_nodes[0], user_uid=user_uid)
-        await self._content_store.delete([node_id], hard_delete=hard_delete)
+        """Delete a node and every descendant linked via parent_id.
 
-        # deleted associated chunks
+        Saves a snapshot for each deleted note so restore-latest still works
+        per node, then issues a single batched content-store delete and a
+        single chunks delete keyed on the full set of ids.
+        """
+        existing_nodes = await self.get_nodes([node_id])
+        if not existing_nodes:
+            return
+
+        descendants = await self.get_node_descendants(node_id)
+        all_to_delete: list[Note] = list(existing_nodes) + list(descendants)
+        all_ids = [n.id for n in all_to_delete]
+
+        if self._note_revision_store is not None:
+            for n in all_to_delete:
+                try:
+                    await self._note_revision_store.save_note_snapshot(n, user_uid=user_uid)
+                except Exception as e:
+                    logger.exception("Failed to snapshot note %s before delete", n.id, exc_info=e)
+
+        await self._content_store.delete(all_ids, hard_delete=hard_delete)
+
+        # deleted associated chunks for every removed node in one filter
         def _log_task_result(task: asyncio.Task) -> None:
             try:
                 task.result()
@@ -143,7 +158,7 @@ class GraphStore:
                 must=[
                     FieldCondition(
                         key="document_uid",
-                        match=MatchValue(value=node_id),
+                        match=MatchAny(any=all_ids),
                     ),
                     FieldCondition(
                         key="type",

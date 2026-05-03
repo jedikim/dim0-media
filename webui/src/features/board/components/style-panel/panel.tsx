@@ -3,7 +3,6 @@ import {
   SloppyPresets,
   StrokeWidthPresets,
   TRANSPARENT_HEX,
-  type FillStyle,
   type FontFamily,
   type FontSize,
   type StrokeStyle,
@@ -96,57 +95,6 @@ const WavyGlyph = ({ amount }: { amount: number }): ReactElement => (
     />
   </svg>
 )
-
-const FillGlyph = ({ kind }: { kind: FillStyle }): ReactElement => {
-  return (
-    <svg width='24' height='24' viewBox='0 0 24 24' className='text-foreground/80'>
-      <rect x='4' y='4' width='16' height='16' rx='3' ry='3' fill='none' stroke='currentColor' />
-      {kind === 'solid' && (
-        <rect
-          x='4'
-          y='4'
-          width='16'
-          height='16'
-          rx='3'
-          ry='3'
-          className='fill-foreground/20'
-        />
-      )}
-      {kind === 'hachure' && (
-        <g stroke='currentColor' strokeWidth='1'>
-          {Array.from({ length: 8 }).map((_, i) => (
-            <line key={i} x1={5} y1={6 + i * 2} x2={19} y2={4 + i * 2} />
-          ))}
-        </g>
-      )}
-      {kind === 'cross-hatch' && (
-        <g stroke='currentColor' strokeWidth='1'>
-          {Array.from({ length: 8 }).map((_, i) => (
-            <line key={`a-${i}`} x1={5} y1={6 + i * 2} x2={19} y2={4 + i * 2} />
-          ))}
-          {Array.from({ length: 8 }).map((_, i) => (
-            <line key={`b-${i}`} x1={5} y1={18 - i * 2} x2={19} y2={20 - i * 2} />
-          ))}
-        </g>
-      )}
-      {kind === 'zigzag' && (
-        <polyline
-          points='5,18 9,6 13,18 17,6 19,12'
-          fill='none'
-          stroke='currentColor'
-          strokeWidth='1.5'
-        />
-      )}
-      {kind === 'dots' && (
-        <g className='fill-current'>
-          {Array.from({ length: 12 }).map((_, i) => (
-            <circle key={i} cx={6 + (i % 4) * 4} cy={6 + Math.floor(i / 4) * 4} r={0.8} />
-          ))}
-        </g>
-      )}
-    </svg>
-  )
-}
 
 const CornerGlyph = ({ r }: { r: 0 | 2 }): ReactElement => (
   <svg width='24' height='24' viewBox='0 0 24 24' className='text-foreground/80'>
@@ -270,7 +218,6 @@ const BASE_SETTING_KEYS = [
   'strokeColor',
   'backgroundColor',
   'textColor',
-  'fillStyle',
   'strokeWidth',
   'strokeStyle',
   'roughness',
@@ -294,7 +241,6 @@ export function StylePanel<T extends StyleLike>({
     | 'strokeColor'
     | 'backgroundColor'
     | 'textColor'
-    | 'fillStyle'
     | 'strokeWidth'
     | 'strokeStyle'
     | 'roughness'
@@ -351,17 +297,6 @@ export function StylePanel<T extends StyleLike>({
           onPick={v => onStyleChange({ textColor: (v || undefined) } as Partial<T>)}
           variant='compact'
         />
-      </Section>
-    ),
-    fillStyle: (
-      <Section title='Fill style'>
-        <ToggleGroup type='single' value={(s.fillStyle as FillStyle) ?? 'solid'} onValueChange={v => v && onStyleChange({ fillStyle: v as T[keyof T] } as Partial<T>)} className='flex flex-wrap gap-2'>
-          {(['hachure', 'dots', 'zigzag', 'solid', 'cross-hatch'] as FillStyle[]).map(kind => (
-            <ToggleGroupItem key={kind} value={kind} className='h-9 w-9 items-center justify-center rounded-md border bg-muted text-muted-foreground data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground'>
-              <FillGlyph kind={kind} />
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
       </Section>
     ),
     strokeWidth: (
@@ -482,7 +417,6 @@ export function StylePanel<T extends StyleLike>({
     strokeColor: 'Border color',
     backgroundColor: 'Background',
     textColor: 'Text color',
-    fillStyle: 'Fill style',
     strokeWidth: 'Stroke width',
     strokeStyle: 'Stroke style',
     roughness: 'Sloppiness',
@@ -500,7 +434,6 @@ export function StylePanel<T extends StyleLike>({
     strokeColor: <ColorDot color={resolveDisplayColor(s.strokeColor as string | undefined, isDark)} />,
     backgroundColor: <ColorDot color={resolveDisplayColor((s as Style).backgroundColor ?? null, isDark)} />,
     textColor: <ColorDot color={resolveDisplayColor(s.textColor as string | undefined, isDark)} />,
-    fillStyle: <FillGlyph kind={(s.fillStyle as FillStyle) ?? 'solid'} />,
     strokeWidth: <LineGlyph width={s.strokeWidth ?? 1} />,
     strokeStyle: <LineGlyph width={2} dash={(s.strokeStyle as StrokeStyle) === 'dashed' ? [6, 4] : (s.strokeStyle as StrokeStyle) === 'dotted' ? [1, 5] : undefined} />,
     roughness: <WavyGlyph amount={(s.roughness ?? 0) * 4} />,

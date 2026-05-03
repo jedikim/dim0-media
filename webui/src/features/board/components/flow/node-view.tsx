@@ -83,7 +83,7 @@ const NodeStatusOverlay = memo(function NodeStatusOverlay({
   nodeType,
 }: NodeStatusOverlayProps) {
   if (selected && nodeType !== 'sheet') {
-    return <div className='absolute inset-1 border border-secondary-foreground pointer-events-none rounded-md z-10' />
+    return <div className='absolute inset-0 border border-secondary-foreground pointer-events-none rounded-none z-10' />
   }
   return null
 })
@@ -223,7 +223,6 @@ function NodeViewBase({ id, data, selected, width, height, dragging }: NodeProps
             backgroundColor={backgroundColor}
             strokeColor={strokeColor}
             roughness={data.style.roughness}
-            fillStyle={data.style.fillStyle}
             strokeStyle={data.style.strokeStyle}
             strokeWidth={data.style.strokeWidth}
             seed={data.roughSeed}
@@ -304,7 +303,6 @@ function NodeViewBase({ id, data, selected, width, height, dragging }: NodeProps
           backgroundColor={backgroundColor}
           strokeColor={strokeColor}
           roughness={data.style.roughness}
-          fillStyle={data.style.fillStyle}
           strokeStyle={data.style.strokeStyle}
           strokeWidth={data.style.strokeWidth}
           seed={data.roughSeed}

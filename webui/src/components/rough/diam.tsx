@@ -1,9 +1,10 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef } from 'react'
+import React, { memo, useCallback, useEffect, useRef } from 'react'
 import { RoughCanvas } from 'roughjs/bin/canvas'
-import type { Options as RoughOptions } from 'roughjs/bin/core'
 import clsx from 'clsx'
 import type { StrokeStyle } from '@/features/board/types/style'
 import { getCachedCanvas, serializeCacheKey } from './cache'
+import { roundedDiamondPath, sharpDiamondPath } from './paths'
+import { FillLayer } from './fill-layer'
 import { useGraphStore } from '@/features/board/store/graph-store'
 
 type RoundedClass = 'none' | 'rounded-2xl'
@@ -15,7 +16,6 @@ type RoughShapeProps = {
   strokeStyle?: StrokeStyle // 'solid' | 'dashed' | 'dotted'
   strokeWidth?: number
   fill?: string
-  fillStyle?: RoughOptions['fillStyle']
   className?: string
   seed?: number
   widthPx?: number
@@ -35,8 +35,6 @@ type DrawConfig = {
   stroke: string
   strokeStyle: StrokeStyle
   strokeWidth: number
-  fill?: string
-  fillStyle?: RoughOptions['fillStyle']
   seed: number
   dpr: number
   renderScale: number
@@ -47,9 +45,9 @@ type SimplifiedDiamondOverlayProps = {
   stroke?: string
   strokeStyle?: StrokeStyle
   strokeWidth?: number
-  fill?: string
-  viewBoxWidth: number
-  viewBoxHeight: number
+  fillInset: number
+  widthPx: number
+  heightPx: number
 }
 
 const SimplifiedDiamondOverlay = memo(function SimplifiedDiamondOverlay({
@@ -57,19 +55,18 @@ const SimplifiedDiamondOverlay = memo(function SimplifiedDiamondOverlay({
   stroke,
   strokeStyle,
   strokeWidth,
-  fill,
-  viewBoxWidth,
-  viewBoxHeight,
+  fillInset,
+  widthPx,
+  heightPx,
 }: SimplifiedDiamondOverlayProps) {
   const { strokeLineDash, lineCap } = mapStrokeStyle(strokeStyle, strokeWidth)
   const dashArray = strokeLineDash ? strokeLineDash.join(' ') : undefined
-  const viewW = Math.max(1, viewBoxWidth)
-  const viewH = Math.max(1, viewBoxHeight)
-  const inset = 1
-  const x0 = inset
-  const y0 = inset
-  const x1 = viewW - inset
-  const y1 = viewH - inset
+  const viewW = Math.max(1, widthPx)
+  const viewH = Math.max(1, heightPx)
+  const x0 = fillInset
+  const y0 = fillInset
+  const x1 = viewW - fillInset
+  const y1 = viewH - fillInset
   const baseRadius = rounded === 'rounded-2xl' ? 16 : 0
   const pathData =
     baseRadius > 0
@@ -78,20 +75,14 @@ const SimplifiedDiamondOverlay = memo(function SimplifiedDiamondOverlay({
 
   return (
     <svg
-      className='absolute pointer-events-none m-0.75'
-      style={{
-        inset: 0,
-        zIndex: 10,
-        overflow: 'visible',
-        width: 'calc(100% - 0.375rem)',
-        height: 'calc(100% - 0.375rem)',
-      }}
+      className='absolute pointer-events-none'
+      style={{ inset: 0, width: '100%', height: '100%', zIndex: 10, overflow: 'visible' }}
       viewBox={`0 0 ${viewW} ${viewH}`}
       preserveAspectRatio="none"
     >
       <path
         d={pathData}
-        fill={fill || 'transparent'}
+        fill='transparent'
         stroke={stroke || 'transparent'}
         strokeWidth={strokeWidth ?? 1}
         strokeDasharray={dashArray}
@@ -114,8 +105,6 @@ const drawConfigEqual = (a: DrawConfig | null, b: DrawConfig) => {
     a.stroke === b.stroke &&
     a.strokeStyle === b.strokeStyle &&
     a.strokeWidth === b.strokeWidth &&
-    a.fill === b.fill &&
-    a.fillStyle === b.fillStyle &&
     a.seed === b.seed &&
     a.dpr === b.dpr &&
     a.renderScale === b.renderScale
@@ -167,98 +156,6 @@ function mapStrokeStyle(
   }
 }
 
-/** Simple sharp diamond path (inscribed). */
-function sharpDiamondPath(x0: number, y0: number, x1: number, y1: number): string {
-  const cx = (x0 + x1) / 2
-  const cy = (y0 + y1) / 2
-  return [
-    `M ${cx} ${y0}`, // top mid
-    `L ${x1} ${cy}`, // right mid
-    `L ${cx} ${y1}`, // bottom mid
-    `L ${x0} ${cy}`, // left mid
-    `Z`
-  ].join(' ')
-}
-
-/**
- * Rounded diamond path (inscribed).
- * r is a visual corner radius in px. We trim each 45° edge by s = r * √2,
- * then connect the two trim points around each corner with a quadratic curve
- * using the corner vertex as the control point.
- */
-function roundedDiamondPath(
-  x0: number,
-  y0: number,
-  x1: number,
-  y1: number,
-  r: number
-): string {
-  const cx = (x0 + x1) / 2
-  const cy = (y0 + y1) / 2
-
-  // Diamond vertices (clockwise)
-  const T = { x: cx,   y: y0 }
-  const R = { x: x1,   y: cy }
-  const B = { x: cx,   y: y1 }
-  const L = { x: x0,   y: cy }
-
-  // helper: move along segment A->B by distance s
-  const along = (A: { x: number, y: number }, B: { x: number, y: number }, s: number) => {
-    const dx = B.x - A.x
-    const dy = B.y - A.y
-    const len = Math.hypot(dx, dy) || 1
-    const t = Math.max(0, Math.min(1, s / len))
-    return { x: A.x + dx * t, y: A.y + dy * t }
-  }
-
-  // edge length (all are equal for a diamond)
-  const edgeLen = Math.hypot(R.x - T.x, R.y - T.y)
-
-  // convert axis radius r to along-edge trim distance s (45° edges)
-  let s = r * Math.SQRT2
-  const sMax = Math.max(0, edgeLen / 2 - 0.01)
-  s = Math.max(0, Math.min(s, sMax))
-  if (s <= 0.0001) {
-    // fall back to sharp diamond
-    return [
-      `M ${cx} ${y0}`,
-      `L ${x1} ${cy}`,
-      `L ${cx} ${y1}`,
-      `L ${x0} ${cy}`,
-      `Z`
-    ].join(' ')
-  }
-
-  // trim points near each corner on adjacent edges
-  const T_R = along(T, R, s) // leaving T toward R
-  const R_T = along(R, T, s) // approaching R from T
-  const R_B = along(R, B, s)
-  const B_R = along(B, R, s)
-  const B_L = along(B, L, s)
-  const L_B = along(L, B, s)
-  const L_T = along(L, T, s)
-  const T_L = along(T, L, s)
-
-  // Sequence: start just after T on edge T->R, then:
-  //  ... line to near R, Q around R, line to near B, Q around B, line to near L, Q around L,
-  //  line to near T, Q around T back to start.
-  return [
-    `M ${T_R.x} ${T_R.y}`,
-    `L ${R_T.x} ${R_T.y}`,
-    `Q ${R.x} ${R.y}, ${R_B.x} ${R_B.y}`,
-
-    `L ${B_R.x} ${B_R.y}`,
-    `Q ${B.x} ${B.y}, ${B_L.x} ${B_L.y}`,
-
-    `L ${L_B.x} ${L_B.y}`,
-    `Q ${L.x} ${L.y}, ${L_T.x} ${L_T.y}`,
-
-    `L ${T_L.x} ${T_L.y}`,
-    `Q ${T.x} ${T.y}, ${T_R.x} ${T_R.y}`,
-    `Z`
-  ].join(' ')
-}
-
 /* =========================
    DIAMOND — inscribed, with rounded option
    ========================= */
@@ -270,7 +167,6 @@ export const RoughDiamond: React.FC<RoughDiamondProps> = ({
   strokeStyle = 'solid',
   strokeWidth = 1,
   fill,
-  fillStyle = 'solid',
   className,
   seed = 1337,
   widthPx,
@@ -315,8 +211,10 @@ export const RoughDiamond: React.FC<RoughDiamondProps> = ({
     if (canvas.width !== pixelW) canvas.width = pixelW
     if (canvas.height !== pixelH) canvas.height = pixelH
 
-    canvas.style.width = cssW + 'px'
-    canvas.style.height = cssH + 'px'
+    canvas.style.width = paddedWidth + 'px'
+    canvas.style.height = paddedHeight + 'px'
+    canvas.style.left = (-bleed) + 'px'
+    canvas.style.top = (-bleed) + 'px'
 
     const config: DrawConfig = {
       cssW,
@@ -327,8 +225,6 @@ export const RoughDiamond: React.FC<RoughDiamondProps> = ({
       stroke,
       strokeStyle,
       strokeWidth,
-      fill,
-      fillStyle,
       seed,
       dpr,
       renderScale
@@ -354,7 +250,7 @@ export const RoughDiamond: React.FC<RoughDiamondProps> = ({
 
     const { strokeLineDash, lineCap } = mapStrokeStyle(strokeStyle, strokeWidth)
     const apparentSize = Math.max(cssW, cssH) * Math.min(1, effectiveZoom)
-    const { curveStepCount, maxRandomnessOffset, hachureGap } = detailForSize(apparentSize)
+    const { curveStepCount, maxRandomnessOffset } = detailForSize(apparentSize)
 
     const cacheKey = serializeCacheKey([
       'diamond',
@@ -363,8 +259,6 @@ export const RoughDiamond: React.FC<RoughDiamondProps> = ({
       visibleStroke,
       strokeStyle,
       strokeWidth,
-      fill || '',
-      fillStyle || '',
       seed,
       effectiveZoom,
       renderScale,
@@ -386,9 +280,6 @@ export const RoughDiamond: React.FC<RoughDiamondProps> = ({
         roughness,
         stroke: visibleStroke,
         strokeWidth: strokeWidth ?? 1,
-        fill,
-        fillStyle,
-        fillWeight: 1,
         bowing: 2,
         curveStepCount,
         maxRandomnessOffset,
@@ -397,9 +288,7 @@ export const RoughDiamond: React.FC<RoughDiamondProps> = ({
         strokeLineDashOffset: 0,
         dashOffset: 8,
         dashGap: 16,
-        hachureGap,
         disableMultiStroke: true,
-        disableMultiStrokeFill: true,
         preserveVertices: true,
       })
 
@@ -413,8 +302,10 @@ export const RoughDiamond: React.FC<RoughDiamondProps> = ({
     if (canvas.width !== offscreen.width) canvas.width = offscreen.width
     if (canvas.height !== offscreen.height) canvas.height = offscreen.height
 
-    canvas.style.width = cssW + 'px'
-    canvas.style.height = cssH + 'px'
+    canvas.style.width = paddedWidth + 'px'
+    canvas.style.height = paddedHeight + 'px'
+    canvas.style.left = (-bleed) + 'px'
+    canvas.style.top = (-bleed) + 'px'
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
@@ -424,7 +315,7 @@ export const RoughDiamond: React.FC<RoughDiamondProps> = ({
     ctx.drawImage(offscreen, 0, 0)
 
     lastConfigRef.current = config
-  }, [rounded, roughness, stroke, strokeWidth, fill, fillStyle, effectiveZoom, seed, strokeStyle, isMoving, isResizing, widthPx, heightPx])
+  }, [rounded, roughness, stroke, strokeWidth, fill, effectiveZoom, seed, strokeStyle, isMoving, isResizing, widthPx, heightPx])
 
   const scheduleRedraw = useCallback(() => {
     if (rafRef.current !== null) return
@@ -440,13 +331,6 @@ export const RoughDiamond: React.FC<RoughDiamondProps> = ({
 
   const isSimplified = isMoving && !isResizing
   const mainDivClass = clsx('relative', className || '')
-  const overlayViewBox = useMemo(() => {
-    const inset = 6
-    return {
-      width: Math.max(1, resolvedWidth - inset),
-      height: Math.max(1, resolvedHeight - inset),
-    }
-  }, [resolvedHeight, resolvedWidth])
 
   useEffect(() => {
     if (!isSimplified) {
@@ -464,22 +348,34 @@ export const RoughDiamond: React.FC<RoughDiamondProps> = ({
     }
   }, [])
 
+  const fillKind = rounded === 'rounded-2xl' ? 'diamond-rounded' : 'diamond-sharp'
+  const renderEffectiveStrokeWidth = stroke === 'transparent' ? 0 : (strokeWidth ?? 1)
+  const fillInset = renderEffectiveStrokeWidth <= 1.5 ? 0.5 + renderEffectiveStrokeWidth / 2 : renderEffectiveStrokeWidth / 2
+
   return (
     <div ref={wrapperRef} className={mainDivClass}>
+      <FillLayer
+        kind={fillKind}
+        fill={fill}
+        widthPx={resolvedWidth}
+        heightPx={resolvedHeight}
+        cornerRadius={16}
+        inset={fillInset}
+      />
       {isSimplified && (
         <SimplifiedDiamondOverlay
           rounded={rounded}
           stroke={stroke}
           strokeStyle={strokeStyle}
           strokeWidth={strokeWidth}
-          fill={fill}
-          viewBoxWidth={overlayViewBox.width}
-          viewBoxHeight={overlayViewBox.height}
+          fillInset={fillInset}
+          widthPx={resolvedWidth}
+          heightPx={resolvedHeight}
         />
       )}
       <canvas
         ref={canvasRef}
-        className='absolute inset-0 w-full h-full pointer-events-none'
+        className='absolute pointer-events-none'
         style={{ zIndex: 10, background: 'transparent', opacity: isSimplified ? 0 : 1 }}
       />
       <div className='relative z-20 w-full h-full'>
