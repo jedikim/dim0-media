@@ -1,3 +1,9 @@
+## v0.3.1 (2026-05-04)
+
+### Feat
+
+- **edge**: add misalignment style from spider-verse (#66)
+
 ## v0.3.0 (2026-05-03)
 
 ## v0.2.8 (2026-04-30)
