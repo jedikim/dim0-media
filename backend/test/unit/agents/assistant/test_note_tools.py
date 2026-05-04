@@ -9,7 +9,7 @@ from unittest.mock import ANY, AsyncMock
 
 import pytest
 
-from agents import RunContextWrapper
+from agents.tool_context import ToolContext
 
 from topix.agents.datatypes.context import Context
 from topix.agents.notes.service import build_note, get_default_note_size
@@ -22,6 +22,16 @@ from topix.agents.notes.tools import (
 from topix.datatypes.note.note import Note
 from topix.datatypes.note.style import NodeType
 from topix.datatypes.resource import RichText
+
+
+def _make_tool_ctx(tool_name: str = "test_tool") -> ToolContext[Context]:
+    """Build a ToolContext stub for invoking tools directly in unit tests."""
+    return ToolContext(
+        context=Context(),
+        tool_name=tool_name,
+        tool_call_id="test-call-id",
+        tool_arguments="{}",
+    )
 
 
 class DummyGraphStore:
@@ -117,7 +127,7 @@ async def test_write_note_tool_creates_note_in_root_scope_by_default() -> None:
     tool = create_write_note_tool(graph_store, "graph-1", root_id="folder-1")
 
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"content": "New note content", "label": "New note"}),
     )
 
@@ -156,7 +166,7 @@ async def test_write_note_tool_rewrites_existing_note_and_seeds_size_when_too_sm
 
     tool = create_write_note_tool(graph_store, "graph-1")
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps(
             {
                 "note_id": "note-1",
@@ -212,7 +222,7 @@ async def test_write_note_tool_preserves_size_when_existing_already_sheet_sized(
 
     tool = create_write_note_tool(graph_store, "graph-1")
     await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps(
             {
                 "note_id": "note-1",
@@ -250,7 +260,7 @@ async def test_edit_note_tool_updates_only_requested_field() -> None:
 
     tool = create_edit_note_tool(graph_store, "graph-1")
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"note_id": "note-1", "field": "label", "old": "Before", "new": "After"}),
     )
 
@@ -282,7 +292,7 @@ async def test_edit_note_tool_replaces_substring_within_larger_field() -> None:
 
     tool = create_edit_note_tool(graph_store, "graph-1")
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"note_id": "note-1", "field": "content", "old": "beta", "new": "BETA"}),
     )
 
@@ -332,7 +342,7 @@ async def test_edit_note_tool_rejects_cross_board_notes() -> None:
     tool = create_edit_note_tool(graph_store, "graph-1")
 
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"note_id": "note-1", "field": "content", "old": "anything", "new": "Nope"}),
     )
 
@@ -354,7 +364,7 @@ async def test_edit_note_tool_rejects_old_not_found() -> None:
 
     tool = create_edit_note_tool(graph_store, "graph-1")
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"note_id": "note-1", "field": "content", "old": "Old", "new": "After"}),
     )
 
@@ -376,7 +386,7 @@ async def test_edit_note_tool_rejects_non_unique_old_without_replace_all() -> No
 
     tool = create_edit_note_tool(graph_store, "graph-1")
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"note_id": "note-1", "field": "content", "old": "hello", "new": "world"}),
     )
 
@@ -402,7 +412,7 @@ async def test_edit_note_tool_replaces_all_when_flag_is_set() -> None:
 
     tool = create_edit_note_tool(graph_store, "graph-1")
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps(
             {
                 "note_id": "note-1",
@@ -428,7 +438,7 @@ async def test_edit_note_tool_rejects_empty_old() -> None:
     tool = create_edit_note_tool(graph_store, "graph-1")
 
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"note_id": "note-1", "field": "content", "old": "", "new": "x"}),
     )
 
@@ -455,7 +465,7 @@ async def test_get_note_tool_returns_current_note_metadata_and_content() -> None
 
     tool = create_get_note_tool(graph_store, "graph-1")
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"note_id": "note-1"}),
     )
 
@@ -477,7 +487,7 @@ async def test_get_note_tool_rejects_cross_board_notes() -> None:
     tool = create_get_note_tool(graph_store, "graph-1")
 
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"note_id": "note-1"}),
     )
 
@@ -496,7 +506,7 @@ async def test_link_notes_tool_creates_link_with_label() -> None:
 
     tool = create_link_notes_tool(graph_store, "graph-1")
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"source_id": "src", "target_id": "dst", "label": "causes"}),
     )
 
@@ -530,7 +540,7 @@ async def test_link_notes_tool_inherits_root_id_as_parent() -> None:
 
     tool = create_link_notes_tool(graph_store, "graph-1", root_id="folder-1")
     await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"source_id": "src", "target_id": "dst"}),
     )
 
@@ -550,7 +560,7 @@ async def test_link_notes_tool_omits_label_when_none() -> None:
 
     tool = create_link_notes_tool(graph_store, "graph-1")
     await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"source_id": "src", "target_id": "dst"}),
     )
 
@@ -565,7 +575,7 @@ async def test_link_notes_tool_rejects_same_source_and_target() -> None:
     tool = create_link_notes_tool(graph_store, "graph-1")
 
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"source_id": "same", "target_id": "same"}),
     )
 
@@ -582,7 +592,7 @@ async def test_link_notes_tool_rejects_missing_notes() -> None:
 
     tool = create_link_notes_tool(graph_store, "graph-1")
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"source_id": "src", "target_id": "dst"}),
     )
 
@@ -602,7 +612,7 @@ async def test_link_notes_tool_rejects_cross_board_notes() -> None:
 
     tool = create_link_notes_tool(graph_store, "graph-1")
     result = await tool.on_invoke_tool(
-        RunContextWrapper(Context()),
+        _make_tool_ctx(),
         json.dumps({"source_id": "src", "target_id": "dst"}),
     )
 

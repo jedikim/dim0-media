@@ -139,7 +139,7 @@ class WebSearchHandler:
             wrapper: RunContextWrapper,
             query: str,
         ) -> WebSearchOutput:
-            tool_id = gen_uid()
+            tool_id = getattr(wrapper, "tool_call_id", None) or gen_uid()
             search_output: WebSearchOutput = await web_search(wrapper, query)
             await ToolHandler.log_input(
                 AgentToolName.WEB_SEARCH, tool_id, query, wrapper.context

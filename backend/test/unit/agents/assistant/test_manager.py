@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator
 
 import pytest
 
-from topix.agents.assistant.manager import AssistantManager
+from topix.agents.assistant.manager import AUTO_MODEL_BASE_PLAN, AssistantManager
 from topix.agents.datatypes.context import ReasoningContext
 from topix.agents.datatypes.model_enum import ModelEnum
 from topix.agents.datatypes.outputs import WebSearchOutput
@@ -41,7 +41,7 @@ class RecordingSession:
 class RecordingPlanAgent:
     """Minimal plan agent stub for manager routing tests."""
 
-    def __init__(self, model: str = "openrouter/moonshotai/kimi-k2.5:nitro"):
+    def __init__(self, model: str = AUTO_MODEL_BASE_PLAN):
         """Store only the fields the manager needs to mutate."""
         self.model = model
 
@@ -226,4 +226,4 @@ async def test_select_plan_model_uses_mini_for_medium(monkeypatch: pytest.Monkey
 
     selected_model = await manager._select_plan_model([{"role": "user", "content": "Medium task"}])
 
-    assert selected_model == "openrouter/moonshotai/kimi-k2.5:nitro"
+    assert selected_model == AUTO_MODEL_BASE_PLAN

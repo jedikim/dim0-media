@@ -91,19 +91,10 @@ class ToolHandler:
     ) -> FunctionTool:
         """Convert function to a function tool.
 
-        The first argument of a function must be a RunContextWrapper.
-        If tool_id needed, add it as a input parameter, keep the exact name `tool_id`
-
-        Example:
-        ```python
-        def my_function(
-            wrapper: RunContextWrapper[Context],
-            tool_id: str,
-            input: str,
-        ) -> str:
-            return input
-        function_tool = ToolHandler.convert_func_to_tool(my_function, "my_function")
-        ```
+        The first argument of a function must be a RunContextWrapper. The SDK
+        passes a ToolContext (a RunContextWrapper subclass) at runtime, so
+        wrapped functions can read `wrapper.tool_call_id`, `wrapper.tool_name`,
+        and `wrapper.tool_arguments` if they need access to the live tool call.
 
         Args:
             func: The wrapped function tool implementation.
@@ -129,25 +120,17 @@ class ToolHandler:
         async def wrapped_func(wrapper: RunContextWrapper[Context], *args, **kwargs):
             # log the input:
             context = wrapper.context
-            tool_id = gen_uid()
+            # Prefer the SDK-assigned tool_call_id so logs correlate with the
+            # model transcript and OpenAI's tracing dashboard. Fall back to a
+            # fresh uid if invoked outside the SDK (e.g. test stubs).
+            tool_id = getattr(wrapper, "tool_call_id", None) or gen_uid()
 
-            signature = inspect.signature(func)
-
-            # Check whether in function, tool_id and wrapper context contains:
-            if "tool_id" in signature.parameters:
-                bound_arguments = signature.bind(
-                    wrapper, *args, **kwargs, tool_id=tool_id
-                )
-            else:
-                bound_arguments = signature.bind(wrapper, *args, **kwargs)
-
+            bound_arguments = inspect.signature(func).bind(wrapper, *args, **kwargs)
             bound_arguments.apply_defaults()
-            input = dict(bound_arguments.arguments)
-
             input = {
                 name: value
-                for name, value in input.items()
-                if not isinstance(value, RunContextWrapper) and not name == "tool_id"
+                for name, value in bound_arguments.arguments.items()
+                if not isinstance(value, RunContextWrapper)
             }
 
             await cls.log_input(tool_name, tool_id, input, context)
@@ -191,19 +174,22 @@ class ToolHandler:
             The function that can be later converted as FunctionTool.
 
         """
-        async def run(context: Context, input: Any) -> Any:
+        async def run(context: Context, input: Any, tool_call_id: str | None = None) -> Any:
             """Execute the agent with the provided context and input.
 
             Args:
                 context: The context for the agent.
                 input: The input data for the agent
+                tool_call_id: Optional SDK-assigned tool_call_id used for log
+                    correlation. Falls back to a fresh uid when called outside
+                    the SDK invocation path.
 
             Returns:
                 The final output from the agent as a string.
 
             """
             # Log the input message:
-            tool_id = gen_uid()
+            tool_id = tool_call_id or gen_uid()
             await cls.log_input(tool_name, tool_id, input, context)
 
             # Run the agent
@@ -275,7 +261,11 @@ class ToolHandler:
             async def run_agent(
                 wrapper: RunContextWrapper[Context], input: str
             ) -> ToolOutput:
-                return await run(wrapper.context, input)
+                return await run(
+                    wrapper.context,
+                    input,
+                    tool_call_id=getattr(wrapper, "tool_call_id", None),
+                )
             if input_type is not None:
                 run_agent.__annotations__["input"] = input_type
             return run_agent
