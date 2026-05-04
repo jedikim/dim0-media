@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 from unittest.mock import ANY, AsyncMock
@@ -33,6 +34,11 @@ class DummyGraphStore:
         self.get_graph = AsyncMock(return_value=type("Graph", (), {"nodes": []})())
         self.get_nodes = AsyncMock(return_value=[])
         self.patch_note = AsyncMock()
+        self._note_locks: dict[str, asyncio.Lock] = {}
+
+    def note_lock(self, note_id: str) -> asyncio.Lock:
+        """Mirror GraphStore.note_lock so tools can serialize same-note edits in tests."""
+        return self._note_locks.setdefault(note_id, asyncio.Lock())
 
 
 @pytest.mark.asyncio
@@ -260,6 +266,34 @@ async def test_edit_note_tool_updates_only_requested_field() -> None:
 
 
 @pytest.mark.asyncio
+async def test_edit_note_tool_replaces_substring_within_larger_field() -> None:
+    """Edit note should replace a unique substring without touching surrounding text."""
+    graph_store = DummyGraphStore()
+    existing_note = Note(
+        id="note-1",
+        graph_uid="graph-1",
+        content=RichText(markdown="alpha beta gamma"),
+    )
+    updated_note = existing_note.model_copy(deep=True)
+    updated_note.content = RichText(markdown="alpha BETA gamma")
+
+    graph_store.get_nodes.return_value = [existing_note]
+    graph_store.patch_note.return_value = updated_note
+
+    tool = create_edit_note_tool(graph_store, "graph-1")
+    result = await tool.on_invoke_tool(
+        RunContextWrapper(Context()),
+        json.dumps({"note_id": "note-1", "field": "content", "old": "beta", "new": "BETA"}),
+    )
+
+    assert result.type == "edit_note"
+    graph_store.patch_note.assert_awaited_once_with(
+        "note-1",
+        {"content": {"markdown": "alpha BETA gamma"}},
+    )
+
+
+@pytest.mark.asyncio
 async def test_write_note_tool_schema_hides_parent_scope_args() -> None:
     """Write note tool should not expose internal board-scope args."""
     tool = create_write_note_tool(DummyGraphStore(), "graph-1", root_id="folder-1")
@@ -280,19 +314,26 @@ async def test_edit_note_tool_schema_hides_parent_scope_args() -> None:
     assert "field" in tool.params_json_schema["properties"]
     assert "old" in tool.params_json_schema["properties"]
     assert "new" in tool.params_json_schema["properties"]
+    assert "replace_all" in tool.params_json_schema["properties"]
 
 
 @pytest.mark.asyncio
 async def test_edit_note_tool_rejects_cross_board_notes() -> None:
     """Edit note should fail when the note does not belong to the scoped board."""
     graph_store = DummyGraphStore()
-    graph_store.get_nodes.return_value = [Note(id="note-1", graph_uid="graph-2")]
+    graph_store.get_nodes.return_value = [
+        Note(
+            id="note-1",
+            graph_uid="graph-2",
+            content=RichText(markdown="anything"),
+        )
+    ]
 
     tool = create_edit_note_tool(graph_store, "graph-1")
 
     result = await tool.on_invoke_tool(
         RunContextWrapper(Context()),
-        json.dumps({"note_id": "note-1", "field": "label", "old": "", "new": "Nope"}),
+        json.dumps({"note_id": "note-1", "field": "content", "old": "anything", "new": "Nope"}),
     )
 
     assert isinstance(result, str)
@@ -300,8 +341,8 @@ async def test_edit_note_tool_rejects_cross_board_notes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_edit_note_tool_rejects_stale_old_value() -> None:
-    """Edit note should fail safely when the note changed since it was read."""
+async def test_edit_note_tool_rejects_old_not_found() -> None:
+    """Edit note should fail when the anchor substring is absent from the field."""
     graph_store = DummyGraphStore()
     graph_store.get_nodes.return_value = [
         Note(
@@ -318,7 +359,83 @@ async def test_edit_note_tool_rejects_stale_old_value() -> None:
     )
 
     assert isinstance(result, str)
-    assert "changed since it was read" in result
+    assert "not found" in result
+
+
+@pytest.mark.asyncio
+async def test_edit_note_tool_rejects_non_unique_old_without_replace_all() -> None:
+    """Edit note should fail when the anchor occurs more than once and replace_all is off."""
+    graph_store = DummyGraphStore()
+    graph_store.get_nodes.return_value = [
+        Note(
+            id="note-1",
+            graph_uid="graph-1",
+            content=RichText(markdown="hello hello"),
+        )
+    ]
+
+    tool = create_edit_note_tool(graph_store, "graph-1")
+    result = await tool.on_invoke_tool(
+        RunContextWrapper(Context()),
+        json.dumps({"note_id": "note-1", "field": "content", "old": "hello", "new": "world"}),
+    )
+
+    assert isinstance(result, str)
+    assert "occurs 2 times" in result
+    graph_store.patch_note.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_edit_note_tool_replaces_all_when_flag_is_set() -> None:
+    """Edit note should replace every occurrence when replace_all is true."""
+    graph_store = DummyGraphStore()
+    existing_note = Note(
+        id="note-1",
+        graph_uid="graph-1",
+        content=RichText(markdown="hello hello"),
+    )
+    updated_note = existing_note.model_copy(deep=True)
+    updated_note.content = RichText(markdown="world world")
+
+    graph_store.get_nodes.return_value = [existing_note]
+    graph_store.patch_note.return_value = updated_note
+
+    tool = create_edit_note_tool(graph_store, "graph-1")
+    result = await tool.on_invoke_tool(
+        RunContextWrapper(Context()),
+        json.dumps(
+            {
+                "note_id": "note-1",
+                "field": "content",
+                "old": "hello",
+                "new": "world",
+                "replace_all": True,
+            }
+        ),
+    )
+
+    assert result.type == "edit_note"
+    graph_store.patch_note.assert_awaited_once_with(
+        "note-1",
+        {"content": {"markdown": "world world"}},
+    )
+
+
+@pytest.mark.asyncio
+async def test_edit_note_tool_rejects_empty_old() -> None:
+    """Edit note should reject an empty anchor up front, never reaching the store."""
+    graph_store = DummyGraphStore()
+    tool = create_edit_note_tool(graph_store, "graph-1")
+
+    result = await tool.on_invoke_tool(
+        RunContextWrapper(Context()),
+        json.dumps({"note_id": "note-1", "field": "content", "old": "", "new": "x"}),
+    )
+
+    assert isinstance(result, str)
+    assert "Empty old" in result
+    graph_store.get_nodes.assert_not_awaited()
+    graph_store.patch_note.assert_not_awaited()
 
 
 @pytest.mark.asyncio

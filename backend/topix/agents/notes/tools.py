@@ -192,47 +192,69 @@ def create_edit_note_tool(
         field: Literal["label", "content"],
         old: str,
         new: str,
+        replace_all: bool = False,
     ) -> EditNoteOutput:
-        """Apply a targeted content edit to an existing note field in the current board scope.
+        """Apply a targeted text edit to a note field by anchoring on a unique substring.
 
         Use this as the default tool for localized changes to an existing note, including prose,
-        markdown, code, or widget source. Multiple `edit_note` calls are preferred when several
-        small updates are needed. Pass the exact current value in `old` so the update can fail
-        safely if the note has changed since you last saw it. Always identify the target note by
-        `note_id`, never by label, because labels are descriptive and may change.
+        markdown, code, or widget source. Always identify the target note by `note_id`, never by
+        label, because labels are descriptive and may change.
+
+        `old` is a substring of the current field value, not the entire value. Use the smallest
+        snippet that's clearly unique — typically a phrase or 2-4 adjacent lines. The edit fails
+        if `old` occurs zero times or more than once. To resolve a non-unique match, expand `old`
+        with surrounding context, or pass `replace_all=true` to change every occurrence.
 
         Args:
             note_id (str): Exact id of the note to update.
             field (Literal["label", "content"]): Which note field to edit.
-            old (str): Exact current value expected for that field.
-            new (str): Replacement value for that field.
+            old (str): Non-empty substring of the current field value to anchor the edit.
+            new (str): Replacement text for the matched substring.
+            replace_all (bool): When true, replace every occurrence of `old`. Reserve for
+                renames or repeated tokens you want changed everywhere.
 
         """
-        existing_notes = await graph_store.get_nodes([note_id])
-        if not existing_notes:
-            raise ValueError(f"Note {note_id} was not found.")
-
-        existing_note = existing_notes[0]
-        if existing_note.graph_uid != graph_uid:
-            raise ValueError("Note does not belong to the current board scope.")
-
-        if field == "label":
-            current_value = existing_note.label.markdown if existing_note.label is not None else ""
-        else:
-            current_value = existing_note.content.markdown if existing_note.content is not None else ""
-        if current_value != old:
+        if old == "":
             raise ValueError(
-                f"Note {note_id} {field} changed since it was read. "
-                f"Expected {old!r} but found {current_value!r}."
+                "Empty old not allowed. Pass a non-empty anchor, "
+                "or use write_note to rewrite the field."
             )
 
-        patch: dict = {
-            field: {"markdown": new},
-        }
+        async with graph_store.note_lock(note_id):
+            existing_notes = await graph_store.get_nodes([note_id])
+            if not existing_notes:
+                raise ValueError(f"Note {note_id} was not found.")
 
-        updated_note = await graph_store.patch_note(note_id, patch)
-        if updated_note is None:
-            raise ValueError(f"Note {note_id} was not found.")
+            existing_note = existing_notes[0]
+            if existing_note.graph_uid != graph_uid:
+                raise ValueError("Note does not belong to the current board scope.")
+
+            if field == "label":
+                current_value = existing_note.label.markdown if existing_note.label is not None else ""
+            else:
+                current_value = existing_note.content.markdown if existing_note.content is not None else ""
+
+            count = current_value.count(old)
+            if count == 0:
+                raise ValueError(
+                    f"old not found in {field}. Re-read the note with get_note "
+                    f"and use a snippet from its current content."
+                )
+            if count > 1 and not replace_all:
+                raise ValueError(
+                    f"old occurs {count} times in {field}. Expand it with surrounding "
+                    f"context for uniqueness, or pass replace_all=true."
+                )
+
+            new_value = current_value.replace(old, new) if replace_all else current_value.replace(old, new, 1)
+
+            patch: dict = {
+                field: {"markdown": new_value},
+            }
+
+            updated_note = await graph_store.patch_note(note_id, patch)
+            if updated_note is None:
+                raise ValueError(f"Note {note_id} was not found.")
 
         return EditNoteOutput(
             note_id=updated_note.id,

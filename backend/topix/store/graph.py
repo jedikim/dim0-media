@@ -40,6 +40,11 @@ class GraphStore:
         self._content_store = ContentStore.from_config()
         self._pg_pool = None
         self._note_revision_store: NoteRevisionStore | None = None
+        self._note_locks: dict[str, asyncio.Lock] = {}
+
+    def note_lock(self, note_id: str) -> asyncio.Lock:
+        """Return a per-note lock used to serialize tool-level read-modify-write edits."""
+        return self._note_locks.setdefault(note_id, asyncio.Lock())
 
     async def open(self):
         """Open the database connection pool."""

@@ -55,7 +55,10 @@ tool_descriptions = {
         "Create a new note or fully rewrite an existing note using label, content, and note type"
     ),
     AgentToolName.CREATE_NOTE: "Create a new note using content as the main body and label only as an optional title",
-    AgentToolName.EDIT_NOTE: "Apply a targeted text edit to a note field using note_id, field, old, and new",
+    AgentToolName.EDIT_NOTE: (
+        "Apply a targeted text edit to a note field using note_id, field, "
+        "a unique substring anchor old, replacement new, and optional replace_all"
+    ),
     AgentToolName.GET_NOTE: "Read an existing note by note_id to inspect its current label, content, and note type",
     AgentToolName.LINK_NOTES: (
         "Create a directed arrow from one note to another using source_id and target_id, "

@@ -4,7 +4,7 @@ import type { Graph } from "../types/board"
 import { apiFetch } from "@/api"
 import { useAppStore } from "@/store"
 import { listBoards } from "./list-boards"
-import { isBoardCreationLimited } from "../lib/board-limit"
+import { FREE_PLAN_BOARD_LIMIT, isBoardCreationLimited } from "../lib/board-limit"
 import { toast } from "sonner"
 
 
@@ -38,7 +38,7 @@ export const useCreateBoard = () => {
       const boards = cachedBoards ?? await listBoards()
 
       if (isBoardCreationLimited(userPlan, boards.length)) {
-        toast.error("Free plan allows 2 boards. Upgrade to Plus for unlimited limits, or self-host for your own unlimited setup.")
+        toast.error(`Free plan allows ${FREE_PLAN_BOARD_LIMIT} boards. Upgrade to Plus for unlimited limits, or self-host for your own unlimited setup.`)
         throw new Error("board_limit_reached")
       }
 

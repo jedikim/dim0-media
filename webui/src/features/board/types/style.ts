@@ -229,7 +229,7 @@ export const createDefaultStyle = ({
       return {
         ...defaultOptions,
         roughness: 0.5,
-        roundness: 2,
+        roundness: 0,
         fontFamily: "handwriting",
         fontSize: "M",
         textAlign: "center",
@@ -239,7 +239,7 @@ export const createDefaultStyle = ({
       return {
         ...defaultOptions,
         roughness: 0.5,
-        roundness: 2,
+        roundness: 0,
         fontFamily: "handwriting",
         fontSize: "M",
         textAlign: "center",
@@ -249,7 +249,7 @@ export const createDefaultStyle = ({
       return {
         ...defaultOptions,
         roughness: 0.5,
-        roundness: 2,
+        roundness: 0,
         fontFamily: "handwriting",
         fontSize: "M",
         textAlign: "center",
@@ -259,7 +259,7 @@ export const createDefaultStyle = ({
       return {
         ...defaultOptions,
         roughness: 0.5,
-        roundness: 2,
+        roundness: 0,
         fontFamily: "handwriting",
         fontSize: "M",
         textAlign: "center"
@@ -270,7 +270,7 @@ export const createDefaultStyle = ({
       return {
         ...defaultOptions,
         roughness: 0.5,
-        roundness: 2,
+        roundness: 0,
         fontFamily: "handwriting",
         fontSize: "M",
         textAlign: "center"

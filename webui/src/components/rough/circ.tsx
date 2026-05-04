@@ -4,6 +4,8 @@ import clsx from 'clsx'
 import type { StrokeStyle } from '@/features/board/types/style'
 import { getCachedCanvas, serializeCacheKey } from './cache'
 import { FillLayer } from './fill-layer'
+import { resolveEdgeRender } from './derived-edge'
+import { useTheme } from '@/components/theme-provider'
 import { useGraphStore } from '@/features/board/store/graph-store'
 
 type RoughShapeProps = {
@@ -33,25 +35,25 @@ type DrawConfig = {
 }
 
 type SimplifiedCircleOverlayProps = {
-  stroke?: string
-  strokeStyle?: StrokeStyle
-  strokeWidth?: number
+  edgeColor: string
+  edgeWidth: number
+  edgeStyle: StrokeStyle
   fillInset: number
   widthPx?: number
   heightPx?: number
 }
 
 const SimplifiedCircleOverlay = memo(function SimplifiedCircleOverlay({
-  stroke,
-  strokeStyle,
-  strokeWidth,
+  edgeColor,
+  edgeWidth,
+  edgeStyle,
   fillInset,
   widthPx,
   heightPx
 }: SimplifiedCircleOverlayProps) {
-  const hasStroke = stroke && stroke !== 'transparent' && (strokeWidth ?? 1) > 0
-  const useSvgDash = hasStroke && (strokeStyle === 'dashed' || strokeStyle === 'dotted')
-  const { strokeLineDash, lineCap } = mapStrokeStyle(strokeStyle, strokeWidth)
+  const hasStroke = edgeWidth > 0
+  const useSvgDash = hasStroke && (edgeStyle === 'dashed' || edgeStyle === 'dotted')
+  const { strokeLineDash, lineCap } = mapStrokeStyle(edgeStyle, edgeWidth)
   const dashArray = strokeLineDash ? strokeLineDash.join(' ') : undefined
   const viewBoxWidth = Math.max(1, widthPx ?? 1)
   const viewBoxHeight = Math.max(1, heightPx ?? 1)
@@ -71,8 +73,8 @@ const SimplifiedCircleOverlay = memo(function SimplifiedCircleOverlay({
         rx={rx}
         ry={ry}
         fill='transparent'
-        stroke={stroke || 'transparent'}
-        strokeWidth={strokeWidth ?? 1}
+        stroke={hasStroke ? edgeColor : 'transparent'}
+        strokeWidth={edgeWidth}
         strokeDasharray={useSvgDash ? dashArray : undefined}
         strokeLinecap={lineCap}
         vectorEffect="non-scaling-stroke"
@@ -166,6 +168,8 @@ export const RoughCircle: React.FC<RoughShapeProps> = ({
   const isResizing = useGraphStore(state => state.isResizingNode)
   const effectiveZoom = quantizeZoom(viewportZoom || 1)
   const isSimplified = isMoving && !isResizing
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
 
   const draw = useCallback((wrapper: HTMLDivElement, canvas: HTMLCanvasElement) => {
     const rect = wrapper.getBoundingClientRect()
@@ -176,10 +180,13 @@ export const RoughCircle: React.FC<RoughShapeProps> = ({
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
     const oversample = oversampleForZoom(effectiveZoom)
 
-    const effectiveStrokeWidth = stroke === 'transparent' ? 0 : (strokeWidth ?? 1)
+    const edge = resolveEdgeRender(stroke, fill, isDark, strokeStyle, strokeWidth, roughness)
+    const effectiveStrokeWidth = edge.width
+    const effectiveStrokeStyle = edge.style
+    const effectiveRoughness = edge.roughness
     // bleed so jitter/stroke won't clip
     // add a tiny extra margin to avoid clipping at seams
-    const bleed = Math.ceil(effectiveStrokeWidth / 2 + (roughness ?? 1.2) * 1.5 + 3)
+    const bleed = Math.ceil(effectiveStrokeWidth / 2 + effectiveRoughness * 1.5 + 3)
 
     const paddedWidth = cssW + bleed * 2
     const paddedHeight = cssH + bleed * 2
@@ -205,9 +212,9 @@ export const RoughCircle: React.FC<RoughShapeProps> = ({
       cssW,
       cssH,
       zoom: effectiveZoom,
-      roughness,
-      stroke,
-      strokeStyle,
+      roughness: effectiveRoughness,
+      stroke: edge.color,
+      strokeStyle: effectiveStrokeStyle,
       strokeWidth: effectiveStrokeWidth,
       seed,
       dpr,
@@ -218,7 +225,7 @@ export const RoughCircle: React.FC<RoughShapeProps> = ({
       return
     }
 
-    const visibleStroke = stroke === 'transparent' && !fill ? '#222' : stroke
+    const visibleStroke = edge.color
 
     const innerW = cssW
     const innerH = cssH
@@ -227,15 +234,15 @@ export const RoughCircle: React.FC<RoughShapeProps> = ({
     const ellipseW = innerW
     const ellipseH = innerH
 
-    const { strokeLineDash, lineCap } = mapStrokeStyle(strokeStyle, effectiveStrokeWidth)
+    const { strokeLineDash, lineCap } = mapStrokeStyle(effectiveStrokeStyle, effectiveStrokeWidth)
     const apparentSize = Math.max(cssW, cssH) * Math.min(1, effectiveZoom)
     const { curveStepCount, maxRandomnessOffset } = detailForSize(apparentSize)
 
     const cacheKey = serializeCacheKey([
       'ellipse',
-      roughness,
+      effectiveRoughness,
       visibleStroke,
-      strokeStyle,
+      effectiveStrokeStyle,
       effectiveStrokeWidth,
       seed,
       effectiveZoom,
@@ -256,7 +263,7 @@ export const RoughCircle: React.FC<RoughShapeProps> = ({
 
       const rc = new RoughCanvas(target)
       const drawable = rc.generator.ellipse(cx, cy, ellipseW, ellipseH, {
-        roughness,
+        roughness: effectiveRoughness,
         stroke: visibleStroke,
         strokeWidth: effectiveStrokeWidth,
         bowing: 2,
@@ -294,7 +301,7 @@ export const RoughCircle: React.FC<RoughShapeProps> = ({
     ctx.drawImage(offscreen, 0, 0)
 
     lastConfigRef.current = config
-  }, [roughness, stroke, strokeWidth, fill, effectiveZoom, seed, strokeStyle, widthPx, heightPx])
+  }, [roughness, stroke, strokeWidth, fill, isDark, effectiveZoom, seed, strokeStyle, widthPx, heightPx])
 
   const scheduleRedraw = useCallback(() => {
     if (isMoving) return
@@ -331,8 +338,8 @@ export const RoughCircle: React.FC<RoughShapeProps> = ({
   }, [])
 
   const mainDivClass = clsx('relative', className || '')
-  const renderEffectiveStrokeWidth = stroke === 'transparent' ? 0 : (strokeWidth ?? 1)
-  const fillInset = 0.5 + renderEffectiveStrokeWidth / 2
+  const renderEdge = resolveEdgeRender(stroke, fill, isDark, strokeStyle, strokeWidth, roughness)
+  const fillInset = 0.5 + renderEdge.width / 2
 
   if (isSimplified) {
     return (
@@ -345,9 +352,9 @@ export const RoughCircle: React.FC<RoughShapeProps> = ({
           inset={fillInset}
         />
         <SimplifiedCircleOverlay
-          stroke={stroke}
-          strokeStyle={strokeStyle}
-          strokeWidth={strokeWidth}
+          edgeColor={renderEdge.color}
+          edgeWidth={renderEdge.width}
+          edgeStyle={renderEdge.style}
           fillInset={fillInset}
           widthPx={widthPx}
           heightPx={heightPx}

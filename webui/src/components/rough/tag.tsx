@@ -5,6 +5,8 @@ import type { StrokeStyle } from '@/features/board/types/style'
 import { getCachedCanvas, serializeCacheKey } from './cache'
 import { tagPath } from './paths'
 import { FillLayer } from './fill-layer'
+import { resolveEdgeRender } from './derived-edge'
+import { useTheme } from '@/components/theme-provider'
 import { useGraphStore } from '@/features/board/store/graph-store'
 
 type RoughShapeProps = {
@@ -34,23 +36,23 @@ type DrawConfig = {
 }
 
 type SimplifiedTagOverlayProps = {
-  stroke?: string
-  strokeStyle?: StrokeStyle
-  strokeWidth?: number
+  edgeColor: string
+  edgeWidth: number
+  edgeStyle: StrokeStyle
   fillInset: number
   widthPx: number
   heightPx: number
 }
 
 const SimplifiedTagOverlay = memo(function SimplifiedTagOverlay({
-  stroke,
-  strokeStyle,
-  strokeWidth,
+  edgeColor,
+  edgeWidth,
+  edgeStyle,
   fillInset,
   widthPx,
   heightPx
 }: SimplifiedTagOverlayProps) {
-  const { strokeLineDash, lineCap } = mapStrokeStyle(strokeStyle, strokeWidth)
+  const { strokeLineDash, lineCap } = mapStrokeStyle(edgeStyle, edgeWidth)
   const dashArray = strokeLineDash ? strokeLineDash.join(' ') : undefined
   const innerW = Math.max(1, widthPx - fillInset * 2)
   const innerH = Math.max(1, heightPx - fillInset * 2)
@@ -68,8 +70,8 @@ const SimplifiedTagOverlay = memo(function SimplifiedTagOverlay({
       <path
         d={pathData}
         fill='transparent'
-        stroke={stroke || 'transparent'}
-        strokeWidth={strokeWidth ?? 1}
+        stroke={edgeWidth > 0 ? edgeColor : 'transparent'}
+        strokeWidth={edgeWidth}
         strokeDasharray={dashArray}
         strokeLinecap={lineCap}
         strokeLinejoin="round"
@@ -163,6 +165,8 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
   const effectiveZoom = quantizeZoom(viewportZoom || 1)
   const resolvedWidth = Math.max(1, Math.floor(widthPx ?? 1))
   const resolvedHeight = Math.max(1, Math.floor(heightPx ?? 1))
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === 'dark'
 
   const draw = useCallback((wrapper: HTMLDivElement, canvas: HTMLCanvasElement) => {
     if (isMoving && !isResizing) return
@@ -174,7 +178,12 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
     const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1
     const oversample = oversampleForZoom(effectiveZoom)
 
-    const bleed = Math.ceil((strokeWidth ?? 1) / 2 + (roughness ?? 1.2) * 1.5 + 2)
+    const edge = resolveEdgeRender(stroke, fill, isDark, strokeStyle, strokeWidth, roughness)
+    const effectiveStrokeWidth = edge.width
+    const effectiveStrokeStyle = edge.style
+    const effectiveRoughness = edge.roughness
+
+    const bleed = Math.ceil(effectiveStrokeWidth / 2 + effectiveRoughness * 1.5 + 2)
     const paddedWidth = cssW + bleed * 2
     const paddedHeight = cssH + bleed * 2
     const baseScale = dpr * oversample * RENDER_SCALE_FACTOR
@@ -199,10 +208,10 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
       cssW,
       cssH,
       zoom: effectiveZoom,
-      roughness,
-      stroke,
-      strokeStyle,
-      strokeWidth,
+      roughness: effectiveRoughness,
+      stroke: edge.color,
+      strokeStyle: effectiveStrokeStyle,
+      strokeWidth: effectiveStrokeWidth,
       seed,
       dpr,
       renderScale
@@ -212,21 +221,21 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
       return
     }
 
-    const visibleStroke = stroke === 'transparent' && !fill ? '#222' : stroke
+    const visibleStroke = edge.color
     const notch = Math.min(cssH * 0.45, cssW * 0.3)
     const radius = Math.min(cssH / 2, cssW / 4, 18)
     const pathData = tagPath(cssW, cssH, notch, radius)
 
-    const { strokeLineDash, lineCap } = mapStrokeStyle(strokeStyle, strokeWidth)
+    const { strokeLineDash, lineCap } = mapStrokeStyle(effectiveStrokeStyle, effectiveStrokeWidth)
     const apparentSize = Math.max(cssW, cssH) * Math.min(1, effectiveZoom)
     const { curveStepCount, maxRandomnessOffset } = detailForSize(apparentSize)
 
     const cacheKey = serializeCacheKey([
       'tag',
-      roughness,
+      effectiveRoughness,
       visibleStroke,
-      strokeStyle,
-      strokeWidth,
+      effectiveStrokeStyle,
+      effectiveStrokeWidth,
       seed,
       effectiveZoom,
       renderScale,
@@ -245,9 +254,9 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
 
       const rc = new RoughCanvas(target)
       const drawable = rc.generator.path(pathData, {
-        roughness,
+        roughness: effectiveRoughness,
         stroke: visibleStroke,
-        strokeWidth: strokeWidth ?? 1,
+        strokeWidth: effectiveStrokeWidth,
         bowing: 2,
         curveStepCount,
         maxRandomnessOffset,
@@ -283,7 +292,7 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
     ctx.drawImage(offscreen, 0, 0)
 
     lastConfigRef.current = config
-  }, [roughness, stroke, strokeWidth, fill, effectiveZoom, seed, strokeStyle, isMoving, isResizing, widthPx, heightPx])
+  }, [roughness, stroke, strokeWidth, fill, isDark, effectiveZoom, seed, strokeStyle, isMoving, isResizing, widthPx, heightPx])
 
   const scheduleRedraw = useCallback(() => {
     if (rafRef.current !== null) return
@@ -299,9 +308,9 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
 
   const mainDivClass = clsx('relative', className || '')
   const isSimplified = isMoving && !isResizing
-  const renderEffectiveStrokeWidth = stroke === 'transparent' ? 0 : (strokeWidth ?? 1)
+  const renderEdge = resolveEdgeRender(stroke, fill, isDark, strokeStyle, strokeWidth, roughness)
   // Tag path runs to wrapper edges; fill stays at wrapper edges, stroke center at wrapper edge.
-  const fillInset = renderEffectiveStrokeWidth / 2
+  const fillInset = renderEdge.width / 2
 
   useEffect(() => {
     if (!isSimplified) {
@@ -330,9 +339,9 @@ export const RoughTag: React.FC<RoughShapeProps> = ({
       />
       {isSimplified && (
         <SimplifiedTagOverlay
-          stroke={stroke}
-          strokeStyle={strokeStyle}
-          strokeWidth={strokeWidth}
+          edgeColor={renderEdge.color}
+          edgeWidth={renderEdge.width}
+          edgeStyle={renderEdge.style}
           fillInset={fillInset}
           widthPx={resolvedWidth}
           heightPx={resolvedHeight}

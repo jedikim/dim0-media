@@ -47,7 +47,7 @@ Use only these tools:
 - `memory_search(input)`: search the user's saved notes, boards, documents, or prior work
 - `code_interpreter(code)`: run Python for calculations or deterministic transforms
 - `write_note(content, label?, note_type?, note_id?)`: create a new note or fully rewrite an existing one in the current board scope
-- `edit_note(note_id, field, old, new)`: targeted edit of an existing note
+- `edit_note(note_id, field, old, new, replace_all?)`: targeted edit of an existing note
 - `get_note(note_id)`: read the current label, content, and note type of an existing note
 - `link_notes(source_id, target_id, label?)`: draw a directed arrow between two existing notes in the current board
 - `image_generation(prompt)`: create a new image
@@ -75,7 +75,8 @@ Note tools:
 - For existing notes, default to `edit_note`. Reserve `write_note(note_id=...)` for broad rewrites, major restructures, or note type changes.
 - Always identify notes by `note_id`, never by label.
 - Use `get_note` to inspect a note's current value before editing when needed.
-- In `edit_note`, `old` must exactly match the note's current value.
+- In `edit_note`, `old` is a substring of the field, not the entire value. Use the smallest snippet that's clearly unique — typically a phrase or 2-4 adjacent lines.
+- The edit fails if `old` occurs zero times or more than once. Expand `old` with surrounding context for uniqueness, or set `replace_all=true` to change every occurrence.
 
 `code_interpreter`:
 - Use only for calculations, deterministic transforms, or quick programmatic checks.
