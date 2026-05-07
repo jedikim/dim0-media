@@ -3,6 +3,8 @@
 import asyncio
 import logging
 
+import asyncpg
+
 from qdrant_client.models import (
     FieldCondition,
     Filter,
@@ -29,26 +31,41 @@ from topix.store.postgres.graph_user import (
 from topix.store.postgres.pool import create_pool
 from topix.store.qdrant.store import ContentStore
 
+DEFAULT_SNAPSHOT_CONCURRENCY = 8
+
 logger = logging.getLogger(__name__)
 
 
 class GraphStore:
     """Store for managing graph data in the database."""
 
-    def __init__(self):
-        """Initialize the GraphStore."""
+    def __init__(self, snapshot_concurrency: int = DEFAULT_SNAPSHOT_CONCURRENCY):
+        """Initialize the GraphStore.
+
+        ``snapshot_concurrency`` caps how many background note-snapshot writers
+        can hold a Postgres connection at once. This is the main backpressure
+        guard against bursty edits exhausting the shared pool.
+        """
         self._content_store = ContentStore.from_config()
-        self._pg_pool = None
+        self._pg_pool: asyncpg.Pool | None = None
+        self._owns_pool = False
         self._note_revision_store: NoteRevisionStore | None = None
         self._note_locks: dict[str, asyncio.Lock] = {}
+        self._snapshot_sem = asyncio.Semaphore(snapshot_concurrency)
+        self._snapshot_tasks: set[asyncio.Task] = set()
 
     def note_lock(self, note_id: str) -> asyncio.Lock:
         """Return a per-note lock used to serialize tool-level read-modify-write edits."""
         return self._note_locks.setdefault(note_id, asyncio.Lock())
 
-    async def open(self):
-        """Open the database connection pool."""
-        self._pg_pool = await create_pool()
+    async def open(self, pool: asyncpg.Pool | None = None):
+        """Open the store. Pass a shared pool, or omit to create a private one."""
+        if pool is None:
+            self._pg_pool = await create_pool()
+            self._owns_pool = True
+        else:
+            self._pg_pool = pool
+            self._owns_pool = False
         self._note_revision_store = NoteRevisionStore(self._pg_pool)
         await self._note_revision_store.ensure_table()
 
@@ -75,16 +92,22 @@ class GraphStore:
             return
 
         note_to_snapshot = note.model_copy(deep=True)
+        revision_store = self._note_revision_store
+        sem = self._snapshot_sem
 
         def _log_task_result(task: asyncio.Task) -> None:
+            self._snapshot_tasks.discard(task)
             try:
                 task.result()
             except Exception as e:
                 logger.exception("Background save_note_snapshot failed", exc_info=e)
 
-        task = asyncio.create_task(
-            self._note_revision_store.save_note_snapshot(note_to_snapshot, user_uid=user_uid)
-        )
+        async def _bounded_save_snapshot() -> None:
+            async with sem:
+                await revision_store.save_note_snapshot(note_to_snapshot, user_uid=user_uid)
+
+        task = asyncio.create_task(_bounded_save_snapshot())
+        self._snapshot_tasks.add(task)
         task.add_done_callback(_log_task_result)
 
     @staticmethod
@@ -414,7 +437,10 @@ class GraphStore:
             return await get_graph_by_uid(conn, graph_uid)
 
     async def close(self):
-        """Close the database connection pool."""
-        if self._pg_pool:
+        """Close the store. Drains pending snapshot tasks; closes the pool only if owned."""
+        if self._snapshot_tasks:
+            pending = list(self._snapshot_tasks)
+            await asyncio.gather(*pending, return_exceptions=True)
+        if self._pg_pool and self._owns_pool:
             await self._pg_pool.close()
         await self._content_store.close()

@@ -1,5 +1,7 @@
 """Email verification store module."""
 
+import asyncpg
+
 from topix.datatypes.email_verification import EmailVerificationToken
 from topix.store.postgres.email_verification import (
     _dangerous_hard_delete_email_verification_tokens_by_user_uid,
@@ -16,11 +18,17 @@ class EmailVerificationStore:
 
     def __init__(self):
         """Initialize the email verification store."""
-        self._pg_pool = None
+        self._pg_pool: asyncpg.Pool | None = None
+        self._owns_pool = False
 
-    async def open(self):
-        """Open the database connection pool."""
-        self._pg_pool = await create_pool()
+    async def open(self, pool: asyncpg.Pool | None = None):
+        """Open the store. Pass a shared pool, or omit to create a private one."""
+        if pool is None:
+            self._pg_pool = await create_pool()
+            self._owns_pool = True
+        else:
+            self._pg_pool = pool
+            self._owns_pool = False
 
     async def save_token(self, token: EmailVerificationToken) -> EmailVerificationToken:
         """Create/replace active verification token for a user."""
@@ -48,6 +56,6 @@ class EmailVerificationStore:
             await _dangerous_hard_delete_email_verification_tokens_by_user_uid(conn, user_uid)
 
     async def close(self):
-        """Close the database connection pool."""
-        if self._pg_pool:
+        """Close the store. Only closes the pool if this store created it."""
+        if self._pg_pool and self._owns_pool:
             await self._pg_pool.close()

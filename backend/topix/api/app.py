@@ -19,6 +19,7 @@ from topix.setup import setup
 from topix.store.chat import ChatStore
 from topix.store.email_verification import EmailVerificationStore
 from topix.store.graph import GraphStore
+from topix.store.postgres.pool import create_pool
 from topix.store.redis.store import RedisStore
 from topix.store.subscription import SubscriptionStore
 from topix.store.user import UserStore
@@ -34,17 +35,21 @@ def create_app(stage: StageEnum):
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Application lifespan context manager."""
+        # One shared Postgres pool for every store. Per-store pools used to
+        # multiply our connection footprint and exhaust Postgres under burst.
+        app.pg_pool = await create_pool()
+
         # Initialize stores
         app.graph_store = GraphStore()
-        await app.graph_store.open()
+        await app.graph_store.open(app.pg_pool)
         app.user_store = UserStore()
-        await app.user_store.open()
+        await app.user_store.open(app.pg_pool)
         app.chat_store = ChatStore()
-        await app.chat_store.open()
+        await app.chat_store.open(app.pg_pool)
         app.user_billing_store = UserBillingStore()
-        await app.user_billing_store.open()
+        await app.user_billing_store.open(app.pg_pool)
         app.email_verification_store = EmailVerificationStore()
-        await app.email_verification_store.open()
+        await app.email_verification_store.open(app.pg_pool)
         app.subscription_store = SubscriptionStore()
         await app.subscription_store.open()
         app.parser_pipeline = ParsingPipeline()
@@ -54,7 +59,8 @@ def create_app(stage: StageEnum):
 
         yield
 
-        # Close stores
+        # Close stores. They no-op the pool close when sharing, then we close
+        # the shared pool exactly once at the end.
         await app.graph_store.close()
         await app.user_store.close()
         await app.chat_store.close()
@@ -63,6 +69,7 @@ def create_app(stage: StageEnum):
         await app.subscription_store.close()
         # Close Redis
         await app.redis_store.close()
+        await app.pg_pool.close()
 
     app = FastAPI(lifespan=lifespan)
 

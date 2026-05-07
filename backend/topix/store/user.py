@@ -1,5 +1,7 @@
 """User Store Module."""
 
+import asyncpg
+
 from topix.datatypes.user import User
 from topix.store.postgres.pool import create_pool
 from topix.store.postgres.user import (
@@ -20,11 +22,17 @@ class UserStore:
 
     def __init__(self):
         """Initialize the UserStore."""
-        self._pg_pool = None
+        self._pg_pool: asyncpg.Pool | None = None
+        self._owns_pool = False
 
-    async def open(self):
-        """Open the database connection pool."""
-        self._pg_pool = await create_pool()
+    async def open(self, pool: asyncpg.Pool | None = None):
+        """Open the store. Pass a shared pool, or omit to create a private one."""
+        if pool is None:
+            self._pg_pool = await create_pool()
+            self._owns_pool = True
+        else:
+            self._pg_pool = pool
+            self._owns_pool = False
 
     async def add_user(self, user: User):
         """Add a new user to the database."""
@@ -85,6 +93,6 @@ class UserStore:
             await mark_user_email_verified_by_uid(conn, user_uid)
 
     async def close(self):
-        """Close the database connection pool."""
-        if self._pg_pool:
+        """Close the store. Only closes the pool if this store created it."""
+        if self._pg_pool and self._owns_pool:
             await self._pg_pool.close()

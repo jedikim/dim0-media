@@ -2,6 +2,8 @@
 
 from typing import Literal
 
+import asyncpg
+
 from topix.datatypes.chat.chat import Chat, Message
 from topix.store.postgres.chat import (
     _dangerous_hard_delete_chat_by_uid,
@@ -20,12 +22,18 @@ class ChatStore:
 
     def __init__(self):
         """Initialize the chat store."""
-        self._pg_pool = None
+        self._pg_pool: asyncpg.Pool | None = None
+        self._owns_pool = False
         self._content_store = ContentStore.from_config()
 
-    async def open(self):
-        """Open the database connection pool."""
-        self._pg_pool = await create_pool()
+    async def open(self, pool: asyncpg.Pool | None = None):
+        """Open the store. Pass a shared pool, or omit to create a private one."""
+        if pool is None:
+            self._pg_pool = await create_pool()
+            self._owns_pool = True
+        else:
+            self._pg_pool = pool
+            self._owns_pool = False
 
     async def create_chat(self, chat: Chat):
         """Create a new chat."""
@@ -141,7 +149,7 @@ class ChatStore:
         return messages[0]
 
     async def close(self):
-        """Close the database connection pool."""
-        if self._pg_pool:
+        """Close the store. Only closes the pool if this store created it."""
+        if self._pg_pool and self._owns_pool:
             await self._pg_pool.close()
         await self._content_store.close()

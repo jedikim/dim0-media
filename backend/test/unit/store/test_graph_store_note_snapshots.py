@@ -19,7 +19,11 @@ def _build_store() -> GraphStore:
     store = object.__new__(GraphStore)
     store._content_store = AsyncMock()
     store._pg_pool = None
+    store._owns_pool = False
     store._note_revision_store = None
+    store._note_locks = {}
+    store._snapshot_sem = asyncio.Semaphore(8)
+    store._snapshot_tasks = set()
     return store
 
 
