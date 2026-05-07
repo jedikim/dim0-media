@@ -56,7 +56,14 @@ class _FakeGraphStore:
         return [link for link in self.links if link.id in requested]
 
     async def get_graph(self, graph_uid: str, root_id: str | None = None) -> _FakeGraph:
-        scoped_nodes = [n for n in self.notes.values() if n.graph_uid == graph_uid]
+        scoped_nodes = [
+            n for n in self.notes.values()
+            if n.graph_uid == graph_uid
+            and (
+                (root_id is None and n.parent_id is None)
+                or (root_id is not None and n.parent_id == root_id)
+            )
+        ]
         scoped_links = [link for link in self.links if link.graph_uid == graph_uid]
         return _FakeGraph(nodes=scoped_nodes, edges=scoped_links)
 
@@ -347,6 +354,48 @@ async def test_rearrange_anchors_below_existing_board_content() -> None:
     assert positions["a"]["x"] == pytest.approx(100.0)  # anchor min_x
     assert positions["a"]["y"] == pytest.approx(250.0 + DEFAULT_NOTE_GAP)
     assert positions["b"]["y"] == pytest.approx(positions["a"]["y"])  # same row
+
+
+@pytest.mark.asyncio
+async def test_rearrange_anchors_below_folder_content_when_scoped() -> None:
+    """Inside a folder, the anchor must use folder content, not the root-level board.
+
+    Without root_id propagation, _board_tail_origin would query the top-level board
+    and place the new tiles relative to root-level nodes — far from where the user
+    actually is. With root_id, only folder-1's existing notes contribute.
+    """
+    from topix.agents.notes.service import DEFAULT_NOTE_GAP
+
+    folder_existing = _make_note(
+        "folder-existing", x=200.0, y=300.0, width=200.0, height=100.0,
+    )
+    folder_existing.parent_id = "folder-1"
+    root_existing = _make_note(
+        "root-existing", x=10.0, y=5000.0, width=200.0, height=100.0,
+    )
+    new_a = _make_note("new-a", width=200.0, height=100.0)
+    new_a.parent_id = "folder-1"
+    new_b = _make_note("new-b", width=200.0, height=100.0)
+    new_b.parent_id = "folder-1"
+
+    store = _FakeGraphStore(
+        notes={
+            "folder-existing": folder_existing,
+            "root-existing": root_existing,
+            "new-a": new_a,
+            "new-b": new_b,
+        },
+    )
+
+    await rearrange_created_notes(
+        store, "graph-1", ["new-a", "new-b"], root_id="folder-1",
+    )
+
+    positions = {nid: _patched_position(store, nid) for nid in ["new-a", "new-b"]}
+    # Anchored below folder-existing (bottom edge at 400), not below root-existing (5000+).
+    assert positions["new-a"]["x"] == pytest.approx(200.0)
+    assert positions["new-a"]["y"] == pytest.approx(400.0 + DEFAULT_NOTE_GAP)
+    assert positions["new-b"]["y"] == pytest.approx(positions["new-a"]["y"])
 
 
 # -----------------------------

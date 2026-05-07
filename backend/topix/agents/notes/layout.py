@@ -191,14 +191,17 @@ async def _board_tail_origin(
     graph_store: GraphStore,
     graph_uid: str,
     exclude_ids: set[str],
+    root_id: str | None = None,
 ) -> tuple[float, float]:
     """Return an origin just below existing board content, ignoring the given ids.
 
     `exclude_ids` keeps the newly-created notes (still at their stacked default
     position) from contributing to the board's bottom edge, which would otherwise
-    push the new layout down arbitrarily.
+    push the new layout down arbitrarily. `root_id` scopes the lookup to a folder
+    so the anchor reflects the user's actual viewport context rather than the
+    top-level board.
     """
-    graph = await graph_store.get_graph(graph_uid)
+    graph = await graph_store.get_graph(graph_uid, root_id=root_id)
     if graph is None:
         return 0.0, 0.0
 
@@ -326,6 +329,7 @@ async def rearrange_created_notes(  # noqa: C901
     graph_uid: str,
     created_ids: list[str],
     created_link_ids: list[str] | None = None,
+    root_id: str | None = None,
     max_row_width: float = MAX_ROW_WIDTH,
     h_gap: float = TILE_GAP_X,
     v_gap: float = TILE_GAP_Y,
@@ -346,6 +350,8 @@ async def rearrange_created_notes(  # noqa: C901
         created_ids: Ids of notes created in the current turn. Only these are moved.
         created_link_ids: Ids of links created in the current turn. Used to pull old
             anchor nodes into their components. Empty/None means singletons-only.
+        root_id: Folder scope. When set, the "below existing board content" anchor
+            uses only nodes that share this folder instead of the top-level board.
         max_row_width: Width budget for a row before wrapping to the next.
         h_gap: Horizontal gap between flex-wrap tiles in the same row.
         v_gap: Vertical gap between flex-wrap rows.
@@ -454,7 +460,9 @@ async def rearrange_created_notes(  # noqa: C901
             free_tiles.append((positions, width, height))
 
     if free_tiles:
-        origin_x, origin_y = await _board_tail_origin(graph_store, graph_uid, movable_set)
+        origin_x, origin_y = await _board_tail_origin(
+            graph_store, graph_uid, movable_set, root_id=root_id,
+        )
         cursor_x = origin_x
         cursor_y = origin_y
         row_width = 0.0

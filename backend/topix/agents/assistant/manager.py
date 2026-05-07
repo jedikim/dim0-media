@@ -46,12 +46,14 @@ class AssistantManager:
         auto_mode: bool = False,
         graph_store: GraphStore | None = None,
         graph_uid: str | None = None,
+        root_id: str | None = None,
     ):
         """Init method."""
         self.plan_agent = plan_agent
         self.auto_mode = auto_mode
         self.graph_store = graph_store
         self.graph_uid = graph_uid
+        self.root_id = root_id
 
     @classmethod
     def from_config(
@@ -83,6 +85,7 @@ class AssistantManager:
             auto_mode=auto_mode,
             graph_store=graph_store,
             graph_uid=graph_uid,
+            root_id=root_id,
         )
 
     def _set_plan_model(self, model: str) -> None:
@@ -190,6 +193,7 @@ class AssistantManager:
                 self.graph_uid,
                 created_ids,
                 created_link_ids=created_link_ids,
+                root_id=self.root_id,
             )
         except Exception:
             logger.exception(
