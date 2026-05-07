@@ -1,3 +1,9 @@
+## v0.3.4 (2026-05-07)
+
+### Fix
+
+- **agents**: scope rearrange anchor to current folder, not root board (#69)
+
 ## v0.3.3 (2026-05-07)
 
 ### Fix
