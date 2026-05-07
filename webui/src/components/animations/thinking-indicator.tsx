@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import { AnimatePresence, motion } from "motion/react"
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { THINKING_ICONS, THINKING_VERBS, type ThinkingIcon } from "./thinking-indicator-presets"
 
 
@@ -15,14 +15,17 @@ type SweepTextProps = {
  * (trailing underscore + block caret) through the word left → right.
  * Characters behind the cursor show the new text, characters ahead of it
  * still show the old one, and the cursor advances one slot per tick so the
- * swap reads as a terminal-style inline retype. Assumes a monospaced font.
+ * swap reads as a terminal-style inline retype. Initial mount sweeps from
+ * empty into the first verb so the indicator boots up rather than appearing
+ * pre-typed. Assumes a monospaced font.
  */
 const SweepText = ({ text, msPerChar = 90, className = "" }: SweepTextProps) => {
-  const [display, setDisplay] = useState(text)
+  const reduceMotion = useReducedMotion()
+  const [display, setDisplay] = useState("")
   const [previous, setPrevious] = useState<string | null>(null)
   const [cursorIndex, setCursorIndex] = useState(-1)
   const timerRef = useRef<number | null>(null)
-  const displayRef = useRef(display)
+  const displayRef = useRef("")
 
   useEffect(() => {
     return () => {
@@ -30,7 +33,22 @@ const SweepText = ({ text, msPerChar = 90, className = "" }: SweepTextProps) => 
     }
   }, [])
 
-  useEffect(() => {
+  // Layout effect (not effect) so the empty→first-verb sweep starts before
+  // the first paint — avoids a 1-frame flash where the layout collapses to
+  // zero width and the icon/dots jump in toward each other.
+  useLayoutEffect(() => {
+    if (reduceMotion) {
+      displayRef.current = text
+      setDisplay(text)
+      setPrevious(null)
+      setCursorIndex(-1)
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current)
+        timerRef.current = null
+      }
+      return
+    }
+
     if (text === displayRef.current) return
 
     const prev = displayRef.current
@@ -58,7 +76,7 @@ const SweepText = ({ text, msPerChar = 90, className = "" }: SweepTextProps) => 
     }
 
     timerRef.current = window.setTimeout(step, msPerChar)
-  }, [text, msPerChar])
+  }, [text, msPerChar, reduceMotion])
 
   const slots = useMemo(() => {
     const prev = previous ?? display
@@ -69,6 +87,10 @@ const SweepText = ({ text, msPerChar = 90, className = "" }: SweepTextProps) => 
       newChar: display[i] ?? "\u00A0",
     }))
   }, [display, previous])
+
+  if (reduceMotion) {
+    return <span className={`inline-flex font-mono ${className}`}>{text}</span>
+  }
 
   const sweeping = previous !== null && cursorIndex >= 0
 
@@ -133,22 +155,34 @@ export const ThinkingIndicator = ({
   iconSize = 16,
   className = "",
 }: ThinkingIndicatorProps) => {
+  const reduceMotion = useReducedMotion()
   const [iconStep, setIconStep] = useState(0)
   const [textStep, setTextStep] = useState(0)
 
   useEffect(() => {
+    if (reduceMotion) return
     const id = window.setInterval(() => setIconStep(s => s + 1), iconInterval)
     return () => window.clearInterval(id)
-  }, [iconInterval])
+  }, [iconInterval, reduceMotion])
 
   useEffect(() => {
+    if (reduceMotion) return
     const id = window.setInterval(() => setTextStep(s => s + 1), textInterval)
     return () => window.clearInterval(id)
-  }, [textInterval])
+  }, [textInterval, reduceMotion])
 
   const iconEntry = icons[iconStep % icons.length]
   const verb = verbs[textStep % verbs.length]
   const Icon = iconEntry.Icon
+
+  if (reduceMotion) {
+    return (
+      <span className={`inline-flex items-center gap-2 font-mono text-sm leading-none ${className}`}>
+        <Icon size={iconSize} weight="duotone" />
+        <span>{verb}…</span>
+      </span>
+    )
+  }
 
   return (
     <span
@@ -185,22 +219,31 @@ export const ThinkingIndicator = ({
 
 /**
  * Three pulsing dots, phase-offset so they look like an ellipsis breathing.
+ * Collapses to a static ellipsis when the user prefers reduced motion.
  */
-export const ThinkingDots = () => (
-  <span aria-hidden className="inline-flex font-mono text-muted-foreground">
-    {[0, 1, 2].map(i => (
-      <motion.span
-        key={i}
-        animate={{ opacity: [0.2, 1, 0.2] }}
-        transition={{
-          duration: 1.2,
-          repeat: Infinity,
-          delay: i * 0.18,
-          ease: "easeInOut",
-        }}
-      >
-        .
-      </motion.span>
-    ))}
-  </span>
-)
+export const ThinkingDots = () => {
+  const reduceMotion = useReducedMotion()
+
+  if (reduceMotion) {
+    return <span aria-hidden className="inline-flex font-mono text-muted-foreground">…</span>
+  }
+
+  return (
+    <span aria-hidden className="inline-flex font-mono text-muted-foreground">
+      {[0, 1, 2].map(i => (
+        <motion.span
+          key={i}
+          animate={{ opacity: [0.2, 1, 0.2] }}
+          transition={{
+            duration: 1.2,
+            repeat: Infinity,
+            delay: i * 0.18,
+            ease: "easeInOut",
+          }}
+        >
+          .
+        </motion.span>
+      ))}
+    </span>
+  )
+}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
+import { motion, useReducedMotion } from "motion/react"
 import { useAppStore } from "@/store"
 import { CheckCircleStatusIcon, ChevronDownIcon } from "@/components/icons"
 import { ThinkingDots } from "@/components/animations/thinking-indicator"
@@ -23,6 +24,7 @@ import { StepsPopoverContent } from "./steps-popover-content"
 export const ProgressLine = () => {
   const { chatId } = useChat()
   const userId = useAppStore((s) => s.userId)
+  const reduceMotion = useReducedMotion()
   const { data: messages } = useListMessages({
     chatId: chatId ?? "",
     userId,
@@ -92,10 +94,17 @@ export const ProgressLine = () => {
     return (
       <div className='w-full px-3 pt-3'>
         <div className='inline-flex max-w-full items-center gap-1.5 rounded-full bg-secondary/40 px-3 py-1.5'>
-          <Icon className='size-3.5 text-wiki-link shrink-0' strokeWidth={2} />
+          <motion.span
+            className='inline-flex shrink-0'
+            animate={reduceMotion ? undefined : { opacity: [0.55, 1, 0.55] }}
+            transition={reduceMotion ? undefined : { duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <Icon className='size-3.5 text-wiki-link' strokeWidth={2} />
+          </motion.span>
           <span className='truncate font-mono text-xs text-muted-foreground'>
             {getToolTitle(activeTool.name)}
           </span>
+          <ThinkingDots />
         </div>
       </div>
     )

@@ -103,72 +103,9 @@ export function RootLayout() {
 /**
  * Full-screen auth background:
  * - soft "secondary" blobs
- * - subtle canvas-generated grain texture (PNG tile)
+ * - subtle dot grid overlay (matches the dim0.net landing-page graph paper)
  */
 export function AuthBackground() {
-  const [dataUrl, setDataUrl] = useState<string | null>(null)
-
-  useEffect(() => {
-    let rAF = 0
-    let timer: number | undefined
-
-    const makeGrain = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2) // cap for perf
-      const width = Math.ceil(window.innerWidth * dpr)
-      const height = Math.ceil(window.innerHeight * dpr)
-
-      // downscale factor to keep perf while preserving fine grain
-      const scale = 0.75 // 1 = max detail; lower = faster
-      const w = Math.max(1, Math.floor(width * scale))
-      const h = Math.max(1, Math.floor(height * scale))
-
-      const canvas = document.createElement("canvas")
-      canvas.width = w
-      canvas.height = h
-      const ctx = canvas.getContext("2d", { willReadFrequently: true })
-      if (!ctx) return
-
-      const img = ctx.createImageData(w, h)
-      const buf = img.data
-
-      // tiny but denser specks
-      const density = 0.18 // 0..1
-      const alphaMin = 18
-      const alphaMax = 45
-
-      for (let i = 0; i < buf.length; i += 4) {
-        const on = Math.random() < density
-        const val = on ? 255 : 0
-        buf[i] = val
-        buf[i + 1] = val
-        buf[i + 2] = val
-        buf[i + 3] = on
-          ? alphaMin + Math.floor(Math.random() * (alphaMax - alphaMin))
-          : 0
-      }
-
-      ctx.putImageData(img, 0, 0)
-      setDataUrl(canvas.toDataURL("image/png"))
-    }
-
-    const debouncedMake = () => {
-      if (timer) window.clearTimeout(timer)
-      timer = window.setTimeout(() => {
-        rAF = window.requestAnimationFrame(makeGrain)
-      }, 120)
-    }
-
-    // initial render
-    debouncedMake()
-    window.addEventListener("resize", debouncedMake)
-
-    return () => {
-      window.removeEventListener("resize", debouncedMake)
-      if (timer) window.clearTimeout(timer)
-      if (rAF) window.cancelAnimationFrame(rAF)
-    }
-  }, [])
-
   return (
     <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
       {/* soft secondary blobs */}
@@ -176,19 +113,14 @@ export function AuthBackground() {
       <div className="absolute -bottom-24 -left-24 h-[45vh] w-[55vw] rounded-full bg-secondary-foreground/15 blur-3xl" />
       <div className="absolute -bottom-40 -right-40 h-[35vh] w-[45vw] rounded-full bg-secondary-foreground/10 blur-3xl" />
 
-      {/* seamless grain overlay (no tiling) */}
+      {/* dot grid overlay */}
       <div
-        className="absolute inset-0 opacity-35 mix-blend-multiply"
-        style={
-          dataUrl
-            ? {
-                backgroundImage: `url(${dataUrl})`,
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "center",
-                backgroundSize: "cover",
-              }
-            : undefined
-        }
+        className="absolute inset-0 opacity-50"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle, color-mix(in oklab, var(--foreground) 55%, transparent) 1px, transparent 1px)",
+          backgroundSize: "22px 22px",
+        }}
       />
     </div>
   )

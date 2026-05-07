@@ -66,7 +66,15 @@ export const FloatingIsland = ({ boardId, onOpenFullSheet }: FloatingIslandProps
         <ProgressLine />
         <div className='flex items-center gap-2 p-3'>
           {isStreaming ? (
-            <ThinkingIndicator className='text-xs text-foreground/70 shrink-0' iconSize={14} />
+            <button
+              type='button'
+              onClick={onOpenFullSheet}
+              title='Open full chat'
+              aria-label='Open full chat'
+              className='inline-flex items-center shrink-0 rounded-md cursor-pointer transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary-foreground/30'
+            >
+              <ThinkingIndicator className='text-xs text-foreground/70' iconSize={14} />
+            </button>
           ) : (
             <button
               type='button'

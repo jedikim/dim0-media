@@ -18,6 +18,7 @@ from agents import (
     function_tool,
 )
 from openai.types.responses import (
+    ResponseOutputItemAddedEvent,
     ResponseReasoningSummaryTextDeltaEvent,
     ResponseTextDeltaEvent,
 )
@@ -414,6 +415,10 @@ class ToolHandler:
     ) -> None:
         """Process the streaming response from the LLM.
 
+        Forwards reasoning/text deltas as token messages, and surfaces an early
+        "started" signal the moment the model commits to a function call so the
+        UI can render a placeholder before arguments finish streaming.
+
         Args:
             context: The context for the agent.
             stream_response: The streaming response from the LLM from Runner.run_streamed
@@ -425,21 +430,50 @@ class ToolHandler:
             ResponseTextDeltaEvent: StreamingMessageType.STREAM_MESSAGE,
             ResponseReasoningSummaryTextDeltaEvent: StreamingMessageType.STREAM_REASONING_MESSAGE,
         }
+        reasoning_text_tools = {
+            AgentToolName.RAW_MESSAGE,
+            AgentToolName.SYNTHESIZER,
+            AgentToolName.ANSWER_REFORMULATE,
+        }
 
         async for event in stream_response.stream_events():
-            if event.type == RAW_RESPONSE_EVENT:
-                for cls, msg_type in event_type_map.items():
-                    if isinstance(event.data, cls):
-                        msg = AgentStreamMessage(
-                            type=msg_type,
-                            content=Content(
-                                type=ContentType.TOKEN, text=event.data.delta
-                            ),
-                            tool_id=tool_id,
-                            tool_name=tool_name,
-                            is_stop=False,
+            if event.type != RAW_RESPONSE_EVENT:
+                continue
+
+            if isinstance(event.data, ResponseOutputItemAddedEvent):
+                item = event.data.item
+                if item.type == "function_call":
+                    # Use ``call_id`` (not ``id``): the SDK later sets
+                    # ``wrapper.tool_call_id`` from ``call_id``, so keying on it
+                    # keeps this start signal and the eventual log_input/
+                    # log_output events on the same step in the UI.
+                    try:
+                        started_tool = AgentToolName(item.name)
+                    except ValueError:
+                        started_tool = None
+                    if started_tool is not None and started_tool not in reasoning_text_tools:
+                        await context._message_queue.put(
+                            AgentStreamMessage(
+                                tool_id=item.call_id,
+                                tool_name=started_tool,
+                                content=Content(type=ContentType.STATUS, text="started"),
+                                is_stop=False,
+                            )
                         )
-                        await context._message_queue.put(msg)
+                continue
+
+            for cls, msg_type in event_type_map.items():
+                if isinstance(event.data, cls):
+                    msg = AgentStreamMessage(
+                        type=msg_type,
+                        content=Content(
+                            type=ContentType.TOKEN, text=event.data.delta
+                        ),
+                        tool_id=tool_id,
+                        tool_name=tool_name,
+                        is_stop=False,
+                    )
+                    await context._message_queue.put(msg)
 
     @classmethod
     def _extract_thoughts(cls, response: RunResult | RunResultStreaming) -> str:

@@ -383,6 +383,9 @@ export function extractStepDescription(step: ReasoningStep): { reasoning: string
   }
 
   if (step.name === "write_note" && typeof step.output !== "string") {
+    if (step.state === "started") {
+      return { reasoning: step.thought || "", message: "Writing note…", title: getToolTitle(step.name), input }
+    }
     const output = step.output as WriteNoteOutput
     const typeLabel = output.noteType.replace(/-/g, " ")
     return {
@@ -400,6 +403,9 @@ export function extractStepDescription(step: ReasoningStep): { reasoning: string
   }
 
   if (step.name === "create_note" && typeof step.output !== "string") {
+    if (step.state === "started") {
+      return { reasoning: step.thought || "", message: "Creating note…", title: getToolTitle(step.name), input }
+    }
     const output = step.output as CreateNoteOutput
     const typeLabel = output.noteType.replace(/-/g, " ")
     return {
@@ -413,6 +419,9 @@ export function extractStepDescription(step: ReasoningStep): { reasoning: string
   }
 
   if (step.name === "edit_note" && typeof step.output !== "string") {
+    if (step.state === "started") {
+      return { reasoning: step.thought || "", message: "Editing note…", title: getToolTitle(step.name), input }
+    }
     const output = step.output as EditNoteOutput
     const typeLabel = output.noteType.replace(/-/g, " ")
     return {
