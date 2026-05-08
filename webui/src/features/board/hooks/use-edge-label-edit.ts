@@ -23,7 +23,6 @@ export function useEdgeLabelEdit({
 }: UseEdgeLabelEditInput) {
   const [editingEdgeId, setEditingEdgeId] = useState<string | null>(null)
   const [edgeLabelDraft, setEdgeLabelDraft] = useState<string>('')
-  const updateEdgeByIdPersist = useGraphStore(state => state.updateEdgeByIdPersist)
 
   useEffect(() => {
     if (!isGraphView && editingEdgeId) {
@@ -62,7 +61,7 @@ export function useEdgeLabelEdit({
 
   const handleEdgeControlPointChange = useCallback(
     (edgeId: string, position: { x: number; y: number }) => {
-      updateEdgeByIdPersist(edgeId, edge => {
+      useGraphStore.getState().updateEdgeByIdPersist(edgeId, edge => {
         const linkData = ensureLinkData(edge)
         const nextLink: Link = {
           ...linkData,
@@ -77,13 +76,13 @@ export function useEdgeLabelEdit({
         }
       })
     },
-    [updateEdgeByIdPersist],
+    [],
   )
 
   const handleEdgeLabelSave = useCallback(() => {
     if (!editingEdgeId) return
     const draft = edgeLabelDraft
-    updateEdgeByIdPersist(editingEdgeId, edge => ({
+    useGraphStore.getState().updateEdgeByIdPersist(editingEdgeId, edge => ({
       ...edge,
       data: {
         ...ensureLinkData(edge),
@@ -94,7 +93,7 @@ export function useEdgeLabelEdit({
     }))
     setEditingEdgeId(null)
     setEdgeLabelDraft('')
-  }, [editingEdgeId, edgeLabelDraft, updateEdgeByIdPersist])
+  }, [editingEdgeId, edgeLabelDraft])
 
   const edgesForRender = useDecoratedEdges({
     edges,

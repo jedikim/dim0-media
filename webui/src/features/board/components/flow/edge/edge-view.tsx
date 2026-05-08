@@ -31,7 +31,7 @@ import {
   BASE_X_FACTOR,
   getMarkerId,
 } from './edge-markers'
-import { selectEdgeNodeSlice } from '../../../utils/edge-node-geometry'
+import { selectEdgeAllSlices, type EdgeNodeSlice } from '../../../utils/edge-node-geometry'
 import { estimateEdgeLabelSize } from '../../../utils/edge-label-estimate'
 
 const ARROW_CLEARANCE_FACTOR = 0.5 // pull heads farther from node surface
@@ -76,16 +76,32 @@ export const EdgeView = memo(function EdgeView({
   const { screenToFlowPosition } = useReactFlow()
   const isMoving = useGraphStore(state => state.isMoving)
 
-  const sourceNodeSlice = useGraphStore(useShallow(selectEdgeNodeSlice(source)))
-  const targetNodeSlice = useGraphStore(useShallow(selectEdgeNodeSlice(target)))
-  const attachedSourceId = sourceNodeSlice?.attachedToNodeId
-  const attachedTargetId = targetNodeSlice?.attachedToNodeId
-  const attachedSourceNodeSlice = useGraphStore(useShallow(
-    attachedSourceId ? selectEdgeNodeSlice(attachedSourceId) : () => null,
-  ))
-  const attachedTargetNodeSlice = useGraphStore(useShallow(
-    attachedTargetId ? selectEdgeNodeSlice(attachedTargetId) : () => null,
-  ))
+  const flat = useGraphStore(useShallow(selectEdgeAllSlices(source, target)))
+
+  const sourceNodeSlice = useMemo<EdgeNodeSlice | null>(
+    () => flat.sExists
+      ? { x: flat.sx, y: flat.sy, w: flat.sw, h: flat.sh, shape: flat.sShape, attachedToNodeId: flat.sAttachedToId }
+      : null,
+    [flat.sExists, flat.sx, flat.sy, flat.sw, flat.sh, flat.sShape, flat.sAttachedToId],
+  )
+  const targetNodeSlice = useMemo<EdgeNodeSlice | null>(
+    () => flat.tExists
+      ? { x: flat.tx, y: flat.ty, w: flat.tw, h: flat.th, shape: flat.tShape, attachedToNodeId: flat.tAttachedToId }
+      : null,
+    [flat.tExists, flat.tx, flat.ty, flat.tw, flat.th, flat.tShape, flat.tAttachedToId],
+  )
+  const attachedSourceNodeSlice = useMemo<EdgeNodeSlice | null>(
+    () => flat.asExists
+      ? { x: flat.asx, y: flat.asy, w: flat.asw, h: flat.ash, shape: flat.asShape }
+      : null,
+    [flat.asExists, flat.asx, flat.asy, flat.asw, flat.ash, flat.asShape],
+  )
+  const attachedTargetNodeSlice = useMemo<EdgeNodeSlice | null>(
+    () => flat.atExists
+      ? { x: flat.atx, y: flat.aty, w: flat.atw, h: flat.ath, shape: flat.atShape }
+      : null,
+    [flat.atExists, flat.atx, flat.aty, flat.atw, flat.ath, flat.atShape],
+  )
   const [bendPointDrag, setBendPointDrag] = useState<Point | null>(null)
 
   const edgeExtras = (data ?? {}) as EdgeRenderData

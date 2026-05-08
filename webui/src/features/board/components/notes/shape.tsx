@@ -7,7 +7,7 @@ import { ImageShape } from './image-shape'
 import { LiteMarkdown } from '@/components/markdown/lite-markdown'
 import { CanvasLiteMarkdown } from '@/components/markdown/canvas-lite-markdown'
 import { getEffectiveContentScale, contentBoxFromNode } from '../../utils/note-box'
-import { useGraphStore } from '../../store/graph-store'
+import { useEffectiveZoom, useMotionState } from '../flow/motion-state-context'
 import { useTheme } from '@/components/theme-provider'
 
 
@@ -289,9 +289,8 @@ export const Shape = memo(function Shape({
   renderTextStyle,
   onCanvasRenderReadyChange,
 }: ShapeProps) {
-  const zoom = useGraphStore(state => state.zoom ?? 1)
-  const isMoving = useGraphStore(state => state.isMoving)
-  const isResizingNode = useGraphStore(state => state.isResizingNode)
+  const zoom = useEffectiveZoom()
+  const { isMoving, isResizingNode } = useMotionState()
   const paddingClass = nodeType === 'text' ? 'py-1' : 'p-2'
   const base = `
     w-full ${paddingClass} border-none resize-none

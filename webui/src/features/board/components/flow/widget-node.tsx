@@ -6,6 +6,7 @@ import { useShallow } from "zustand/react/shallow"
 
 import { DragGripIcon, ExpandIcon, LayoutIcon } from "@/components/icons"
 import { useGraphStore } from "../../store/graph-store"
+import { useMotionState } from "./motion-state-context"
 import type { Note } from "../../types/note"
 import { NodeTitleCaption } from "./node-title-caption"
 import { WidgetIframe } from "./widget-iframe"
@@ -61,15 +62,14 @@ export const WidgetNode = memo(function WidgetNode({
   selected = false,
   dragging,
 }: WidgetNodeProps) {
-  const { boardId, rootId, graphViewports, isMoving, boardCanEdit, rendererSize } = useGraphStore(useShallow((state) => ({
+  const { boardId, rootId, graphViewports, boardCanEdit, rendererSize } = useGraphStore(useShallow((state) => ({
     boardId: state.boardId,
     rootId: state.rootId,
     graphViewports: state.graphViewports,
-    isMoving: state.isMoving,
     boardCanEdit: state.boardCanEdit,
     rendererSize: state.rendererSize,
   })))
-  const openNodeSurface = useGraphStore((state) => state.openNodeSurface)
+  const { isMoving } = useMotionState()
   const html = note.content?.markdown?.trim() || ""
   const scopeViewportKey = boardId ? `${boardId}:${rootId ?? "root"}` : undefined
   const viewport = scopeViewportKey ? graphViewports[scopeViewportKey] : undefined
@@ -110,7 +110,7 @@ export const WidgetNode = memo(function WidgetNode({
             className="nodrag flex size-8 items-center justify-center rounded-full border border-border/70 bg-background/90 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-accent hover:text-foreground"
             onClick={(event) => {
               event.stopPropagation()
-              openNodeSurface(note.id, "widget")
+              useGraphStore.getState().openNodeSurface(note.id, "widget")
             }}
             title="Open widget"
             aria-label="Open widget"

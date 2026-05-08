@@ -39,7 +39,6 @@ export const NodeTitleCaption = memo(function NodeTitleCaption({
   onEditingChange,
 }: NodeTitleCaptionProps) {
   const boardCanEdit = useGraphStore((state) => state.boardCanEdit)
-  const updateNodeByIdPersist = useGraphStore((state) => state.updateNodeByIdPersist)
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(label || "")
@@ -71,14 +70,14 @@ export const NodeTitleCaption = memo(function NodeTitleCaption({
     const prev = label?.trim() || ""
     if (next === prev) return
 
-    updateNodeByIdPersist(nodeId, (node) => ({
+    useGraphStore.getState().updateNodeByIdPersist(nodeId, (node) => ({
       ...node,
       data: {
         ...node.data,
         label: next ? { markdown: next } : undefined,
       },
     }))
-  }, [nodeId, label, updateNodeByIdPersist])
+  }, [nodeId, label])
 
   const stopEdit = useCallback((save: boolean) => {
     if (save) commitTitle(draft)

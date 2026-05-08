@@ -4,6 +4,7 @@ import { subscribeMarkdownFontEpoch } from '@/components/markdown/canvas-lite-ma
 import type { FontFamily, FontSize, NodeType, TextStyle } from '../types/style'
 import { contentWidthFromNode, nodeHeightFromContent } from '../utils/note-box'
 import { estimateNoteContentHeight } from '../utils/markdown-height-estimate'
+import { useMotionState } from '../components/flow/motion-state-context'
 
 
 type UseNoteMinHeightOptions = {
@@ -17,6 +18,9 @@ type UseNoteMinHeightOptions = {
   // When false, the hook is a no-op — used for node types that render custom UI
   // (sheets, folders, sandboxes, widgets, etc.) and don't want a text-driven floor.
   enabled?: boolean
+  // Persisted height used as a cheap fallback while the viewport is moving,
+  // to skip the markdown layout estimate during cull-in pans.
+  fallbackHeight?: number
 }
 
 
@@ -46,8 +50,10 @@ export function useContentMinHeight(nodeId: string, options: UseNoteMinHeightOpt
     textStyle,
     floor = DEFAULT_FLOOR,
     enabled = true,
+    fallbackHeight,
   } = options
   const updateNodeInternals = useUpdateNodeInternals()
+  const { isMoving } = useMotionState()
   const [fontEpoch, setFontEpoch] = useState(0)
   const nodeRef = useRef<HTMLElement | null>(null)
   const lastAppliedMinH = useRef<number | null>(null)
@@ -60,6 +66,13 @@ export function useContentMinHeight(nodeId: string, options: UseNoteMinHeightOpt
   const computedMinH = useMemo(() => {
     if (!enabled) return floor
     if (!nodeWidth || nodeWidth <= 0) return floor
+
+    // Defer the markdown layout estimate while the viewport is moving — it's
+    // the heaviest part of cull-in mounts. The persisted height is usually
+    // accurate; the real estimate kicks in when motion ends.
+    if (isMoving && fallbackHeight && fallbackHeight > 0) {
+      return Math.max(floor, fallbackHeight)
+    }
 
     const contentWidth = contentWidthFromNode({ nodeType, nodeWidth })
     const contentHeight = estimateNoteContentHeight({
@@ -75,7 +88,7 @@ export function useContentMinHeight(nodeId: string, options: UseNoteMinHeightOpt
     return Math.max(floor, required)
     // fontEpoch participates as an invalidation key only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, text, nodeWidth, nodeType, fontFamily, fontSize, textStyle, floor, fontEpoch])
+  }, [enabled, isMoving, fallbackHeight, text, nodeWidth, nodeType, fontFamily, fontSize, textStyle, floor, fontEpoch])
 
   useLayoutEffect(() => {
     if (!enabled) {

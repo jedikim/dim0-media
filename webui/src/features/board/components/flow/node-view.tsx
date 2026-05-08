@@ -113,7 +113,6 @@ function NodeViewBase({ id, data, selected, width, height, dragging }: NodeProps
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
 
-  const setIsResizingNode = useGraphStore(state => state.setIsResizingNode)
   const viewSlides = useGraphStore(state => state.viewSlides)
 
   const nodeType = data.style.type
@@ -136,6 +135,7 @@ function NodeViewBase({ id, data, selected, width, height, dragging }: NodeProps
     fontSize: data.style.fontSize,
     textStyle: data.style.textStyle,
     enabled: usesContentMinHeight,
+    fallbackHeight: currentNodeHeight,
   })
 
   const baseMinH = isVisualNode
@@ -159,10 +159,10 @@ function NodeViewBase({ id, data, selected, width, height, dragging }: NodeProps
   const textColor = isDark ? darkModeDisplayHex(data.style.textColor) || undefined : data.style.textColor
 
   const handleResizeStart = () => {
-    setIsResizingNode(true)
+    useGraphStore.getState().setIsResizingNode(true)
   }
   const handleResizeEnd = () => {
-    setIsResizingNode(false)
+    useGraphStore.getState().setIsResizingNode(false)
   }
   const resizeMinWidth = isVisualNode ? 80 : 20
   const resizeMinHeight = isVisualNode ? 80 : innerMinH

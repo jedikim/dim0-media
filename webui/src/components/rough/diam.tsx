@@ -7,7 +7,10 @@ import { roundedDiamondPath, sharpDiamondPath } from './paths'
 import { FillLayer } from './fill-layer'
 import { resolveEdgeRender } from './derived-edge'
 import { useTheme } from '@/components/theme-provider'
-import { useGraphStore } from '@/features/board/store/graph-store'
+import {
+  useEffectiveZoom,
+  useMotionState,
+} from '@/features/board/components/flow/motion-state-context'
 
 type RoundedClass = 'none' | 'rounded-2xl'
 
@@ -113,11 +116,6 @@ const drawConfigEqual = (a: DrawConfig | null, b: DrawConfig) => {
   )
 }
 
-const quantizeZoom = (value: number): number => {
-  if (!Number.isFinite(value)) return 1
-  return Math.max(0.1, Math.round(value * 10) / 10)
-}
-
 const oversampleForZoom = (value: number): number => {
   if (!Number.isFinite(value)) return 1
   if (value >= 1) {
@@ -178,10 +176,8 @@ export const RoughDiamond: React.FC<RoughDiamondProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const lastConfigRef = useRef<DrawConfig | null>(null)
   const rafRef = useRef<number | null>(null)
-  const viewportZoom = useGraphStore(state => state.zoom ?? 1)
-  const isMoving = useGraphStore(state => state.isMoving)
-  const isResizing = useGraphStore(state => state.isResizingNode)
-  const effectiveZoom = quantizeZoom(viewportZoom || 1)
+  const effectiveZoom = useEffectiveZoom()
+  const { isMoving, isResizingNode: isResizing } = useMotionState()
   const resolvedWidth = Math.max(1, Math.floor(widthPx ?? 1))
   const resolvedHeight = Math.max(1, Math.floor(heightPx ?? 1))
   const { resolvedTheme } = useTheme()
@@ -385,7 +381,11 @@ export const RoughDiamond: React.FC<RoughDiamondProps> = ({
       <canvas
         ref={canvasRef}
         className='absolute pointer-events-none'
-        style={{ zIndex: 10, background: 'transparent', opacity: isSimplified ? 0 : 1 }}
+        style={{
+          zIndex: 10,
+          background: 'transparent',
+          visibility: isSimplified ? 'hidden' : 'visible',
+        }}
       />
       <div className='relative z-20 w-full h-full'>
         {children}

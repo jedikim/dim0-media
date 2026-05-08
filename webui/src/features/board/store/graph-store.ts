@@ -41,6 +41,7 @@ import {
   loadViewportsFromStorage,
   saveViewportToStorage,
 } from "./viewport-store"
+import { clearLastCursorPosition } from "./cursor-ref"
 import { clearRoughCanvasCache } from "@/components/rough/cache"
 import { generateUuid } from "@/lib/common"
 import {
@@ -83,6 +84,48 @@ const isFolderNode = (node: NoteNode | undefined) =>
 
 const buildNodesById = (nodes: NoteNode[]) =>
   new Map(nodes.map((n) => [n.id, n]))
+
+
+/**
+ * Counts the point-node entries in a node array. Used to maintain a fast
+ * `pointNodeCount` field so endpoint-visibility hot paths can early-exit
+ * without scanning the array.
+ */
+const countPointNodes = (nodes: NoteNode[]): number => {
+  let count = 0
+  for (const node of nodes) {
+    if (isPointNode(node)) count++
+  }
+  return count
+}
+
+
+/**
+ * Dev-only invariant: nodesById must mirror the nodes array exactly. Catches
+ * drift where the index falls out of sync with the source of truth.
+ */
+const assertNodesByIdInvariant = (
+  nodes: NoteNode[],
+  nodesById: Map<string, NoteNode>,
+  context: string,
+): void => {
+  if (!import.meta.env.DEV) return
+  if (nodes.length !== nodesById.size) {
+    console.error(
+      `[graph-store] nodesById drift in ${context}: nodes.length=${nodes.length}, nodesById.size=${nodesById.size}`,
+    )
+    return
+  }
+  for (const node of nodes) {
+    if (nodesById.get(node.id) !== node) {
+      console.error(
+        `[graph-store] nodesById drift in ${context}: node ${node.id} not identical in index`,
+      )
+      return
+    }
+  }
+}
+
 
 const buildAttachedPointIdsByNode = (nodes: NoteNode[]) => {
   const map = new Map<string, Set<string>>()
@@ -905,6 +948,7 @@ export interface GraphStore {
   nodes: NoteNode[]
   nodesById: Map<string, NoteNode>
   attachedPointIdsByNode: Map<string, Set<string>>
+  pointNodeCount: number
   edges: LinkEdge[]
 
   deletedNodes: NoteNode[]
@@ -916,8 +960,6 @@ export interface GraphStore {
   isDraggingNodes: boolean
   draggingNodeIds: Set<string>
   draggingPointId?: string
-  lastCursorPosition?: { x: number; y: number }
-  setLastCursorPosition: (position?: { x: number; y: number }) => void
   viewSlides: boolean
   setViewSlides: (enabled: boolean) => void
   presentationMode: boolean
@@ -1009,6 +1051,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       const changed = state.boardId !== boardId || state.rootId !== rootId
       if (changed) {
         clearRoughCanvasCache()
+        clearLastCursorPosition()
       }
       return changed
         ? {
@@ -1021,7 +1064,6 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
             resizeSnapshotNodes: null,
             presentationMode: false,
             activeSlideId: undefined,
-            lastCursorPosition: undefined,
             boardBackground: getBoardBackground(boardId),
             boardBackgroundTexture: getBoardBackgroundTexture(boardId),
             boardVisibility: "private",
@@ -1046,6 +1088,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   nodes: [],
   nodesById: new Map(),
   attachedPointIdsByNode: new Map(),
+  pointNodeCount: 0,
   edges: [],
 
   deletedNodes: [],
@@ -1056,8 +1099,6 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   isDraggingNodes: false,
   draggingNodeIds: new Set(),
   draggingPointId: undefined,
-  lastCursorPosition: undefined,
-  setLastCursorPosition: (position) => set({ lastCursorPosition: position }),
   viewSlides: true,
   setViewSlides: (enabled) => set({ viewSlides: enabled }),
   presentationMode: false,
@@ -1110,6 +1151,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
         nodes: nextNodes,
         nodesById: buildNodesById(nextNodes),
         attachedPointIdsByNode: buildAttachedPointIdsByNode(nextNodes),
+        pointNodeCount: countPointNodes(nextNodes),
       }
     }),
 
@@ -1135,6 +1177,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       nodes: nextNodes,
       nodesById: buildNodesById(nextNodes),
       attachedPointIdsByNode: buildAttachedPointIdsByNode(nextNodes),
+      pointNodeCount: countPointNodes(nextNodes),
     })
 
     if (recording) {
@@ -1205,10 +1248,17 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       }
     }
 
+    const wasPoint = isPointNode(prevNode)
+    const isPoint = isPointNode(nextNode)
+    const pointDelta = (isPoint ? 1 : 0) - (wasPoint ? 1 : 0)
+
     set({
       nodes: nextNodes,
       nodesById: nextNodesById,
       attachedPointIdsByNode: nextAttached,
+      ...(pointDelta !== 0
+        ? { pointNodeCount: Math.max(0, get().pointNodeCount + pointDelta) }
+        : {}),
     })
 
     // Keep undo/redo parity with setNodesPersist by recording scoped node patches.
@@ -1394,8 +1444,11 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
     })
 
     let nextNodes = applyNodeChanges(changes, prevNodes)
-    let nextNodesById = updateNodesById(get().nodesById, nextNodes, changes)
+    const nextNodesById = updateNodesById(get().nodesById, nextNodes, changes)
     let nodesChanged = false
+    // Ids mutated by the in-handler logic (point detach/snap/realign), separate
+    // from generic touchedNodeIds. Used to patch nextNodesById incrementally.
+    const logicMutatedIds = new Set<string>()
 
     const pointOffset = POINT_NODE_SIZE / 2
     const nextById = new Map(nextNodes.map(n => [n.id, n]))
@@ -1408,6 +1461,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
         nextById.set(id, updated)
         nodesChanged = true
         touchedNodeIds.add(id)
+        logicMutatedIds.add(id)
       }
     }
 
@@ -1427,8 +1481,10 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       }
     }
 
+    let pointDelta = 0
     for (const ch of changes) {
       if (ch.type === "add" && ch.item && isPointNode(ch.item)) {
+        pointDelta += 1
         const attachedTo = (ch.item.data as { attachedToNodeId?: string }).attachedToNodeId
         if (attachedTo) {
           updateAttachedIndex(ch.item.id, undefined, attachedTo)
@@ -1437,6 +1493,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       if (ch.type === "remove" && ch.id) {
         const prev = prevNodesById.get(ch.id)
         if (prev && isPointNode(prev)) {
+          pointDelta -= 1
           const attachedTo = (prev.data as { attachedToNodeId?: string }).attachedToNodeId
           if (attachedTo) {
             updateAttachedIndex(prev.id, attachedTo, undefined)
@@ -1549,14 +1606,26 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
     }
 
     if (nodesChanged) {
-      nextNodes = nextNodes.map(n => nextById.get(n.id) ?? n)
-      nextNodesById = buildNodesById(nextNodes)
+      nextNodes = nextNodes.map(n => {
+        const replacement = nextById.get(n.id)
+        return replacement && replacement !== n ? replacement : n
+      })
+      // Patch only the entries the in-handler logic mutated; nextNodesById
+      // already reflects add/remove changes via updateNodesById above.
+      for (const id of logicMutatedIds) {
+        const node = nextById.get(id)
+        if (node) nextNodesById.set(id, node)
+      }
     }
     set({
       nodes: nextNodes,
       nodesById: nextNodesById,
       attachedPointIdsByNode: attachedIndexDirty ? attachedIndex : get().attachedPointIdsByNode,
+      ...(pointDelta !== 0
+        ? { pointNodeCount: Math.max(0, get().pointNodeCount + pointDelta) }
+        : {}),
     })
+    assertNodesByIdInvariant(nextNodes, nextNodesById, "onNodesChange:siteA")
 
     if (draggingDirty) {
       set({
@@ -1669,6 +1738,9 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       }
     }
 
+    // Everything from here only matters when point nodes exist on the board.
+    if (get().pointNodeCount === 0) return
+
     const selectedPointIds = new Set(
       nextNodes
         .filter((n) => n.selected && isPointNode(n))
@@ -1707,6 +1779,8 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       nextNodes.some(n => isPointNode(n) && (n.data as { endpointActive?: boolean }).endpointActive)
     ) {
       const selectMode = get().isSelectMode
+      let toggleDirty = false
+      const toggledMutations: NoteNode[] = []
       const toggledNodes = nextNodes.map((n) => {
         if (!isPointNode(n)) return n
         const shouldActive = activePointIds.has(n.id)
@@ -1718,15 +1792,23 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
         ) {
           return n
         }
-        return {
+        toggleDirty = true
+        const next: NoteNode = {
           ...n,
           draggable: shouldActive,
           selectable: shouldActive || selectMode,
           data: { ...n.data, endpointActive: shouldActive },
         }
+        toggledMutations.push(next)
+        return next
       })
 
-      set({ nodes: toggledNodes, nodesById: buildNodesById(toggledNodes) })
+      if (toggleDirty) {
+        const updatedById = new Map(get().nodesById)
+        for (const node of toggledMutations) updatedById.set(node.id, node)
+        set({ nodes: toggledNodes, nodesById: updatedById })
+        assertNodesByIdInvariant(toggledNodes, updatedById, "onNodesChange:siteB")
+      }
     }
   },
 
@@ -1752,6 +1834,9 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
     set({ edges: updatedEdges })
 
     if (onlySelect) {
+      // Endpoint visibility only matters when point nodes exist.
+      if (get().pointNodeCount === 0) return
+
       const activePointIds = new Set<string>()
       for (const edge of updatedEdges) {
         if (!edge.selected) continue
@@ -1761,6 +1846,8 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
 
       if (activePointIds.size > 0 || prevNodes.some(n => isPointNode(n) && (n.data as { endpointActive?: boolean }).endpointActive)) {
         const selectMode = get().isSelectMode
+        let toggleDirty = false
+        const toggledMutations: NoteNode[] = []
         const nextNodes = prevNodes.map((n) => {
           if (!isPointNode(n)) return n
           const shouldActive = activePointIds.has(n.id)
@@ -1772,14 +1859,22 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
           ) {
             return n
           }
-          return {
+          toggleDirty = true
+          const next: NoteNode = {
             ...n,
             draggable: shouldActive,
             selectable: shouldActive || selectMode,
             data: { ...n.data, endpointActive: shouldActive },
           }
+          toggledMutations.push(next)
+          return next
         })
-        set({ nodes: nextNodes, nodesById: buildNodesById(nextNodes) })
+        if (toggleDirty) {
+          const updatedById = new Map(get().nodesById)
+          for (const node of toggledMutations) updatedById.set(node.id, node)
+          set({ nodes: nextNodes, nodesById: updatedById })
+          assertNodesByIdInvariant(nextNodes, updatedById, "onEdgesChange:siteC")
+        }
       }
       return
     }
@@ -1876,6 +1971,9 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       nodes: updatedNodes,
       nodesById: deletedPointIds.size > 0 ? buildNodesById(updatedNodes) : get().nodesById,
       attachedPointIdsByNode: updatedAttachedIndex,
+      pointNodeCount: deletedPointIds.size > 0
+        ? Math.max(0, get().pointNodeCount - deletedPointIds.size)
+        : get().pointNodeCount,
     })
     // DB delete is covered via onEdgesChange's background diff
   },
@@ -1897,6 +1995,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   setIsSelectMode: (enabled) =>
     set((state) => {
       if (state.isSelectMode === enabled) return {}
+      if (state.pointNodeCount === 0) return { isSelectMode: enabled }
       const nextNodes = state.nodes.map((n) => {
         if (!isPointNode(n)) return n
         const active = Boolean((n.data as { endpointActive?: boolean }).endpointActive)
@@ -2023,6 +2122,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       edges: nextEdges,
       nodesById: buildNodesById(nextNodes),
       attachedPointIdsByNode: buildAttachedPointIdsByNode(nextNodes),
+      pointNodeCount: countPointNodes(nextNodes),
     })
 
     const scopeKey = getScopeKey(state)
@@ -2078,6 +2178,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
       edges: nextEdges,
       nodesById: buildNodesById(nextNodes),
       attachedPointIdsByNode: buildAttachedPointIdsByNode(nextNodes),
+      pointNodeCount: countPointNodes(nextNodes),
     })
 
     const scopeKey = getScopeKey(state)

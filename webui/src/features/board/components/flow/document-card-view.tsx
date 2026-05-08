@@ -5,7 +5,7 @@ import clsx from "clsx"
 import { LiteMarkdown } from "@/components/markdown/lite-markdown"
 import { DeleteIcon, NotepadIcon, PinIcon, PinOffIcon } from "@/components/icons"
 
-import { useGraphStore } from "../../store/graph-store"
+import { useMotionState } from "./motion-state-context"
 import type { NoteWithPin } from "./note-card"
 
 
@@ -154,7 +154,7 @@ export const DocumentCardView = memo(function DocumentCardView({
   onDelete,
   onOpen,
 }: DocumentCardViewProps) {
-  const isMoving = useGraphStore((state) => state.isMoving)
+  const { isMoving } = useMotionState()
   const suspendContent = Boolean(isMoving || dragging)
 
   const handleCardClick = useCallback((event: React.MouseEvent) => {

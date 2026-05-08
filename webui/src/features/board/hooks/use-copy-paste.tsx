@@ -1,5 +1,6 @@
 import { useCallback, useEffect } from 'react'
 import { useGraphStore } from '../store/graph-store'
+import { getLastCursorPosition } from '../store/cursor-ref'
 import { convertNoteToNode } from '../utils/graph'
 import { useAppStore } from '@/store'
 import type { Note } from '../types/note'
@@ -245,7 +246,7 @@ export function useCopyPasteNodes(opts: CopyPasteOptions = {}) {
 
     if ((!copiedNotes || !copiedNotes.length) && (!copiedPointNodes || !copiedPointNodes.length)) return
 
-    const lastCursor = useGraphStore.getState().lastCursorPosition
+    const lastCursor = getLastCursorPosition()
     const selectionCenter = computeSelectionCenter(copiedNotes ?? [], copiedPointNodes ?? [])
     const baseOffset = lastCursor && selectionCenter
       ? { dx: lastCursor.x - selectionCenter.x, dy: lastCursor.y - selectionCenter.y }

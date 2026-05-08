@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 
 import type { LinkEdge } from '../types/flow'
 import type { Link } from '../types/link'
@@ -17,6 +17,13 @@ type UseDecoratedEdgesInput = {
   labelHandlers: EdgeLabelHandlers
 }
 
+type DecorationCacheEntry = {
+  input: LinkEdge
+  ctrl: (edgeId: string, position: { x: number; y: number }) => void
+  output: LinkEdge
+}
+
+
 export function useDecoratedEdges({
   edges,
   editingEdgeId,
@@ -24,11 +31,25 @@ export function useDecoratedEdges({
   onControlPointChange,
   labelHandlers,
 }: UseDecoratedEdgesInput): LinkEdge[] {
+  // Per-edge memo: an edge whose identity hasn't changed keeps the same wrapped
+  // output across renders, so EdgeView's memo prop diff stays stable.
+  const cacheRef = useRef<Map<string, DecorationCacheEntry>>(new Map())
+
   const edgesWithHandlers = useMemo(() => {
-    return edges.map(edge => {
+    const cache = cacheRef.current
+    const next = new Map<string, DecorationCacheEntry>()
+
+    const result = edges.map(edge => {
       const baseLink = edge.data as Link | undefined
       if (!baseLink) return edge
-      return {
+
+      const cached = cache.get(edge.id)
+      if (cached && cached.input === edge && cached.ctrl === onControlPointChange) {
+        next.set(edge.id, cached)
+        return cached.output
+      }
+
+      const output = {
         ...edge,
         data: {
           ...baseLink,
@@ -36,7 +57,12 @@ export function useDecoratedEdges({
             onControlPointChange(edge.id, position),
         } as Link,
       }
+      next.set(edge.id, { input: edge, ctrl: onControlPointChange, output })
+      return output
     })
+
+    cacheRef.current = next
+    return result
   }, [edges, onControlPointChange])
 
   const edgesForRender = useMemo(() => {

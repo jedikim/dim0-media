@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
+import { memo, useCallback, useEffect, useMemo, useState } from "react"
 import { clsx } from "clsx"
 
 import { Shape } from "../notes/shape"
@@ -6,6 +6,7 @@ import { DocumentCardView } from "./document-card-view"
 import { CodeSandboxNode } from "./code-sandbox-node"
 import { WidgetNode } from "./widget-node"
 import { NodeTitleCaption } from "./node-title-caption"
+import { NodeCardLabelEditor } from "./node-card-label-editor"
 import { useGraphStore } from "../../store/graph-store"
 import { darkModeDisplayHex } from "../../lib/colors/dark-variants"
 import { fontFamilyToTwClass, fontSizeToTwClass, textStyleToTwClass } from "../../types/style"
@@ -29,28 +30,17 @@ type NodeCardProps = {
 type LabelContainerProps = {
   className: string
   textColor?: string
-  onDoubleClick: () => void
-  onPointerDown: (event: React.PointerEvent) => void
+  onDoubleClick?: () => void
+  onPointerDown?: (event: React.PointerEvent) => void
   children: React.ReactNode
-}
-
-type NoteDisplayContentProps = {
-  note: NoteWithPin
-  labelEditing: boolean
-  labelDraft: string
-  textareaRef: React.RefObject<HTMLTextAreaElement | null>
-  onLabelChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => void
-  textColor?: string
-  nodeWidth?: number
-  nodeHeight?: number
-  onCanvasRenderReadyChange?: (ready: boolean) => void
 }
 
 
 /**
- * Shared wrapper for interactive node content.
+ * Shared wrapper for interactive node content. Both display and edit
+ * variants render content inside this container.
  */
-const LabelContainer = memo(function LabelContainer({
+export const LabelContainer = memo(function LabelContainer({
   className,
   textColor,
   onDoubleClick,
@@ -70,15 +60,24 @@ const LabelContainer = memo(function LabelContainer({
 })
 
 
+type NoteDisplayContentProps = {
+  note: NoteWithPin
+  textColor?: string
+  nodeWidth?: number
+  nodeHeight?: number
+  onCanvasRenderReadyChange?: (ready: boolean) => void
+}
+
+
+const noopChange = () => {}
+
+
 /**
- * Display renderer for standard note content and inline editing.
+ * Display-only content renderer. Editing variant is owned by
+ * <NodeCardLabelEditor> and mounts only when actively editing.
  */
 const NoteDisplayContent = memo(function NoteDisplayContent({
   note,
-  labelEditing,
-  labelDraft,
-  textareaRef,
-  onLabelChange,
   textColor,
   nodeWidth,
   nodeHeight,
@@ -92,14 +91,14 @@ const NoteDisplayContent = memo(function NoteDisplayContent({
   const imageUrl = note.properties.imageUrl?.image?.url
   const renderWidth = nodeWidth ?? note.properties.nodeSize?.size?.width
   const renderHeight = nodeHeight ?? note.properties.nodeSize?.size?.height
+  const value = note.content?.markdown || note.label?.markdown || ""
 
   return (
     <Shape
       nodeType={note.style.type}
-      value={labelEditing ? labelDraft : note.content?.markdown || note.label?.markdown || ""}
-      labelEditing={labelEditing}
-      onChange={onLabelChange}
-      textareaRef={textareaRef}
+      value={value}
+      labelEditing={false}
+      onChange={noopChange}
       textAlign={note.style.textAlign}
       styleHelpers={{
         text: textStyleToTwClass(note.style.textStyle),
@@ -121,7 +120,9 @@ const NoteDisplayContent = memo(function NoteDisplayContent({
 
 
 /**
- * Root node card renderer used inside flow nodes.
+ * Root node card renderer used inside flow nodes. Routes to a variant
+ * (sheet / code-sandbox / widget / image / text) and lazily mounts the
+ * label editor only when a text/image node is actively being edited.
  */
 export const NodeCard = memo(function NodeCard({
   note,
@@ -138,19 +139,10 @@ export const NodeCard = memo(function NodeCard({
   const isWidget = note.style.type === "widget"
   const isText = note.style.type === "text"
   const isImage = note.style.type === "image"
-  const nonSheetDisplayValue = note.content?.markdown || note.label?.markdown || ""
+  const supportsLabelEdit = !isSheet && !isCodeSandbox && !isWidget
 
-  const setNodesPersist = useGraphStore((state) => state.setNodesPersist)
-  const updateNodeByIdPersist = useGraphStore((state) => state.updateNodeByIdPersist)
-  const setEdgesPersist = useGraphStore((state) => state.setEdgesPersist)
   const boardCanEdit = useGraphStore((state) => state.boardCanEdit)
-  const openNodeSurface = useGraphStore((state) => state.openNodeSurface)
-
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [labelEditing, setLabelEditing] = useState(false)
-  const [labelDraft, setLabelDraft] = useState<string>(nonSheetDisplayValue)
-  const [debouncedLabelDraft, setDebouncedLabelDraft] = useState<string>(nonSheetDisplayValue)
-  const selRef = useRef<{ start: number; end: number } | null>(null)
 
   const textColor = isDark ? darkModeDisplayHex(note.style.textColor) || undefined : note.style.textColor
   const isPinned = note.properties.pinned.boolean === true
@@ -169,23 +161,6 @@ export const NodeCard = memo(function NodeCard({
   )
 
   useEffect(() => {
-    if (!labelEditing) {
-      setLabelDraft(nonSheetDisplayValue)
-      setDebouncedLabelDraft(nonSheetDisplayValue)
-    }
-  }, [labelEditing, nonSheetDisplayValue])
-
-  useEffect(() => {
-    if (!labelEditing) return
-
-    const timer = window.setTimeout(() => {
-      setDebouncedLabelDraft(labelDraft)
-    }, 300)
-
-    return () => window.clearTimeout(timer)
-  }, [labelDraft, labelEditing])
-
-  useEffect(() => {
     onLabelEditingChange?.(labelEditing)
   }, [labelEditing, onLabelEditingChange])
 
@@ -197,86 +172,23 @@ export const NodeCard = memo(function NodeCard({
 
   useEffect(() => {
     if (!isText || !note.autoEdit) return
-
     setLabelEditing(true)
-    updateNodeByIdPersist(note.id, (node) => ({
+    useGraphStore.getState().updateNodeByIdPersist(note.id, (node) => ({
       ...node,
       data: {
         ...node.data,
         autoEdit: false,
       },
     }))
-  }, [isText, note.autoEdit, note.id, updateNodeByIdPersist])
+  }, [isText, note.autoEdit, note.id])
 
-  useEffect(() => {
-    if (!labelEditing) return
-    const element = textareaRef.current
-    if (!element) return
-
-    element.focus()
-    const length = element.value.length
-    try {
-      element.setSelectionRange(length, length)
-    } catch {
-      console.warn("Failed to set selection range")
-    }
-  }, [labelEditing])
-
-  useLayoutEffect(() => {
-    if (!labelEditing) return
-    const element = textareaRef.current
-    const selection = selRef.current
-    if (!element || !selection) return
-
-    const restore = () => {
-      try {
-        element.setSelectionRange(selection.start, selection.end)
-      } catch {
-        console.warn("Failed to restore selection range")
-      }
-    }
-
-    restore()
-    const frameId = requestAnimationFrame(restore)
-    return () => cancelAnimationFrame(frameId)
-  }, [labelDraft, labelEditing])
-
-  useEffect(() => {
-    if (!labelEditing || debouncedLabelDraft === nonSheetDisplayValue) return
-
-    updateNodeByIdPersist(note.id, (node) => ({
-      ...node,
-      data: {
-        ...node.data,
-        content: { markdown: debouncedLabelDraft },
-      },
-    }))
-  }, [debouncedLabelDraft, labelEditing, nonSheetDisplayValue, note.id, updateNodeByIdPersist])
-
-  const handleLabelChange = useCallback((event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const next = event.target.value
-    selRef.current = {
-      start: event.target.selectionStart ?? next.length,
-      end: event.target.selectionEnd ?? next.length,
-    }
-    setLabelDraft(next)
-  }, [])
-
-  const stopDragging = useCallback((event: React.PointerEvent) => {
-    if (labelEditing) {
-      event.stopPropagation()
-    }
-  }, [labelEditing])
-
-  const handleLabelDoubleClick = useCallback(() => {
-    if (!isSheet) {
-      setLabelEditing(true)
-    }
-  }, [isSheet])
+  const handleStartEdit = useCallback(() => {
+    if (supportsLabelEdit) setLabelEditing(true)
+  }, [supportsLabelEdit])
 
   const handleTogglePin = useCallback((event: React.MouseEvent) => {
     event.stopPropagation()
-    updateNodeByIdPersist(note.id, (node) => {
+    useGraphStore.getState().updateNodeByIdPersist(note.id, (node) => {
       const props = node.data.properties as NoteProperties
       return {
         ...node,
@@ -289,90 +201,97 @@ export const NodeCard = memo(function NodeCard({
         },
       }
     })
-  }, [isPinned, note.id, updateNodeByIdPersist])
+  }, [isPinned, note.id])
 
   const handleDelete = useCallback((event: React.MouseEvent) => {
     event.stopPropagation()
-    setNodesPersist((nodes) => nodes.filter((node) => node.id !== note.id))
-    setEdgesPersist((edges) => edges.filter((edge) => edge.source !== note.id && edge.target !== note.id))
-  }, [note.id, setEdgesPersist, setNodesPersist])
+    const store = useGraphStore.getState()
+    store.setNodesPersist((nodes) => nodes.filter((node) => node.id !== note.id))
+    store.setEdgesPersist((edges) => edges.filter((edge) => edge.source !== note.id && edge.target !== note.id))
+  }, [note.id])
 
   const handleOpenSheet = useCallback(() => {
     if (!boardCanEdit) return
-    openNodeSurface(note.id, "sheet")
-  }, [boardCanEdit, note.id, openNodeSurface])
+    useGraphStore.getState().openNodeSurface(note.id, "sheet")
+  }, [boardCanEdit, note.id])
 
-  if (!isSheet) {
-    if (isCodeSandbox) {
-      return (
-        <LabelContainer
-          className={labelClass}
-          textColor={textColor}
-          onDoubleClick={handleLabelDoubleClick}
-          onPointerDown={stopDragging}
-        >
-          <CodeSandboxNode note={note} dragging={dragging} />
-        </LabelContainer>
-      )
-    }
-
-    if (isWidget) {
-      return (
-        <LabelContainer
-          className={labelClass}
-          textColor={textColor}
-          onDoubleClick={handleLabelDoubleClick}
-          onPointerDown={stopDragging}
-        >
-          <WidgetNode note={note} selected={selected} dragging={dragging} />
-        </LabelContainer>
-      )
-    }
-
-    if (isImage) {
-      return (
-        <LabelContainer
-          className={labelClass}
-          textColor={textColor}
-          onDoubleClick={handleLabelDoubleClick}
-          onPointerDown={stopDragging}
-        >
-          <div className="group relative flex h-full w-full items-center justify-center overflow-visible">
-            <NoteDisplayContent
-              note={note}
-              labelEditing={labelEditing}
-              labelDraft={labelDraft}
-              textareaRef={textareaRef}
-              onLabelChange={handleLabelChange}
-              textColor={textColor}
-              nodeWidth={nodeWidth}
-              nodeHeight={nodeHeight}
-              onCanvasRenderReadyChange={onCanvasRenderReadyChange}
-            />
-            <ImageCaptionOverlay note={note} selected={selected} />
-          </div>
-        </LabelContainer>
-      )
-    }
-
+  if (isSheet) {
     return (
       <LabelContainer
         className={labelClass}
         textColor={textColor}
-        onDoubleClick={handleLabelDoubleClick}
-        onPointerDown={stopDragging}
       >
-        <NoteDisplayContent
+        <DocumentCardView
           note={note}
-          labelEditing={labelEditing}
-          labelDraft={labelDraft}
-          textareaRef={textareaRef}
-          onLabelChange={handleLabelChange}
+          selected={selected}
+          dragging={dragging}
+          isDark={isDark}
+          isPinned={isPinned}
           textColor={textColor}
-          nodeWidth={nodeWidth}
-          nodeHeight={nodeHeight}
-          onCanvasRenderReadyChange={onCanvasRenderReadyChange}
+          onTogglePin={handleTogglePin}
+          onDelete={handleDelete}
+          onOpen={handleOpenSheet}
         />
+      </LabelContainer>
+    )
+  }
+
+  if (isCodeSandbox) {
+    return (
+      <LabelContainer
+        className={labelClass}
+        textColor={textColor}
+      >
+        <CodeSandboxNode note={note} dragging={dragging} />
+      </LabelContainer>
+    )
+  }
+
+  if (isWidget) {
+    return (
+      <LabelContainer
+        className={labelClass}
+        textColor={textColor}
+      >
+        <WidgetNode note={note} selected={selected} dragging={dragging} />
+      </LabelContainer>
+    )
+  }
+
+  // Image and text branches: editing is gated, so the editor mounts only
+  // when actively in edit mode and unmounts otherwise.
+  if (labelEditing) {
+    return (
+      <NodeCardLabelEditor
+        note={note}
+        selected={selected}
+        isImage={isImage}
+        textColor={textColor}
+        labelClass={labelClass}
+        nodeWidth={nodeWidth}
+        nodeHeight={nodeHeight}
+        onCanvasRenderReadyChange={onCanvasRenderReadyChange}
+      />
+    )
+  }
+
+  if (isImage) {
+    return (
+      <LabelContainer
+        className={labelClass}
+        textColor={textColor}
+        onDoubleClick={handleStartEdit}
+      >
+        <div className="group relative flex h-full w-full items-center justify-center overflow-visible">
+          <NoteDisplayContent
+            note={note}
+            textColor={textColor}
+            nodeWidth={nodeWidth}
+            nodeHeight={nodeHeight}
+            onCanvasRenderReadyChange={onCanvasRenderReadyChange}
+          />
+          <ImageCaptionOverlay note={note} selected={selected} />
+        </div>
       </LabelContainer>
     )
   }
@@ -381,19 +300,14 @@ export const NodeCard = memo(function NodeCard({
     <LabelContainer
       className={labelClass}
       textColor={textColor}
-      onDoubleClick={handleLabelDoubleClick}
-      onPointerDown={stopDragging}
+      onDoubleClick={handleStartEdit}
     >
-      <DocumentCardView
+      <NoteDisplayContent
         note={note}
-        selected={selected}
-        dragging={dragging}
-        isDark={isDark}
-        isPinned={isPinned}
         textColor={textColor}
-        onTogglePin={handleTogglePin}
-        onDelete={handleDelete}
-        onOpen={handleOpenSheet}
+        nodeWidth={nodeWidth}
+        nodeHeight={nodeHeight}
+        onCanvasRenderReadyChange={onCanvasRenderReadyChange}
       />
     </LabelContainer>
   )
@@ -410,7 +324,7 @@ type ImageCaptionOverlayProps = {
  * Caption rendered below an image node. Hidden by default; revealed on hover,
  * when the node is selected, or while the caption is being edited.
  */
-const ImageCaptionOverlay = memo(function ImageCaptionOverlay({
+export const ImageCaptionOverlay = memo(function ImageCaptionOverlay({
   note,
   selected,
 }: ImageCaptionOverlayProps) {

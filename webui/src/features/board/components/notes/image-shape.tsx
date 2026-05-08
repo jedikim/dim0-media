@@ -19,6 +19,8 @@ export const ImageShape = ({ imageUrl, className }: ImageShapeProps) => {
       <img
         src={imageUrl}
         alt="Note Image"
+        loading="lazy"
+        decoding="async"
         className="max-w-full max-h-full object-contain rounded-md shadow-sm"
       />
     </div>

@@ -6,7 +6,10 @@ import { getCachedCanvas, serializeCacheKey } from './cache'
 import { FillLayer } from './fill-layer'
 import { resolveEdgeRender } from './derived-edge'
 import { useTheme } from '@/components/theme-provider'
-import { useGraphStore } from '@/features/board/store/graph-store'
+import {
+  useEffectiveZoom,
+  useMotionState,
+} from '@/features/board/components/flow/motion-state-context'
 
 type RoughShapeProps = {
   children?: React.ReactNode
@@ -99,11 +102,6 @@ const drawConfigEqual = (a: DrawConfig | null, b: DrawConfig) => {
   )
 }
 
-const quantizeZoom = (value: number): number => {
-  if (!Number.isFinite(value)) return 1
-  return Math.max(0.1, Math.round(value * 10) / 10)
-}
-
 const oversampleForZoom = (value: number): number => {
   if (!Number.isFinite(value)) return 1
   if (value >= 1) {
@@ -163,10 +161,8 @@ export const RoughCircle: React.FC<RoughShapeProps> = ({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const lastConfigRef = useRef<DrawConfig | null>(null)
   const rafRef = useRef<number | null>(null)
-  const viewportZoom = useGraphStore(state => state.zoom ?? 1)
-  const isMoving = useGraphStore(state => state.isMoving)
-  const isResizing = useGraphStore(state => state.isResizingNode)
-  const effectiveZoom = quantizeZoom(viewportZoom || 1)
+  const effectiveZoom = useEffectiveZoom()
+  const { isMoving, isResizingNode: isResizing } = useMotionState()
   const isSimplified = isMoving && !isResizing
   const { resolvedTheme } = useTheme()
   const isDark = resolvedTheme === 'dark'
@@ -341,31 +337,6 @@ export const RoughCircle: React.FC<RoughShapeProps> = ({
   const renderEdge = resolveEdgeRender(stroke, fill, isDark, strokeStyle, strokeWidth, roughness)
   const fillInset = 0.5 + renderEdge.width / 2
 
-  if (isSimplified) {
-    return (
-      <div className={mainDivClass}>
-        <FillLayer
-          kind='ellipse'
-          fill={fill}
-          widthPx={widthPx ?? 1}
-          heightPx={heightPx ?? 1}
-          inset={fillInset}
-        />
-        <SimplifiedCircleOverlay
-          edgeColor={renderEdge.color}
-          edgeWidth={renderEdge.width}
-          edgeStyle={renderEdge.style}
-          fillInset={fillInset}
-          widthPx={widthPx}
-          heightPx={heightPx}
-        />
-        <div className='relative z-20 w-full h-full'>
-          {children}
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div ref={wrapperRef} className={mainDivClass}>
       <FillLayer
@@ -378,8 +349,22 @@ export const RoughCircle: React.FC<RoughShapeProps> = ({
       <canvas
         ref={canvasRef}
         className='absolute pointer-events-none'
-        style={{ zIndex: 10, background: 'transparent' }}
+        style={{
+          zIndex: 10,
+          background: 'transparent',
+          visibility: isSimplified ? 'hidden' : 'visible',
+        }}
       />
+      {isSimplified && (
+        <SimplifiedCircleOverlay
+          edgeColor={renderEdge.color}
+          edgeWidth={renderEdge.width}
+          edgeStyle={renderEdge.style}
+          fillInset={fillInset}
+          widthPx={widthPx}
+          heightPx={heightPx}
+        />
+      )}
       <div className='relative z-20 w-full h-full'>
         {children}
       </div>
