@@ -1,3 +1,9 @@
+## v0.3.7 (2026-05-08)
+
+### Perf
+
+- content visibility cull (#72)
+
 ## v0.3.6 (2026-05-08)
 
 ### Perf
