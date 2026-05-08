@@ -38,3 +38,18 @@
     background-color: transparent !important;
     border: none !important;
 }
+
+/*
+ * Applied by useNodeViewportCull to nodes well outside the renderer
+ * viewport. content-visibility: hidden tells the browser to skip paint
+ * and layout while keeping the node mounted in the React tree, so
+ * panning back to it doesn't pay React mount/unmount cost.
+ *
+ * Only off-screen nodes ever carry this class — on-screen nodes have
+ * no containment and render rough strokes, layered offsets, captions,
+ * and drag handles without clipping.
+ */
+.react-flow__node.graph-node-culled {
+  content-visibility: hidden;
+  contain-intrinsic-size: auto 200px 80px;
+}
