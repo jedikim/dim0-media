@@ -3,7 +3,7 @@ import clsx from 'clsx'
 import { useChatStore } from '../../store/chat-store'
 import { SendMessageError } from '../../api/send-message'
 import { useSubmitPrompt } from '../../hooks/use-submit-prompt'
-import { useMessageContext } from '../../hooks/use-message-context'
+import { buildMessageContext } from '../../hooks/use-message-context'
 import { useAppStore } from '@/store'
 import { SendButton } from './send-button'
 import TextareaAutosize from 'react-textarea-autosize'
@@ -89,8 +89,6 @@ export const InputBar = ({
 
   const [input, setInput] = useState<string>('')
 
-  const { messageContext } = useMessageContext({ enabled: enableSelectionContext })
-
   // Deep Research dialog state
   const [showDRDialog, setShowDRDialog] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -128,7 +126,7 @@ export const InputBar = ({
         forceNewChat,
         attachedBoardId,
         preferChatRoute,
-        messageContext,
+        messageContext: buildMessageContext({ enabled: enableSelectionContext }),
         autoCreateBoard,
       })
     } catch (error) {

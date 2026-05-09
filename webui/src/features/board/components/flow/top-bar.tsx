@@ -25,7 +25,6 @@ import {
   PuzzlePieceIcon,
   ShapesMenuIcon,
   ShareIcon,
-  SparklesIcon,
   SquareShapeIcon,
   TagIcon,
   TextTIcon,
@@ -36,7 +35,6 @@ import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import clsx from 'clsx'
-import { FREE_PLAN_DOCUMENT_LIMIT_TOOLTIP } from '../../lib/board-limit'
 
 import type { AddNoteNodeOptions } from '../../hooks/use-add-node'
 import type { NodeType } from '../../types/style'
@@ -60,13 +58,11 @@ type Props = {
   setOpenDocumentUpload: (open: boolean) => void
   setOpenChatDialog: (open: boolean) => void
   chatOpen: boolean
-  setOpenAiSpark: (open: boolean) => void
   onToggleSlidesPanel: () => void
   slidesPanelOpen: boolean
   boardId?: string
   boardVisibility: 'private' | 'public'
   onUpdateVisibility: (visibility: 'private' | 'public') => Promise<void>
-  documentUploadLimited: boolean
 }
 
 
@@ -84,13 +80,11 @@ export const TopBar = memo(function TopBar({
   setOpenDocumentUpload,
   setOpenChatDialog,
   chatOpen,
-  setOpenAiSpark,
   onToggleSlidesPanel,
   slidesPanelOpen,
   boardId,
   boardVisibility,
   onUpdateVisibility,
-  documentUploadLimited,
 }: Props) {
   const currentFolderDepth = useGraphStore(state => state.currentFolderDepth)
   const maxFolderDepth = useGraphStore(state => state.maxFolderDepth)
@@ -146,7 +140,7 @@ export const TopBar = memo(function TopBar({
     folder: isAtMaxFolderDepth
       ? `Max Sub-board depth reached (${maxFolderDepth})`
       : 'Sub-board',
-    document: documentUploadLimited ? FREE_PLAN_DOCUMENT_LIMIT_TOOLTIP : 'Upload document',
+    document: 'Upload document',
     shape: 'Shapes',
     connector: 'Connector',
     text: 'Text',
@@ -375,7 +369,7 @@ export const TopBar = memo(function TopBar({
                 <FolderPlusActionIcon className='size-4 shrink-0' />
                 <span>Sub-board</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setOpenDocumentUpload(true)} className='gap-2 text-sm' disabled={!boardId || documentUploadLimited}>
+              <DropdownMenuItem onSelect={() => setOpenDocumentUpload(true)} className='gap-2 text-sm' disabled={!boardId}>
                 <DocumentFileIcon className='size-4 shrink-0' />
                 <span>Document</span>
               </DropdownMenuItem>
@@ -387,11 +381,6 @@ export const TopBar = memo(function TopBar({
               <DropdownMenuItem onSelect={() => onAddNode({ nodeType: 'widget' })} className='gap-2 text-sm'>
                 <LearnWidgetIcon className='size-4 shrink-0' />
                 <span>Widget</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setOpenAiSpark(true)} className='gap-2 text-sm' disabled={!boardId}>
-                <SparklesIcon className='size-4 shrink-0 text-secondary-foreground' />
-                <span>AI actions</span>
-                <DropdownMenuShortcut>B</DropdownMenuShortcut>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -436,11 +425,11 @@ export const TopBar = memo(function TopBar({
             <TooltipTrigger asChild>
               <Button
                 variant={null}
-                className={clsx(normalButtonClass, documentUploadLimited && 'opacity-50')}
+                className={normalButtonClass}
                 size='icon'
                 onClick={() => setOpenDocumentUpload(true)}
                 aria-label='Upload document'
-                disabled={!boardId || documentUploadLimited}
+                disabled={!boardId}
               >
                 <DocumentFileIcon className='size-4 shrink-0' />
               </Button>
