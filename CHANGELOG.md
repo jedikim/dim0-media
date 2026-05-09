@@ -1,3 +1,9 @@
+## v0.3.9 (2026-05-09)
+
+### Feat
+
+- add forget password reset (#74)
+
 ## v0.3.8 (2026-05-08)
 
 ### Perf
