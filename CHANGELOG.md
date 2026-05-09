@@ -1,3 +1,9 @@
+## v0.3.10 (2026-05-09)
+
+### Perf
+
+- floating island subscriptions (#75)
+
 ## v0.3.9 (2026-05-09)
 
 ### Feat
