@@ -25,14 +25,16 @@ export const ToolsMenu = ({ memorySearchAvailable = true }: ToolsMenuProps) => {
       <Tooltip delayDuration={400}>
         <div className="rounded-lg bg-background backdrop-blur-md supports-[backdrop-filter]:bg-sidebar/50">
           <TooltipTrigger asChild>
-            <DialogTrigger asChild>
-              <button
-                className={buttonClass}
-                aria-label="Open settings"
-              >
-                <ToolsMenuIcon className="size-4 shrink-0" strokeWidth={2} />
-              </button>
-            </DialogTrigger>
+            <DialogTrigger
+              render={
+                <button
+                  className={buttonClass}
+                  aria-label="Open settings"
+                >
+                  <ToolsMenuIcon className="size-4 shrink-0" strokeWidth={2} />
+                </button>
+              }
+            />
           </TooltipTrigger>
         </div>
         <TooltipContent>

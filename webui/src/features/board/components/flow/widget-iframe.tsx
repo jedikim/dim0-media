@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useMemo, useState } from "react"
+import { memo, useEffect, useId, useMemo, useRef, useState } from "react"
 import { useTheme } from "@/components/theme-provider"
 import { buildWidgetDocument } from "./widget-document"
 
@@ -26,6 +26,21 @@ export const WidgetIframe = memo(function WidgetIframe({
   const { resolvedTheme } = useTheme()
   const frameId = useId()
   const [height, setHeight] = useState(minHeight)
+  const iframeRef = useRef<HTMLIFrameElement | null>(null)
+
+  // Force the iframe to navigate to an empty document before React detaches
+  // it. Setting srcdoc to a fresh value triggers the browser to unload the
+  // previous document, terminating any setInterval / requestAnimationFrame /
+  // listeners the widget HTML had scheduled. Without this, the previous
+  // document can outlive the React unmount until garbage collection
+  // (non-deterministic), and its scheduled work continues to consume CPU.
+  useEffect(() => {
+    return () => {
+      const el = iframeRef.current
+      if (!el) return
+      el.srcdoc = "<!doctype html><html></html>"
+    }
+  }, [])
 
   useEffect(() => {
     if (!autoHeight || typeof window === "undefined") {
@@ -74,6 +89,7 @@ export const WidgetIframe = memo(function WidgetIframe({
   return (
     <iframe
       key={resolvedTheme}
+      ref={iframeRef}
       title={title}
       srcDoc={srcDoc}
       sandbox="allow-scripts"

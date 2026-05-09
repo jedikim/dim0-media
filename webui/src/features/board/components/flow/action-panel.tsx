@@ -144,12 +144,11 @@ export const ActionPanel = memo(function ActionPanel({
       <ImageSearchDialog openImageSearch={openImageSearch} setOpenImageSearch={setOpenImageSearch} />
       <IconSearchDialog openIconSearch={openIconSearch} setOpenIconSearch={setOpenIconSearch} />
       <DocumentUploadDialog open={openDocumentUpload} onOpenChange={setOpenDocumentUpload} />
-      <Sheet open={openSlidesPanel} onOpenChange={setOpenSlidesPanel} modal={false}>
+      <Sheet open={openSlidesPanel} onOpenChange={setOpenSlidesPanel} modal={false} disablePointerDismissal>
         <SheetContent
           side="right"
           showOverlay={false}
           showClose={false}
-          onInteractOutside={(event) => event.preventDefault()}
           className="w-[360px] max-w-[92vw] bg-sidebar text-sidebar-foreground border-l border-border p-0"
         >
           <SheetHeader className='sr-only'>

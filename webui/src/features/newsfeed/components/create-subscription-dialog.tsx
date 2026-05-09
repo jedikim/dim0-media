@@ -17,7 +17,7 @@ export function CreateSubscriptionDialog({
   trigger
 }: {
   afterCreate?: () => void
-  trigger?: React.ReactNode
+  trigger?: React.ReactElement
 }) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>('editing')
@@ -60,11 +60,11 @@ export function CreateSubscriptionDialog({
 
   return (
     <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) reset() }}>
-      <DialogTrigger asChild>
-        {trigger ?? (
+      <DialogTrigger
+        render={trigger ?? (
           <Button size='sm' className='rounded-md'>Add new subscription</Button>
         )}
-      </DialogTrigger>
+      />
 
       <DialogContent className='sm:max-w-xl'>
         <DialogHeader className='w-full flex flex-row items-center justify-center'>

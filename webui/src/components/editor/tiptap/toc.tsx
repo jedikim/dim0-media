@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type RefObject } from "react"
+import { useState, useEffect, useCallback, useRef, type RefObject } from "react"
 import type { Editor } from "@tiptap/react"
 import { cn } from "@/lib/utils"
 
@@ -128,11 +128,19 @@ export function TocPanel({ editor, scrollRef }: Props) {
   const [hovered, setHovered] = useState(false)
   const { headings, blocks } = useTocData(editor)
   const activeIndex = useActiveHeading(editor, headings.length, scrollRef)
+  const headingButtonsRef = useRef<(HTMLButtonElement | null)[]>([])
 
   function scrollToHeading(index: number) {
     const els = editor.view.dom.querySelectorAll("h1, h2, h3")
     els[index]?.scrollIntoView({ behavior: "smooth", block: "start" })
   }
+
+  // Keep the active heading visible inside the scrollable panel — when the
+  // panel opens or the active heading changes, scroll its row into view.
+  useEffect(() => {
+    if (!hovered) return
+    headingButtonsRef.current[activeIndex]?.scrollIntoView({ block: "nearest" })
+  }, [hovered, activeIndex])
 
   return (
     <div
@@ -161,20 +169,21 @@ export function TocPanel({ editor, scrollRef }: Props) {
       {/* ── hover panel ──────────────────────────────────────── */}
       <div
         className={cn(
-          "absolute right-0 top-0 z-20 w-52 rounded-lg border border-border bg-card shadow-lg",
+          "absolute right-0 top-0 z-20 flex w-52 max-h-[50vh] flex-col rounded-lg border border-border bg-card shadow-lg",
           "transition-all duration-150",
           hovered && headings.length > 0
             ? "pointer-events-auto translate-x-0 opacity-100"
             : "pointer-events-none translate-x-1 opacity-0",
         )}
       >
-        <p className="px-3 pb-1 pt-2.5 font-sans text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <p className="shrink-0 px-3 pb-1 pt-2.5 font-sans text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           On this page
         </p>
-        <div className="pb-2">
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin pb-2">
           {headings.map((h, i) => (
             <button
               key={i}
+              ref={(el) => { headingButtonsRef.current[i] = el }}
               type="button"
               onClick={() => scrollToHeading(i)}
               className={cn(

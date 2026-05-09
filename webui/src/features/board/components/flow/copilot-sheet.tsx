@@ -23,13 +23,11 @@ export function CopilotSheet({
   onOpenFullChat,
 }: CopilotSheetProps) {
   return (
-    <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
+    <Sheet open={open} onOpenChange={onOpenChange} modal={false} disablePointerDismissal>
       <SheetContent
         side="right"
         showOverlay={false}
         showClose={false}
-        // Keep the panel open when users click outside on the canvas.
-        onInteractOutside={(event) => event.preventDefault()}
         className="md:w-[500px] md:max-w-[92vw] w-full bg-background text-sidebar-foreground border-l-1 border-border/70 p-0 shadow-sm"
       >
         {/* Radix Dialog primitive requires an accessible title for content. */}
@@ -65,8 +63,10 @@ export function CopilotSheet({
           </div>
         </div>
         <div className="flex-1 relative overflow-y-auto scrollbar-thin">
-          {/* Keep chat behavior unchanged: board-scoped thread when boardId is available. */}
-          {boardId ? (
+          {/* Lazy-mount the chat tree only while the sheet is actually open.
+             This keeps the heavy Conversation + message-history mount cost
+             from lingering across open/close cycles. */}
+          {open && boardId ? (
             <Chat
               initialBoardId={boardId}
               className="relative"
@@ -74,11 +74,11 @@ export function CopilotSheet({
               chatId={currentChatId}
               enableSelectionContext
             />
-          ) : (
+          ) : open ? (
             <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">
               Select a board to start a conversation.
             </div>
-          )}
+          ) : null}
         </div>
       </SheetContent>
     </Sheet>

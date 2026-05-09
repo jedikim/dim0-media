@@ -87,6 +87,7 @@ export default defineConfig({
             if (id.includes("@tanstack")) return "tanstack"
             if (id.includes("@dagrejs")) return "dagre"
             if (id.includes("@radix-ui")) return "radix"
+            if (id.includes("@base-ui")) return "base-ui"
             if (id.includes("@dnd-kit")) return "dnd-kit"
             if (id.includes("d3")) return "d3"
             if (id.includes("@milkdown")) return "milkdown"

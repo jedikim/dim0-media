@@ -67,9 +67,15 @@ export interface ImageSearchDialogProps {
 
 
 /**
- * Dialog component for searching and selecting images.
+ * Lazy body for image search. Mounted only while the dialog is open so the
+ * heavy network/decoding/GPU cost of an image grid doesn't linger across
+ * open/close cycles.
  */
-export const ImageSearchDialog = ({ openImageSearch, setOpenImageSearch }: ImageSearchDialogProps) => {
+const ImageSearchDialogBody = ({
+  setOpenImageSearch,
+}: {
+  setOpenImageSearch: (open: boolean) => void
+}) => {
   const [q, setQ] = useState<string>('')
   const [isImporting, setIsImporting] = useState<boolean>(false)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -113,63 +119,83 @@ export const ImageSearchDialog = ({ openImageSearch, setOpenImageSearch }: Image
   }
 
   return (
+    <>
+      <DialogHeader className='p-4 border-b text-secondary-foreground w-full text-center'>
+        <DialogTitle>Search images</DialogTitle>
+      </DialogHeader>
+      <div className='p-4'>
+        <Input
+          placeholder='Search Unsplash…'
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          autoFocus
+          className='focus-visible:ring-2 focus-visible:ring-secondary-foreground/75 focus-visible:border-secondary-foreground'
+        />
+      </div>
+      <div className='px-4 pb-2'>
+        <button
+          type='button'
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isImporting}
+          className='flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-muted-foreground/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground hover:border-secondary-foreground/75 hover:text-secondary-foreground hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60 transition-colors'
+        >
+          <ImagePlaceholderIcon className='size-4 shrink-0' />
+          <span>{isImporting ? 'Importing…' : 'Import from computer'}</span>
+        </button>
+        <input
+          ref={fileInputRef}
+          type='file'
+          accept='image/*'
+          multiple
+          className='hidden'
+          onChange={e => void handleFilesPicked(e.target.files)}
+        />
+      </div>
+      <div className='p-4 pt-2 h-full w-full flex-1 overflow-y-auto scrollbar-thin'>
+        {isLoading ? (
+          <div className='grid grid-cols-2 sm:grid-cols-3 gap-3 w-full'>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className='aspect-square w-full' />
+            ))}
+          </div>
+        ) : (
+          <div className='grid grid-cols-2 sm:grid-cols-3 gap-3 w-full'>
+            {data?.map(img => (
+              <button
+                key={img.url}
+                className='group relative aspect-square rounded-md overflow-hidden border hover:ring-2 hover:ring-secondary-foreground/75'
+                onClick={() => { void handleSelectImage(img.url) }}
+              >
+                <img
+                  src={img.url}
+                  alt={img.description || 'image'}
+                  loading='lazy'
+                  decoding='async'
+                  className='size-full object-cover'
+                />
+              </button>
+            ))}
+            {debouncedQ && !data?.length && (
+              <div className='col-span-full text-sm text-muted-foreground p-4'>No results</div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+
+/**
+ * Dialog component for searching and selecting images.
+ */
+export const ImageSearchDialog = ({ openImageSearch, setOpenImageSearch }: ImageSearchDialogProps) => {
+  return (
     <Dialog open={openImageSearch} onOpenChange={setOpenImageSearch}>
       <DialogContent className='sm:max-w-2xl p-0 overflow-hidden sm:w-1/3 sm:h-[50vh] flex flex-col'>
-        <DialogHeader className='p-4 border-b text-secondary-foreground w-full text-center'>
-          <DialogTitle>Search images</DialogTitle>
-        </DialogHeader>
-        <div className='p-4'>
-          <Input
-            placeholder='Search Unsplash…'
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            autoFocus
-            className='focus-visible:ring-2 focus-visible:ring-secondary-foreground/75 focus-visible:border-secondary-foreground'
-          />
-        </div>
-        <div className='px-4 pb-2'>
-          <button
-            type='button'
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isImporting}
-            className='flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-muted-foreground/40 bg-muted/30 px-4 py-3 text-sm text-muted-foreground hover:border-secondary-foreground/75 hover:text-secondary-foreground hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-60 transition-colors'
-          >
-            <ImagePlaceholderIcon className='size-4 shrink-0' />
-            <span>{isImporting ? 'Importing…' : 'Import from computer'}</span>
-          </button>
-          <input
-            ref={fileInputRef}
-            type='file'
-            accept='image/*'
-            multiple
-            className='hidden'
-            onChange={e => void handleFilesPicked(e.target.files)}
-          />
-        </div>
-        <div className='p-4 pt-2 h-full w-full flex-1 overflow-y-auto scrollbar-thin'>
-          {isLoading ? (
-            <div className='grid grid-cols-2 sm:grid-cols-3 gap-3 w-full'>
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className='aspect-square w-full' />
-              ))}
-            </div>
-          ) : (
-            <div className='grid grid-cols-2 sm:grid-cols-3 gap-3 w-full'>
-              {data?.map(img => (
-                <button
-                  key={img.url}
-                  className='group relative aspect-square rounded-md overflow-hidden border hover:ring-2 hover:ring-secondary-foreground/75'
-                  onClick={() => { void handleSelectImage(img.url) }}
-                >
-                  <img src={img.url} alt={img.description || 'image'} className='size-full object-cover' />
-                </button>
-              ))}
-              {debouncedQ && !data?.length && (
-                <div className='col-span-full text-sm text-muted-foreground p-4'>No results</div>
-              )}
-            </div>
-          )}
-        </div>
+        {openImageSearch && (
+          <ImageSearchDialogBody setOpenImageSearch={setOpenImageSearch} />
+        )}
       </DialogContent>
     </Dialog>
   )

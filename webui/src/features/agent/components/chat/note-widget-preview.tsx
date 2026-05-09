@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react"
 import { Link, useSearch } from "@tanstack/react-router"
 import { ExternalLinkIcon, LoaderIcon, WarningIcon } from "@/components/icons"
 
@@ -5,6 +6,10 @@ import { useGetNote } from "@/features/board/api/get-note"
 import { WidgetIframe } from "@/features/board/components/flow/widget-iframe"
 import { BoardUrl } from "@/routes"
 import { useChat } from "../../hooks/chat-context"
+
+
+const WIDGET_PREVIEW_HEIGHT = 260
+const VIEWPORT_BUFFER_PX = 300
 
 type NoteWidgetPreviewProps = {
   boardId: string
@@ -77,15 +82,64 @@ export const NoteWidgetPreview = ({
   }
 
   return (
-    <div className='w-full overflow-hidden rounded-xl bg-background'>
-      <WidgetIframe
-        html={note.content.markdown}
-        title={note.label?.markdown || "Widget preview"}
-        autoHeight
-        maxHeight={1200}
-        minHeight={260}
-        className='w-full border-0 bg-transparent rounded-sm'
-      />
+    <LazyMountedWidgetIframe
+      html={note.content.markdown}
+      title={note.label?.markdown || "Widget preview"}
+    />
+  )
+}
+
+
+type LazyMountedWidgetIframeProps = {
+  html: string
+  title: string
+}
+
+
+/**
+ * Mounts the widget iframe only when the container intersects the viewport
+ * (with a buffer). Off-screen widgets unmount, terminating their iframe
+ * scripts via WidgetIframe's own cleanup. Reserves the iframe's minimum
+ * height as placeholder space so scroll position stays stable across
+ * mount/unmount transitions.
+ */
+const LazyMountedWidgetIframe = ({ html, title }: LazyMountedWidgetIframeProps) => {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+  const [inView, setInView] = useState(false)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0]
+        if (!entry) return
+        setInView(entry.isIntersecting)
+      },
+      { rootMargin: `${VIEWPORT_BUFFER_PX}px`, threshold: 0 },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+
+  return (
+    <div
+      ref={containerRef}
+      className='w-full overflow-hidden rounded-xl bg-background'
+      style={{ minHeight: WIDGET_PREVIEW_HEIGHT }}
+    >
+      {inView ? (
+        <WidgetIframe
+          html={html}
+          title={title}
+          autoHeight
+          maxHeight={1200}
+          minHeight={WIDGET_PREVIEW_HEIGHT}
+          className='w-full border-0 bg-transparent rounded-sm'
+        />
+      ) : (
+        <div style={{ height: WIDGET_PREVIEW_HEIGHT }} aria-hidden />
+      )}
     </div>
   )
 }

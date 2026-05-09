@@ -34,12 +34,15 @@ export interface IconSearchDialogProps {
 
 
 /**
- * Dialog component for searching and selecting icons.
+ * Lazy body for icon search. Mounted only while the dialog is open so the
+ * iconify network/decoding cost for hundreds of icons doesn't linger
+ * across open/close cycles.
  */
-export const IconSearchDialog = ({
-  openIconSearch,
-  setOpenIconSearch
-}: IconSearchDialogProps) => {
+const IconSearchDialogBody = ({
+  setOpenIconSearch,
+}: {
+  setOpenIconSearch: (open: boolean) => void
+}) => {
   const [q, setQ] = useState<string>('')
 
   const debouncedQ = useDebouncedValue<string>({ value: q, delay: 1000 })
@@ -49,7 +52,6 @@ export const IconSearchDialog = ({
   const addNode = useAddNoteNode()
 
   const handleSelectIcon = (iconName: string) => {
-    // Future: insert selected icon into canvas
     addNode({
       nodeType: "icon",
       icon: iconName,
@@ -59,45 +61,62 @@ export const IconSearchDialog = ({
   }
 
   return (
+    <>
+      <DialogHeader className='p-4 border-b text-secondary-foreground w-full text-center'>
+        <DialogTitle>Search icons</DialogTitle>
+      </DialogHeader>
+      <div className='p-4'>
+        <Input
+          placeholder='Search Icon…'
+          value={q}
+          onChange={e => setQ(e.target.value)}
+          autoFocus
+          className='focus-visible:ring-2 focus-visible:ring-secondary-foreground/75 focus-visible:border-secondary-foreground'
+        />
+      </div>
+      <div className='p-4 pt-2 h-full w-full flex-1 overflow-y-auto scrollbar-thin'>
+        {isLoading ? (
+          <div className='grid grid-cols-5 sm:grid-cols-10 gap-1 w-full'>
+            {Array.from({ length: 10 }).map((_, i) => (
+              <Skeleton key={i} className='aspect-square w-full' />
+            ))}
+          </div>
+        ) : (
+          <div className='grid grid-cols-5 sm:grid-cols-10 gap-1 w-full'>
+            {data?.map(icon => (
+              <button
+                key={icon.url}
+                className='group relative aspect-square rounded-md border hover:ring-2 hover:ring-secondary-foreground/75 grid place-items-center p-1 bg-card'
+                title={icon.name}
+                onClick={() => handleSelectIcon(icon.name)}
+              >
+                <ThemedIcon iconName={icon.name} />
+              </button>
+            ))}
+            {debouncedQ && !data?.length && (
+              <div className='col-span-full text-sm text-muted-foreground p-4'>No results</div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
+  )
+}
+
+
+/**
+ * Dialog component for searching and selecting icons.
+ */
+export const IconSearchDialog = ({
+  openIconSearch,
+  setOpenIconSearch
+}: IconSearchDialogProps) => {
+  return (
     <Dialog open={openIconSearch} onOpenChange={setOpenIconSearch}>
       <DialogContent className='sm:max-w-xl p-0 overflow-hidden sm:w-1/3 sm:h-[50vh] flex flex-col'>
-        <DialogHeader className='p-4 border-b text-secondary-foreground w-full text-center'>
-          <DialogTitle>Search icons</DialogTitle>
-        </DialogHeader>
-        <div className='p-4'>
-          <Input
-            placeholder='Search Icon…'
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            autoFocus
-            className='focus-visible:ring-2 focus-visible:ring-secondary-foreground/75 focus-visible:border-secondary-foreground'
-          />
-        </div>
-        <div className='p-4 pt-2 h-full w-full flex-1 overflow-y-auto scrollbar-thin'>
-          {isLoading ? (
-            <div className='grid grid-cols-5 sm:grid-cols-10 gap-1 w-full'>
-              {Array.from({ length: 10 }).map((_, i) => (
-                <Skeleton key={i} className='aspect-square w-full' />
-              ))}
-            </div>
-          ) : (
-            <div className='grid grid-cols-5 sm:grid-cols-10 gap-1 w-full'>
-              {data?.map(icon => (
-                <button
-                  key={icon.url}
-                  className='group relative aspect-square rounded-md border hover:ring-2 hover:ring-secondary-foreground/75 grid place-items-center p-1 bg-card'
-                  title={icon.name}
-                  onClick={() => handleSelectIcon(icon.name)}
-                >
-                  <ThemedIcon iconName={icon.name} />
-                </button>
-              ))}
-              {debouncedQ && !data?.length && (
-                <div className='col-span-full text-sm text-muted-foreground p-4'>No results</div>
-              )}
-            </div>
-          )}
-        </div>
+        {openIconSearch && (
+          <IconSearchDialogBody setOpenIconSearch={setOpenIconSearch} />
+        )}
       </DialogContent>
     </Dialog>
   )

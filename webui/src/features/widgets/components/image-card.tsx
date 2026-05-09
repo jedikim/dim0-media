@@ -141,17 +141,19 @@ export default function ImageSearchStrip({
 
                 {showOverlayCounter && (
                   <Dialog open={open} onOpenChange={setOpen}>
-                    <DialogTrigger asChild>
-                      <button
-                        type='button'
-                        className='absolute inset-0 bg-background/60 backdrop-blur-[1px] text-foreground text-sm font-medium'
-                        title={`View ${hiddenCount} more`}
-                      >
-                        <span className='absolute inset-0 flex items-center justify-center'>
-                          + {hiddenCount}
-                        </span>
-                      </button>
-                    </DialogTrigger>
+                    <DialogTrigger
+                      render={
+                        <button
+                          type='button'
+                          className='absolute inset-0 bg-background/60 backdrop-blur-[1px] text-foreground text-sm font-medium'
+                          title={`View ${hiddenCount} more`}
+                        >
+                          <span className='absolute inset-0 flex items-center justify-center'>
+                            + {hiddenCount}
+                          </span>
+                        </button>
+                      }
+                    />
                     <DialogContent className='max-w-5xl'>
                       <DialogHeader>
                         <DialogTitle className='text-base'>{title}</DialogTitle>
