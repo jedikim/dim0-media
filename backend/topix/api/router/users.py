@@ -1,13 +1,20 @@
 """Users API Router."""
 import logging
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from topix.api.datatypes.requests import EmailVerificationRequest, GoogleSigninRequest, RefreshRequest, UserSignupRequest
+from topix.api.datatypes.requests import (
+    EmailVerificationRequest,
+    ForgotPasswordRequest,
+    GoogleSigninRequest,
+    RefreshRequest,
+    ResetPasswordRequest,
+    UserSignupRequest,
+)
 from topix.api.utils.auth_methods import get_google_client_id, is_google_connect_available
 from topix.api.utils.decorators import with_standard_response
 from topix.api.utils.email_verification import (
@@ -22,6 +29,16 @@ from topix.api.utils.email_verification import (
     utc_now,
 )
 from topix.api.utils.google_connect import verify_google_id_token
+from topix.api.utils.password_reset import (
+    DEFAULT_RESET_RESEND_COOLDOWN_SECONDS,
+    build_password_reset_url,
+    compute_reset_expiry,
+    generate_password_reset_token,
+    get_password_reset_config,
+    hash_password_reset_token,
+    is_password_reset_enabled,
+    send_password_reset_link,
+)
 from topix.api.utils.rate_limit.token_plan import resolve_plan_for_token
 from topix.api.utils.security import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
@@ -35,8 +52,10 @@ from topix.api.utils.security import (
     get_password_hash,
 )
 from topix.datatypes.email_verification import EmailVerificationToken
+from topix.datatypes.password_reset import PasswordResetToken
 from topix.datatypes.user import User
 from topix.store.email_verification import EmailVerificationStore
+from topix.store.password_reset import PasswordResetStore
 from topix.store.user import UserStore
 
 router = APIRouter(
@@ -316,6 +335,7 @@ async def get_email_verification_status(
 @router.post("/refresh")
 @with_standard_response
 async def refresh_access_token(
+    response: Response,
     request: Request,
     body: Annotated[RefreshRequest, Body(description="Refresh token payload")],
 ):
@@ -334,6 +354,16 @@ async def refresh_access_token(
     user = await user_store.get_user(user_uid)
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+
+    # Refresh-token revocation gate. After password reset we set password_changed_at;
+    # any token issued before that timestamp must be rejected to invalidate stolen sessions.
+    if user.password_changed_at is not None:
+        iat_raw = payload.get("iat")
+        if iat_raw is None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token revoked")
+        iat_dt = datetime.fromtimestamp(int(iat_raw), tz=timezone.utc).replace(tzinfo=None)
+        if iat_dt < user.password_changed_at:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh token revoked")
 
     # 2) Issue new access token (short-lived)
     plan = await resolve_plan_for_token(request, user.uid)
@@ -374,3 +404,116 @@ async def delete_user(
     """Delete a user by its ID."""
     user_store: UserStore = request.app.user_store
     return await user_store.delete_user(user_id, hard_delete=True)
+
+
+@router.get("/password-reset-status")
+@with_standard_response
+async def get_password_reset_status():
+    """Return whether the password reset flow is enabled."""
+    return {"enabled": is_password_reset_enabled()}
+
+
+@router.post("/forgot-password")
+@with_standard_response
+async def forgot_password(
+    response: Response,
+    request: Request,
+    body: Annotated[ForgotPasswordRequest, Body(description="Email to send a password reset link to")],
+):
+    """Send a password reset email if the address belongs to a local-credential account.
+
+    Always returns the same generic 200 response to prevent email enumeration.
+    Silently no-ops for unknown emails, Google-only accounts, or when reset is disabled.
+    """
+    generic_response = {"message": "If an account exists, a password reset link has been sent."}
+    if not is_password_reset_enabled():
+        return generic_response
+
+    email = (body.email or "").strip()
+    if not email:
+        return generic_response
+
+    user_store: UserStore = request.app.user_store
+    password_reset_store: PasswordResetStore = request.app.password_reset_store
+
+    user = await user_store.get_user_by_email(email)
+    if not user or not user.password_hash:
+        # Unknown email or Google-only account: silently no-op.
+        return generic_response
+
+    reset_config = get_password_reset_config()
+    now = utc_now()
+
+    latest_token = await password_reset_store.get_latest_token_for_user(user.uid)
+    if latest_token and latest_token.created_at:
+        elapsed = (now - latest_token.created_at).total_seconds()
+        if elapsed < DEFAULT_RESET_RESEND_COOLDOWN_SECONDS:
+            # Still inside cooldown: do not regenerate and do not reveal anything.
+            return generic_response
+
+    raw_token = generate_password_reset_token()
+    token_hash = hash_password_reset_token(raw_token)
+    await password_reset_store.save_token(
+        PasswordResetToken(
+            user_uid=user.uid,
+            token_hash=token_hash,
+            expires_at=compute_reset_expiry(now, reset_config.ttl_hours),
+            created_at=now,
+        )
+    )
+    reset_url = build_password_reset_url(reset_config.app_base_url, raw_token)
+    try:
+        await send_password_reset_link(
+            resend_api_key=reset_config.resend_api_key,
+            resend_from_email=reset_config.resend_from_email,
+            to_email=user.email,
+            reset_url=reset_url,
+            ttl_hours=reset_config.ttl_hours,
+        )
+    except HTTPException:
+        logging.exception("Failed to send password reset email for user %s", user.uid)
+
+    return generic_response
+
+
+@router.post("/reset-password")
+@with_standard_response
+async def reset_password(
+    response: Response,
+    request: Request,
+    body: Annotated[ResetPasswordRequest, Body(description="Reset token + new password payload")],
+):
+    """Consume a reset token and update the user's password.
+
+    Sets password_changed_at so existing refresh tokens become unusable on next refresh.
+    """
+    if not is_password_reset_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Password reset is disabled",
+        )
+
+    if not body.new_password or len(body.new_password) < 8:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Password must be at least 8 characters",
+        )
+
+    password_reset_store: PasswordResetStore = request.app.password_reset_store
+    user_store: UserStore = request.app.user_store
+
+    token_hash = hash_password_reset_token(body.token)
+    token = await password_reset_store.get_active_token_by_hash(token_hash)
+    if token is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token",
+        )
+
+    pw_hash = get_password_hash(body.new_password)
+    await user_store.update_user(
+        token.user_uid,
+        {"password_hash": pw_hash, "password_changed_at": utc_now()},
+    )
+    await password_reset_store.mark_token_used(token.uid)
+    return {"message": "Password reset successfully"}

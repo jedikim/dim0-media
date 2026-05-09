@@ -19,7 +19,9 @@ from topix.setup import setup
 from topix.store.chat import ChatStore
 from topix.store.email_verification import EmailVerificationStore
 from topix.store.graph import GraphStore
+from topix.store.password_reset import PasswordResetStore
 from topix.store.postgres.pool import create_pool
+from topix.store.postgres.schema import apply_schema
 from topix.store.redis.store import RedisStore
 from topix.store.subscription import SubscriptionStore
 from topix.store.user import UserStore
@@ -39,6 +41,10 @@ def create_app(stage: StageEnum):
         # multiply our connection footprint and exhaust Postgres under burst.
         app.pg_pool = await create_pool()
 
+        # Apply idempotent schema so existing self-hosted DBs pick up additive
+        # changes (new tables, new columns) without a manual migration step.
+        await apply_schema(app.pg_pool)
+
         # Initialize stores
         app.graph_store = GraphStore()
         await app.graph_store.open(app.pg_pool)
@@ -50,6 +56,8 @@ def create_app(stage: StageEnum):
         await app.user_billing_store.open(app.pg_pool)
         app.email_verification_store = EmailVerificationStore()
         await app.email_verification_store.open(app.pg_pool)
+        app.password_reset_store = PasswordResetStore()
+        await app.password_reset_store.open(app.pg_pool)
         app.subscription_store = SubscriptionStore()
         await app.subscription_store.open()
         app.parser_pipeline = ParsingPipeline()
@@ -66,6 +74,7 @@ def create_app(stage: StageEnum):
         await app.chat_store.close()
         await app.user_billing_store.close()
         await app.email_verification_store.close()
+        await app.password_reset_store.close()
         await app.subscription_store.close()
         # Close Redis
         await app.redis_store.close()

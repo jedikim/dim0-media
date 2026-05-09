@@ -13,6 +13,9 @@ ENV PATH="/root/.local/bin:${PATH}"
 WORKDIR /app
 
 COPY backend/ /app/
+# schema.sql is applied idempotently on backend startup; bundle it alongside
+# the package so apply_schema() can locate it via parents-walk to /app/build/.
+COPY build/schema.sql /app/build/schema.sql
 
 # install the backend from the committed lockfile for deterministic builds
 RUN uv sync --frozen --no-dev

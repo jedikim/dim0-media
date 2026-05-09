@@ -25,6 +25,7 @@ class User(BaseModel):
     google_picture_url: str | None = None
     google_linked_at: datetime | None = None
     email_verified_at: datetime | None = None
+    password_changed_at: datetime | None = None
 
     created_at: datetime | None = Field(default_factory=datetime.now)
     updated_at: datetime | None = None

@@ -11,7 +11,7 @@ let isRedirecting = false
 
 function isAuthPage() {
   const p = location.pathname
-  return p === "/signin" || p === "/signup"
+  return p === "/signin" || p === "/signup" || p === "/forgot-password" || p === "/reset-password"
 }
 
 function isBrowserAsset(reqUrl: string) {
@@ -373,6 +373,50 @@ export async function verifyEmailToken(token: string): Promise<void> {
     path: "/users/verify-email",
     method: "POST",
     body: { token },
+    noAuth: true,
+  })
+}
+
+
+export type PasswordResetStatus = {
+  enabled: boolean
+}
+
+
+/**
+ * Fetch whether the password reset flow is enabled on the backend.
+ */
+export async function getPasswordResetStatus(): Promise<PasswordResetStatus> {
+  const res = await apiFetch<{ data: PasswordResetStatus }>({
+    path: "/users/password-reset-status",
+    method: "GET",
+    noAuth: true,
+  })
+  return res.data
+}
+
+
+/**
+ * Request a password reset email. Backend always 200s to avoid email enumeration.
+ */
+export async function forgotPassword(email: string): Promise<void> {
+  await apiFetch<{ data: { message: string } }, { email: string }>({
+    path: "/users/forgot-password",
+    method: "POST",
+    body: { email },
+    noAuth: true,
+  })
+}
+
+
+/**
+ * Complete a password reset by exchanging a reset token for a new password.
+ */
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  await apiFetch<{ data: { message: string } }, { token: string; new_password: string }>({
+    path: "/users/reset-password",
+    method: "POST",
+    body: { token, new_password: newPassword },
     noAuth: true,
   })
 }

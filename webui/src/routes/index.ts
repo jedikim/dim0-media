@@ -23,6 +23,8 @@ import { NotFoundPage } from "@/components/not-found"
 import { SettingsScreen } from "@/features/user-settings/screens/settings-screen"
 import { BillingScreen } from "@/features/user-settings/screens/billing-screen"
 import { VerifyEmailPage } from "@/features/signin/screens/verify-email"
+import { ForgotPasswordPage } from "@/features/signin/screens/forgot-password"
+import { ResetPasswordPage } from "@/features/signin/screens/reset-password"
 import { InstallScreen } from "@/features/install/screens/install-screen"
 
 
@@ -83,6 +85,18 @@ const verifyEmailRoute = createRoute({
   path: "/verify-email",
   beforeLoad: requireAuth,
   component: VerifyEmailPage,
+})
+
+const forgotPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/forgot-password",
+  component: ForgotPasswordPage,
+})
+
+const resetPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/reset-password",
+  component: ResetPasswordPage,
 })
 
 const indexRoute = createRoute({
@@ -201,6 +215,8 @@ const routeTree = rootRoute.addChildren([
   signinRoute,
   signupRoute,
   verifyEmailRoute,
+  forgotPasswordRoute,
+  resetPasswordRoute,
   indexRoute,
   homeRoute,
   chatsIndexRoute,

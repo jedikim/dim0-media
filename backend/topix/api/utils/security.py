@@ -60,13 +60,13 @@ async def authenticate_user(user_store: UserStore, email: str, password: str) ->
 
 
 def _encode_jwt(claims: dict, *, minutes: int | None = None, days: int | None = None) -> str:
-    """Sign a JWT with optional expiration."""
+    """Sign a JWT with iat + optional expiration so refresh checks can detect stale tokens."""
     config: Config = Config.instance()
     now = datetime.now(timezone.utc)
     exp = now + (
         timedelta(minutes=minutes) if minutes is not None else timedelta(days=days or 0)
     )
-    to_encode = {**claims, "exp": exp}
+    to_encode = {**claims, "iat": now, "exp": exp}
     return jwt.encode(to_encode, config.app.security.secret_key.get_secret_value(), algorithm=config.app.security.algorithm)
 
 

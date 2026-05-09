@@ -21,6 +21,7 @@ def _build_user_from_row(row: asyncpg.Record) -> User:
         google_picture_url=row["google_picture_url"],
         google_linked_at=row["google_linked_at"].isoformat() if row["google_linked_at"] else None,
         email_verified_at=row["email_verified_at"].isoformat() if row["email_verified_at"] else None,
+        password_changed_at=row["password_changed_at"].isoformat() if row["password_changed_at"] else None,
         created_at=row["created_at"].isoformat() if row["created_at"] else None,
         updated_at=row["updated_at"].isoformat() if row["updated_at"] else None,
         deleted_at=row["deleted_at"].isoformat() if row["deleted_at"] else None,
@@ -76,7 +77,7 @@ async def get_user_by_uid(conn: asyncpg.Connection, uid: str) -> User | None:
     query = (
         "SELECT id, uid, email, username, name, password_hash, auth_provider, google_sub, "
         "google_email, google_picture_url, google_linked_at, email_verified_at, "
-        "created_at, updated_at, deleted_at "
+        "password_changed_at, created_at, updated_at, deleted_at "
         "FROM users WHERE uid = $1"
     )
     row = await conn.fetchrow(query, uid)
@@ -90,7 +91,7 @@ async def get_user_by_email(conn: asyncpg.Connection, email: str) -> User | None
     query = (
         "SELECT id, uid, email, username, name, password_hash, auth_provider, google_sub, "
         "google_email, google_picture_url, google_linked_at, email_verified_at, "
-        "created_at, updated_at, deleted_at "
+        "password_changed_at, created_at, updated_at, deleted_at "
         "FROM users WHERE email = $1"
     )
     row = await conn.fetchrow(query, email)
@@ -104,7 +105,7 @@ async def get_user_by_google_sub(conn: asyncpg.Connection, google_sub: str) -> U
     query = (
         "SELECT id, uid, email, username, name, password_hash, auth_provider, google_sub, "
         "google_email, google_picture_url, google_linked_at, email_verified_at, "
-        "created_at, updated_at, deleted_at "
+        "password_changed_at, created_at, updated_at, deleted_at "
         "FROM users WHERE google_sub = $1"
     )
     row = await conn.fetchrow(query, google_sub)

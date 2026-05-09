@@ -37,6 +37,19 @@ class EmailVerificationRequest(BaseModel):
     token: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    """Request model for initiating a password reset."""
+
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    """Request model for completing a password reset with a token."""
+
+    token: str
+    new_password: str
+
+
 class BillingCheckoutRequest(BaseModel):
     """Request model for creating a Stripe checkout session."""
 

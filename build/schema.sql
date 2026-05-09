@@ -1,4 +1,9 @@
-CREATE TABLE users (
+-- Schema is idempotent: applied on first postgres init AND re-applied on every
+-- backend startup. Keep all changes additive: CREATE TABLE IF NOT EXISTS,
+-- CREATE INDEX IF NOT EXISTS, ALTER TABLE ... ADD COLUMN IF NOT EXISTS.
+-- Non-additive changes (renames, type changes) need a separate one-off step.
+
+CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     uid TEXT NOT NULL UNIQUE,
     email TEXT NOT NULL UNIQUE,
@@ -10,12 +15,13 @@ CREATE TABLE users (
     google_picture_url TEXT,
     google_linked_at TIMESTAMP,
     email_verified_at TIMESTAMP,
+    password_changed_at TIMESTAMP,
     name TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP,
     deleted_at TIMESTAMP
 );
-CREATE INDEX idx_users_uid ON users(uid);
+CREATE INDEX IF NOT EXISTS idx_users_uid ON users(uid);
 
 
 INSERT INTO users (uid, email, username, name, password_hash)
@@ -23,7 +29,7 @@ VALUES ('root', 'root@root.ai', 'root', 'Root User', 'RandomHash')
 ON CONFLICT (uid) DO NOTHING;
 
 
-CREATE TABLE graphs (
+CREATE TABLE IF NOT EXISTS graphs (
     id SERIAL PRIMARY KEY,
     uid TEXT NOT NULL UNIQUE,
     label TEXT,
@@ -35,10 +41,10 @@ CREATE TABLE graphs (
     updated_at TIMESTAMP,
     deleted_at TIMESTAMP
 );
-CREATE INDEX idx_graphs_uid ON graphs(uid);
+CREATE INDEX IF NOT EXISTS idx_graphs_uid ON graphs(uid);
 
 
-CREATE TABLE graph_user (
+CREATE TABLE IF NOT EXISTS graph_user (
     id SERIAL PRIMARY KEY,
     graph_id INT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -48,7 +54,7 @@ CREATE TABLE graph_user (
 );
 
 
-CREATE TABLE chats (
+CREATE TABLE IF NOT EXISTS chats (
     id SERIAL PRIMARY KEY,
     uid TEXT NOT NULL UNIQUE,
     label TEXT,
@@ -58,12 +64,12 @@ CREATE TABLE chats (
     updated_at TIMESTAMP,
     deleted_at TIMESTAMP
 );
-CREATE INDEX idx_chats_uid ON chats(uid);
-CREATE INDEX idx_chats_user_uid ON chats(user_uid);
-CREATE INDEX idx_chats_graph_uid ON chats(graph_uid);
+CREATE INDEX IF NOT EXISTS idx_chats_uid ON chats(uid);
+CREATE INDEX IF NOT EXISTS idx_chats_user_uid ON chats(user_uid);
+CREATE INDEX IF NOT EXISTS idx_chats_graph_uid ON chats(graph_uid);
 
 
-CREATE TABLE user_billing (
+CREATE TABLE IF NOT EXISTS user_billing (
     user_uid TEXT PRIMARY KEY REFERENCES users(uid) ON DELETE CASCADE,
     plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'plus')),
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'trialing', 'past_due', 'canceled', 'incomplete')),
@@ -75,11 +81,11 @@ CREATE TABLE user_billing (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
-CREATE INDEX idx_user_billing_plan ON user_billing(plan);
-CREATE INDEX idx_user_billing_status ON user_billing(status);
+CREATE INDEX IF NOT EXISTS idx_user_billing_plan ON user_billing(plan);
+CREATE INDEX IF NOT EXISTS idx_user_billing_status ON user_billing(status);
 
 
-CREATE TABLE email_verification_tokens (
+CREATE TABLE IF NOT EXISTS email_verification_tokens (
     id SERIAL PRIMARY KEY,
     uid TEXT NOT NULL UNIQUE,
     user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
@@ -89,5 +95,29 @@ CREATE TABLE email_verification_tokens (
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP
 );
-CREATE INDEX idx_email_verification_tokens_user_uid ON email_verification_tokens(user_uid);
-CREATE INDEX idx_email_verification_tokens_expires_at ON email_verification_tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_user_uid ON email_verification_tokens(user_uid);
+CREATE INDEX IF NOT EXISTS idx_email_verification_tokens_expires_at ON email_verification_tokens(expires_at);
+
+
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    id SERIAL PRIMARY KEY,
+    uid TEXT NOT NULL UNIQUE,
+    user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMP NOT NULL,
+    used_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_uid ON password_reset_tokens(user_uid);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires_at ON password_reset_tokens(expires_at);
+
+
+-- ============================================================================
+-- Additive deltas for older self-hosted DBs.
+-- For each column added to an existing table after its CREATE TABLE was first
+-- shipped, append `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...` here so DBs
+-- that already have the table get the new column on next backend startup.
+-- ============================================================================
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP;
