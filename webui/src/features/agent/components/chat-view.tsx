@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu"
 import { AddIcon, ChatHistoryIcon, ChatNewIcon, ClockIcon } from "@/components/icons"
-import { useNavigate, useParams, useRouterState } from "@tanstack/react-router"
+import { useNavigate, useRouterState } from "@tanstack/react-router"
 import { useAppStore } from "@/store"
 
 type ChatProps = {
@@ -169,7 +169,6 @@ const ChatBody = ({
   const { data: chatList = [] } = useListChats({ graphUid: initialBoardId, userId })
   const navigate = useNavigate()
   const routerLocation = useRouterState({ select: (s) => s.location })
-  const boardParams = useParams({ from: "/boards/$id", shouldThrow: false })
 
   const attachedBoardId = useMemo(() => {
     const currentChat = chatList?.find(c => c.uid === chatId)
@@ -190,13 +189,14 @@ const ChatBody = ({
   )
 
   const isBoardRoute = routerLocation.pathname?.startsWith("/boards/")
-  const boardRouteId = boardParams?.id ?? initialBoardId
 
   const syncBoardUrl = (nextChatId?: string) => {
-    if (!isBoardRoute || !boardRouteId) return
+    if (!isBoardRoute) return
+    // Stay on whatever board-family path we're on (board, sheet, code,
+    // widget) — `to: "."` keeps the current pathname so an active surface
+    // panel isn't closed when the chat changes. We only swap the search.
     navigate({
-      to: "/boards/$id",
-      params: { id: boardRouteId },
+      to: ".",
       search: (prev: Record<string, unknown>) => ({
         ...prev,
         current_chat_id: nextChatId || undefined,

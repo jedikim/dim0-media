@@ -17,7 +17,6 @@ import { SubscriptionsScreen } from "@/features/newsfeed/screens/subscriptions"
 import { NewsfeedsScreen } from "@/features/newsfeed/screens/newsfeeds"
 import { NewsfeedLinearPage } from "@/features/newsfeed/screens/newsfeed-linear-page"
 import { HomePage } from "@/features/home/screens/home"
-import { SheetScreen } from "@/features/board/screens/sheet-screen"
 import { DashboardScreen } from "@/features/board/screens/dashboard-screen"
 import { NotFoundPage } from "@/components/not-found"
 import { SettingsScreen } from "@/features/user-settings/screens/settings-screen"
@@ -139,7 +138,11 @@ const dashboardRoute = createRoute({
   component: DashboardScreen,
 })
 
-// /boards/:id (protected)
+// /boards/:id (protected). Surface routes (sheets/$noteId,
+// code-sandbox/$noteId, widgets/$noteId) are *children* of this route,
+// not siblings — that way navigating into / out of a surface keeps the
+// parent (BoardScreen + canvas) mounted instead of unmounting React
+// Flow and re-running the board-hydration effect each time.
 export const BoardUrl = "/boards/$id"
 const boardRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -148,13 +151,30 @@ const boardRoute = createRoute({
   component: BoardScreen,
 })
 
-// /boards/:id/sheets/:noteId (protected)
+// /boards/:id/sheets/:noteId — child of boardRoute. The component is
+// intentionally null: BoardScreen reads URL state via
+// `useActiveSurfaceFromUrl` and mounts the panel itself.
 export const SheetUrl = "/boards/$id/sheets/$noteId"
 const sheetRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: SheetUrl,
-  beforeLoad: requireVerifiedAuth,
-  component: SheetScreen,
+  getParentRoute: () => boardRoute,
+  path: "/sheets/$noteId",
+  component: () => null,
+})
+
+// /boards/:id/code-sandbox/:noteId — child of boardRoute.
+export const CodeSandboxUrl = "/boards/$id/code-sandbox/$noteId"
+const codeSandboxRoute = createRoute({
+  getParentRoute: () => boardRoute,
+  path: "/code-sandbox/$noteId",
+  component: () => null,
+})
+
+// /boards/:id/widgets/:noteId — child of boardRoute.
+export const WidgetUrl = "/boards/$id/widgets/$noteId"
+const widgetRoute = createRoute({
+  getParentRoute: () => boardRoute,
+  path: "/widgets/$noteId",
+  component: () => null,
 })
 
 // /subscriptions (protected)
@@ -222,8 +242,7 @@ const routeTree = rootRoute.addChildren([
   chatsIndexRoute,
   chatRoute,
   dashboardRoute,
-  boardRoute,
-  sheetRoute,
+  boardRoute.addChildren([sheetRoute, codeSandboxRoute, widgetRoute]),
   subscriptionsRoute,
   newsfeedsRoute,
   newsfeedDetailRoute,

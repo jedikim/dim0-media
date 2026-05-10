@@ -57,11 +57,9 @@ type EmptyGraphHintProps = {
  * Centered empty-state illustration with onboarding hint.
  */
 const EmptyGraphHint = memo(function EmptyGraphHint({ isMobile }: EmptyGraphHintProps) {
-  const assistantLocationLabel = isMobile ? "right bar" : "top bar"
-
   return (
     <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center px-6 py-10">
-      <div className="flex w-full max-w-[760px] flex-col items-center rounded-xl bg-sidebar px-8 py-10 text-center">
+      <div className="flex w-full max-w-[760px] flex-col items-center px-8 py-10 text-center">
         <StackedCardsIllustration
           className="h-auto w-full max-w-[520px]"
           shadowColor="color-mix(in oklab, var(--accent-foreground) 10%, transparent)"
@@ -70,8 +68,17 @@ const EmptyGraphHint = memo(function EmptyGraphHint({ isMobile }: EmptyGraphHint
           aria-hidden="true"
         />
         <p className="mt-4 max-w-[32rem] text-balance text-lg leading-relaxed text-sidebar-foreground/50">
-          Start adding components and open assistant from{" "}
-          <span className="font-semibold text-sidebar-foreground">{assistantLocationLabel}</span>
+          {isMobile ? (
+            <>
+              Add components or open the assistant from the{" "}
+              <span className="font-semibold text-sidebar-foreground">right bar</span>
+            </>
+          ) : (
+            <>
+              Add components from the toolbar, or ask the assistant{" "}
+              <span className="font-semibold text-sidebar-foreground">below</span>
+            </>
+          )}
         </p>
       </div>
     </div>

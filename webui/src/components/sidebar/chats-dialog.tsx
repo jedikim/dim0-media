@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { useNavigate } from "@tanstack/react-router"
+import { useNavigate, useParams, useRouterState } from "@tanstack/react-router"
 import { useInfiniteChats } from "@/features/agent/api/list-chats"
 import { useAppStore } from "@/store"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -40,6 +40,12 @@ const formatChatDate = (value?: string) => {
 export function ChatsDialog({ open, onOpenChange, boardId, title }: ChatsDialogProps) {
   const userId = useAppStore((s) => s.userId)
   const navigate = useNavigate()
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const routeParams = useParams({ strict: false }) as { id?: string }
+  // The route's `id` is the board id when we're anywhere in the /boards/...
+  // family. On other routes (e.g. /chats/$id) `id` means something else, so
+  // gate on the pathname before treating it as a board id.
+  const currentBoardId = pathname.startsWith("/boards/") ? routeParams.id : undefined
   const [scrollViewport, setScrollViewport] = useState<HTMLDivElement | null>(null)
 
   const graphUid = boardId ?? "any"
@@ -68,6 +74,19 @@ export function ChatsDialog({ open, onOpenChange, boardId, title }: ChatsDialogP
   const handleSelect = (chatUid: string, chatBoardId?: string) => {
     onOpenChange(false)
     if (chatBoardId) {
+      // Same-board chat switch: just update the search param so any open
+      // sheet/code/widget surface URL is preserved. Cross-board: navigate
+      // to the new board (closing the surface is correct in that case).
+      if (chatBoardId === currentBoardId) {
+        navigate({
+          to: ".",
+          search: (prev: Record<string, unknown>) => ({
+            ...prev,
+            current_chat_id: chatUid,
+          }),
+        })
+        return
+      }
       navigate({
         to: "/boards/$id",
         params: { id: chatBoardId },

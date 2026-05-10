@@ -49,7 +49,11 @@ export const ActionPanel = memo(function ActionPanel({
 }: ActionPanelProps) {
   const [openImageSearch, setOpenImageSearch] = useState(false)
   const [openIconSearch, setOpenIconSearch] = useState(false)
-  const [openChatDialog, setOpenChatDialog] = useState(false)
+  // Lifted to graph-store so the surface panels (sheet/code/widget) can
+  // open the chat sideview from their mobile-only sparkles button. Also
+  // resets automatically on scope change in `setGraphScope`.
+  const openChatDialog = useGraphStore(state => state.chatSheetOpen)
+  const setOpenChatDialog = useGraphStore(state => state.setChatSheetOpen)
   const [openShapeMenu, setOpenShapeMenu] = useState(false)
   const [openDocumentUpload, setOpenDocumentUpload] = useState(false)
   const [openSlidesPanel, setOpenSlidesPanel] = useState(false)
@@ -60,10 +64,13 @@ export const ActionPanel = memo(function ActionPanel({
   const setViewSlides = useGraphStore(state => state.setViewSlides)
   const presentationMode = useGraphStore(state => state.presentationMode)
   const navigate = useNavigate()
+  // `strict: false` so this also reads the search on the surface routes
+  // (/boards/$id/sheets/$noteId, /code-sandbox/$noteId, /widgets/$noteId);
+  // a `from: "/boards/$id"` would only match the bare board route and
+  // silently drop `current_chat_id` on those nested routes.
   const boardSearch = useSearch({
-    from: "/boards/$id",
+    strict: false,
     select: (s: { current_chat_id?: string }) => ({ currentChatId: s.current_chat_id }),
-    shouldThrow: false,
   })
   const currentChatId = boardSearch?.currentChatId
 

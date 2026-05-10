@@ -15,6 +15,11 @@ export interface SendMessageRequestPayload {
   webSearchEngine: WebSearchEngine
   enabledTools?: ToolName[]
   useDeepResearch?: boolean
+  /**
+   * Composed at submit time from the active page (when a surface is open)
+   * plus any selected canvas nodes. The backend prepends this to the user
+   * message so the agent knows what the user is looking at.
+   */
   messageContext?: string
 }
 

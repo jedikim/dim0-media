@@ -28,7 +28,7 @@ export function CopilotSheet({
         side="right"
         showOverlay={false}
         showClose={false}
-        className="md:w-[500px] md:max-w-[92vw] w-full bg-background text-sidebar-foreground border-l-1 border-border/70 p-0 shadow-sm"
+        className="md:w-[500px] md:max-w-[92vw] w-full bg-background text-sidebar-foreground border-l-1 border-border/70 p-0 shadow-sm z-[60]"
       >
         {/* Radix Dialog primitive requires an accessible title for content. */}
         <SheetHeader className="sr-only">

@@ -73,10 +73,11 @@ export function NewChatItem({
 export function ChatMenuItem({ chatId, label }: { chatId: string, label?: string }) {
   const navigate = useNavigate()
   const chatParams = useParams({ from: "/chats/$id", shouldThrow: false })
+  // `strict: false` so this also matches surface routes
+  // (/boards/$id/sheets/$noteId, /code-sandbox/$noteId, /widgets/$noteId).
   const boardSearch = useSearch({
-    from: "/boards/$id",
+    strict: false,
     select: (s: { current_chat_id?: string }) => s.current_chat_id,
-    shouldThrow: false
   })
   const activeChatId = chatParams?.id ?? boardSearch
   const isActive = activeChatId === chatId

@@ -9,10 +9,12 @@ type SheetEditorProps = {
   className?: string
   pageProvider?: PageProvider | null
   parentNoteId?: string | null
+  /** Optional content rendered above the prose, inside the editor's scroll. */
+  bodyHeader?: React.ReactNode
 }
 
 
-export const SheetEditor = ({ value, onSave, className, pageProvider, parentNoteId }: SheetEditorProps) => {
+export const SheetEditor = ({ value, onSave, className, pageProvider, parentNoteId, bodyHeader }: SheetEditorProps) => {
   return (
     <div
       className={cn("h-full w-full", className)}
@@ -24,6 +26,7 @@ export const SheetEditor = ({ value, onSave, className, pageProvider, parentNote
         onSave={onSave}
         pageProvider={pageProvider}
         parentNoteId={parentNoteId}
+        bodyHeader={bodyHeader}
       />
     </div>
   )

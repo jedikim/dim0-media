@@ -8,6 +8,7 @@ import { useAppStore } from '@/store'
 import { SendButton } from './send-button'
 import TextareaAutosize from 'react-textarea-autosize'
 import { useChat } from '../../hooks/chat-context'
+import { useGraphStore } from '@/features/board/store/graph-store'
 import { useNavigate, useParams } from '@tanstack/react-router'
 import { SettingsBillingUrl } from '@/routes'
 import { WelcomeMessage } from './welcome-message'
@@ -109,6 +110,9 @@ export const InputBar = ({
   // boards can still receive new chats even when the user is at the cap.
   const showBoardLimitGate = autoCreateBoard && isBoardCreationLimited
   const showBoardChip = autoCreateBoard || Boolean(attachedBoardId)
+  // Single boolean: re-renders only when the dialog opens or closes,
+  // not on title/content changes. Cheap.
+  const hasActiveSurface = useGraphStore((s) => Boolean(s.activeNodeSurface))
   const placeholder = showBoardLimitGate
     ? `You've used ${FREE_PLAN_BOARD_LIMIT}/${FREE_PLAN_BOARD_LIMIT} boards on the free plan`
     : autoCreateBoard
@@ -218,7 +222,7 @@ export const InputBar = ({
       <div className="flex items-start gap-2 p-0">
         {showBoardChip && (
           <span className="mt-1 shrink-0 rounded bg-secondary px-2 py-0.5 font-mono text-xs text-secondary-foreground">
-            @board
+            {hasActiveSurface ? "@page" : "@board"}
           </span>
         )}
         <TextareaAutosize

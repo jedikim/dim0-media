@@ -37,6 +37,23 @@ import { updateNote } from "../api/update-note"
 import { removeLink } from "../api/remove-link"
 import { removeNote } from "../api/remove-note"
 import { invalidateBoardContents } from "../api/invalidate-board-contents"
+import { nodeSurfacePath } from "../utils/node-surface-url"
+
+
+/**
+ * Injected at app boot via `setBoardNavigate`. The store opens / closes
+ * node surfaces by navigating the router; we accept the navigate fn from
+ * the host so the store doesn't have to import the router (which would
+ * create a cycle through the screen components).
+ */
+type BoardNavigateOpen = (path: string, params: { id: string; noteId: string }) => void
+type BoardNavigateClose = (boardId: string) => void
+let _navigateOpen: BoardNavigateOpen | null = null
+let _navigateClose: BoardNavigateClose | null = null
+export function setBoardNavigate(open: BoardNavigateOpen, close: BoardNavigateClose): void {
+  _navigateOpen = open
+  _navigateClose = close
+}
 import {
   loadViewportsFromStorage,
   saveViewportToStorage,
@@ -988,6 +1005,17 @@ export interface GraphStore {
   openNodeSurface: (nodeId: string, kind: NodeSurfaceKind) => void
   closeNodeSurface: () => void
 
+  /**
+   * Whether the board's chat sideview (CopilotSheet) is open. Lives in
+   * the store so the surface panels can open it from a mobile-only
+   * sparkles button (the floating island that normally opens it is
+   * hidden on small screens). Reset on scope change in `setGraphScope`
+   * so navigating to a different board / sub-board doesn't carry the
+   * sheet open across with stale context.
+   */
+  chatSheetOpen: boolean
+  setChatSheetOpen: (open: boolean) => void
+
   setNodes: (nodes: Updater<NoteNode[]>) => void
   setEdges: (edges: Updater<LinkEdge[]>) => void
 
@@ -1070,6 +1098,7 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
             boardCanEdit: true,
             boardLabel: "",
             activeNodeSurface: null,
+            chatSheetOpen: false,
           }
         : {
             boardId,
@@ -1114,6 +1143,8 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   boardCanEdit: true,
   boardLabel: "",
   activeNodeSurface: null,
+  chatSheetOpen: false,
+  setChatSheetOpen: (open) => set({ chatSheetOpen: open }),
   setBoardBackground: (color) => {
     const boardId = get().boardId
     if (!boardId) return
@@ -1139,8 +1170,18 @@ export const useGraphStore = create<GraphStore>((set, get) => ({
   setBoardVisibility: (visibility) => set({ boardVisibility: visibility }),
   setBoardCanEdit: (canEdit) => set({ boardCanEdit: canEdit }),
   setBoardLabel: (label) => set({ boardLabel: label }),
-  openNodeSurface: (nodeId, kind) => set({ activeNodeSurface: { nodeId, kind } }),
-  closeNodeSurface: () => set({ activeNodeSurface: null }),
+  openNodeSurface: (nodeId, kind) => {
+    set({ activeNodeSurface: { nodeId, kind } })
+    const boardId = get().boardId
+    if (!boardId || !_navigateOpen) return
+    _navigateOpen(nodeSurfacePath(kind), { id: boardId, noteId: nodeId })
+  },
+  closeNodeSurface: () => {
+    set({ activeNodeSurface: null })
+    const boardId = get().boardId
+    if (!boardId || !_navigateClose) return
+    _navigateClose(boardId)
+  },
 
   // --- flexible setters ---
 

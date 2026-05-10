@@ -63,7 +63,7 @@ export const AnswerCard = ({ onOpenFullSheet }: AnswerCardProps) => {
     <div
       key={assistantMessage.id}
       className={cn(
-        "fixed top-20 right-4 z-40 w-[380px] max-w-[calc(100vw-2rem)]",
+        "fixed top-20 right-4 z-[60] w-[380px] max-w-[calc(100vw-2rem)]",
         "pointer-events-auto hidden md:block"
       )}
     >

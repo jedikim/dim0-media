@@ -276,6 +276,16 @@ export const useSendMessage = () => {
                   applyRemoteNoteNode(prevNodes, fetchedNode, isNewlyCreated),
                 { persist: false })
 
+                // Sub-pages don't live on the canvas, so the panel reads
+                // them via React Query (`useGetNote`). Refresh that cache
+                // too so an open sheet panel reflects the AI's edit
+                // without the user having to close and reopen.
+                queryClient.setQueryData(["note", activeBoardId, output.noteId], note)
+                queryClient.invalidateQueries({
+                  queryKey: ["note", activeBoardId, output.noteId],
+                  exact: true,
+                })
+
                 if (isNewlyCreated) {
                   createdNoteIds.push(output.noteId)
                 }
