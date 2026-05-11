@@ -1,4 +1,4 @@
-.dark .shiny-text {
+[data-mode="dark"] .shiny-text {
   background: linear-gradient(
     120deg,
     rgba(255, 255, 255, 0) 40%,
@@ -12,7 +12,7 @@
   animation: shine 5s linear infinite;
 }
 
-.light .shiny-text {
+[data-mode="light"] .shiny-text {
   background: linear-gradient(
     120deg,
     rgba(0, 0, 0, 0) 40%,

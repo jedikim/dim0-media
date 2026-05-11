@@ -200,14 +200,14 @@
   background-color: var(--shiki-light-bg) !important;
 }
 
-.dark .shiki,
-.dark .shiki span {
+[data-mode="dark"] .shiki,
+[data-mode="dark"] .shiki span {
   color: var(--shiki-dark) !important;
   font-style: var(--shiki-dark-font-style) !important;
   font-weight: var(--shiki-dark-font-weight) !important;
 }
 
-.dark .shiki {
+[data-mode="dark"] .shiki {
   background-color: var(--shiki-dark-bg) !important;
 }
 
@@ -279,16 +279,14 @@
 }
 
 /* Stacked grid: Shiki layer behind, editable layer in front.
-   Background matches the Shiki theme so trailing empty lines (which Shiki trims)
-   and the 80ms debounce window don't expose the page behind the shorter shiki pre. */
+   Background pulls from --code-block-bg (set per app theme in index.css) so
+   the wrapper matches whichever Shiki theme the active app theme maps to.
+   Important for trailing empty lines Shiki trims and the ~80ms window before
+   Shiki finishes its first highlight. */
 .code-block-body {
   display: grid;
   overflow-x: auto;
-  background: #faf4ed; /* rose-pine-dawn base */
-}
-
-.dark .code-block-body {
-  background: #191724; /* rose-pine base */
+  background: var(--code-block-bg);
 }
 
 .code-block-shiki-layer,
@@ -404,7 +402,7 @@
   font-size: 0.875rem;
 }
 
-.dark .tiptap-editor .ProseMirror [data-type="block-math"].block-math-error:not([data-latex=""]) {
+[data-mode="dark"] .tiptap-editor .ProseMirror [data-type="block-math"].block-math-error:not([data-latex=""]) {
   color: oklch(0.72 0.18 25);
   border-left-color: oklch(0.72 0.18 25);
 }
@@ -512,12 +510,13 @@
 
 /* ── highlight mark ─────────────────────────────────────────────────────── */
 
-/* Highlight palette — vars on :root / .dark (not editor-scoped) so they're
-   also reachable from portaled UI like the bubble-menu color picker that
-   renders outside .tiptap-editor. The Highlight extension emits
-   `data-color="<name>"` only for named colors (no inline style); CSS
-   below paints from the variable, so theme-awareness is implicit.
-   Hex colors keep their own inline style and bypass these vars. */
+/* Highlight palette — vars on :root / [data-mode="dark"] (not editor-scoped) so
+   they're also reachable from portaled UI like the bubble-menu color picker
+   that renders outside .tiptap-editor. The Highlight extension emits
+   `data-color="<name>"` only for named colors (no inline style); CSS below
+   paints from the variable, so theme-awareness is implicit. Hex colors keep
+   their own inline style and bypass these vars. Palette is shared across all
+   themes for now — per-theme overrides can be added in a later PR. */
 :root {
   --hl-yellow: #fef08a;
   --hl-green:  #bbf7d0;
@@ -529,7 +528,7 @@
   --hl-gray:   #e5e7eb;
 }
 
-.dark {
+[data-mode="dark"] {
   --hl-yellow: rgba(133, 77, 14, 0.55);
   --hl-green:  rgba(20, 83, 45, 0.55);
   --hl-blue:   rgba(30, 58, 138, 0.55);
@@ -572,7 +571,7 @@
   white-space: nowrap;
 }
 
-.dark .tiptap-editor .ProseMirror .editor-tag-chip {
+[data-mode="dark"] .tiptap-editor .ProseMirror .editor-tag-chip {
   background: oklch(0.30 0.05 250 / 0.5);
   color: oklch(0.75 0.08 250);
   border-color: oklch(0.45 0.06 250 / 0.5);
@@ -584,7 +583,7 @@
   border-color: oklch(0.75 0.07 150 / 0.6);
 }
 
-.dark .tiptap-editor .ProseMirror .editor-tag-chip--kv {
+[data-mode="dark"] .tiptap-editor .ProseMirror .editor-tag-chip--kv {
   background: oklch(0.28 0.05 150 / 0.5);
   color: oklch(0.72 0.10 150);
   border-color: oklch(0.42 0.07 150 / 0.5);

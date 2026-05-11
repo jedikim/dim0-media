@@ -6,11 +6,11 @@ import { CustomTable } from "./custom-table"
 import { Pre } from "./custom-pre"
 import { MarkdownLink } from "./markdown-link"
 import { Streamdown } from "streamdown"
-import { createCodePlugin } from "./streamdown-code-plugin"
+import { codePlugin } from "./streamdown-code-plugin"
 import { sanitizeMathDelimiters } from "./sanitize-math"
-
-
-const code = createCodePlugin(["rose-pine-dawn", "rose-pine-moon"])
+import { useTheme } from "@/components/theme-provider"
+import { type ShikiThemePair } from "@/components/theme-constants"
+import type { BundledTheme } from "shiki"
 
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
@@ -211,14 +211,19 @@ const components = {
 /** -------------------------------------------------------
  * Renderer: GFM + math override + mermaid
  * ------------------------------------------------------*/
-const Renderer: React.FC<{ content: string; isStreaming?: boolean }> = ({ content, isStreaming }) => {
+const Renderer: React.FC<{
+  content: string
+  isStreaming?: boolean
+  shikiThemes: ShikiThemePair
+}> = ({ content, isStreaming, shikiThemes }) => {
   const normalized = normalizeMathDelimiters(sanitizeMathDelimiters(content))
+
   return (
     <div>
       <Streamdown
         mode={isStreaming ? "streaming" : "static"}
         components={components}
-        shikiTheme={["rose-pine-dawn", "rose-pine-moon"]}
+        shikiTheme={shikiThemes as [BundledTheme, BundledTheme]}
         remarkPlugins={[
           remarkGfm, // <- restores GFM (tables, task lists, etc.)
           // singleDollarTextMath disabled: bare `$` stays literal (currency, prose).
@@ -228,7 +233,7 @@ const Renderer: React.FC<{ content: string; isStreaming?: boolean }> = ({ conten
         rehypePlugins={[
           rehypeKatex, // <- render math with KaTeX
         ]}
-        plugins={isStreaming ? undefined: { code: code }}
+        plugins={isStreaming ? undefined : { code: codePlugin }}
       >
         {normalized}
       </Streamdown>
@@ -253,13 +258,15 @@ export interface MarkdownViewProps {
  */
 export const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
   ({ content, isStreaming = false }) => {
+    const { shikiThemes } = useTheme()
+
     React.useEffect(() => {
       ensureScrollbarStyleInjected()
     }, [])
 
     return (
       <div className="w-full min-w-0">
-        <Renderer content={content} isStreaming={isStreaming} />
+        <Renderer content={content} isStreaming={isStreaming} shikiThemes={shikiThemes} />
       </div>
     )
   },

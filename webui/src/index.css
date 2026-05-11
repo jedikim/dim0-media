@@ -3,7 +3,7 @@
 @import "tw-animate-css";
 @source "../node_modules/streamdown/dist/index.js";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is([data-mode="dark"] *));
 
 .minimap-hide-slide {
   display: none;
@@ -60,12 +60,11 @@
   --font-handwriting: var(--font-handwriting);
   --font-informal: var(--font-informal);
 
-  /* ── layout ─────────────────────────────────────────────── */
-  --radius: 0.625rem;
-  --radius-sm: calc(var(--radius) - 8px);   /* 4px  — chips, inline code */
-  --radius-md: calc(var(--radius) - 4px);   /* 8px  — buttons, inputs */
-  --radius-lg: var(--radius);               /* 12px — popovers, cards */
-  --radius-xl: calc(var(--radius) + 4px);   /* 16px — large panels */
+  /* ── layout (each theme picks its own --radius; the scale derives from it) */
+  --radius-sm: calc(var(--radius) - 8px);   /* 4px-ish — chips, inline code */
+  --radius-md: calc(var(--radius) - 4px);   /* 8px-ish — buttons, inputs */
+  --radius-lg: var(--radius);               /* base — popovers, cards */
+  --radius-xl: calc(var(--radius) + 4px);   /* +4px — large panels */
 
   --shadow-2xs: var(--shadow-2xs);
   --shadow-xs: var(--shadow-xs);
@@ -78,11 +77,58 @@
 }
 
 /* ============================================================
-   LIGHT THEME
+   SHARED ROOT — typography + layout that all themes inherit
    ============================================================ */
 
 :root {
-  /* ── surfaces ───────────────────────────────────────────── */
+  /* UI chrome — Atkinson Hyperlegible Next (Braille Institute, legibility-optimized) */
+  --font-sans: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', ui-sans-serif, sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  --font-serif: 'Lora', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
+  --font-mono: 'Inconsolata', ui-monospace, SFMono-Regular,
+    Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  --font-handwriting: 'Architects Daughter', cursive;
+  --font-informal: 'Shantell Sans', ui-handwriting, cursive;
+
+  --tracking-normal: 0rem;
+  --spacing: 0.25rem;
+
+  /* shape fill misregistration — print-style offset between fill and stroke. */
+  --shape-misregister-x: -3px;
+  --shape-misregister-y: -2px;
+
+  /* light shadows — applied by default; dark mode overrides below */
+  --shadow-2xs: 0px 2px 4px 0px hsl(0 0% 0% / 0.03);
+  --shadow-xs:  0px 2px 4px 0px hsl(0 0% 0% / 0.03);
+  --shadow-sm:  0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 1px 2px -1px hsl(0 0% 0% / 0.05);
+  --shadow:     0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 1px 2px -1px hsl(0 0% 0% / 0.05);
+  --shadow-md:  0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 2px 4px -1px hsl(0 0% 0% / 0.05);
+  --shadow-lg:  0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 4px 6px -1px hsl(0 0% 0% / 0.05);
+  --shadow-xl:  0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 8px 10px -1px hsl(0 0% 0% / 0.05);
+  --shadow-2xl: 0px 2px 4px 0px hsl(0 0% 0% / 0.13);
+}
+
+[data-mode="dark"] {
+  --shadow-2xs: 0px 2px 4px 0px hsl(0 0% 0% / 0.05);
+  --shadow-xs:  0px 2px 4px 0px hsl(0 0% 0% / 0.05);
+  --shadow-sm:  0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow:     0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow-md:  0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 2px 4px -1px hsl(0 0% 0% / 0.10);
+  --shadow-lg:  0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 4px 6px -1px hsl(0 0% 0% / 0.10);
+  --shadow-xl:  0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 8px 10px -1px hsl(0 0% 0% / 0.10);
+  --shadow-2xl: 0px 2px 4px 0px hsl(0 0% 0% / 0.25);
+}
+
+/* ============================================================
+   PARCHMENT — warm paper, sienna accent (default theme)
+   Radius: standard (10px)
+   ============================================================ */
+
+[data-theme="parchment"] {
+  --radius: 0.625rem;
+
+  /* surfaces */
   --background:            oklch(0.97 0.006 95);
   --foreground:            oklch(0.32 0.02 270);
   --card:                  oklch(0.985 0.004 95);
@@ -90,13 +136,13 @@
   --popover:               oklch(0.985 0.004 95);
   --popover-foreground:    oklch(0.32 0.02 270);
 
-  /* ── brand & actions ────────────────────────────────────── */
+  /* brand & actions */
   --primary:               oklch(0.20 0.01 95);
   --primary-foreground:    oklch(0.97 0.006 95);
-  --secondary:             oklch(0.92 0.04 50);   /* sienna tint — chip bg */
-  --secondary-foreground:  oklch(0.38 0.10 38);   /* dark sienna text */
+  --secondary:             oklch(0.92 0.04 50);
+  --secondary-foreground:  oklch(0.38 0.10 38);
 
-  /* ── chrome ─────────────────────────────────────────────── */
+  /* chrome */
   --muted:                 oklch(0.94 0.008 95);
   --muted-foreground:      oklch(0.50 0.02 270);
   --accent:                oklch(0.94 0.008 95);
@@ -105,9 +151,9 @@
   --destructive-foreground: oklch(0.98 0.005 95);
   --border:                oklch(0.88 0.003 95);
   --input:                 oklch(0.94 0.008 95);
-  --ring:                  oklch(0.38 0.10 38);   /* sienna focus ring */
+  --ring:                  oklch(0.38 0.10 38);
 
-  /* ── sidebar ─────────────────────────────────────────────── */
+  /* sidebar */
   --sidebar:               oklch(0.955 0.006 95);
   --sidebar-foreground:    oklch(0.32 0.02 270);
   --sidebar-primary:       oklch(0.20 0.01 95);
@@ -121,59 +167,26 @@
   --sidebar-icon-3:        #965e30;
   --sidebar-icon-4:        #a6395c;
 
-  /* ── editor-specific ────────────────────────────────────── */
+  /* editor */
   --highlight-default:     oklch(0.973 0.071 103);
-  --link:                  oklch(0.4909 0.0770 227.9983);  /* blue — external URLs */
+  --link:                  oklch(0.4909 0.0770 227.9983);
   --link-foreground:       oklch(0.32 0.06 228);
-  --wiki-link:             oklch(0.55 0.11 38);            /* sienna — [[internal refs]] */
+  --wiki-link:             oklch(0.55 0.11 38);
   --wiki-link-subtle:      oklch(0.92 0.04 50);
 
-  /* ── charts ─────────────────────────────────────────────── */
+  /* charts */
   --chart-1: oklch(0.70 0.12 25);
   --chart-2: oklch(0.72 0.10 210);
   --chart-3: oklch(0.5989 0.1071 2.6555);
   --chart-4: oklch(0.4909 0.0770 227.9983);
   --chart-5: oklch(0.66 0.11 330);
 
-  /* ── typography ─────────────────────────────────────────── */
-  /* UI chrome — Atkinson Hyperlegible Next (Braille Institute, legibility-optimized) */
-  --font-sans: 'Atkinson Hyperlegible Next', system-ui, -apple-system, BlinkMacSystemFont,
-    'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', ui-sans-serif, sans-serif,
-    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-  /* Editor body text — Lora. Source Serif 4 loaded on-demand if user switches body font. */
-  --font-serif: 'Lora', ui-serif, Georgia, Cambria, 'Times New Roman', Times, serif;
-  /* Code blocks & metadata — Inconsolata (humanist mono, warm, variable 200–900) */
-  --font-mono: 'Inconsolata', ui-monospace, SFMono-Regular,
-    Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
-  /* Canvas annotations, diagram labels — structured handwriting */
-  --font-handwriting: 'Architects Daughter', cursive;
-  /* Sticky notes, casual callouts — expressive handwriting */
-  --font-informal: 'Shantell Sans', ui-handwriting, cursive;
-
-  /* ── shadows (very subtle — warm parchment feel) ─────────── */
-  --shadow-2xs: 0px 2px 4px 0px hsl(0 0% 0% / 0.03);
-  --shadow-xs:  0px 2px 4px 0px hsl(0 0% 0% / 0.03);
-  --shadow-sm:  0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 1px 2px -1px hsl(0 0% 0% / 0.05);
-  --shadow:     0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 1px 2px -1px hsl(0 0% 0% / 0.05);
-  --shadow-md:  0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 2px 4px -1px hsl(0 0% 0% / 0.05);
-  --shadow-lg:  0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 4px 6px -1px hsl(0 0% 0% / 0.05);
-  --shadow-xl:  0px 2px 4px 0px hsl(0 0% 0% / 0.05), 0px 8px 10px -1px hsl(0 0% 0% / 0.05);
-  --shadow-2xl: 0px 2px 4px 0px hsl(0 0% 0% / 0.13);
-
-  --tracking-normal: 0rem;
-  --spacing: 0.25rem;
-
-  /* shape fill misregistration — print-style offset between fill and stroke. */
-  --shape-misregister-x: -3px;
-  --shape-misregister-y: -2px;
+  /* code-block bg — matches the Shiki theme's bg so wrapper + Shiki output
+     share a seamless surface (rose-pine-dawn for this theme). */
+  --code-block-bg: #faf4ed;
 }
 
-/* ============================================================
-   DARK THEME — neutral dark, sienna accent does the warmth
-   ============================================================ */
-
-.dark {
-  /* ── surfaces ───────────────────────────────────────────── */
+[data-theme="parchment"][data-mode="dark"] {
   --background:            oklch(0.16 0.002 45);
   --foreground:            oklch(0.90 0.002 45);
   --card:                  oklch(0.20 0.002 45);
@@ -181,24 +194,21 @@
   --popover:               oklch(0.20 0.002 45);
   --popover-foreground:    oklch(0.90 0.002 45);
 
-  /* ── brand & actions ────────────────────────────────────── */
-  --primary:               oklch(0.65 0.11 38);   /* sienna */
+  --primary:               oklch(0.65 0.11 38);
   --primary-foreground:    oklch(0.13 0.002 45);
-  --secondary:             oklch(0.24 0.05 40);   /* dark sienna tint — chip bg */
+  --secondary:             oklch(0.24 0.05 40);
   --secondary-foreground:  oklch(0.86 0.08 45);
 
-  /* ── chrome ─────────────────────────────────────────────── */
   --muted:                 oklch(0.23 0.002 45);
   --muted-foreground:      oklch(0.55 0.002 45);
   --accent:                oklch(0.23 0.002 45);
   --accent-foreground:     oklch(0.90 0.002 45);
   --destructive:           oklch(0.55 0.13 12);
   --destructive-foreground: oklch(0.97 0.005 95);
-  --border:                oklch(1 0 0 / 0.08);   /* white 8% — elegant, adapts to bg */
+  --border:                oklch(1 0 0 / 0.08);
   --input:                 oklch(0.23 0.002 45);
-  --ring:                  oklch(0.65 0.11 38);   /* sienna focus ring */
+  --ring:                  oklch(0.65 0.11 38);
 
-  /* ── sidebar ─────────────────────────────────────────────── */
   --sidebar:               oklch(0.18 0.002 45);
   --sidebar-foreground:    oklch(0.90 0.002 45);
   --sidebar-primary:       oklch(0.65 0.11 38);
@@ -209,32 +219,579 @@
   --sidebar-ring:          oklch(0.65 0.11 38);
   --sidebar-icon-1:        oklch(0.64 0.14 265);
   --sidebar-icon-2:        oklch(0.63 0.13 145);
-  --sidebar-icon-3:        oklch(0.65 0.11 38);   /* sienna */
+  --sidebar-icon-3:        oklch(0.65 0.11 38);
   --sidebar-icon-4:        oklch(0.64 0.14 358);
 
-  /* ── editor-specific ────────────────────────────────────── */
-  --highlight-default:     oklch(0.28 0.08 40);   /* visible amber glow on dark bg */
-  --link:                  oklch(0.67 0.09 235);  /* blue — external URLs */
+  --highlight-default:     oklch(0.28 0.08 40);
+  --link:                  oklch(0.67 0.09 235);
   --link-foreground:       oklch(0.74 0.07 235);
-  --wiki-link:             oklch(0.65 0.11 38);   /* sienna — [[internal refs]] */
+  --wiki-link:             oklch(0.65 0.11 38);
   --wiki-link-subtle:      oklch(0.24 0.05 40);
 
-  /* ── charts ─────────────────────────────────────────────── */
   --chart-1: oklch(0.80 0.15 25);
   --chart-2: oklch(0.82 0.13 210);
   --chart-3: oklch(0.78 0.12 2.7);
   --chart-4: oklch(0.78 0.12 228);
   --chart-5: oklch(0.82 0.14 330);
 
-  /* ── shadows (heavier on dark — more contrast needed) ────── */
-  --shadow-2xs: 0px 2px 4px 0px hsl(0 0% 0% / 0.05);
-  --shadow-xs:  0px 2px 4px 0px hsl(0 0% 0% / 0.05);
-  --shadow-sm:  0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 1px 2px -1px hsl(0 0% 0% / 0.10);
-  --shadow:     0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 1px 2px -1px hsl(0 0% 0% / 0.10);
-  --shadow-md:  0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 2px 4px -1px hsl(0 0% 0% / 0.10);
-  --shadow-lg:  0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 4px 6px -1px hsl(0 0% 0% / 0.10);
-  --shadow-xl:  0px 2px 4px 0px hsl(0 0% 0% / 0.10), 0px 8px 10px -1px hsl(0 0% 0% / 0.10);
-  --shadow-2xl: 0px 2px 4px 0px hsl(0 0% 0% / 0.25);
+  --code-block-bg: #191724;            /* rose-pine */
+}
+
+/* ============================================================
+   CATPPUCCIN — pastel, mauve accent (Latte / Mocha)
+   Radius: extra soft (14px)
+   ============================================================ */
+
+[data-theme="catppuccin"] {
+  --radius: 0.875rem;
+
+  /* surfaces — Latte */
+  --background:            oklch(0.951 0.004 264);   /* base   #eff1f5 */
+  --foreground:            oklch(0.434 0.034 281);   /* text   #4c4f69 */
+  --card:                  oklch(0.927 0.005 264);   /* mantle #e6e9ef */
+  --card-foreground:       oklch(0.434 0.034 281);
+  --popover:               oklch(0.927 0.005 264);
+  --popover-foreground:    oklch(0.434 0.034 281);
+
+  --primary:               oklch(0.526 0.244 305);   /* mauve  #8839ef */
+  --primary-foreground:    oklch(0.951 0.004 264);
+  --secondary:             oklch(0.87 0.05 305);     /* light mauve chip */
+  --secondary-foreground:  oklch(0.45 0.20 305);
+
+  --muted:                 oklch(0.892 0.007 264);   /* crust  #dce0e8 */
+  --muted-foreground:      oklch(0.55 0.025 280);    /* subtext0 */
+  --accent:                oklch(0.834 0.011 271);   /* surface0 #ccd0da */
+  --accent-foreground:     oklch(0.434 0.034 281);
+  --destructive:           oklch(0.555 0.232 14);    /* red    #d20f39 */
+  --destructive-foreground: oklch(0.951 0.004 264);
+  --border:                oklch(0.834 0.011 271);
+  --input:                 oklch(0.892 0.007 264);
+  --ring:                  oklch(0.526 0.244 305);
+
+  --sidebar:               oklch(0.927 0.005 264);
+  --sidebar-foreground:    oklch(0.434 0.034 281);
+  --sidebar-primary:       oklch(0.526 0.244 305);
+  --sidebar-primary-foreground: oklch(0.951 0.004 264);
+  --sidebar-accent:        oklch(0.87 0.05 305);
+  --sidebar-accent-foreground: oklch(0.45 0.20 305);
+  --sidebar-border:        oklch(0.834 0.011 271);
+  --sidebar-ring:          oklch(0.526 0.244 305);
+  --sidebar-icon-1:        oklch(0.555 0.222 261);   /* blue */
+  --sidebar-icon-2:        oklch(0.59 0.15 145);     /* green */
+  --sidebar-icon-3:        oklch(0.526 0.244 305);   /* mauve */
+  --sidebar-icon-4:        oklch(0.62 0.18 30);      /* peach */
+
+  --highlight-default:     oklch(0.92 0.06 95);      /* warm yellow tint */
+  --link:                  oklch(0.555 0.222 261);   /* blue */
+  --link-foreground:       oklch(0.45 0.18 261);
+  --wiki-link:             oklch(0.526 0.244 305);   /* mauve */
+  --wiki-link-subtle:      oklch(0.87 0.05 305);
+
+  --chart-1: oklch(0.62 0.18 30);    /* peach */
+  --chart-2: oklch(0.555 0.222 261); /* blue */
+  --chart-3: oklch(0.555 0.232 14);  /* red */
+  --chart-4: oklch(0.65 0.14 200);   /* sky */
+  --chart-5: oklch(0.526 0.244 305); /* mauve */
+
+  --code-block-bg: #eff1f5;            /* catppuccin-latte */
+}
+
+[data-theme="catppuccin"][data-mode="dark"] {
+  /* surfaces — Mocha */
+  --background:            oklch(0.222 0.025 280);   /* base    #1e1e2e */
+  --foreground:            oklch(0.873 0.034 270);   /* text    #cdd6f4 */
+  --card:                  oklch(0.255 0.022 280);   /* mantle  #181825 lifted */
+  --card-foreground:       oklch(0.873 0.034 270);
+  --popover:               oklch(0.255 0.022 280);
+  --popover-foreground:    oklch(0.873 0.034 270);
+
+  --primary:               oklch(0.776 0.136 304);   /* mauve   #cba6f7 */
+  --primary-foreground:    oklch(0.222 0.025 280);
+  --secondary:             oklch(0.34 0.06 304);     /* dim mauve chip */
+  --secondary-foreground:  oklch(0.85 0.10 304);
+
+  --muted:                 oklch(0.319 0.024 281);   /* surface0 #313244 */
+  --muted-foreground:      oklch(0.68 0.025 270);    /* subtext0 */
+  --accent:                oklch(0.319 0.024 281);
+  --accent-foreground:     oklch(0.873 0.034 270);
+  --destructive:           oklch(0.762 0.122 8);     /* red #f38ba8 */
+  --destructive-foreground: oklch(0.222 0.025 280);
+  --border:                oklch(1 0 0 / 0.08);
+  --input:                 oklch(0.319 0.024 281);
+  --ring:                  oklch(0.776 0.136 304);
+
+  --sidebar:               oklch(0.255 0.022 280);
+  --sidebar-foreground:    oklch(0.873 0.034 270);
+  --sidebar-primary:       oklch(0.776 0.136 304);
+  --sidebar-primary-foreground: oklch(0.222 0.025 280);
+  --sidebar-accent:        oklch(0.34 0.06 304);
+  --sidebar-accent-foreground: oklch(0.85 0.10 304);
+  --sidebar-border:        oklch(1 0 0 / 0.08);
+  --sidebar-ring:          oklch(0.776 0.136 304);
+  --sidebar-icon-1:        oklch(0.762 0.106 263);   /* blue */
+  --sidebar-icon-2:        oklch(0.83 0.13 145);     /* green */
+  --sidebar-icon-3:        oklch(0.776 0.136 304);   /* mauve */
+  --sidebar-icon-4:        oklch(0.80 0.12 30);      /* peach */
+
+  --highlight-default:     oklch(0.34 0.07 95);
+  --link:                  oklch(0.762 0.106 263);
+  --link-foreground:       oklch(0.82 0.08 263);
+  --wiki-link:             oklch(0.776 0.136 304);
+  --wiki-link-subtle:      oklch(0.34 0.06 304);
+
+  --chart-1: oklch(0.80 0.12 30);
+  --chart-2: oklch(0.762 0.106 263);
+  --chart-3: oklch(0.762 0.122 8);
+  --chart-4: oklch(0.78 0.10 200);
+  --chart-5: oklch(0.776 0.136 304);
+
+  --code-block-bg: #1e1e2e;            /* catppuccin-mocha */
+}
+
+/* ============================================================
+   TOKYO NIGHT — cool blue, electric accent (Day / Night)
+   Radius: standard (10px)
+   ============================================================ */
+
+[data-theme="tokyo-night"] {
+  --radius: 0.625rem;
+
+  /* surfaces — Day */
+  --background:            oklch(0.905 0.005 269);   /* #e1e2e7 */
+  --foreground:            oklch(0.36 0.06 270);     /* #343b58 */
+  --card:                  oklch(0.93 0.005 269);    /* lifted from bg */
+  --card-foreground:       oklch(0.36 0.06 270);
+  --popover:               oklch(0.93 0.005 269);
+  --popover-foreground:    oklch(0.36 0.06 270);
+
+  --primary:               oklch(0.605 0.193 256);   /* blue #2e7de9 */
+  --primary-foreground:    oklch(0.96 0.005 269);
+  --secondary:             oklch(0.86 0.06 256);     /* light blue chip */
+  --secondary-foreground:  oklch(0.45 0.18 256);
+
+  --muted:                 oklch(0.86 0.006 269);    /* bg_dark */
+  --muted-foreground:      oklch(0.55 0.04 270);     /* comment */
+  --accent:                oklch(0.83 0.008 269);    /* bg_highlight */
+  --accent-foreground:     oklch(0.36 0.06 270);
+  --destructive:           oklch(0.61 0.22 8);       /* red #f52a65 */
+  --destructive-foreground: oklch(0.96 0.005 269);
+  --border:                oklch(0.78 0.012 269);
+  --input:                 oklch(0.86 0.006 269);
+  --ring:                  oklch(0.605 0.193 256);
+
+  --sidebar:               oklch(0.88 0.006 269);
+  --sidebar-foreground:    oklch(0.36 0.06 270);
+  --sidebar-primary:       oklch(0.605 0.193 256);
+  --sidebar-primary-foreground: oklch(0.96 0.005 269);
+  --sidebar-accent:        oklch(0.86 0.06 256);
+  --sidebar-accent-foreground: oklch(0.45 0.18 256);
+  --sidebar-border:        oklch(0.78 0.012 269);
+  --sidebar-ring:          oklch(0.605 0.193 256);
+  --sidebar-icon-1:        oklch(0.605 0.193 256);   /* blue */
+  --sidebar-icon-2:        oklch(0.55 0.13 150);     /* green */
+  --sidebar-icon-3:        oklch(0.55 0.22 305);     /* magenta */
+  --sidebar-icon-4:        oklch(0.55 0.18 50);      /* orange */
+
+  --highlight-default:     oklch(0.92 0.07 95);
+  --link:                  oklch(0.55 0.15 220);     /* cyan */
+  --link-foreground:       oklch(0.45 0.13 220);
+  --wiki-link:             oklch(0.55 0.22 305);     /* magenta */
+  --wiki-link-subtle:      oklch(0.86 0.06 256);
+
+  --chart-1: oklch(0.605 0.193 256);
+  --chart-2: oklch(0.55 0.15 220);
+  --chart-3: oklch(0.61 0.22 8);
+  --chart-4: oklch(0.55 0.13 150);
+  --chart-5: oklch(0.55 0.22 305);
+
+  --code-block-bg: #ffffff;            /* github-light (Shiki light substitute) */
+}
+
+[data-theme="tokyo-night"][data-mode="dark"] {
+  /* surfaces — Night */
+  --background:            oklch(0.197 0.022 271);   /* #1a1b26 */
+  --foreground:            oklch(0.823 0.046 264);   /* #c0caf5 */
+  --card:                  oklch(0.245 0.025 271);   /* bg_highlight tone */
+  --card-foreground:       oklch(0.823 0.046 264);
+  --popover:               oklch(0.245 0.025 271);
+  --popover-foreground:    oklch(0.823 0.046 264);
+
+  --primary:               oklch(0.696 0.132 256);   /* blue #7aa2f7 */
+  --primary-foreground:    oklch(0.197 0.022 271);
+  --secondary:             oklch(0.30 0.06 256);
+  --secondary-foreground:  oklch(0.82 0.10 256);
+
+  --muted:                 oklch(0.275 0.028 271);   /* fg_gutter */
+  --muted-foreground:      oklch(0.55 0.045 264);    /* comment */
+  --accent:                oklch(0.275 0.028 271);
+  --accent-foreground:     oklch(0.823 0.046 264);
+  --destructive:           oklch(0.71 0.16 14);      /* red #f7768e */
+  --destructive-foreground: oklch(0.197 0.022 271);
+  --border:                oklch(1 0 0 / 0.08);
+  --input:                 oklch(0.275 0.028 271);
+  --ring:                  oklch(0.696 0.132 256);
+
+  --sidebar:               oklch(0.22 0.024 271);
+  --sidebar-foreground:    oklch(0.823 0.046 264);
+  --sidebar-primary:       oklch(0.696 0.132 256);
+  --sidebar-primary-foreground: oklch(0.197 0.022 271);
+  --sidebar-accent:        oklch(0.30 0.06 256);
+  --sidebar-accent-foreground: oklch(0.82 0.10 256);
+  --sidebar-border:        oklch(1 0 0 / 0.08);
+  --sidebar-ring:          oklch(0.696 0.132 256);
+  --sidebar-icon-1:        oklch(0.696 0.132 256);   /* blue */
+  --sidebar-icon-2:        oklch(0.78 0.14 150);     /* green */
+  --sidebar-icon-3:        oklch(0.74 0.13 305);     /* magenta */
+  --sidebar-icon-4:        oklch(0.78 0.15 50);      /* orange */
+
+  --highlight-default:     oklch(0.32 0.07 95);
+  --link:                  oklch(0.83 0.13 220);     /* cyan #7dcfff */
+  --link-foreground:       oklch(0.86 0.10 220);
+  --wiki-link:             oklch(0.74 0.13 305);     /* magenta */
+  --wiki-link-subtle:      oklch(0.30 0.06 256);
+
+  --chart-1: oklch(0.696 0.132 256);
+  --chart-2: oklch(0.83 0.13 220);
+  --chart-3: oklch(0.71 0.16 14);
+  --chart-4: oklch(0.78 0.14 150);
+  --chart-5: oklch(0.74 0.13 305);
+
+  --code-block-bg: #1a1b26;            /* tokyo-night */
+}
+
+/* ============================================================
+   GRUVBOX — retro vim, orange accent (Light / Dark)
+   Radius: flat (6px) — matches the no-frills aesthetic
+   ============================================================ */
+
+[data-theme="gruvbox"] {
+  --radius: 0.375rem;
+
+  /* surfaces — Light */
+  --background:            oklch(0.949 0.038 95);    /* bg0 #fbf1c7 */
+  --foreground:            oklch(0.305 0.011 67);    /* fg1 #3c3836 */
+  --card:                  oklch(0.91 0.045 90);     /* bg1 #ebdbb2 */
+  --card-foreground:       oklch(0.305 0.011 67);
+  --popover:               oklch(0.91 0.045 90);
+  --popover-foreground:    oklch(0.305 0.011 67);
+
+  --primary:               oklch(0.601 0.165 47);    /* orange #d65d0e */
+  --primary-foreground:    oklch(0.949 0.038 95);
+  --secondary:             oklch(0.83 0.055 85);     /* bg2 #d5c4a1 */
+  --secondary-foreground:  oklch(0.45 0.14 47);
+
+  --muted:                 oklch(0.91 0.045 90);
+  --muted-foreground:      oklch(0.49 0.025 60);     /* fg3 */
+  --accent:                oklch(0.83 0.055 85);
+  --accent-foreground:     oklch(0.305 0.011 67);
+  --destructive:           oklch(0.486 0.196 31);    /* red #cc241d */
+  --destructive-foreground: oklch(0.949 0.038 95);
+  --border:                oklch(0.74 0.04 80);      /* bg3 #bdae93 */
+  --input:                 oklch(0.91 0.045 90);
+  --ring:                  oklch(0.601 0.165 47);
+
+  --sidebar:               oklch(0.93 0.04 92);
+  --sidebar-foreground:    oklch(0.305 0.011 67);
+  --sidebar-primary:       oklch(0.601 0.165 47);
+  --sidebar-primary-foreground: oklch(0.949 0.038 95);
+  --sidebar-accent:        oklch(0.83 0.055 85);
+  --sidebar-accent-foreground: oklch(0.45 0.14 47);
+  --sidebar-border:        oklch(0.74 0.04 80);
+  --sidebar-ring:          oklch(0.601 0.165 47);
+  --sidebar-icon-1:        oklch(0.532 0.077 215);   /* blue   #458588 */
+  --sidebar-icon-2:        oklch(0.578 0.142 124);   /* green  #98971a */
+  --sidebar-icon-3:        oklch(0.601 0.165 47);    /* orange */
+  --sidebar-icon-4:        oklch(0.55 0.137 354);    /* purple #b16286 */
+
+  --highlight-default:     oklch(0.92 0.10 88);      /* yellow tint */
+  --link:                  oklch(0.532 0.077 215);   /* blue */
+  --link-foreground:       oklch(0.42 0.07 215);
+  --wiki-link:             oklch(0.586 0.092 144);   /* aqua #689d6a */
+  --wiki-link-subtle:      oklch(0.83 0.055 85);
+
+  --chart-1: oklch(0.601 0.165 47);
+  --chart-2: oklch(0.532 0.077 215);
+  --chart-3: oklch(0.486 0.196 31);
+  --chart-4: oklch(0.578 0.142 124);
+  --chart-5: oklch(0.55 0.137 354);
+
+  --code-block-bg: #fbf1c7;            /* gruvbox-light-medium */
+}
+
+[data-theme="gruvbox"][data-mode="dark"] {
+  /* surfaces — Dark */
+  --background:            oklch(0.247 0.011 67);    /* bg0 #282828 */
+  --foreground:            oklch(0.875 0.038 90);    /* fg1 #ebdbb2 */
+  --card:                  oklch(0.305 0.011 67);    /* bg1 #3c3836 */
+  --card-foreground:       oklch(0.875 0.038 90);
+  --popover:               oklch(0.305 0.011 67);
+  --popover-foreground:    oklch(0.875 0.038 90);
+
+  --primary:               oklch(0.74 0.187 47);     /* orange #fe8019 */
+  --primary-foreground:    oklch(0.247 0.011 67);
+  --secondary:             oklch(0.38 0.025 60);     /* bg2 #504945 */
+  --secondary-foreground:  oklch(0.85 0.13 60);
+
+  --muted:                 oklch(0.305 0.011 67);
+  --muted-foreground:      oklch(0.62 0.018 80);     /* fg4 */
+  --accent:                oklch(0.38 0.025 60);
+  --accent-foreground:     oklch(0.875 0.038 90);
+  --destructive:           oklch(0.65 0.215 32);     /* red #fb4934 */
+  --destructive-foreground: oklch(0.247 0.011 67);
+  --border:                oklch(1 0 0 / 0.10);
+  --input:                 oklch(0.305 0.011 67);
+  --ring:                  oklch(0.74 0.187 47);
+
+  --sidebar:               oklch(0.275 0.011 67);
+  --sidebar-foreground:    oklch(0.875 0.038 90);
+  --sidebar-primary:       oklch(0.74 0.187 47);
+  --sidebar-primary-foreground: oklch(0.247 0.011 67);
+  --sidebar-accent:        oklch(0.38 0.025 60);
+  --sidebar-accent-foreground: oklch(0.85 0.13 60);
+  --sidebar-border:        oklch(1 0 0 / 0.10);
+  --sidebar-ring:          oklch(0.74 0.187 47);
+  --sidebar-icon-1:        oklch(0.70 0.09 215);     /* blue #83a598 */
+  --sidebar-icon-2:        oklch(0.78 0.15 124);     /* green #b8bb26 */
+  --sidebar-icon-3:        oklch(0.74 0.187 47);     /* orange */
+  --sidebar-icon-4:        oklch(0.75 0.10 354);     /* purple #d3869b */
+
+  --highlight-default:     oklch(0.42 0.10 88);
+  --link:                  oklch(0.70 0.09 215);
+  --link-foreground:       oklch(0.78 0.07 215);
+  --wiki-link:             oklch(0.78 0.10 144);     /* aqua #8ec07c */
+  --wiki-link-subtle:      oklch(0.38 0.025 60);
+
+  --chart-1: oklch(0.74 0.187 47);
+  --chart-2: oklch(0.70 0.09 215);
+  --chart-3: oklch(0.65 0.215 32);
+  --chart-4: oklch(0.78 0.15 124);
+  --chart-5: oklch(0.75 0.10 354);
+
+  --code-block-bg: #282828;            /* gruvbox-dark-medium */
+}
+
+/* ============================================================
+   MONOKAI PRO — neon-on-dark IDE classic (Sun / Octagon)
+   Radius: tight (8px) — matches the editor-precision aesthetic
+   ============================================================ */
+
+[data-theme="monokai-pro"] {
+  --radius: 0.5rem;
+
+  /* surfaces — Filter Sun */
+  --background:            oklch(0.965 0.011 30);    /* #faf4f2 */
+  --foreground:            oklch(0.265 0.018 320);   /* #29242a wine */
+  --card:                  oklch(0.978 0.008 30);    /* slight lift */
+  --card-foreground:       oklch(0.265 0.018 320);
+  --popover:               oklch(0.978 0.008 30);
+  --popover-foreground:    oklch(0.265 0.018 320);
+
+  /* primary = dark wine for IDE-chrome feel; rose stays as accent only */
+  --primary:               oklch(0.265 0.018 320);
+  --primary-foreground:    oklch(0.965 0.011 30);
+  --secondary:             oklch(0.90 0.04 12);      /* soft rose chip */
+  --secondary-foreground:  oklch(0.52 0.13 8);
+
+  --muted:                 oklch(0.92 0.012 35);
+  --muted-foreground:      oklch(0.48 0.014 30);
+  --accent:                oklch(0.92 0.012 35);
+  --accent-foreground:     oklch(0.265 0.018 320);
+  --destructive:           oklch(0.58 0.16 12);
+  --destructive-foreground: oklch(0.965 0.011 30);
+  --border:                oklch(0.86 0.018 40);
+  --input:                 oklch(0.92 0.012 35);
+  --ring:                  oklch(0.55 0.13 10);      /* rose ring accent */
+
+  --sidebar:               oklch(0.945 0.013 30);
+  --sidebar-foreground:    oklch(0.265 0.018 320);
+  --sidebar-primary:       oklch(0.265 0.018 320);
+  --sidebar-primary-foreground: oklch(0.965 0.011 30);
+  --sidebar-accent:        oklch(0.90 0.04 12);
+  --sidebar-accent-foreground: oklch(0.52 0.13 8);
+  --sidebar-border:        oklch(0.86 0.018 40);
+  --sidebar-ring:          oklch(0.55 0.13 10);
+  --sidebar-icon-1:        oklch(0.50 0.10 215);     /* slate-blue */
+  --sidebar-icon-2:        oklch(0.50 0.12 150);     /* green */
+  --sidebar-icon-3:        oklch(0.55 0.13 10);      /* rose */
+  --sidebar-icon-4:        oklch(0.55 0.18 305);     /* purple */
+
+  --highlight-default:     oklch(0.93 0.07 90);
+  --link:                  oklch(0.50 0.10 215);     /* slate-blue */
+  --link-foreground:       oklch(0.42 0.08 215);
+  --wiki-link:             oklch(0.55 0.13 10);      /* rose — matches syntax */
+  --wiki-link-subtle:      oklch(0.90 0.04 12);
+
+  --chart-1: oklch(0.55 0.13 10);
+  --chart-2: oklch(0.50 0.10 215);
+  --chart-3: oklch(0.58 0.14 70);    /* warm yellow */
+  --chart-4: oklch(0.50 0.12 150);   /* green */
+  --chart-5: oklch(0.55 0.18 305);   /* purple */
+
+  --code-block-bg: #ffffff;            /* vitesse-light (Monokai Pro Sun substitute) */
+}
+
+[data-theme="monokai-pro"][data-mode="dark"] {
+  /* surfaces — Filter Octagon */
+  --background:            oklch(0.297 0.025 280);   /* #282a3a */
+  --foreground:            oklch(0.945 0.012 200);   /* #eaf2f1 */
+  --card:                  oklch(0.345 0.025 280);
+  --card-foreground:       oklch(0.945 0.012 200);
+  --popover:               oklch(0.345 0.025 280);
+  --popover-foreground:    oklch(0.945 0.012 200);
+
+  /* primary = off-white surface; coral stays as accent only */
+  --primary:               oklch(0.945 0.012 200);
+  --primary-foreground:    oklch(0.297 0.025 280);
+  --secondary:             oklch(0.36 0.06 12);      /* dim coral chip */
+  --secondary-foreground:  oklch(0.85 0.13 12);
+
+  --muted:                 oklch(0.36 0.022 280);
+  --muted-foreground:      oklch(0.62 0.022 270);    /* #80818e */
+  --accent:                oklch(0.36 0.022 280);
+  --accent-foreground:     oklch(0.945 0.012 200);
+  --destructive:           oklch(0.65 0.18 12);
+  --destructive-foreground: oklch(0.297 0.025 280);
+  --border:                oklch(1 0 0 / 0.08);
+  --input:                 oklch(0.36 0.022 280);
+  --ring:                  oklch(0.68 0.15 12);      /* coral ring accent */
+
+  --sidebar:               oklch(0.32 0.025 280);
+  --sidebar-foreground:    oklch(0.945 0.012 200);
+  --sidebar-primary:       oklch(0.945 0.012 200);
+  --sidebar-primary-foreground: oklch(0.297 0.025 280);
+  --sidebar-accent:        oklch(0.36 0.06 12);
+  --sidebar-accent-foreground: oklch(0.85 0.13 12);
+  --sidebar-border:        oklch(1 0 0 / 0.08);
+  --sidebar-ring:          oklch(0.68 0.15 12);
+  --sidebar-icon-1:        oklch(0.78 0.10 195);     /* cyan #9cd1bb */
+  --sidebar-icon-2:        oklch(0.83 0.16 110);     /* lime #bad761 */
+  --sidebar-icon-3:        oklch(0.68 0.15 12);      /* coral */
+  --sidebar-icon-4:        oklch(0.86 0.14 85);      /* yellow #ffd76d */
+
+  --highlight-default:     oklch(0.42 0.10 85);
+  --link:                  oklch(0.78 0.10 195);     /* cyan */
+  --link-foreground:       oklch(0.83 0.08 195);
+  --wiki-link:             oklch(0.78 0.10 305);     /* lavender #c39ac9 */
+  --wiki-link-subtle:      oklch(0.36 0.06 12);
+
+  --chart-1: oklch(0.68 0.15 12);
+  --chart-2: oklch(0.78 0.10 195);
+  --chart-3: oklch(0.86 0.14 85);
+  --chart-4: oklch(0.83 0.16 110);
+  --chart-5: oklch(0.78 0.10 305);
+
+  --code-block-bg: #272822;            /* monokai */
+}
+
+/* ============================================================
+   ROSÉ PINE — soft pastel, rose accent (Dawn / Main)
+   Radius: gentle (12px) — matches the soft pastel mood
+   ============================================================ */
+
+[data-theme="rose-pine"] {
+  --radius: 0.75rem;
+
+  /* surfaces — Dawn */
+  --background:            oklch(0.97 0.012 75);     /* base    #faf4ed */
+  --foreground:            oklch(0.42 0.052 290);    /* text    #575279 */
+  --card:                  oklch(0.985 0.008 75);    /* surface #fffaf3 */
+  --card-foreground:       oklch(0.42 0.052 290);
+  --popover:               oklch(0.985 0.008 75);
+  --popover-foreground:    oklch(0.42 0.052 290);
+
+  --primary:               oklch(0.555 0.105 10);    /* love    #b4637a */
+  --primary-foreground:    oklch(0.97 0.012 75);
+  --secondary:             oklch(0.84 0.06 25);      /* rose tint chip */
+  --secondary-foreground:  oklch(0.50 0.13 10);
+
+  --muted:                 oklch(0.93 0.015 60);     /* overlay #f2e9e1 */
+  --muted-foreground:      oklch(0.55 0.025 280);    /* subtle  #797593 */
+  --accent:                oklch(0.93 0.015 60);
+  --accent-foreground:     oklch(0.42 0.052 290);
+  --destructive:           oklch(0.555 0.105 10);
+  --destructive-foreground: oklch(0.97 0.012 75);
+  --border:                oklch(0.83 0.015 30);     /* highlight-high */
+  --input:                 oklch(0.93 0.015 60);
+  --ring:                  oklch(0.555 0.105 10);
+
+  --sidebar:               oklch(0.95 0.013 70);
+  --sidebar-foreground:    oklch(0.42 0.052 290);
+  --sidebar-primary:       oklch(0.555 0.105 10);
+  --sidebar-primary-foreground: oklch(0.97 0.012 75);
+  --sidebar-accent:        oklch(0.84 0.06 25);
+  --sidebar-accent-foreground: oklch(0.50 0.13 10);
+  --sidebar-border:        oklch(0.83 0.015 30);
+  --sidebar-ring:          oklch(0.555 0.105 10);
+  --sidebar-icon-1:        oklch(0.46 0.07 230);     /* pine    #286983 */
+  --sidebar-icon-2:        oklch(0.56 0.07 200);     /* foam    #56949f */
+  --sidebar-icon-3:        oklch(0.555 0.105 10);    /* love */
+  --sidebar-icon-4:        oklch(0.55 0.10 310);     /* iris    #907aa9 */
+
+  --highlight-default:     oklch(0.92 0.08 80);
+  --link:                  oklch(0.56 0.07 200);     /* foam */
+  --link-foreground:       oklch(0.46 0.07 230);     /* pine */
+  --wiki-link:             oklch(0.55 0.10 310);     /* iris */
+  --wiki-link-subtle:      oklch(0.84 0.06 25);
+
+  --chart-1: oklch(0.555 0.105 10);
+  --chart-2: oklch(0.56 0.07 200);
+  --chart-3: oklch(0.65 0.12 50);
+  --chart-4: oklch(0.46 0.07 230);
+  --chart-5: oklch(0.55 0.10 310);
+
+  --code-block-bg: #faf4ed;            /* rose-pine-dawn */
+}
+
+[data-theme="rose-pine"][data-mode="dark"] {
+  /* surfaces — Main */
+  --background:            oklch(0.198 0.026 290);   /* base    #191724 */
+  --foreground:            oklch(0.91 0.025 280);    /* text    #e0def4 */
+  --card:                  oklch(0.243 0.028 290);   /* surface #1f1d2e */
+  --card-foreground:       oklch(0.91 0.025 280);
+  --popover:               oklch(0.243 0.028 290);
+  --popover-foreground:    oklch(0.91 0.025 280);
+
+  --primary:               oklch(0.72 0.135 10);     /* love    #eb6f92 */
+  --primary-foreground:    oklch(0.198 0.026 290);
+  --secondary:             oklch(0.36 0.06 10);      /* dim love chip */
+  --secondary-foreground:  oklch(0.85 0.12 10);
+
+  --muted:                 oklch(0.275 0.028 290);   /* overlay #26233a */
+  --muted-foreground:      oklch(0.70 0.025 290);    /* subtle  #908caa */
+  --accent:                oklch(0.275 0.028 290);
+  --accent-foreground:     oklch(0.91 0.025 280);
+  --destructive:           oklch(0.72 0.135 10);
+  --destructive-foreground: oklch(0.198 0.026 290);
+  --border:                oklch(1 0 0 / 0.08);
+  --input:                 oklch(0.275 0.028 290);
+  --ring:                  oklch(0.72 0.135 10);
+
+  --sidebar:               oklch(0.225 0.028 290);
+  --sidebar-foreground:    oklch(0.91 0.025 280);
+  --sidebar-primary:       oklch(0.72 0.135 10);
+  --sidebar-primary-foreground: oklch(0.198 0.026 290);
+  --sidebar-accent:        oklch(0.36 0.06 10);
+  --sidebar-accent-foreground: oklch(0.85 0.12 10);
+  --sidebar-border:        oklch(1 0 0 / 0.08);
+  --sidebar-ring:          oklch(0.72 0.135 10);
+  --sidebar-icon-1:        oklch(0.55 0.07 215);     /* pine    #31748f */
+  --sidebar-icon-2:        oklch(0.83 0.07 200);     /* foam    #9ccfd8 */
+  --sidebar-icon-3:        oklch(0.72 0.135 10);     /* love */
+  --sidebar-icon-4:        oklch(0.78 0.10 310);     /* iris    #c4a7e7 */
+
+  --highlight-default:     oklch(0.35 0.08 85);
+  --link:                  oklch(0.83 0.07 200);     /* foam */
+  --link-foreground:       oklch(0.86 0.06 200);
+  --wiki-link:             oklch(0.78 0.10 310);     /* iris */
+  --wiki-link-subtle:      oklch(0.36 0.06 10);
+
+  --chart-1: oklch(0.72 0.135 10);
+  --chart-2: oklch(0.83 0.07 200);
+  --chart-3: oklch(0.84 0.13 80);    /* gold */
+  --chart-4: oklch(0.55 0.07 215);   /* pine */
+  --chart-5: oklch(0.78 0.10 310);   /* iris */
+
+  --code-block-bg: #191724;            /* rose-pine */
 }
 
 /* ============================================================
@@ -350,7 +907,7 @@
       0 0 0 hsl(0 0% 100% / 0.25),
       0 8px 18px hsl(32 28% 30% / 0.22);
   }
-  .dark .sticky-note-shadow {
+  [data-mode="dark"] .sticky-note-shadow {
     box-shadow:
       0 0 0 hsl(0 0% 100% / 0.1),
       0 10px 20px hsl(0 0% 0% / 0.32);
@@ -368,7 +925,7 @@
     background-size: 220px 220px;
     background-repeat: repeat;
   }
-  .dark .board-paper-grain {
+  [data-mode="dark"] .board-paper-grain {
     mix-blend-mode: screen;
     opacity: 0.10;
     filter: invert(1);
@@ -393,7 +950,7 @@
     background-size: 18px 18px, 23px 23px, 29px 29px, 100% 100%;
     background-position: 0 0, 7px 11px, 13px 5px, 0 0;
   }
-  .dark .paper-note-texture::after {
+  [data-mode="dark"] .paper-note-texture::after {
     opacity: 0.32;
     background-image:
       radial-gradient(circle at 20% 20%, hsl(0 0% 100% / 0.18) 0 0.7px, transparent 1px),
@@ -420,7 +977,7 @@
   .editor-body-sans {
     font-family: var(--font-sans);
     font-size: 1rem;
-    line-height: 1.8;  /* slightly more than serif — higher x-height needs more room */
+    line-height: 1.8;
   }
 }
 

@@ -3,10 +3,12 @@ import { NodeViewWrapper, NodeViewContent } from "@tiptap/react"
 import type { NodeViewProps } from "@tiptap/react"
 import { CopySimple, Check, CaretDown } from "@phosphor-icons/react"
 import { highlightCodeSync, ensureLanguage, LANGUAGE_OPTIONS } from "./shiki"
+import { useTheme } from "@/components/theme-provider"
 
 
 export function CodeBlockView({ node, updateAttributes }: NodeViewProps) {
   const [copied, setCopied] = useState(false)
+  const { shikiThemes } = useTheme()
 
   const code = node.textContent
   const lang = (node.attrs.language as string | null) ?? "plaintext"
@@ -19,27 +21,31 @@ export function CodeBlockView({ node, updateAttributes }: NodeViewProps) {
     // Try synchronous highlight first — keeps zero latency between keystroke
     // and visible token color, so the user never sees a "flash" between plain
     // text and highlighted text.
-    const html = highlightCodeSync(code, lang)
+    const html = highlightCodeSync(code, lang, shikiThemes)
     if (html != null) {
       if (shikiLayerRef.current) shikiLayerRef.current.innerHTML = html
       editPreRef.current?.classList.add("shiki-loaded")
       return
     }
-    // First-load path: highlighter or grammar isn't ready yet. Show the
-    // editable text in the foreground meanwhile; once the grammar lands,
-    // re-render and swap to Shiki.
-    editPreRef.current?.classList.remove("shiki-loaded")
+    // First-load path OR theme-switch where the new theme JSON isn't loaded
+    // yet. If we already had Shiki output rendered, keep it visible during
+    // the async load so the user doesn't flash to plain text — the old
+    // colors are stale for a beat, then swap atomically.
+    const hadShikiContent = !!shikiLayerRef.current?.innerHTML
+    if (!hadShikiContent) {
+      editPreRef.current?.classList.remove("shiki-loaded")
+    }
     let cancelled = false
-    ensureLanguage(lang, () => {
+    ensureLanguage(lang, shikiThemes, () => {
       if (cancelled) return
-      const ready = highlightCodeSync(code, lang)
+      const ready = highlightCodeSync(code, lang, shikiThemes)
       if (ready != null && shikiLayerRef.current) {
         shikiLayerRef.current.innerHTML = ready
         editPreRef.current?.classList.add("shiki-loaded")
       }
     })
     return () => { cancelled = true }
-  }, [code, lang])
+  }, [code, lang, shikiThemes])
 
   function copyCode() {
     navigator.clipboard.writeText(code)

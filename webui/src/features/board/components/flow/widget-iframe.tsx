@@ -35,8 +35,12 @@ export const WidgetIframe = memo(function WidgetIframe({
   // document can outlive the React unmount until garbage collection
   // (non-deterministic), and its scheduled work continues to consume CPU.
   useEffect(() => {
+    // Cache the element at mount: `key={resolvedTheme}` already remounts
+    // the whole component when the iframe DOM node changes, so the
+    // captured `el` is guaranteed to match the iframe this instance owns
+    // at cleanup time.
+    const el = iframeRef.current
     return () => {
-      const el = iframeRef.current
       if (!el) return
       el.srcdoc = "<!doctype html><html></html>"
     }

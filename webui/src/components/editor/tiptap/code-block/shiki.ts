@@ -1,4 +1,5 @@
-import { createHighlighter, type Highlighter } from "shiki"
+import { createHighlighter, type Highlighter, type BundledTheme } from "shiki"
+
 
 export const LANGUAGE_OPTIONS = [
   { value: "plaintext", label: "Plain text" },
@@ -26,26 +27,36 @@ export const LANGUAGE_OPTIONS = [
   { value: "diff", label: "Diff" },
 ] as const
 
+
 export type LangValue = (typeof LANGUAGE_OPTIONS)[number]["value"]
 
-let _promise: Promise<Highlighter> | null = null
+type ThemePair = readonly [BundledTheme, BundledTheme]
+
+
+let _hlPromise: Promise<Highlighter> | null = null
 let _hl: Highlighter | null = null
 const _loadedLangs = new Set<string>(["plaintext"])
+const _loadedThemes = new Set<string>()
 const _loadingLangs = new Map<string, Promise<void>>()
+const _loadingThemes = new Map<string, Promise<void>>()
 
-function getHighlighter(): Promise<Highlighter> {
-  if (!_promise) {
-    // Start minimal: grammars are fetched on demand via loadLanguage() so each
-    // language becomes its own async chunk instead of bundling all 23 upfront.
-    _promise = createHighlighter({
-      themes: ["rose-pine", "rose-pine-dawn"],
+
+/**
+ * Lazily creates the singleton Shiki highlighter, seeding it with the first
+ * theme pair requested. Subsequent themes are added via `loadTheme()`.
+ */
+function getHighlighter(seed: ThemePair): Promise<Highlighter> {
+  if (!_hlPromise) {
+    _hlPromise = createHighlighter({
+      themes: Array.from(new Set(seed)),
       langs: ["plaintext"],
     }).then((hl) => {
       _hl = hl
+      for (const t of seed) _loadedThemes.add(t)
       return hl
     })
   }
-  return _promise
+  return _hlPromise
 }
 
 
@@ -54,51 +65,77 @@ function safeLang(lang: string): LangValue {
 }
 
 
+function bothLoaded(themes: ThemePair, lang: LangValue): boolean {
+  return _loadedThemes.has(themes[0]) && _loadedThemes.has(themes[1]) && _loadedLangs.has(lang)
+}
+
+
 /**
- * Synchronously highlight `code` if the requested language is already loaded.
- * Returns null when the highlighter or the language grammar isn't ready yet —
- * the caller should fall back to plain text and call `ensureLanguage()` to
- * trigger async loading + a ready callback.
+ * Synchronously highlight `code` against `themes` if both the grammar and the
+ * theme pair are already loaded. Returns null when anything is missing — the
+ * caller should fall back to plain text and call `ensureLanguage()` to trigger
+ * async loading + a ready callback.
  */
-export function highlightCodeSync(code: string, lang: string): string | null {
+export function highlightCodeSync(
+  code: string,
+  lang: string,
+  themes: ThemePair,
+): string | null {
   if (!_hl) return null
   const sl = safeLang(lang)
-  if (!_loadedLangs.has(sl)) return null
+  if (!bothLoaded(themes, sl)) return null
   return _hl.codeToHtml(code, {
     lang: sl,
-    themes: { light: "rose-pine-dawn", dark: "rose-pine" },
+    themes: { light: themes[0], dark: themes[1] },
     defaultColor: false,
   })
 }
 
 
 /**
- * Ensure the highlighter and the requested language are loaded. Calls `onReady`
- * once both are available (immediately if already loaded, otherwise after the
- * async work finishes).
+ * Ensure the highlighter, the requested language, and the requested theme pair
+ * are all loaded. Calls `onReady` once everything is available (immediately if
+ * already loaded, otherwise after the async work finishes).
  */
-export function ensureLanguage(lang: string, onReady: () => void): void {
+export function ensureLanguage(
+  lang: string,
+  themes: ThemePair,
+  onReady: () => void,
+): void {
   const sl = safeLang(lang)
-  if (_hl && _loadedLangs.has(sl)) {
+  if (_hl && bothLoaded(themes, sl)) {
     onReady()
     return
   }
 
   const run = async () => {
-    const hl = await getHighlighter()
-    if (_loadedLangs.has(sl)) {
-      onReady()
-      return
+    const hl = await getHighlighter(themes)
+
+    for (const t of themes) {
+      if (_loadedThemes.has(t)) continue
+      let pending = _loadingThemes.get(t)
+      if (!pending) {
+        pending = hl.loadTheme(t).then(() => {
+          _loadedThemes.add(t)
+          _loadingThemes.delete(t)
+        })
+        _loadingThemes.set(t, pending)
+      }
+      await pending
     }
-    let pending = _loadingLangs.get(sl)
-    if (!pending) {
-      pending = hl.loadLanguage(sl).then(() => {
-        _loadedLangs.add(sl)
-        _loadingLangs.delete(sl)
-      })
-      _loadingLangs.set(sl, pending)
+
+    if (!_loadedLangs.has(sl)) {
+      let pending = _loadingLangs.get(sl)
+      if (!pending) {
+        pending = hl.loadLanguage(sl).then(() => {
+          _loadedLangs.add(sl)
+          _loadingLangs.delete(sl)
+        })
+        _loadingLangs.set(sl, pending)
+      }
+      await pending
     }
-    await pending
+
     onReady()
   }
   void run()

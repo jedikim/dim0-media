@@ -271,24 +271,36 @@ export const useSendMessage = () => {
 
               try {
                 const note = await getBoardNote(activeBoardId, output.noteId)
-                const fetchedNode = convertNoteToNode(note)
-                setNodesPersist((prevNodes) =>
-                  applyRemoteNoteNode(prevNodes, fetchedNode, isNewlyCreated),
-                { persist: false })
 
-                // Sub-pages don't live on the canvas, so the panel reads
-                // them via React Query (`useGetNote`). Refresh that cache
-                // too so an open sheet panel reflects the AI's edit
-                // without the user having to close and reopen.
-                queryClient.setQueryData(["note", activeBoardId, output.noteId], note)
-                queryClient.invalidateQueries({
-                  queryKey: ["note", activeBoardId, output.noteId],
-                  exact: true,
-                })
+                // Only mutate the canvas when the note actually belongs
+                // to the current scope. A sub-page (parent is another
+                // note) or a note in a different folder shouldn't appear
+                // as a phantom canvas node on edit — the panel still
+                // sees the update via the React Query cache write below.
+                const currentRootId = useGraphStore.getState().rootId
+                const noteParentId = note.parentId
+                const belongsToCanvas =
+                  (noteParentId ?? undefined) === (currentRootId ?? undefined)
 
-                if (isNewlyCreated) {
-                  createdNoteIds.push(output.noteId)
+                if (belongsToCanvas) {
+                  const fetchedNode = convertNoteToNode(note)
+                  setNodesPersist((prevNodes) =>
+                    applyRemoteNoteNode(prevNodes, fetchedNode, isNewlyCreated),
+                  { persist: false })
+
+                  if (isNewlyCreated) {
+                    createdNoteIds.push(output.noteId)
+                  }
                 }
+
+                // Push the fresh note into the React Query cache so the
+                // sub-page panel (which reads via `useGetNote`) reflects
+                // the AI's edit immediately. We intentionally don't call
+                // `invalidateQueries` here: we already have the canonical
+                // server response in hand, and a same-key refetch can
+                // return stale data and clobber what we just set if the
+                // backend commit lands a moment late.
+                queryClient.setQueryData(["note", activeBoardId, output.noteId], note)
               } catch (error) {
                 console.error("Failed to apply remote note update locally:", error)
               }

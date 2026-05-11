@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="parchment" data-mode="light">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/dim0.svg" />
@@ -12,6 +12,32 @@
     <meta name="apple-mobile-web-app-title" content="Dim0" />
     <title>Dim0</title>
     <script src="/config.js"></script>
+    <script>
+      // Theme bootstrap — applies stored theme + mode before React mounts so
+      // first paint matches the saved preference (no light/dark flash).
+      (function () {
+        try {
+          var VALID_THEMES = ["parchment", "catppuccin", "tokyo-night", "gruvbox", "monokai-pro", "rose-pine"]
+          var themeId = "parchment"
+          var mode = "system"
+          var raw = localStorage.getItem("topix-ui-theme")
+          if (raw) {
+            var parsed = JSON.parse(raw)
+            if (parsed && VALID_THEMES.indexOf(parsed.themeId) >= 0) themeId = parsed.themeId
+            if (parsed && (parsed.mode === "light" || parsed.mode === "dark" || parsed.mode === "system")) mode = parsed.mode
+          } else {
+            var legacy = localStorage.getItem("vite-ui-theme")
+            if (legacy === "light" || legacy === "dark" || legacy === "system") mode = legacy
+          }
+          var resolved = mode === "system"
+            ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+            : mode
+          var root = document.documentElement
+          root.dataset.theme = themeId
+          root.dataset.mode = resolved
+        } catch (e) { /* defaults from <html> attributes apply */ }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

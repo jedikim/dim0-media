@@ -21,7 +21,7 @@ type SheetNodePanelProps = {
 
 
 const PANEL_CLASS =
-  "absolute left-1/2 -translate-x-1/2 top-4 bottom-4 md:top-20 md:bottom-[96px] w-[min(900px,calc(100vw-2rem))] z-[55] flex flex-col rounded-lg border bg-background shadow-xl overflow-visible"
+  "absolute left-1/2 -translate-x-1/2 top-4 bottom-4 md:top-20 md:bottom-[96px] w-[min(900px,calc(100vw-2rem))] z-[55] flex flex-col rounded-lg border bg-card shadow-xl overflow-visible"
 
 
 /**
@@ -203,6 +203,7 @@ export const SheetNodePanel = memo(function SheetNodePanel({
         <div className="min-w-0 flex-1 pr-2">
           <SheetBreadcrumb
             ancestors={ancestors}
+            current={note}
             onSegmentClick={(ancestor, kind) => {
               if (kind === "folder") {
                 closeNodeSurface()
