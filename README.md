@@ -1,23 +1,27 @@
+<p align="center">
+  <img src="docs/images/dim0-icon.png" alt="Dim0" width="96" />
+</p>
+
 <h1 align="center">Dim0 - The Thinking Canvas</h1>
 
 <p align="center">
-  <img src="docs/images/affiche.png" alt="Dim0 - Your canvas thinks back" width="440" />
+  <img src="docs/images/affiche.png" alt="Dim0 - Your canvas thinks back" width="100%" />
 </p>
 
 <p align="center">
-  Notes, code, widgets, and documents on one board - and an agent that can read what's on it and write back into it.
+  Notes, code, widgets, and documents on one board - and an agent that can read what's on it and write back into it. <strong>Your work is yours: privacy-first, your data stays yours.</strong>
 </p>
 
 <p align="center">
-  <a href="https://dim0.net">🌐 Website</a> · <a href="https://app.dim0.net">🚀 Live App</a> · 📄 MIT License
+  <a href="https://dim0.net">🌐 Website</a> · <a href="https://app.dim0.net">🚀 Live App</a> · 🔒 Privacy-first · 📄 MIT License
 </p>
 
 <p align="center">
   ⭐ Star if Dim0 is useful to you. It helps others find the project.
 </p>
 
-![Dim0 app screenshot](docs/images/app-screenshot.png)
-*A board with notes, charts, visual explainers, and the agent - all in the same workspace.*
+![Dim0 app screenshot](docs/images/themes-light-dark.png)
+*A board with notes, charts, visual explainers, and the agent - all in the same workspace, in light and dark.*
 
 https://github.com/user-attachments/assets/6848ae85-eba9-41d2-8c09-38063fcbe90a
 
@@ -50,6 +54,18 @@ Everything on the board is a node:
 - **Nested boards** - for when one board isn't enough
 - **Frames** - turn the canvas into a presentation
 
+![Shapes on a board](docs/images/board-shapes.png)
+*Shapes for diagrams, flowcharts, and spatial layout.*
+
+![Rich notes](docs/images/board-notes.png)
+*Notes are first-class - rich text, math, code, edited in place.*
+
+![Widgets](docs/images/board-widgets.png)
+*Widgets render charts and interactive explainers right on the canvas.*
+
+![Mindmap from shapes and notes](docs/images/board-mindmap.png)
+*Mix shapes and notes to think through a topic spatially.*
+
 https://github.com/user-attachments/assets/ad5de9f4-6f44-43a2-b59a-5279232d7f60
 
 ## Agent layer
@@ -64,6 +80,16 @@ Built on the OpenAI Agents SDK, with board-aware tools wired in:
 - Memory - semantic store and recall, via Qdrant
 
 Models: OpenAI, Anthropic, Google Gemini, Mistral, Moonshot, DeepSeek, Qwen, Z.ai.
+
+![Ask a question, get a visual answer](docs/images/agent-flow.png)
+*Ask a question on the board - the agent answers with a widget, a mindmap, or a note, dropped back where you're working.*
+
+## Themes
+
+Light, dark, and a set of paper-and-ink variants. The canvas adapts; so do notes, widgets, and shapes.
+
+![Theme showcase](docs/images/themes-showcase.png)
+*A few of the available themes.*
 
 ## Try it
 
