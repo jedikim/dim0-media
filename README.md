@@ -23,9 +23,7 @@
 ![Dim0 app screenshot](docs/images/themes-light-dark.png)
 *A board with notes, charts, visual explainers, and the agent - all in the same workspace, in light and dark.*
 
-https://github.com/user-attachments/assets/6848ae85-eba9-41d2-8c09-38063fcbe90a
-
-
+https://github.com/user-attachments/assets/cdc7d3d4-eb59-4d7d-a9ff-6f0206ba82df
 
 ## What it is
 
