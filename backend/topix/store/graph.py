@@ -12,6 +12,7 @@ from qdrant_client.models import (
     MatchValue,
 )
 
+from topix.datatypes.file.document import Document
 from topix.datatypes.graph.graph import Graph
 from topix.datatypes.note.link import Link
 from topix.datatypes.note.note import Note
@@ -122,7 +123,14 @@ class GraphStore:
         return merged
 
     async def patch_note(self, node_id: str, data: dict, user_uid: str | None = None) -> Note | None:
-        """Patch a note by merging the update into the full stored note payload."""
+        """Patch a note by merging the update into the full stored note payload.
+
+        Validates the merged payload against the matching pydantic model so
+        documents (subclass of Note with `type: Literal["document"]`) keep
+        their type discriminator and document-specific properties intact —
+        otherwise validating a document row against the bare `Note` model
+        fails with a literal_error on the `type` field.
+        """
         existing_nodes = await self.get_nodes([node_id])
         if not existing_nodes:
             return None
@@ -135,7 +143,8 @@ class GraphStore:
             data,
         )
         merged_payload["id"] = node_id
-        merged_note = Note.model_validate(merged_payload)
+        model = Document if isinstance(existing_note, Document) else Note
+        merged_note = model.model_validate(merged_payload)
 
         await self._content_store.update([merged_note.model_dump(exclude_none=False)])
         return merged_note

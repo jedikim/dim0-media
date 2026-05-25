@@ -66,6 +66,10 @@ Everything on the board is a node:
 
 https://github.com/user-attachments/assets/ad5de9f4-6f44-43a2-b59a-5279232d7f60
 
+## Canvas engine
+
+The board is built on [canvas-harness](https://github.com/winlp4ever/canvas-harness), a canvas-rendered node-graph library we maintain separately. Boards can hold thousands of nodes and still pan, zoom, and edit smoothly — comparable to tldraw and Excalidraw, and on par with hosted tools like Miro or FigJam.
+
 ## Agent layer
 
 Built on the OpenAI Agents SDK, with board-aware tools wired in:

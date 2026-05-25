@@ -14,10 +14,20 @@ export interface LinkProperties {
   startPoint?: {
     type: "position",
     position?: { x: number; y: number }
+    /**
+     * When the link's source resolves to an attached node, `position`
+     * is interpreted as a node-local offset (relative to the node's
+     * top-left, pre-rotation) instead of an absolute world coord.
+     * Defaults to false for back-compat with rows persisted before
+     * this flag existed. See backend `PositionProperty.is_local_offset`.
+     */
+    isLocalOffset?: boolean
   }
   endPoint?: {
     type: "position",
     position?: { x: number; y: number }
+    /** Mirrors `startPoint.isLocalOffset` for the target endpoint. */
+    isLocalOffset?: boolean
   }
 }
 

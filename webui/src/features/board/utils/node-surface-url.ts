@@ -1,5 +1,5 @@
 import { CodeSandboxUrl, SheetUrl, WidgetUrl } from "@/routes"
-import type { NodeSurfaceKind } from "../store/graph-store"
+import type { NodeSurfaceKind } from "../harness/store/board-app-store"
 
 
 /**

@@ -174,6 +174,15 @@ class PositionProperty(Property):
 
     type: Literal[PropertyType.POSITION] = PropertyType.POSITION
     position: Position | None = None
+    # When the position belongs to an edge endpoint AND the link's
+    # source/target resolves to an attached node, callers may interpret
+    # `position` as a node-local offset (relative to the node's
+    # top-left, pre-rotation) instead of an absolute world coordinate.
+    # Default `False` keeps the legacy world-coord interpretation for
+    # existing rows so no data migration is needed. Newer clients set
+    # this to True when saving attached endpoints so edges that move
+    # with their node don't require cascading updates.
+    is_local_offset: bool = False
 
 
 class SizeProperty(Property):

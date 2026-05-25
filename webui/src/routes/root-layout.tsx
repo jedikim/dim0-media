@@ -10,7 +10,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useAppStore } from '@/store'
 import { clearTokens } from '@/features/signin/auth-storage'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useGraphStore } from '@/features/board/store/graph-store'
+import { useBoardAppStore } from '@/features/board/harness/store/board-app-store'
 import { useAuth } from '@/features/signin/hooks/auth'
 
 export function RootLayout() {
@@ -48,7 +48,7 @@ export function RootLayout() {
     [location.pathname]
   )
   const showShell = isAuthed && !onAuthPage
-  const presentationMode = useGraphStore(s => s.presentationMode)
+  const presentationMode = useBoardAppStore(s => s.presentationMode)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const effectiveSidebarOpen = presentationMode ? false : sidebarOpen
 

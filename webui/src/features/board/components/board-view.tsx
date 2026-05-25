@@ -1,46 +1,62 @@
-import { ReactFlowProvider } from "@xyflow/react"
-import { useEffect, useMemo } from "react"
-import GraphEditor from "./flow/graph-editor"
-import { useGraphStore } from "../store/graph-store"
-import { LoadingWindow } from "@/components/loading-view"
-import { useGetBoard } from "../api/get-board"
+import { useNavigate, useSearch } from "@tanstack/react-router"
+import { HarnessCanvas } from "../harness/canvas"
+import { useBoardAppStore } from "../harness/store/board-app-store"
+import { FloatingAssistant } from "./flow/floating-assistant/floating-assistant"
+import { CopilotSheet } from "./flow/copilot-sheet"
+
 
 /**
- * GraphView
- *
- * Board-aware shell for the graph editor that triggers a fetch on board changes
- * and renders purely from derived loading state. It resets the mutation state
- * when the boardId changes, fires a single fetch, and relies on React Query's
- * status combined with the graph store's isLoading to avoid local race conditions.
+ * Board entry-point. Mounts the canvas-harness board surface, the
+ * floating-island AI composer at the bottom of the canvas, and the
+ * full chat sheet drawer. Scope (boardId / rootId) is set on the
+ * board-app-store by `BoardScreen`; this component reads from there.
  */
 export const BoardView: React.FC = () => {
-  const { boardId, rootId, isLoading: storeLoading } = useGraphStore()
-  const { getBoardAsync, isPending, isSuccess, reset } = useGetBoard()
+  const navigate = useNavigate()
+  const boardId = useBoardAppStore((s) => s.boardId)
+  const chatSheetOpen = useBoardAppStore((s) => s.chatSheetOpen)
+  const setChatSheetOpen = useBoardAppStore((s) => s.setChatSheetOpen)
+  const presentationMode = useBoardAppStore((s) => s.presentationMode)
 
-  useEffect(() => {
-    if (!boardId) return
-    reset()
-    void getBoardAsync()
-  }, [boardId, rootId, getBoardAsync, reset])
-
-  const loading = useMemo(
-    () => !isSuccess || isPending || storeLoading,
-    [isSuccess, isPending, storeLoading]
-  )
+  // current_chat_id from the URL — shared between the floating island
+  // and the full chat sheet so opening one continues the same chat.
+  const boardSearch = useSearch({
+    strict: false,
+    select: (s: { current_chat_id?: string }) => ({ currentChatId: s.current_chat_id }),
+  })
+  const currentChatId = boardSearch?.currentChatId
 
   return (
     <div className="absolute inset-0 h-full w-full overflow-hidden">
-      <ReactFlowProvider>
-        <div className="relative h-full w-full bg-background">
-          {loading ? (
-            <div className="absolute inset-0 bg-background flex items-center justify-center">
-              <LoadingWindow message="Loading board" viewMode="compact" />
-            </div>
-          ) : (
-            <GraphEditor />
-          )}
-        </div>
-      </ReactFlowProvider>
+      <div className="relative h-full w-full bg-background">
+        <HarnessCanvas />
+        {!chatSheetOpen && !presentationMode && boardId && (
+          <FloatingAssistant
+            boardId={boardId}
+            currentChatId={currentChatId}
+            onOpenFullSheet={() => setChatSheetOpen(true)}
+          />
+        )}
+        <CopilotSheet
+          open={chatSheetOpen}
+          onOpenChange={setChatSheetOpen}
+          boardId={boardId ?? undefined}
+          currentChatId={currentChatId}
+          onOpenFullChat={(chatId) => {
+            setChatSheetOpen(false)
+            if (chatId) {
+              navigate({
+                to: "/chats/$id",
+                params: { id: chatId },
+                search: (prev: Record<string, unknown>) => ({
+                  ...prev,
+                  board_id: boardId || undefined,
+                }),
+              })
+            }
+          }}
+        />
+      </div>
     </div>
   )
 }

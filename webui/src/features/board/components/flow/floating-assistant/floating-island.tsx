@@ -9,7 +9,7 @@ import { useSubmitPrompt } from "@/features/agent/hooks/use-submit-prompt"
 import { buildMessageContext, useHasMessageContext } from "@/features/agent/hooks/use-message-context"
 import { ProgressLine } from "./progress-line"
 import { useCurrentAssistantMessage } from "./use-current-assistant-message"
-import { useGraphStore } from "../../../store/graph-store"
+import { useBoardAppStore } from "../../../harness/store/board-app-store"
 
 
 export interface FloatingIslandProps {
@@ -30,7 +30,7 @@ export const FloatingIsland = ({ boardId, onOpenFullSheet }: FloatingIslandProps
   const hasMessageContext = useHasMessageContext()
   // Single boolean derivation — only re-renders when a surface opens or
   // closes, never when its content/title changes. Cheap.
-  const hasActiveSurface = useGraphStore((s) => Boolean(s.activeNodeSurface))
+  const hasActiveSurface = useBoardAppStore((s) => Boolean(s.activeNodeSurface))
 
   const handleSubmit = async () => {
     if (isStreaming) return

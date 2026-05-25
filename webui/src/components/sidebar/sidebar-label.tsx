@@ -9,11 +9,13 @@ import { useListSubscriptions } from "@/features/newsfeed/api/list-subscriptions
 import { NewChatUrl, SheetUrl } from "@/routes"
 import { ContextBoard } from "@/features/agent/components/context-board"
 import { UNTITLED_LABEL } from "@/features/board/const"
-import { useGraphStore } from "@/features/board/store/graph-store"
+import { useBoardAppStore } from "@/features/board/harness/store/board-app-store"
+import { useHarnessNodeExternal } from "@/features/board/harness/store/use-harness-node-external"
 import { useGetNote } from "@/features/board/api/get-note"
 import { useUpdateNote } from "@/features/board/api/update-note"
-import { FolderBreadcrumb } from "@/features/board/components/flow/folder-breadcrumb"
+import { FolderBreadcrumb } from "@/features/board/components/folder-breadcrumb"
 import { useAppStore } from "@/store"
+import type { NoteNodeData } from "@/features/board/harness/convert/note-to-node"
 
 export const SidebarLabel = ({ mobileContextOnly = false }: { mobileContextOnly?: boolean }) => {
   const navigate = useNavigate()
@@ -72,12 +74,18 @@ export const SidebarLabel = ({ mobileContextOnly = false }: { mobileContextOnly?
   const { data: subscriptionList } = useListSubscriptions()
   const { updateBoard } = useUpdateBoard()
   const { updateChat }  = useUpdateChat()
-  const boardCanEdit = useGraphStore(state => state.boardCanEdit)
-  const boardLabel = useGraphStore(state => state.boardLabel)
-  const setBoardLabel = useGraphStore(state => state.setBoardLabel)
-  const sheetNode = useGraphStore(state =>
-    sheetNoteId ? state.nodes.find(n => n.id === sheetNoteId) : undefined
-  )
+  const boardCanEdit = useBoardAppStore(state => state.canEdit)
+  const boardLabel = useBoardAppStore(state => state.boardLabel)
+  const setBoardLabel = useBoardAppStore(state => state.setBoardLabel)
+  // Sheet title is read from the live harness store via a module-level
+  // store-ref bridge so the sidebar (rendered above the board tree)
+  // sees title edits in real time. Falls back to a one-shot GET when
+  // the node isn't on the current canvas (e.g. user landed directly on
+  // a sheet URL without opening the board first).
+  const sheetNode = useHarnessNodeExternal(sheetNoteId)
+  const sheetNodeLabel = sheetNode
+    ? (sheetNode.data as Partial<NoteNodeData> | undefined)?.label?.markdown
+    : undefined
   const { data: fetchedSheet } = useGetNote({
     boardId: sheetBoardId,
     noteId: sheetNoteId,
@@ -108,7 +116,7 @@ export const SidebarLabel = ({ mobileContextOnly = false }: { mobileContextOnly?
       return
     }
     if (active.view === "sheet") {
-      const sheetLabel = sheetNode?.data?.label?.markdown ?? fetchedSheet?.label?.markdown
+      const sheetLabel = sheetNodeLabel ?? fetchedSheet?.label?.markdown
       setLabel(sheetLabel ?? "Sheet")
       return
     }
@@ -121,7 +129,7 @@ export const SidebarLabel = ({ mobileContextOnly = false }: { mobileContextOnly?
       return
     }
     setLabel("")
-  }, [active.view, active.id, boardList, boardLabel, chatList, subscriptionList, sheetNode, fetchedSheet])
+  }, [active.view, active.id, boardList, boardLabel, chatList, subscriptionList, sheetNodeLabel, fetchedSheet])
 
   const handleSaveEdit = (newLabel: string) => {
     setLabel(newLabel)

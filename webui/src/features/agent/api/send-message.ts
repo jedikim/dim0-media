@@ -11,10 +11,8 @@ import { buildResponse } from "../utils/stream/build"
 import { fetchWithAuthRaw } from "@/api"
 import type { ToolOutput } from "../types/tool-outputs"
 import { trimResponseAnnotations } from "../utils/annotations"
-import { useGraphStore } from "@/features/board/store/graph-store"
-import { getBoardLink, getBoardNote } from "@/features/board/api/get-board"
-import { convertLinkToEdgeWithPoints, convertNoteToNode } from "@/features/board/utils/graph"
-import type { LinkEdge, NoteNode } from "@/features/board/types/flow"
+import { useBoardAppStore } from "@/features/board/harness/store/board-app-store"
+import { getAgentBridge } from "@/features/board/harness/agent/agent-bridge"
 import type {
   CreateNoteOutput,
   EditNoteOutput,
@@ -254,81 +252,37 @@ export const useSendMessage = () => {
         const linkToolOutputs = collectLinkToolOutputs(reasoningSteps)
 
         if (noteToolOutputs.length > 0 || linkToolOutputs.length > 0) {
-          const {
-            boardId: activeBoardId,
-            setNodes,
-            setNodesPersist,
-            setEdges,
-          } = useGraphStore.getState()
+          const activeBoardId = useBoardAppStore.getState().boardId
+          // Apply outputs through the canvas-harness bridge: re-fetches
+          // each note/link from the server (canonical state), updates
+          // the React Query cache so any open sub-page panels see the
+          // edit, and writes a `remote`-origin batch into the harness
+          // store so the canvas reflects the change without triggering
+          // the debounced save loop.
+          const harnessBridge = getAgentBridge()
 
-          if (activeBoardId) {
+          if (activeBoardId && harnessBridge) {
             const createdNoteIds: string[] = []
             for (const output of noteToolOutputs) {
-              if (output.graphUid !== activeBoardId || !output.noteId) continue
-
-              const isNewlyCreated = output.type === "create_note"
-                || (output.type === "write_note" && output.action === "created")
-
-              try {
-                const note = await getBoardNote(activeBoardId, output.noteId)
-
-                // Only mutate the canvas when the note actually belongs
-                // to the current scope. A sub-page (parent is another
-                // note) or a note in a different folder shouldn't appear
-                // as a phantom canvas node on edit — the panel still
-                // sees the update via the React Query cache write below.
-                const currentRootId = useGraphStore.getState().rootId
-                const noteParentId = note.parentId
-                const belongsToCanvas =
-                  (noteParentId ?? undefined) === (currentRootId ?? undefined)
-
-                if (belongsToCanvas) {
-                  const fetchedNode = convertNoteToNode(note)
-                  setNodesPersist((prevNodes) =>
-                    applyRemoteNoteNode(prevNodes, fetchedNode, isNewlyCreated),
-                  { persist: false })
-
-                  if (isNewlyCreated) {
-                    createdNoteIds.push(output.noteId)
-                  }
-                }
-
-                // Push the fresh note into the React Query cache so the
-                // sub-page panel (which reads via `useGetNote`) reflects
-                // the AI's edit immediately. We intentionally don't call
-                // `invalidateQueries` here: we already have the canonical
-                // server response in hand, and a same-key refetch can
-                // return stale data and clobber what we just set if the
-                // backend commit lands a moment late.
-                queryClient.setQueryData(["note", activeBoardId, output.noteId], note)
-              } catch (error) {
-                console.error("Failed to apply remote note update locally:", error)
+              const result = await harnessBridge.applyNoteOutput(output)
+              if (result?.created && result.onCanvas) {
+                createdNoteIds.push(result.noteId)
               }
             }
-
             for (const output of linkToolOutputs) {
-              if (output.graphUid !== activeBoardId || !output.linkId) continue
-
-              try {
-                const link = await getBoardLink(activeBoardId, output.linkId)
-                const nodesById = useGraphStore.getState().nodesById
-                const { edge, points } = convertLinkToEdgeWithPoints(link, nodesById)
-                if (points.length) {
-                  setNodes((prevNodes) => [...prevNodes, ...points])
-                }
-                setEdges((prevEdges) => applyRemoteEdge(prevEdges, edge))
-              } catch (error) {
-                console.error("Failed to apply remote link update locally:", error)
-              }
+              await harnessBridge.applyLinkOutput(output)
             }
 
-            if (createdNoteIds.length > 0 && router.state.location.pathname.startsWith(`/boards/${activeBoardId}`)) {
-              const centerAround = createdNoteIds.join(",")
+            if (
+              createdNoteIds.length > 0
+              && router.state.location.pathname.startsWith(`/boards/${activeBoardId}`)
+            ) {
+              const centerIds = createdNoteIds.join(",")
               navigate({
                 to: "/boards/$id",
                 params: { id: activeBoardId },
                 replace: true,
-                search: (prev: Record<string, unknown>) => ({ ...prev, center_around: centerAround }),
+                search: (prev: Record<string, unknown>) => ({ ...prev, center: centerIds }),
               })
             }
           }
@@ -421,61 +375,3 @@ const collectLinkToolOutputs = (steps: ReasoningStep[]): LinkNotesOutput[] =>
     return []
   })
 
-const applyRemoteEdge = (prevEdges: LinkEdge[], nextEdge: LinkEdge): LinkEdge[] => {
-  const existing = prevEdges.find((edge) => edge.id === nextEdge.id)
-  if (existing) {
-    return prevEdges.map((edge) =>
-      edge.id === nextEdge.id
-        ? { ...nextEdge, selected: existing.selected, animated: existing.animated }
-        : edge,
-    )
-  }
-  return [...prevEdges, nextEdge]
-}
-
-
-const applyRemoteNoteNode = (
-  prevNodes: NoteNode[],
-  nextNode: NoteNode,
-  selectNode: boolean,
-): NoteNode[] => {
-  const existingNode = prevNodes.find((node) => node.id === nextNode.id)
-  const baseNode = existingNode
-    ? {
-        ...nextNode,
-        selected: existingNode.selected,
-        dragging: existingNode.dragging,
-        measured: existingNode.measured ?? nextNode.measured,
-      }
-    : nextNode
-
-  if (existingNode) {
-    return prevNodes.map((node) =>
-      node.id === nextNode.id
-        ? {
-            ...baseNode,
-            selected: selectNode ? true : baseNode.selected,
-          }
-        : (selectNode ? { ...node, selected: false } : node)
-    )
-  }
-
-  const maxZ = prevNodes.reduce((acc, node) => {
-    const kind = (node.data as { kind?: string }).kind
-    const nodeType = (node.data as { style?: { type?: string } }).style?.type
-    if (kind === "point" || nodeType === "slide") return acc
-    return Math.max(acc, node.zIndex ?? 0)
-  }, 0)
-
-  const appendedNode = {
-    ...baseNode,
-    selected: selectNode,
-    zIndex: baseNode.data.style?.type === "slide" ? -1000 : maxZ + 1,
-  }
-
-  const clearedNodes = selectNode
-    ? prevNodes.map((node) => ({ ...node, selected: false }))
-    : prevNodes
-
-  return [...clearedNodes, appendedNode]
-}

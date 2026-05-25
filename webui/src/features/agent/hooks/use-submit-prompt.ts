@@ -2,7 +2,7 @@ import { useCallback } from "react"
 import { useNavigate, useParams, useRouterState } from "@tanstack/react-router"
 import { useAppStore } from "@/store"
 import { useChatStore } from "../store/chat-store"
-import { useGraphStore } from "@/features/board/store/graph-store"
+import { useBoardAppStore } from "@/features/board/harness/store/board-app-store"
 import { useChat } from "./chat-context"
 import { useCreateChat } from "../api/create-chat"
 import { useUpdateChat } from "../api/update-chat"
@@ -41,7 +41,7 @@ export const useSubmitPrompt = () => {
   const enabledTools = useChatStore((s) => s.enabledTools)
   const useDeepResearch = useChatStore((s) => s.useDeepResearch)
   const setUseDeepResearch = useChatStore((s) => s.setUseDeepResearch)
-  const rootId = useGraphStore((s) => s.rootId)
+  const rootId = useBoardAppStore((s) => s.rootId) ?? undefined
 
   const { createChatAsync } = useCreateChat()
   const { updateChatAsync } = useUpdateChat()

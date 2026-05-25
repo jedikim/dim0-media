@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { useGraphStore } from "../store/graph-store"
 import type { Graph } from "../types/board"
 import { apiFetch } from "@/api"
 import { useAppStore } from "@/store"
+import { useBoardAppStore } from "../harness/store/board-app-store"
 import { listBoards } from "./list-boards"
 import { FREE_PLAN_BOARD_LIMIT, isBoardCreationLimited } from "../lib/board-limit"
 import { toast } from "sonner"
@@ -30,7 +30,7 @@ export const useCreateBoard = () => {
   const userId = useAppStore(s => s.userId)
   const userPlan = useAppStore(s => s.userPlan)
 
-  const { setGraphScope, setNodes, setEdges } = useGraphStore()
+  const setBoardScope = useBoardAppStore((s) => s.setBoardScope)
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -47,9 +47,9 @@ export const useCreateBoard = () => {
         const newBoard = { uid: boardId } as Graph // Temporary ID until the server responds
         return [newBoard, ...(oldBoards || [])] // Prepend the new board to the list
       })
-      setGraphScope({ boardId, rootId: undefined }) // Set the current board scope to the newly created board
-      setNodes([])
-      setEdges([])
+      // Pre-set the harness scope so subsequent navigation onto /boards/:id
+      // hydrates the new (empty) board without a flash.
+      setBoardScope({ boardId, rootId: null })
       return boardId
     }
   })

@@ -10,7 +10,7 @@ import { useConvertToMindMap } from "@/features/board/api/convert-to-mindmap"
 import { useCreateBoard } from "@/features/board/api/create-board"
 import { useListBoards } from "@/features/board/api/list-boards"
 import { UNTITLED_LABEL } from "@/features/board/const"
-import { useGraphStore } from "@/features/board/store/graph-store"
+import { useBoardAppStore } from "@/features/board/harness/store/board-app-store"
 import {
   CancelStatusIcon,
   CheckCircleStatusIcon,
@@ -72,7 +72,7 @@ export const SaveAsNote = ({
 }: SaveAsNoteProps) => {
   const [processing, setProcessing] = useState<boolean>(false)
   const userId = useAppStore(s => s.userId)
-  const rootId = useGraphStore(state => state.rootId)
+  const rootId = useBoardAppStore(state => state.rootId) ?? undefined
 
   const { convertToMindMapAsync } = useConvertToMindMap()
   const { data: boardList } = useListBoards(userId)

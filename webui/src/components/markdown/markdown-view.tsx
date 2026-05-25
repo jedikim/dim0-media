@@ -7,6 +7,7 @@ import { Pre } from "./custom-pre"
 import { MarkdownLink } from "./markdown-link"
 import { Streamdown } from "streamdown"
 import { codePlugin } from "./streamdown-code-plugin"
+import { expandPageBlocks } from "./expand-page-blocks"
 import { sanitizeMathDelimiters } from "./sanitize-math"
 import { useTheme } from "@/components/theme-provider"
 import { type ShikiThemePair } from "@/components/theme-constants"
@@ -216,7 +217,12 @@ const Renderer: React.FC<{
   isStreaming?: boolean
   shikiThemes: ShikiThemePair
 }> = ({ content, isStreaming, shikiThemes }) => {
-  const normalized = normalizeMathDelimiters(sanitizeMathDelimiters(content))
+  // Collapse TipTap subpage directive blocks into inline page-ref
+  // links before the rest of the pipeline runs — remark doesn't know
+  // about `:::page` blocks, so without this they'd surface as raw
+  // text. MarkdownLink renders the resulting `page://` URLs as chips.
+  const expanded = expandPageBlocks(content)
+  const normalized = normalizeMathDelimiters(sanitizeMathDelimiters(expanded))
 
   return (
     <div>
