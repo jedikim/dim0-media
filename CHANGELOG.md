@@ -1,3 +1,16 @@
+## v0.3.14 (2026-05-25)
+
+### Feat
+
+- canvas harness (#81)
+
+### Fix
+
+-   - dim0StyleToCanvas       opacity: s.opacity (no divide)
+  - dim0LinkStyleToCanvas   inherits via spread, fixed automatically
+  - canvasStyleToDim0       opacity: s?.opacity ?? 100 (no * 100)
+  - canvasEdgeStyleToDim0Link  same
+
 ## v0.3.13 (2026-05-11)
 
 ### Feat
