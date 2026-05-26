@@ -4,7 +4,7 @@ import { useAppStore } from "@/store"
 import { useListBoards } from "../api/list-boards"
 
 
-export const FREE_PLAN_BOARD_LIMIT = 10
+export const FREE_PLAN_BOARD_LIMIT = 5
 export const FREE_PLAN_DOCUMENT_LIMIT_PER_BOARD = 1
 
 export const FREE_PLAN_BOARD_LIMIT_TOOLTIP =
