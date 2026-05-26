@@ -80,7 +80,16 @@ def create_app(stage: StageEnum):
         await app.redis_store.close()
         await app.pg_pool.close()
 
-    app = FastAPI(lifespan=lifespan)
+    # Expose interactive docs and the OpenAPI schema only in local/dev. In
+    # staging/prod they leak the full route + payload surface, which makes
+    # targeted abuse easier, so disable them outright.
+    docs_enabled = stage in (StageEnum.LOCAL, StageEnum.DEV)
+    app = FastAPI(
+        lifespan=lifespan,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
+    )
 
     origins = ["*"]
 
