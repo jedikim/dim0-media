@@ -15,13 +15,13 @@ export function TopViewPanel({
   const normalButtonClass = `
     transition-colors
     text-card-foreground
-    hover:bg-sidebar-primary hover:text-sidebar-primary-foreground
+    hover:bg-secondary hover:text-secondary-foreground
     p-3
     rounded-lg
   `
   const activeButtonClass = `
     ${normalButtonClass}
-    bg-sidebar-primary text-sidebar-primary-foreground
+    bg-secondary text-secondary-foreground
   `
 
   const ModeButton = ({

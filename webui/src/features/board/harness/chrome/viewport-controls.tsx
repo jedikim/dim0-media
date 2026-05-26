@@ -46,7 +46,7 @@ const TEXTURE_OPTIONS: ReadonlyArray<TextureOption> = [
 
 
 const BTN_CLASS =
-  "inline-flex items-center justify-center rounded-md p-2 text-card-foreground transition-colors hover:bg-sidebar-primary hover:text-sidebar-primary-foreground"
+  "inline-flex items-center justify-center rounded-md p-2 text-card-foreground transition-colors hover:bg-secondary hover:text-secondary-foreground"
 
 
 /**
@@ -211,7 +211,7 @@ export function HarnessViewportControls() {
                   className={clsx(
                     "flex h-7 w-7 items-center justify-center rounded-md text-[8px] font-medium transition-colors",
                     option.value === boardBackgroundTexture
-                      ? "bg-sidebar-primary text-secondary-foreground"
+                      ? "bg-secondary text-secondary-foreground"
                       : "bg-muted text-muted-foreground/50 hover:bg-muted/70",
                   )}
                   onClick={() => setBoardBackgroundTexture(option.value)}

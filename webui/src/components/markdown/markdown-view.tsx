@@ -1,6 +1,7 @@
 import React from "react"
 import type { Components } from "react-markdown"
 import "katex/dist/katex.min.css"
+import "./markdown-view.css"
 import { cn } from "@/lib/utils"
 import { CustomTable } from "./custom-table"
 import { Pre } from "./custom-pre"
@@ -8,6 +9,10 @@ import { MarkdownLink } from "./markdown-link"
 import { Streamdown } from "streamdown"
 import { codePlugin } from "./streamdown-code-plugin"
 import { expandPageBlocks } from "./expand-page-blocks"
+import { expandToggleBlocks } from "./expand-toggle-blocks"
+import { expandTocBlocks } from "./expand-toc-blocks"
+import { remarkHighlight } from "./remark-highlight"
+import { remarkTag } from "./remark-tag"
 import { sanitizeMathDelimiters } from "./sanitize-math"
 import { useTheme } from "@/components/theme-provider"
 import { type ShikiThemePair } from "@/components/theme-constants"
@@ -16,6 +21,7 @@ import type { BundledTheme } from "shiki"
 import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
+import rehypeRaw from "rehype-raw"
 
 
 const DISPLAY_MATH_RE = /\\\[([\s\S]+?)\\\]/g
@@ -29,6 +35,9 @@ const INLINE_MATH_RE = /\\\(([\s\S]+?)\\\)/g
  * remark-math treats same-line `$$...$$` as inline and own-line `$$...$$` as display.
  */
 function normalizeMathDelimiters(src: string): string {
+  // Cheap gate: skip both regex passes when the doc has no LaTeX delimiters.
+  // Matters under streaming where this runs per chunk on every text body.
+  if (!src.includes("\\(") && !src.includes("\\[")) return src
   return src
     .replace(DISPLAY_MATH_RE, (_, body) => `\n$$\n${body}\n$$\n`)
     .replace(INLINE_MATH_RE, (_, body) => `$$${body}$$`)
@@ -209,6 +218,47 @@ const components = {
   pre: Pre,
 } satisfies Components
 
+
+/**
+ * Module-level constants so identity stays stable across renders. react-
+ * markdown / Streamdown invalidate internal caches when these arrays change
+ * reference — recreating them inline on every render is needlessly expensive,
+ * especially under streaming (re-parse per chunk).
+ */
+const REMARK_PLUGINS = [
+  remarkGfm,
+  // singleDollarTextMath disabled: bare `$` stays literal (currency, prose).
+  // Math must arrive as `\(...\)` / `\[...\]` and is normalized to `$$` above.
+  [remarkMath, { singleDollarTextMath: false }],
+  remarkHighlight,
+  remarkTag,
+] as const
+
+const REHYPE_PLUGINS = [
+  // rehype-raw expands the inline `<mark>` / `<span>` HTML produced by the
+  // highlight + tag remark plugins, and the `<details>`/`<summary>` HTML
+  // emitted by `expandToggleBlocks`. Must run before any rehype pass that
+  // consumes those elements; rehype-katex is unaffected (it operates on
+  // remark-math nodes).
+  rehypeRaw,
+  rehypeKatex,
+] as const
+
+const STREAMDOWN_PLUGINS_STATIC = { code: codePlugin } as const
+
+
+/** Run the string-level preprocessors that translate non-CommonMark
+ *  directives into something remark understands. Cheap early-exits guard
+ *  each step so chunks without the relevant markers cost a single
+ *  `String.includes` check. Order matters: `:::page` expands to inline
+ *  links first so its block markers can't confuse the toggle matcher. */
+function preprocess(content: string): string {
+  let s = expandPageBlocks(content)
+  s = expandToggleBlocks(s)
+  s = expandTocBlocks(s)
+  return normalizeMathDelimiters(sanitizeMathDelimiters(s))
+}
+
 /** -------------------------------------------------------
  * Renderer: GFM + math override + mermaid
  * ------------------------------------------------------*/
@@ -217,12 +267,7 @@ const Renderer: React.FC<{
   isStreaming?: boolean
   shikiThemes: ShikiThemePair
 }> = ({ content, isStreaming, shikiThemes }) => {
-  // Collapse TipTap subpage directive blocks into inline page-ref
-  // links before the rest of the pipeline runs — remark doesn't know
-  // about `:::page` blocks, so without this they'd surface as raw
-  // text. MarkdownLink renders the resulting `page://` URLs as chips.
-  const expanded = expandPageBlocks(content)
-  const normalized = normalizeMathDelimiters(sanitizeMathDelimiters(expanded))
+  const normalized = preprocess(content)
 
   return (
     <div>
@@ -230,16 +275,9 @@ const Renderer: React.FC<{
         mode={isStreaming ? "streaming" : "static"}
         components={components}
         shikiTheme={shikiThemes as [BundledTheme, BundledTheme]}
-        remarkPlugins={[
-          remarkGfm, // <- restores GFM (tables, task lists, etc.)
-          // singleDollarTextMath disabled: bare `$` stays literal (currency, prose).
-          // Math must arrive as `\(...\)` / `\[...\]` and is normalized to `$$` above.
-          [remarkMath, { singleDollarTextMath: false }],
-        ]}
-        rehypePlugins={[
-          rehypeKatex, // <- render math with KaTeX
-        ]}
-        plugins={isStreaming ? undefined : { code: codePlugin }}
+        remarkPlugins={REMARK_PLUGINS as never}
+        rehypePlugins={REHYPE_PLUGINS as never}
+        plugins={isStreaming ? undefined : STREAMDOWN_PLUGINS_STATIC}
       >
         {normalized}
       </Streamdown>
@@ -271,7 +309,7 @@ export const MarkdownView: React.FC<MarkdownViewProps> = React.memo(
     }, [])
 
     return (
-      <div className="w-full min-w-0">
+      <div className="mk-content w-full min-w-0">
         <Renderer content={content} isStreaming={isStreaming} shikiThemes={shikiThemes} />
       </div>
     )

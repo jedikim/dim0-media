@@ -130,7 +130,7 @@ export function SlidesPanel() {
             type="button"
             onClick={() => setSlidesPanelOpen(false)}
             aria-label="Close slides panel"
-            className="rounded-md p-1 transition hover:bg-sidebar-primary/30"
+            className="rounded-md p-1 transition hover:bg-secondary"
           >
             <ChevronRightIcon className="size-4 text-muted-foreground" />
           </button>
@@ -202,7 +202,7 @@ function SortableSlideRow({ id, label, active, onClick }: SortableSlideRowProps)
       style={style}
       className={cn(
         "flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2",
-        "transition-colors hover:bg-sidebar-primary/30",
+        "transition-colors hover:bg-secondary",
         active && "ring-1 ring-secondary-foreground/60",
       )}
     >

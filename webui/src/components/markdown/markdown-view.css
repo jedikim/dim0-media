@@ -1,0 +1,95 @@
+/* ── highlight mark ─────────────────────────────────────────────────────── */
+/*
+ * Highlight palette vars (`--hl-yellow` etc.) live on `:root` /
+ * `[data-mode="dark"]` in `editor/tiptap/editor.css`, so the same theme-aware
+ * values are reachable from the read-only viewer without duplication.
+ */
+.mk-content mark {
+  background: var(--hl-yellow);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0.05em 0.1em;
+}
+
+.mk-content mark[data-color="yellow"] { background: var(--hl-yellow); }
+.mk-content mark[data-color="green"]  { background: var(--hl-green); }
+.mk-content mark[data-color="blue"]   { background: var(--hl-blue); }
+.mk-content mark[data-color="red"]    { background: var(--hl-red); }
+.mk-content mark[data-color="pink"]   { background: var(--hl-pink); }
+.mk-content mark[data-color="purple"] { background: var(--hl-purple); }
+.mk-content mark[data-color="orange"] { background: var(--hl-orange); }
+.mk-content mark[data-color="gray"]   { background: var(--hl-gray); }
+
+/* ── tag chips ──────────────────────────────────────────────────────────── */
+
+.mk-content .editor-tag-chip {
+  display: inline;
+  background: oklch(0.93 0.04 250 / 0.5);
+  color: oklch(0.45 0.08 250);
+  border: 1px solid oklch(0.80 0.06 250 / 0.6);
+  border-radius: 4px;
+  padding: 0.05em 0.3em;
+  font-family: var(--font-sans);
+  font-size: 0.8em;
+  white-space: nowrap;
+}
+
+[data-mode="dark"] .mk-content .editor-tag-chip {
+  background: oklch(0.30 0.05 250 / 0.5);
+  color: oklch(0.75 0.08 250);
+  border-color: oklch(0.45 0.06 250 / 0.5);
+}
+
+.mk-content .editor-tag-chip--kv {
+  background: oklch(0.93 0.04 150 / 0.5);
+  color: oklch(0.40 0.09 150);
+  border-color: oklch(0.75 0.07 150 / 0.6);
+}
+
+[data-mode="dark"] .mk-content .editor-tag-chip--kv {
+  background: oklch(0.28 0.05 150 / 0.5);
+  color: oklch(0.72 0.10 150);
+  border-color: oklch(0.42 0.07 150 / 0.5);
+}
+
+/* ── toggle (details) ───────────────────────────────────────────────────── */
+/*
+ * Read-only viewer uses the browser-native <details>/<summary> behaviour —
+ * no NodeView, no JS. Style it to roughly match the editor's rotating-arrow
+ * look so the visual transition between edit and view modes is gentle.
+ */
+.mk-content details {
+  margin: 0.5rem 0;
+}
+
+.mk-content details > summary {
+  list-style: none;
+  cursor: pointer;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  outline: none;
+}
+
+.mk-content details > summary::-webkit-details-marker,
+.mk-content details > summary::marker {
+  display: none;
+  content: "";
+}
+
+.mk-content details > summary::before {
+  content: "▶";
+  font-size: 0.7rem;
+  color: var(--muted-foreground);
+  transition: transform 0.15s ease;
+  display: inline-block;
+}
+
+.mk-content details[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.mk-content details > summary + * {
+  margin-top: 0.25rem;
+}
