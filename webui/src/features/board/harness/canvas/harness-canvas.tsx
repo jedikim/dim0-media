@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
-import { hitTestAny, type CanvasStore, type Renderer } from "@canvas-harness/core"
+import { hitTestAny, type CanvasStore, type NodeId, type Renderer } from "@canvas-harness/core"
+import { createDefaultNote } from "@/features/board/types/note"
+import { noteToNode } from "../convert/note-to-node"
+import { applyStyleMemory } from "./use-create-handlers"
+import { createHarnessTextareaEditor } from "./text-editor-adapter"
 import { setAgentBridge } from "../agent/agent-bridge"
 import { applyLinkOutput, applyNoteOutput } from "../agent/apply-tool-output"
 import { useHarnessApplyMindMap } from "../agent/use-harness-apply-mindmap"
@@ -146,27 +150,48 @@ export function HarnessCanvas() {
   // beginEdit. Lib fires beginEdit BEFORE the consumer onDoubleClick,
   // so cancel here runs synchronously in the same tick — no editor
   // frame is rendered.
+  //
+  // Double-clicking on empty canvas in the select tool drops a text
+  // node and immediately enters edit mode — matches the playground's
+  // quick-text affordance.
   const handleDoubleClick = useCallback(
     (e: CanvasPointerEvent): void => {
       const camera = store.getCamera()
       const hit = hitTestAny(store, e.world, camera.z)
-      if (!hit || !("nodeId" in hit)) return
-      const node = store.getNode(hit.nodeId)
-      if (!node) return
-      if (!CUSTOM_NODE_TYPES.has(node.type)) return
-      store.cancelEdit()
-      if (node.type === "folder" && boardId) {
-        navigate({
-          to: "/boards/$id",
-          params: { id: boardId },
-          search: (prev: Record<string, unknown>) => ({
-            ...prev,
-            root_id: node.id,
-          }),
-        })
+
+      if (hit && "nodeId" in hit) {
+        const node = store.getNode(hit.nodeId)
+        if (!node) return
+        if (!CUSTOM_NODE_TYPES.has(node.type)) return
+        store.cancelEdit()
+        if (node.type === "folder" && boardId) {
+          navigate({
+            to: "/boards/$id",
+            params: { id: boardId },
+            search: (prev: Record<string, unknown>) => ({
+              ...prev,
+              root_id: node.id,
+            }),
+          })
+        }
+        return
       }
+
+      // Empty space: quick text node + edit. Only in the select tool —
+      // other tools have their own click semantics.
+      if (e.tool !== "select" || !canEdit || !boardId) return
+      const note = createDefaultNote({ boardId, nodeType: "text" })
+      if (rootId) note.parentId = rootId
+      const size = note.properties.nodeSize?.size ?? { width: 150, height: 20 }
+      note.properties.nodePosition = {
+        type: "position",
+        position: { x: e.world.x - size.width / 2, y: e.world.y - size.height / 2 },
+      }
+      const styled = applyStyleMemory(noteToNode(note), styleMemory)
+      store.addNode(styled)
+      store.beginEdit(styled.id as NodeId)
     },
-    [store, boardId, navigate],
+    [store, boardId, rootId, canEdit, navigate, styleMemory],
   )
 
   // Hydrate on scope change. `cancelled` guards against late-arriving fetches
@@ -277,6 +302,7 @@ function HarnessCanvasInner({
             selectionColor={theme.selectionColor}
             background={theme.background}
             renderCustomNodeView={renderView}
+            editorAdapter={createHarnessTextareaEditor}
             arrowDefaults={arrowDefaults}
             onCreateDrag={onCreateDrag}
             onClick={onClick}

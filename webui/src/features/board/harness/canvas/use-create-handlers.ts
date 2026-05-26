@@ -49,7 +49,7 @@ const isShapeTool = (tool: string): boolean => SHAPE_TOOLS.has(tool)
  * `data._storedColors` is refreshed so save round-trips the picked
  * colors, not their dark-mode shadows.
  */
-const applyStyleMemory = (node: Node, styleMemory: StyleMemoryApi): Node => {
+export const applyStyleMemory = (node: Node, styleMemory: StyleMemoryApi): Node => {
   if (!isStylableNodeType(node.type)) return node
   if (node.type === "frame") return node
   const remembered = styleMemory.getNodeStyle()
