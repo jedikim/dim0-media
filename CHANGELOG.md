@@ -1,3 +1,9 @@
+## v0.3.17 (2026-05-26)
+
+### Feat
+
+- **board**: double-click to create text node + solid editor surface (#86)
+
 ## v0.3.16 (2026-05-26)
 
 ### Feat
