@@ -1,3 +1,9 @@
+## v0.3.18 (2026-05-26)
+
+### Feat
+
+- **webui**: set free plan board limit to 5 (#87)
+
 ## v0.3.17 (2026-05-26)
 
 ### Feat
