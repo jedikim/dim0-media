@@ -19,13 +19,30 @@ export type HydrateResult = {
  *
  * Returns the raw graph metadata (label, visibility, canEdit) for the
  * caller to push into the board-app store.
+ *
+ * `isCancelled` is checked once after the network resolves: if the
+ * caller has navigated to a different scope while the fetch was in
+ * flight, we skip the store mutation entirely. Without this guard, the
+ * shared store would get clobbered by stale content — and the save
+ * loop would then persist the wrong board's nodes/edges back to the
+ * current board id.
  */
 export const hydrateBoardStore = async (
   store: CanvasStore,
-  opts: { boardId: string; rootId?: string },
+  opts: {
+    boardId: string
+    rootId?: string
+    isCancelled?: () => boolean
+  },
 ): Promise<HydrateResult> => {
-  const { boardId, rootId } = opts
+  const { boardId, rootId, isCancelled } = opts
   const { graph, canEdit } = await getBoard(boardId, rootId)
+
+  // Bail before any conversion or store mutation if a newer scope has
+  // taken over. We still return the fetched graph so the caller's
+  // (also-cancelled) `.then` doesn't NPE in unusual shapes.
+  if (isCancelled?.()) return { graph, canEdit }
+
   const notes = graph.nodes ?? []
   const links = graph.edges ?? []
 

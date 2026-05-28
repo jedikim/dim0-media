@@ -204,7 +204,11 @@ export function HarnessCanvas() {
     let cancelled = false
     setReady(false)
     setIsLoading(true)
-    hydrateBoardStore(store, { boardId, rootId: rootId ?? undefined })
+    hydrateBoardStore(store, {
+      boardId,
+      rootId: rootId ?? undefined,
+      isCancelled: () => cancelled,
+    })
       .then(({ graph, canEdit }) => {
         if (cancelled) return
         setCanEdit(canEdit)
