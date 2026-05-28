@@ -1,3 +1,9 @@
+## v0.3.20 (2026-05-28)
+
+### Fix
+
+- **board**: close board-switch race that swapped content between boards (#89)
+
 ## v0.3.19 (2026-05-27)
 
 ## v0.3.18 (2026-05-26)
