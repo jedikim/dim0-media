@@ -1,9 +1,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import type { Graph } from "../types/board"
 import { apiFetch } from "@/api"
 import { useAppStore } from "@/store"
 import { useBoardAppStore } from "../harness/store/board-app-store"
-import { listBoards } from "./list-boards"
+import { listBoards, type BoardListItem } from "./list-boards"
 import { FREE_PLAN_BOARD_LIMIT, isBoardCreationLimited } from "../lib/board-limit"
 import { toast } from "sonner"
 
@@ -34,7 +33,7 @@ export const useCreateBoard = () => {
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const cachedBoards = queryClient.getQueryData<Graph[]>(["listBoards", userId])
+      const cachedBoards = queryClient.getQueryData<BoardListItem[]>(["listBoards", userId])
       const boards = cachedBoards ?? await listBoards()
 
       if (isBoardCreationLimited(userPlan, boards.length)) {
@@ -43,13 +42,31 @@ export const useCreateBoard = () => {
       }
 
       const boardId = await createBoard()
-      queryClient.setQueryData(["listBoards", userId], (oldBoards: Graph[] | undefined) => {
-        const newBoard = { uid: boardId } as Graph // Temporary ID until the server responds
-        return [newBoard, ...(oldBoards || [])] // Prepend the new board to the list
-      })
+      // Optimistic insert MUST carry `role: "owner"` — the sidebar
+      // splits on this field to bucket into "My boards" vs "Shared
+      // with me". Without it, a freshly-created board appears under
+      // "Shared with me" until the next listBoards refetch.
+      queryClient.setQueryData<BoardListItem[]>(
+        ["listBoards", userId],
+        (oldBoards) => {
+          const newBoard: BoardListItem = {
+            uid: boardId,
+            type: "graph",
+            readonly: false,
+            visibility: "private",
+            createdAt: new Date().toISOString(),
+            role: "owner",
+          }
+          return [newBoard, ...(oldBoards ?? [])]
+        },
+      )
       // Pre-set the harness scope so subsequent navigation onto /boards/:id
       // hydrates the new (empty) board without a flash.
       setBoardScope({ boardId, rootId: null })
+      // Refetch in the background so the optimistic row reconciles
+      // with the server's truth (label, createdAt, etc.) without
+      // blocking the navigation above.
+      queryClient.invalidateQueries({ queryKey: ["listBoards", userId] })
       return boardId
     }
   })

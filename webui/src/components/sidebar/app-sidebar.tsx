@@ -81,15 +81,38 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
     [chatHistoryItems]
   )
 
-  const boardItems = useMemo(
-    () => boards.map(board => (
-      <BoardItem
-        key={board.uid}
-        boardId={board.uid}
-        label={board.label}
-      />
-    )),
-    [boards]
+  const { myBoards, sharedBoards } = useMemo(() => {
+    const mine: typeof boards = []
+    const shared: typeof boards = []
+    for (const board of boards) {
+      if (board.role === "owner") {
+        mine.push(board)
+      } else {
+        shared.push(board)
+      }
+    }
+    return { myBoards: mine, sharedBoards: shared }
+  }, [boards])
+
+  const myBoardItems = useMemo(
+    () =>
+      myBoards.map((board) => (
+        <BoardItem key={board.uid} boardId={board.uid} label={board.label} />
+      )),
+    [myBoards],
+  )
+
+  const sharedBoardItems = useMemo(
+    () =>
+      sharedBoards.map((board) => (
+        <BoardItem
+          key={board.uid}
+          boardId={board.uid}
+          label={board.label}
+          sharedByEmail={board.ownerEmail}
+        />
+      )),
+    [sharedBoards],
   )
 
   return (
@@ -132,10 +155,21 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
                   <HomeMenuItem />
                   <DashboardMenuItem />
                   <NewBoardItem />
-                  {boardItems}
+                  {myBoardItems}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
+
+            {sharedBoardItems.length > 0 && (
+              <SidebarGroup>
+                <SidebarGroupLabel><span>SHARED WITH ME</span></SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {sharedBoardItems}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+            )}
 
             <SidebarGroup>
               <SidebarGroupLabel><span>CHATS</span></SidebarGroupLabel>

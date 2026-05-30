@@ -33,3 +33,8 @@ notebooks.exclude/
 AGENTS.md
 SKILL.md
 .codex
+
+# Local design / working notes — keep on disk, never publish.
+collab-archi.md
+sharing-archi.md
+next-steps.md

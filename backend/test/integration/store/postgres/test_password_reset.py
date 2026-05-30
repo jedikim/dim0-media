@@ -5,8 +5,8 @@ from datetime import timedelta
 import asyncpg
 import pytest
 
-from topix.api.utils.password_reset import hash_password_reset_token
 from topix.api.utils.email_verification import utc_now
+from topix.api.utils.password_reset import hash_password_reset_token
 from topix.datatypes.password_reset import PasswordResetToken
 from topix.store.postgres.password_reset import (
     _dangerous_hard_delete_password_reset_tokens_by_user_uid,

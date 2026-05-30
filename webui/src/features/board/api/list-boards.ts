@@ -3,6 +3,19 @@ import type { Graph } from "../types/board"
 import camelcaseKeys from "camelcase-keys"
 import { apiFetch } from "@/api"
 
+
+/**
+ * One row of the sidebar boards list. Extends the base Graph with the
+ * user's per-board role (so the sidebar can split "My boards" vs
+ * "Shared with me") and, for shared boards, the owner's email for a
+ * tooltip hint.
+ */
+export type BoardListItem = Graph & {
+  role: "owner" | "member" | "viewer"
+  ownerEmail?: string
+}
+
+
 interface ListBoardsResponse {
   data: {
     graphs: Array<{
@@ -15,6 +28,8 @@ interface ListBoardsResponse {
       created_at: string
       updated_at?: string
       deleted_at?: string
+      role: "owner" | "member" | "viewer"
+      owner_email?: string
     }>
   }
 }
@@ -23,14 +38,15 @@ interface ListBoardsResponse {
 /**
  * List all boards for the user.
  *
- * @returns A promise that resolves to an array of board objects, each containing an id and label.
+ * Each row carries the user's per-board role so the sidebar can group
+ * owned vs shared boards. `ownerEmail` is present on shared rows.
  */
-export async function listBoards(): Promise<Graph[]> {
+export async function listBoards(): Promise<BoardListItem[]> {
   const res = await apiFetch<ListBoardsResponse>({
     path: "/boards",
-    method: "GET"
+    method: "GET",
   })
-  return res.data.graphs.map((board) => camelcaseKeys(board, { deep: true })) as Graph[]
+  return res.data.graphs.map((board) => camelcaseKeys(board, { deep: true })) as BoardListItem[]
 }
 
 
@@ -42,7 +58,7 @@ export async function listBoards(): Promise<Graph[]> {
  * @returns A query object containing the list of boards.
  */
 export const useListBoards = (userId: string) => {
-  return useQuery<Graph[]>({
+  return useQuery<BoardListItem[]>({
     queryKey: ["listBoards", userId],
     queryFn: () => listBoards(),
     enabled: !!userId,

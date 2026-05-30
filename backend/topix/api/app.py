@@ -11,7 +11,9 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from topix.api.router import billing, boards, chats, documents, files, finance, subscriptions, tools, users, utils
+from topix.api.router import billing, boards, chats, collab, documents, files, finance, sharing, subscriptions, tools, users, utils
+from topix.collab.agent_bridge import AgentBoardBridge
+from topix.collab.room import RoomRegistry
 from topix.config.config import Config
 from topix.datatypes.stage import StageEnum
 from topix.nlp.pipeline.parsing import ParsingPipeline
@@ -65,6 +67,15 @@ def create_app(stage: StageEnum):
         # Initialize Redis
         app.redis_store = RedisStore.from_config()
 
+        # Per-worker collab room registry (in-process; single-worker for v1).
+        app.collab_rooms = RoomRegistry()
+        # Agent → room bridge: agent tools call this so their edits
+        # surface to live peers via `peer-op` (collab-archi §5.3 Phase 2).
+        app.agent_board_bridge = AgentBoardBridge(
+            graph_store=app.graph_store,
+            registry=app.collab_rooms,
+        )
+
         yield
 
         # Close stores. They no-op the pool close when sharing, then we close
@@ -103,6 +114,8 @@ def create_app(stage: StageEnum):
 
     app.include_router(boards.router)
     app.include_router(chats.router)
+    app.include_router(collab.router)
+    app.include_router(sharing.router)
     app.include_router(tools.router)
     app.include_router(users.router)
     app.include_router(subscriptions.router)

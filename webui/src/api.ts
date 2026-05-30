@@ -6,6 +6,23 @@ import {
   setRefreshToken,
   clearTokens,
 } from "./features/signin/auth-storage"
+import { notifyHttpFailure } from "@/features/connection/connection-state"
+
+
+/**
+ * Wrap `fetch` so a network-level failure (timeout, DNS, abort, offline)
+ * notifies the connection-state detector. HTTP non-2xx responses are NOT
+ * notified — those mean the server *did* respond, just unhappily; the
+ * detector only cares about reachability.
+ */
+const trackedFetch: typeof fetch = async (input, init) => {
+  try {
+    return await fetch(input, init)
+  } catch (err) {
+    notifyHttpFailure()
+    throw err
+  }
+}
 
 let isRedirecting = false
 
@@ -101,7 +118,7 @@ async function refreshAccessToken(): Promise<void> {
     if (!rt) throw new Error("No refresh token")
 
     const url = new URL("/users/refresh", API_URL)
-    const res = await fetch(url.toString(), {
+    const res = await trackedFetch(url.toString(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: rt }),
@@ -175,7 +192,7 @@ export async function apiFetch<TResponse = unknown, TBody = unknown>(
   }
 
   // First attempt
-  let res = await fetch(url.toString(), { method, headers: h, body: payload, signal })
+  let res = await trackedFetch(url.toString(), { method, headers: h, body: payload, signal })
 
   // If unauthorized and we are allowed to refresh -> refresh then retry once
   if (res.status === 401 && !noAuth) {
@@ -186,7 +203,7 @@ export async function apiFetch<TResponse = unknown, TBody = unknown>(
       const newToken = getAccessToken()
       if (newToken) newHeaders.set("Authorization", `Bearer ${newToken}`)
 
-      res = await fetch(url.toString(), {
+      res = await trackedFetch(url.toString(), {
         method,
         headers: newHeaders,
         body: payload,
@@ -238,7 +255,7 @@ export async function signin(username: string, password: string): Promise<TokenP
   form.set("username", username)
   form.set("password", password)
 
-  const res = await fetch(url.toString(), {
+  const res = await trackedFetch(url.toString(), {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: form.toString(),
@@ -305,7 +322,7 @@ export async function getAuthMethods(): Promise<AuthMethods> {
  * Exchange a Google ID token for app JWT tokens.
  */
 export async function googleSignin(idToken: string): Promise<TokenPayload> {
-  const res = await fetch(new URL("/users/google-signin", API_URL).toString(), {
+  const res = await trackedFetch(new URL("/users/google-signin", API_URL).toString(), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id_token: idToken }),
@@ -441,7 +458,7 @@ export async function fetchWithAuthRaw(input: string | URL, init: RawInit = {}):
   }
 
   const doFetch = (hdrs: Headers) =>
-    fetch(typeof input === "string" ? input : input.toString(), { ...rest, headers: hdrs })
+    trackedFetch(typeof input === "string" ? input : input.toString(), { ...rest, headers: hdrs })
 
   // first attempt
   let res = await doFetch(h)

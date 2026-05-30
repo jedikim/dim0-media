@@ -182,6 +182,10 @@ async def get_graph(
     return {
         "graph": graph.model_dump(exclude_none=True),
         "can_edit": can_edit,
+        # `role` is one of "owner" | "member" | "viewer" | None
+        # (None for public-visibility boards a non-member is viewing).
+        # The frontend uses this to gate the Share button (owner-only).
+        "role": role,
     }
 
 
@@ -193,17 +197,26 @@ async def list_graphs(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_uid)]
 ):
-    """List all graphs for the user."""
+    """List all graphs for the user, each annotated with role + owner email."""
     store: GraphStore = request.app.graph_store
 
-    graphs = await store.list_graphs(user_uid=user_id)
+    rows = await store.list_graphs(user_uid=user_id)
 
-    # Convert file:// URLs to data URLs
-    for graph in graphs:
+    items = []
+    for graph, role, owner_email in rows:
+        # Convert file:// URLs to data URLs (kept here so the model
+        # dump below sees the resolved value).
         if graph.thumbnail and graph.thumbnail.startswith("file://"):
             graph.thumbnail = load_png_as_data_url(graph.thumbnail)
+        item = graph.model_dump(exclude_none=True)
+        item["role"] = role
+        # Only attach owner_email for non-owners — saves payload size
+        # and matches what the sidebar actually shows ("shared by …").
+        if role != "owner":
+            item["owner_email"] = owner_email
+        items.append(item)
 
-    return {"graphs": [graph.model_dump(exclude_none=True) for graph in graphs]}
+    return {"graphs": items}
 
 
 @router.post("/{graph_id}/notes/", include_in_schema=False)

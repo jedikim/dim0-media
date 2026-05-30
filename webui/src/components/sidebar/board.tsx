@@ -99,8 +99,22 @@ export function NewBoardItem() {
 }
 
 
-/** Existing board item */
-export function BoardItem({ boardId, label }: { boardId: string, label?: string }) {
+/** Existing board item.
+ *
+ * `sharedByEmail` is present only for boards the current user accessed
+ * via share-link (sidebar "Shared with me" section); when set, we
+ * surface "shared by …" in the tooltip and skip the Delete context-
+ * menu entry — non-owners can't delete the board.
+ */
+export function BoardItem({
+  boardId,
+  label,
+  sharedByEmail,
+}: {
+  boardId: string
+  label?: string
+  sharedByEmail?: string
+}) {
   const { deleteBoard } = useDeleteBoard()
   const navigate = useNavigate()
   const pathname = useRouterState({ select: s => s.location.pathname })
@@ -184,19 +198,26 @@ export function BoardItem({ boardId, label }: { boardId: string, label?: string 
             </TooltipTrigger>
             <TooltipContent side="right" align="center" className="max-w-64">
               <p className="text-xs">{boardLabel}</p>
+              {sharedByEmail && (
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  shared by {sharedByEmail}
+                </p>
+              )}
             </TooltipContent>
           </Tooltip>
 
-          <ContextMenuContent className="w-44">
-            <ContextMenuItem
-              onSelect={() => handleRequestDelete()}
-              variant="destructive"
-              className="text-xs flex flex-row items-center"
-            >
-              <DeleteIcon className="mr-2 size-4" strokeWidth={2} />
-              <span>Delete Board</span>
-            </ContextMenuItem>
-          </ContextMenuContent>
+          {!sharedByEmail && (
+            <ContextMenuContent className="w-44">
+              <ContextMenuItem
+                onSelect={() => handleRequestDelete()}
+                variant="destructive"
+                className="text-xs flex flex-row items-center"
+              >
+                <DeleteIcon className="mr-2 size-4" strokeWidth={2} />
+                <span>Delete Board</span>
+              </ContextMenuItem>
+            </ContextMenuContent>
+          )}
 
           <CollapsibleContent>
             {isLoadingContents && rootContents.length === 0 ? (

@@ -77,6 +77,35 @@ def test_public_board_read_allowed_for_non_member():
     assert payload["data"]["can_edit"] is False
 
 
+def test_private_board_read_allowed_for_viewer_role():
+    """A viewer (graph_user.role == 'viewer') can read the board.
+
+    Regression: `verify_board_read_access` used to gate on
+    `{owner, member}` only, so the GET /boards/{id} call returned 404
+    for view-only share-link recipients. The board listed in their
+    sidebar ("Shared with me") but they couldn't open it. The viewer
+    role is now in the allowed set, alongside owner/member.
+
+    `can_edit` stays False since the viewer can read but not write.
+    """
+    store = _FakeGraphStore()
+    graph_uid = "g-private-shared-view"
+    store.metadata[graph_uid] = Graph(uid=graph_uid, label="Private", visibility="private")
+    store.graphs[graph_uid] = Graph(uid=graph_uid, label="Private", visibility="private")
+    # Explicit viewer row — the share-link accept flow writes this.
+    store.roles[(graph_uid, "viewer")] = "viewer"
+    client = _build_client(store, user_uid="viewer")
+
+    response = client.get(f"/boards/{graph_uid}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "success"
+    assert payload["data"]["graph"]["uid"] == graph_uid
+    assert payload["data"]["can_edit"] is False
+    assert payload["data"]["role"] == "viewer"
+
+
 def test_non_member_write_denied_even_when_public():
     """Non-member should still be denied on write route."""
     store = _FakeGraphStore()

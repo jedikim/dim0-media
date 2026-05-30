@@ -429,6 +429,67 @@ async def test_rearrange_pins_layout_to_old_anchor_position() -> None:
     assert by_id["new-b"]["x"] > 2000.0
 
 
+@dataclass
+class _FakeAgentBridge:
+    """Records bridge.patch_note calls so the rearrange→bridge path can assert."""
+
+    notes: dict[str, Note] = field(default_factory=dict)
+    calls: list[dict] = field(default_factory=list)
+
+    async def patch_note(
+        self, *, board_id: str, node_id: str, data: dict, user_uid: str | None,
+    ) -> Note | None:
+        """Record the call and apply the position patch in-memory."""
+        self.calls.append({"node_id": node_id, "data": data, "board_id": board_id})
+        note = self.notes.get(node_id)
+        if note is None:
+            return None
+        position = data.get("properties", {}).get("node_position", {}).get("position")
+        if position is not None:
+            note.properties.node_position = PositionProperty(
+                position=PositionProperty.Position(x=position["x"], y=position["y"]),
+            )
+        return note
+
+
+@pytest.mark.asyncio
+async def test_rearrange_routes_through_agent_bridge_when_supplied() -> None:
+    """When `agent_bridge` is set, position patches flow through it.
+
+    Routing through the bridge is what makes live collab peers see the
+    post-turn layout — `graph_store.patch_note` alone persists but does
+    not broadcast.
+    """
+    note_a = _make_note("a", width=200.0, height=100.0)
+    note_b = _make_note("b", width=200.0, height=100.0)
+    store = _FakeGraphStore(notes={"a": note_a, "b": note_b})
+    bridge = _FakeAgentBridge(notes={"a": note_a, "b": note_b})
+
+    moved = await rearrange_created_notes(
+        store, "graph-1", ["a", "b"], agent_bridge=bridge,
+    )
+
+    # All patches went through the bridge — graph_store was NOT touched.
+    assert set(moved) == {"a", "b"}
+    assert store.patches == []
+    assert {call["node_id"] for call in bridge.calls} == {"a", "b"}
+    # board_id is propagated for the peer-op routing inside the bridge.
+    assert {call["board_id"] for call in bridge.calls} == {"graph-1"}
+
+
+@pytest.mark.asyncio
+async def test_rearrange_falls_back_to_graph_store_when_bridge_missing() -> None:
+    """No bridge supplied → patches go to `graph_store` (legacy / CLI / tests)."""
+    note_a = _make_note("a", width=200.0, height=100.0)
+    note_b = _make_note("b", width=200.0, height=100.0)
+    store = _FakeGraphStore(notes={"a": note_a, "b": note_b})
+
+    moved = await rearrange_created_notes(store, "graph-1", ["a", "b"])
+
+    assert set(moved) == {"a", "b"}
+    assert {nid for nid, _ in store.patches} == {"a", "b"}
+
+
 @pytest.mark.asyncio
 async def test_rearrange_does_not_move_anchor_node() -> None:
     """The anchor's stored position is unchanged after rearrange runs."""

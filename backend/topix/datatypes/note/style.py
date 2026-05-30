@@ -86,7 +86,9 @@ class Style(BaseModel):
         stroke_width (int): Width of the node's border.
         stroke_style (str): Style of the node's border, can be "solid" or "dashed".
         roughness (float): Roughness of the node, between 0 and 2.
-        roundness (float): Roundness of the node's corners, between 0 and 2.
+        roundness (float): Roundness of the node's corners. 0 = sharp;
+            1 = subtle (used by code-sandbox / widget); 3 = fully rounded
+            (the user-facing "Rounded" toggle).
         opacity (int): Opacity of the node, default is 100%.
         group_ids (list[str]): List of group IDs this node belongs to.
         font_family (str): Font family used for text in the node.
@@ -105,7 +107,7 @@ class Style(BaseModel):
     background_color: str = "#dbeafe"
     fill_style: FillStyle = FillStyle.SOLID
     roughness: float = 0.5
-    roundness: float = 2.0
+    roundness: float = 3.0
     opacity: float = 100
     group_ids: list[str] = []
     font_size: FontSize = FontSize.M

@@ -22,6 +22,7 @@ from topix.agents.notes.service import (
     get_default_note_size,
 )
 from topix.agents.tool_handler import ToolHandler
+from topix.collab.agent_bridge import AgentBoardBridge
 from topix.datatypes.note.link import Link
 from topix.datatypes.note.style import NodeType
 from topix.datatypes.property import SizeProperty
@@ -33,8 +34,14 @@ def create_write_note_tool(
     graph_store: GraphStore,
     graph_uid: str,
     root_id: str | None = None,
+    agent_bridge: AgentBoardBridge | None = None,
 ) -> FunctionTool:
-    """Build a write-note tool bound to the current board and optional folder scope."""
+    """Build a write-note tool bound to the current board and optional folder scope.
+
+    When `agent_bridge` is supplied, mutations route through it so live
+    collab peers receive a `peer-op` with `is_system: true`. When omitted,
+    falls back to direct `graph_store` calls (used in tests + the CLI).
+    """
 
     async def write_note(
         _wrapper: RunContextWrapper[Context],
@@ -69,7 +76,10 @@ def create_write_note_tool(
                 note_type=note_type,
                 parent_id=root_id,
             )
-            await graph_store.add_notes([note])
+            if agent_bridge is not None:
+                await agent_bridge.add_notes(board_id=graph_uid, notes=[note])
+            else:
+                await graph_store.add_notes([note])
 
             return WriteNoteOutput(
                 action="created",
@@ -106,7 +116,12 @@ def create_write_note_tool(
                     size=SizeProperty.Size(width=width, height=height)
                 ).model_dump()
 
-        updated_note = await graph_store.patch_note(note_id, patch)
+        if agent_bridge is not None:
+            updated_note = await agent_bridge.patch_note(
+                board_id=graph_uid, node_id=note_id, data=patch, user_uid=None,
+            )
+        else:
+            updated_note = await graph_store.patch_note(note_id, patch)
         if updated_note is None:
             raise ValueError(f"Note {note_id} was not found.")
 
@@ -183,8 +198,13 @@ def create_create_note_tool(
 def create_edit_note_tool(
     graph_store: GraphStore,
     graph_uid: str,
+    agent_bridge: AgentBoardBridge | None = None,
 ) -> FunctionTool:
-    """Build an edit-note tool bound to the current board scope."""
+    """Build an edit-note tool bound to the current board scope.
+
+    When `agent_bridge` is supplied, patches route through it so live
+    peers receive the equivalent `node.update` as a system `peer-op`.
+    """
 
     async def edit_note(
         _wrapper: RunContextWrapper[Context],
@@ -252,7 +272,12 @@ def create_edit_note_tool(
                 field: {"markdown": new_value},
             }
 
-            updated_note = await graph_store.patch_note(note_id, patch)
+            if agent_bridge is not None:
+                updated_note = await agent_bridge.patch_note(
+                    board_id=graph_uid, node_id=note_id, data=patch, user_uid=None,
+                )
+            else:
+                updated_note = await graph_store.patch_note(note_id, patch)
             if updated_note is None:
                 raise ValueError(f"Note {note_id} was not found.")
 
@@ -319,8 +344,13 @@ def create_link_notes_tool(
     graph_store: GraphStore,
     graph_uid: str,
     root_id: str | None = None,
+    agent_bridge: AgentBoardBridge | None = None,
 ) -> FunctionTool:
-    """Build a link-notes tool bound to the current board and folder scope."""
+    """Build a link-notes tool bound to the current board and folder scope.
+
+    When `agent_bridge` is supplied, new links route through it so live
+    peers receive the equivalent `edge.add` as a system `peer-op`.
+    """
 
     async def link_notes(
         _wrapper: RunContextWrapper[Context],
@@ -364,7 +394,10 @@ def create_link_notes_tool(
             parent_id=root_id,
             label=RichText(markdown=label) if label else None,
         )
-        await graph_store.add_links([link])
+        if agent_bridge is not None:
+            await agent_bridge.add_links(board_id=graph_uid, links=[link])
+        else:
+            await graph_store.add_links([link])
 
         return LinkNotesOutput(
             link_id=link.id,

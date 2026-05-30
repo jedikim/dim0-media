@@ -30,6 +30,7 @@ from topix.agents.widgets.image import display_image_search_widget_tool
 from topix.agents.widgets.learn import learn_generate_html_widget_tool
 from topix.agents.widgets.weather import display_weather_widget_tool
 from topix.api.utils.common import iso_to_clear_date
+from topix.collab.agent_bridge import AgentBoardBridge
 from topix.store.graph import GraphStore
 from topix.store.qdrant.store import ContentStore
 
@@ -71,6 +72,7 @@ class Plan(BaseAgent):
         graph_store: GraphStore | None = None,
         graph_uid: str | None = None,
         root_id: str | None = None,
+        agent_bridge: AgentBoardBridge | None = None,
     ) -> Plan:
         """Create an instance of Plan from configuration."""
         tools = [
@@ -86,10 +88,10 @@ class Plan(BaseAgent):
             tools.append(run_code_tool)
 
         if graph_store is not None and graph_uid is not None:
-            tools.append(create_write_note_tool(graph_store, graph_uid, root_id=root_id))
-            tools.append(create_edit_note_tool(graph_store, graph_uid))
+            tools.append(create_write_note_tool(graph_store, graph_uid, root_id=root_id, agent_bridge=agent_bridge))
+            tools.append(create_edit_note_tool(graph_store, graph_uid, agent_bridge=agent_bridge))
             tools.append(create_get_note_tool(graph_store, graph_uid))
-            tools.append(create_link_notes_tool(graph_store, graph_uid, root_id=root_id))
+            tools.append(create_link_notes_tool(graph_store, graph_uid, root_id=root_id, agent_bridge=agent_bridge))
 
         if config.navigate:
             tools.append(fetch_url_content_tool)

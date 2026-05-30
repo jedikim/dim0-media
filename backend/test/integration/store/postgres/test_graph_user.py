@@ -65,9 +65,11 @@ async def test_graph_user_assoc_and_listing(conn, user_obj, graph_obj):
     result2 = await add_user_to_graph_by_uid(conn, graph_uid, user_uid, "owner")
     assert result2 is False
 
-    # 3. List graphs for user
+    # 3. List graphs for user. Function returns
+    #    list[tuple[Graph, role, owner_email]] since the sharing Phase B
+    #    sidebar split — unpack the tuple to read the graph.
     user_graphs = await list_graphs_by_user_uid(conn, user_uid)
-    user_graph_tuples = [(g.uid, g.label) for g in user_graphs]
+    user_graph_tuples = [(g.uid, g.label) for (g, _role, _owner_email) in user_graphs]
     assert (graph_uid, graph_obj.label) in user_graph_tuples
 
     # 4. List users for graph
@@ -93,7 +95,7 @@ async def test_graph_user_assoc_and_listing(conn, user_obj, graph_obj):
     assert (user2_uid, "member") in graph_users2
 
     user2_graphs = await list_graphs_by_user_uid(conn, user2_uid)
-    user2_graph_tuples = [(g.uid, g.label) for g in user2_graphs]
+    user2_graph_tuples = [(g.uid, g.label) for (g, _role, _owner_email) in user2_graphs]
     assert (graph_uid, graph_obj.label) in user2_graph_tuples
 
     # 7. Clean up: delete user and graph

@@ -25,6 +25,7 @@ import { VerifyEmailPage } from "@/features/signin/screens/verify-email"
 import { ForgotPasswordPage } from "@/features/signin/screens/forgot-password"
 import { ResetPasswordPage } from "@/features/signin/screens/reset-password"
 import { InstallScreen } from "@/features/install/screens/install-screen"
+import { ShareLandingScreen } from "@/features/sharing/screens/share-landing"
 
 
 export const rootRoute = createRootRoute({
@@ -231,6 +232,17 @@ const installRoute = createRoute({
   component: InstallScreen,
 })
 
+// /share/:token — share-link landing page. Intentionally *unguarded*:
+// the screen itself handles the "not signed in" case by stashing the
+// token and routing through /signin. Verified-auth gating would 404
+// the very users we want to onboard.
+export const ShareLandingUrl = "/share/$token"
+const shareLandingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: ShareLandingUrl,
+  component: ShareLandingScreen,
+})
+
 const routeTree = rootRoute.addChildren([
   signinRoute,
   signupRoute,
@@ -249,6 +261,7 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
   settingsBillingRoute,
   installRoute,
+  shareLandingRoute,
 ])
 
 export const router = createRouter({ routeTree })

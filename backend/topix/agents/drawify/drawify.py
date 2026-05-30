@@ -62,7 +62,13 @@ def _node_type_from_drawn(node_type: str) -> NodeType:
 
 
 def _roundness_from_drawn(rounded: bool) -> float:
-    return 2 if rounded else 0
+    """Map drawify's binary `rounded` flag to a Dim0 roundness value.
+
+    `3` matches the webui's "Rounded" picker (~12 px corner radius at
+    canvas-harness's `roundness * 4` mapping). `0` keeps the corners
+    sharp.
+    """
+    return 3 if rounded else 0
 
 
 def _arrowhead_from_label(kind: str) -> Arrowhead:

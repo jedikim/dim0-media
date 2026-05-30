@@ -97,7 +97,12 @@ export function HarnessViewportControls() {
 
   return (
     <div className="absolute bottom-3 left-3 z-50">
-      <div className="flex items-center gap-0.5 rounded-lg border border-border bg-background/95 px-1 py-1 shadow-md backdrop-blur">
+      {/*
+        Container is intentionally chrome-less — transparent, no border
+        or shadow. Each button keeps its own hover state for affordance;
+        the cluster reads as a row of icons floating over the canvas.
+      */}
+      <div className="flex items-center gap-0.5">
         <Tooltip>
           <TooltipTrigger asChild>
             <button

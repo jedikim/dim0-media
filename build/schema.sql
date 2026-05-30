@@ -48,10 +48,27 @@ CREATE TABLE IF NOT EXISTS graph_user (
     id SERIAL PRIMARY KEY,
     graph_id INT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
     user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role TEXT NOT NULL CHECK (role IN ('owner', 'member')),
+    -- 'viewer' added 2026-05-28 for board sharing. Older self-hosted
+    -- DBs pick this up via the ALTER block further down.
+    role TEXT NOT NULL CHECK (role IN ('owner', 'member', 'viewer')),
     created_at TIMESTAMP DEFAULT NOW(),
     UNIQUE (graph_id, user_id)
 );
+
+
+-- Owner-minted invitations that grant role on consume. Two-table split
+-- between graph_share_link (invitations) and graph_user (memberships)
+-- — see sharing-archi.md §4.2.
+CREATE TABLE IF NOT EXISTS graph_share_link (
+    token       TEXT PRIMARY KEY,
+    graph_id    INT NOT NULL REFERENCES graphs(id) ON DELETE CASCADE,
+    role        TEXT NOT NULL CHECK (role IN ('member', 'viewer')),
+    created_by  INT NOT NULL REFERENCES users(id),
+    created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+    revoked_at  TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_graph_share_link_graph_active
+    ON graph_share_link(graph_id) WHERE revoked_at IS NULL;
 
 
 CREATE TABLE IF NOT EXISTS chats (
@@ -121,3 +138,11 @@ CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires_at ON password_rese
 -- ============================================================================
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP;
+
+-- Expand graph_user.role to allow 'viewer' on already-deployed DBs.
+-- DROP + ADD because CHECK constraints aren't natively idempotent.
+-- The conventional auto-generated name for an inline column CHECK is
+-- '<table>_<column>_check'.
+ALTER TABLE graph_user DROP CONSTRAINT IF EXISTS graph_user_role_check;
+ALTER TABLE graph_user ADD CONSTRAINT graph_user_role_check
+    CHECK (role IN ('owner', 'member', 'viewer'));

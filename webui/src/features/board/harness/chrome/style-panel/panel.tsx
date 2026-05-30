@@ -164,7 +164,7 @@ function WavyGlyph({ amount }: { amount: number }) {
 }
 
 
-function CornerGlyph({ r }: { r: 0 | 2 }) {
+function CornerGlyph({ r }: { r: 0 | 3 }) {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" className="text-foreground/80">
       <rect
@@ -247,7 +247,7 @@ export function StylePanel({
         />
       ),
       roughness: <WavyGlyph amount={(s.roughness ?? 0) * 4} />,
-      roundness: <CornerGlyph r={(s.roundness ?? 0) >= 1 ? 2 : 0} />,
+      roundness: <CornerGlyph r={(s.roundness ?? 0) >= 1 ? 3 : 0} />,
       textAlign:
         s.textAlign === "center" ? (
           <TextAlignCenterIcon className="size-4" />
@@ -373,7 +373,7 @@ export function StylePanel({
       <Section title="Roundness">
         <ToggleGroup
           type="single"
-          value={String((s.roundness ?? 0) >= 1 ? 2 : 0)}
+          value={String((s.roundness ?? 0) >= 1 ? 3 : 0)}
           onValueChange={(v) => v && onStyleChange({ roundness: Number(v) })}
           className="flex gap-2"
         >
@@ -384,10 +384,10 @@ export function StylePanel({
             <CornerGlyph r={0} />
           </ToggleGroupItem>
           <ToggleGroupItem
-            value="2"
+            value="3"
             className="h-9 w-9 items-center justify-center rounded-md border bg-muted data-[state=on]:bg-secondary-foreground/10 data-[state=on]:text-secondary-foreground"
           >
-            <CornerGlyph r={2} />
+            <CornerGlyph r={3} />
           </ToggleGroupItem>
         </ToggleGroup>
       </Section>

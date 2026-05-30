@@ -19,6 +19,7 @@ from __future__ import annotations
 import statistics
 
 from collections import defaultdict
+from typing import TYPE_CHECKING
 
 from topix.agents.notes.service import DEFAULT_NOTE_GAP
 from topix.datatypes.note.link import Link
@@ -26,6 +27,9 @@ from topix.datatypes.note.note import Note
 from topix.datatypes.property import PositionProperty
 from topix.store.graph import GraphStore
 from topix.utils.graph.layout import LayoutDirection, layout_directed
+
+if TYPE_CHECKING:
+    from topix.collab.agent_bridge import AgentBoardBridge
 
 # Within-component layout: igraph's Sugiyama treats nodes as dimensionless points,
 # so its hgap/vgap are point-to-point distances, not gaps between rendered rectangles.
@@ -333,6 +337,7 @@ async def rearrange_created_notes(  # noqa: C901
     max_row_width: float = MAX_ROW_WIDTH,
     h_gap: float = TILE_GAP_X,
     v_gap: float = TILE_GAP_Y,
+    agent_bridge: "AgentBoardBridge | None" = None,
 ) -> list[str]:
     """Lay out newly-created notes per connected component, anchored where possible.
 
@@ -355,6 +360,10 @@ async def rearrange_created_notes(  # noqa: C901
         max_row_width: Width budget for a row before wrapping to the next.
         h_gap: Horizontal gap between flex-wrap tiles in the same row.
         v_gap: Vertical gap between flex-wrap rows.
+        agent_bridge: When set, position patches route through the collab
+            bridge (broadcasts a `node.update` peer-op to live peers).
+            When None, patches go directly to `graph_store` — peers will
+            only see the post-turn layout on next snapshot reload.
 
     Returns:
         The ids that were actually repositioned.
@@ -491,7 +500,16 @@ async def rearrange_created_notes(  # noqa: C901
                 ).model_dump()
             }
         }
-        updated = await graph_store.patch_note(nid, patch)
+        # Route through the collab bridge when available so live peers
+        # receive the post-turn layout as `node.update` peer-ops. Without
+        # this, peers see notes at their initial (stacked) positions and
+        # only converge after a refresh.
+        if agent_bridge is not None:
+            updated = await agent_bridge.patch_note(
+                board_id=graph_uid, node_id=nid, data=patch, user_uid=None,
+            )
+        else:
+            updated = await graph_store.patch_note(nid, patch)
         if updated is not None:
             moved.append(nid)
     return moved

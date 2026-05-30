@@ -68,6 +68,12 @@ export type BoardAppState = {
   boardLabel: string
   boardVisibility: "private" | "public" | null
   canEdit: boolean
+  /**
+   * The signed-in user's role on the loaded board. `null` means the
+   * user has no explicit row in `graph_user` (e.g. public-visibility
+   * browse). The Share button is gated on `boardRole === "owner"`.
+   */
+  boardRole: "owner" | "member" | "viewer" | null
   isLoading: boolean
 
   // Active canvas tool. `'select'` is default; the top-bar swaps it and the
@@ -118,6 +124,7 @@ export type BoardAppActions = {
   setBoardLabel: (label: string) => void
   setBoardVisibility: (visibility: BoardAppState["boardVisibility"]) => void
   setCanEdit: (canEdit: boolean) => void
+  setBoardRole: (role: BoardAppState["boardRole"]) => void
   setIsLoading: (loading: boolean) => void
 
   setTool: (tool: string) => void
@@ -148,6 +155,7 @@ const initialState: BoardAppState = {
   boardLabel: "",
   boardVisibility: null,
   canEdit: true,
+  boardRole: null,
   isLoading: false,
   tool: "select",
   viewMode: "board",
@@ -175,6 +183,7 @@ export const useBoardAppStore = create<BoardAppState & BoardAppActions>((set, ge
       boardLabel: "",
       boardVisibility: null,
       canEdit: true,
+      boardRole: null,
       isLoading: false,
       tool: "select",
       viewMode: "board",
@@ -193,6 +202,7 @@ export const useBoardAppStore = create<BoardAppState & BoardAppActions>((set, ge
   setBoardLabel: (label) => set({ boardLabel: label }),
   setBoardVisibility: (visibility) => set({ boardVisibility: visibility }),
   setCanEdit: (canEdit) => set({ canEdit }),
+  setBoardRole: (role) => set({ boardRole: role }),
   setIsLoading: (loading) => set({ isLoading: loading }),
 
   setTool: (tool) => set({ tool }),

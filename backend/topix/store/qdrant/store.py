@@ -313,6 +313,24 @@ class ContentStore:
             await self._update_embs(batch_ids, batch_embeds)
         logger.info(f"Updated {len(fields)} data in the Qdrant store.")
 
+    async def update_payload_only(
+        self, fields: list[dict], refresh: bool = True, batch_size: int = 1000
+    ):
+        """Update payload fields without re-running the embedder.
+
+        Use when the caller knows the embeddable text (label / content /
+        searchable TextProperties) has not changed — typical for spatial
+        ops (drag, resize, z-order, color). Skipping the OpenAI roundtrip
+        is critical for collab op latency: the WS apply lock is held
+        across this call.
+        """
+        ids = [field["id"] for field in fields]
+        for i in range(0, len(fields), batch_size):
+            batch_fields = fields[i:i + batch_size]
+            batch_ids = ids[i:i + batch_size]
+            await self._update_payloads(batch_ids, batch_fields, refresh)
+        logger.info(f"Updated payload-only for {len(fields)} data in the Qdrant store.")
+
     async def count(self, filter: Filter | None = None) -> int:
         """Count the number of objects in the collection."""
         res = await self.client.count(

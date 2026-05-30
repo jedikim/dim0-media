@@ -8,8 +8,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from topix.api.router.users import router
-from topix.api.utils.password_reset import hash_password_reset_token
 from topix.api.utils.email_verification import utc_now
+from topix.api.utils.password_reset import hash_password_reset_token
 from topix.api.utils.security import create_refresh_token
 from topix.config.config import Config
 from topix.datatypes.password_reset import PasswordResetToken

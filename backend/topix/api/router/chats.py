@@ -210,6 +210,7 @@ async def send_message(
             graph_uid=chat.graph_uid,
             root_id=body.root_id,
             auto_mode=auto_mode,
+            agent_bridge=request.app.agent_board_bridge if chat.graph_uid else None,
         )
 
         assistant.plan_agent.set_enabled_tools(enabled_tools)

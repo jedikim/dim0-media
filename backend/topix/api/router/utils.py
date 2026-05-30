@@ -3,7 +3,7 @@ import logging
 
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 
 from topix.api.utils.decorators import with_standard_response
 from topix.config.services import service_config
@@ -17,6 +17,16 @@ router = APIRouter(
     tags=["utils"],
     responses={404: {"description": "Not found"}},
 )
+
+
+@router.get("/ping", include_in_schema=False, status_code=204)
+async def ping() -> Response:
+    """Cheap liveness probe used by the client's connection-state detector.
+
+    No DB, no auth, no logging — by design, this endpoint must remain
+    fast enough to poll aggressively without skewing real metrics.
+    """
+    return Response(status_code=204)
 
 
 @router.get("/icons/search/", include_in_schema=False)
