@@ -1,13 +1,13 @@
 import { useRef } from "react"
 import { NotepadIcon } from "@phosphor-icons/react"
-import type { NodeId } from "@canvas-harness/core"
-import { useNode } from "@canvas-harness/react"
+import { type NodeId } from "@canvas-harness/core"
+import { useCanvasStore, useNode } from "@canvas-harness/react"
 import { MarkdownView } from "@/components/markdown/markdown-view"
 import { cn } from "@/lib/utils"
 import type { NoteNodeData } from "../../convert/note-to-node"
 import {
-  NodeDragHandle,
   NodeTitleCaption,
+  NodeTrafficLights,
   useIsInView,
   useStopCanvasGesture,
 } from "../../shared-views"
@@ -43,6 +43,7 @@ const truncate = (body: string): string =>
  */
 export function SheetView({ id }: SheetViewProps) {
   const node = useNode(id)
+  const store = useCanvasStore()
   const openNodeSurface = useBoardAppStore((s) => s.openNodeSurface)
   const canEdit = useBoardAppStore((s) => s.canEdit)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -93,7 +94,7 @@ export function SheetView({ id }: SheetViewProps) {
         )}
         title={canEdit ? "Open sheet" : undefined}
       >
-        <div className="scrollbar-thin min-h-0 flex-1 overflow-hidden px-4 py-3 text-sm leading-relaxed text-foreground">
+        <div className="scrollbar-thin min-h-0 flex-1 overflow-hidden px-4 pb-3 pt-10 text-sm leading-relaxed text-foreground">
           {body && isInView ? (
             // pointer-events-none so links / images inside the preview
             // don't intercept the card's click → surface-open handler.
@@ -113,7 +114,10 @@ export function SheetView({ id }: SheetViewProps) {
         </div>
       </div>
 
-      <NodeDragHandle />
+      <NodeTrafficLights
+        onDelete={canEdit ? () => store.removeNode(id) : undefined}
+        onExpand={canEdit ? () => openNodeSurface(id as unknown as string, "sheet") : undefined}
+      />
 
       <div className="pointer-events-auto absolute left-1/2 top-full z-20 mt-2 w-full -translate-x-1/2">
         <NodeTitleCaption

@@ -1,15 +1,14 @@
 import { useRef } from "react"
-import { ArrowsOutSimpleIcon, LayoutIcon } from "@phosphor-icons/react"
-import type { NodeId } from "@canvas-harness/core"
-import { useNode } from "@canvas-harness/react"
+import { LayoutIcon } from "@phosphor-icons/react"
+import { type NodeId } from "@canvas-harness/core"
+import { useCanvasStore, useNode } from "@canvas-harness/react"
 import { cn } from "@/lib/utils"
 import { WidgetIframe } from "@/features/board/components/flow/widget-iframe"
 import type { NoteNodeData } from "../../convert/note-to-node"
 import {
-  NodeDragHandle,
   NodeTitleCaption,
+  NodeTrafficLights,
   useIsInView,
-  useStopCanvasGesture,
 } from "../../shared-views"
 import { useBoardAppStore } from "../../store/board-app-store"
 
@@ -29,11 +28,10 @@ export type WidgetViewProps = {
  */
 export function WidgetView({ id }: WidgetViewProps) {
   const node = useNode(id)
+  const store = useCanvasStore()
   const openNodeSurface = useBoardAppStore((s) => s.openNodeSurface)
   const canEdit = useBoardAppStore((s) => s.canEdit)
-  const expandRef = useRef<HTMLButtonElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
-  useStopCanvasGesture(expandRef)
   const isInView = useIsInView(wrapRef, "200px")
   if (!node) return null
 
@@ -48,10 +46,10 @@ export function WidgetView({ id }: WidgetViewProps) {
     >
       <div
         className={cn(
-          "absolute inset-0 flex flex-col overflow-hidden rounded-3xl border border-dashed border-border bg-background p-2",
+          "absolute inset-0 flex flex-col overflow-hidden rounded-2xl border border-dashed border-border bg-background px-2 pb-2 pt-10",
         )}
       >
-        <div className="relative h-full w-full overflow-hidden rounded-2xl border border-border/50 bg-background">
+        <div className="relative h-full w-full overflow-hidden rounded-xl border border-border/50 bg-background">
           {html && isInView ? (
             <WidgetIframe
               html={html}
@@ -67,24 +65,10 @@ export function WidgetView({ id }: WidgetViewProps) {
         </div>
       </div>
 
-      {canEdit ? (
-        <button
-          ref={expandRef}
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            openNodeSurface(id as unknown as string, "widget")
-          }}
-          onDoubleClick={(e) => e.stopPropagation()}
-          className="pointer-events-auto absolute right-2 top-2 z-20 inline-flex size-7 items-center justify-center rounded-full border border-border/70 bg-background/90 text-muted-foreground shadow-sm backdrop-blur-sm transition-colors hover:bg-accent hover:text-foreground"
-          title="Open widget"
-          aria-label="Open widget"
-        >
-          <ArrowsOutSimpleIcon className="size-4" />
-        </button>
-      ) : null}
-
-      <NodeDragHandle />
+      <NodeTrafficLights
+        onDelete={canEdit ? () => store.removeNode(id) : undefined}
+        onExpand={canEdit ? () => openNodeSurface(id as unknown as string, "widget") : undefined}
+      />
 
       <div className="pointer-events-auto absolute left-1/2 top-full z-20 mt-2 w-full -translate-x-1/2">
         <NodeTitleCaption

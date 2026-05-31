@@ -18,8 +18,6 @@ import {
 import { CSS } from "@dnd-kit/utilities"
 import type { Node, NodeId } from "@canvas-harness/core"
 import { useCanvasStore } from "@canvas-harness/react"
-import { DragGripIcon } from "@/components/icons"
-import { cn } from "@/lib/utils"
 import { useDocumentLikeNodes } from "../canvas/use-document-like-nodes"
 import { CodeSandboxView } from "../node-types/code-sandbox"
 import { DocumentView } from "../node-types/document"
@@ -98,9 +96,10 @@ type SortableCardProps = {
 
 
 /**
- * One sortable grid cell. The drag handle in the top-left forwards
- * pointer events to dnd-kit; clicking the rest of the card lands on
- * the underlying React view (which handles "open surface" itself).
+ * One sortable grid cell. dnd-kit's `attributes` + `listeners` are
+ * forwarded through `EmbeddedNodeViewProvider` so the inner
+ * `NodeTrafficLights` strip itself becomes the reorder drag handle —
+ * single chrome shared with the canvas view, no standalone grip.
  */
 const SortableCard = memo(function SortableCard({ node }: SortableCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -111,33 +110,17 @@ const SortableCard = memo(function SortableCard({ node }: SortableCardProps) {
     zIndex: isDragging ? 100 : undefined,
     opacity: isDragging ? 0.7 : 1,
     minWidth: 0,
+    height: CARD_HEIGHT_PX,
   }
+  const dragHandleProps = useMemo(
+    () => ({ ...attributes, ...listeners }),
+    [attributes, listeners],
+  )
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className="relative"
-    >
-      <button
-        {...attributes}
-        {...listeners}
-        type="button"
-        aria-label="Drag to reorder"
-        className="absolute left-1 top-1 z-30 touch-none cursor-grab rounded-md p-1 text-foreground/50 transition hover:text-foreground active:cursor-grabbing"
-        onClick={(e) => e.preventDefault()}
-      >
-        <DragGripIcon className="size-4" />
-      </button>
-      <div
-        className={cn(
-          "relative w-full rounded-2xl border border-border/40 bg-card p-2",
-        )}
-        style={{ height: CARD_HEIGHT_PX }}
-      >
-        <EmbeddedNodeViewProvider>
-          <NodeViewFor node={node} />
-        </EmbeddedNodeViewProvider>
-      </div>
+    <div ref={setNodeRef} style={style} className="relative w-full">
+      <EmbeddedNodeViewProvider dragHandleProps={dragHandleProps}>
+        <NodeViewFor node={node} />
+      </EmbeddedNodeViewProvider>
     </div>
   )
 })

@@ -1,8 +1,13 @@
-import type { NodeId } from "@canvas-harness/core"
-import { useNode } from "@canvas-harness/react"
+import { type NodeId } from "@canvas-harness/core"
+import { useCanvasStore, useNode } from "@canvas-harness/react"
 import { cn } from "@/lib/utils"
 import type { NoteNodeData } from "../../convert/note-to-node"
-import { NodeTitleCaption } from "../../shared-views"
+import {
+  NodeTitleCaption,
+  NodeTrafficLights,
+  useIsEmbeddedNodeView,
+} from "../../shared-views"
+import { useBoardAppStore } from "../../store/board-app-store"
 
 
 export type FolderViewProps = {
@@ -56,6 +61,9 @@ const FolderSilhouette = () => (
  */
 export function FolderView({ id }: FolderViewProps) {
   const node = useNode(id)
+  const store = useCanvasStore()
+  const canEdit = useBoardAppStore((s) => s.canEdit)
+  const embedded = useIsEmbeddedNodeView()
   if (!node) return null
 
   const data = (node.data ?? {}) as Partial<NoteNodeData>
@@ -69,6 +77,12 @@ export function FolderView({ id }: FolderViewProps) {
       <div className="absolute inset-0">
         <FolderSilhouette />
       </div>
+
+      {embedded ? (
+        <NodeTrafficLights
+          onDelete={canEdit ? () => store.removeNode(id) : undefined}
+        />
+      ) : null}
 
       <div
         data-folder-label-edit="true"

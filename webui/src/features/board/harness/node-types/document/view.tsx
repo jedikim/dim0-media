@@ -1,9 +1,10 @@
 import { FilePdf, File as FileIcon, Clock, CheckCircle, Warning } from "@phosphor-icons/react"
-import type { NodeId } from "@canvas-harness/core"
-import { useNode } from "@canvas-harness/react"
+import { type NodeId } from "@canvas-harness/core"
+import { useCanvasStore, useNode } from "@canvas-harness/react"
 import { cn } from "@/lib/utils"
 import type { NoteNodeData } from "../../convert/note-to-node"
-import { NodeTitleCaption } from "../../shared-views"
+import { NodeTitleCaption, NodeTrafficLights } from "../../shared-views"
+import { useBoardAppStore } from "../../store/board-app-store"
 
 
 export type DocumentViewProps = {
@@ -29,6 +30,8 @@ const STATUS_META: Record<
  */
 export function DocumentView({ id }: DocumentViewProps) {
   const node = useNode(id)
+  const store = useCanvasStore()
+  const canEdit = useBoardAppStore((s) => s.canEdit)
   if (!node) return null
 
   const data = (node.data ?? {}) as Partial<NoteNodeData>
@@ -43,6 +46,10 @@ export function DocumentView({ id }: DocumentViewProps) {
 
   return (
     <div className="pointer-events-none relative h-full w-full select-none">
+      <NodeTrafficLights
+        onDelete={canEdit ? () => store.removeNode(id) : undefined}
+      />
+
       <div
         className={cn(
           "flex h-full w-full flex-col items-center justify-center gap-2 p-3 text-foreground",

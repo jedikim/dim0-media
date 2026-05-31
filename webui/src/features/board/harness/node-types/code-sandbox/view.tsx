@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react"
-import type { NodeId } from "@canvas-harness/core"
-import { useNode } from "@canvas-harness/react"
+import { type NodeId } from "@canvas-harness/core"
+import { useCanvasStore, useNode } from "@canvas-harness/react"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/components/theme-provider"
 import {
@@ -11,8 +11,8 @@ import {
 import "@/features/board/components/flow/code-sandbox-node.css"
 import type { NoteNodeData } from "../../convert/note-to-node"
 import {
-  NodeDragHandle,
   NodeTitleCaption,
+  NodeTrafficLights,
   useStopCanvasGesture,
 } from "../../shared-views"
 import { useBoardAppStore } from "../../store/board-app-store"
@@ -31,6 +31,7 @@ export type CodeSandboxViewProps = {
  */
 export function CodeSandboxView({ id }: CodeSandboxViewProps) {
   const node = useNode(id)
+  const store = useCanvasStore()
   const openNodeSurface = useBoardAppStore((s) => s.openNodeSurface)
   const canEdit = useBoardAppStore((s) => s.canEdit)
   const bodyRef = useRef<HTMLButtonElement>(null)
@@ -70,7 +71,7 @@ export function CodeSandboxView({ id }: CodeSandboxViewProps) {
       >
         <div
           className={cn(
-            "code-sandbox-theme relative h-full w-full overflow-auto scrollbar-thin p-3",
+            "code-sandbox-theme relative h-full w-full overflow-auto scrollbar-thin px-3 pb-3 pt-10",
             isDark ? "code-sandbox-theme-dark" : "code-sandbox-theme-light",
           )}
           style={{ backgroundColor: palette.bg, color: palette.text }}
@@ -82,7 +83,10 @@ export function CodeSandboxView({ id }: CodeSandboxViewProps) {
         </div>
       </button>
 
-      <NodeDragHandle />
+      <NodeTrafficLights
+        onDelete={canEdit ? () => store.removeNode(id) : undefined}
+        onExpand={canEdit ? () => openNodeSurface(id as unknown as string, "code-sandbox") : undefined}
+      />
 
       <div className="pointer-events-auto absolute left-1/2 top-full z-20 mt-2 w-full -translate-x-1/2">
         <NodeTitleCaption

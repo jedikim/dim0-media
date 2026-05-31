@@ -73,7 +73,9 @@ const CustomLink = MarkdownLink
  *  Typed wrappers for common elements
  *  ------------------------------------------------------*/
 function H1(props: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h1 className="mt-7 scroll-m-20 pb-2 text-2xl font-medium tracking-tight first:mt-0" {...props} />
+  // Handwriting font for H1 — gives the canvas sheet preview a hand-drawn
+  // "page title" feel that contrasts with the body text below.
+  return <h1 className="mt-7 scroll-m-20 pb-2 text-2xl font-handwriting font-medium tracking-tight first:mt-0" {...props} />
 }
 
 function H2(props: React.HTMLAttributes<HTMLHeadingElement>) {
