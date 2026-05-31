@@ -1,3 +1,9 @@
+## v0.3.24 (2026-05-31)
+
+### Fix
+
+- **board**: persist viewport on camera event + 200ms debounce (#93)
+
 ## v0.3.23 (2026-05-31)
 
 ### Feat
