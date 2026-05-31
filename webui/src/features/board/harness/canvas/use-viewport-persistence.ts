@@ -1,21 +1,36 @@
 import { useEffect, useRef } from "react"
-import type { CanvasStore, InteractionState } from "@canvas-harness/core"
+import type { CanvasStore } from "@canvas-harness/core"
 import { loadViewport, saveViewport, viewportScopeKey } from "./viewport-storage"
 
 
 /**
- * Per-board camera persistence with zero per-frame cost.
+ * Time to wait after the last camera change before persisting. Picks up
+ * where the lib's 150ms motion-end deadline leaves off; long enough to
+ * coalesce a multi-burst trackpad pan into one write, short enough that
+ * tab-close-after-pan rarely loses the last move.
+ */
+const DEBOUNCE_MS = 200
+
+
+/**
+ * Per-board camera persistence with near-zero per-frame cost.
  *
- * Strategy: subscribe to the lib's `'interaction'` event (fires on
- * mode transitions, not per frame) and write to localStorage when the
- * user finishes a pan or zoom gesture (`panning | zooming → idle`).
- * Between gestures the camera doesn't move, so nothing else needs to
- * trigger a save.
+ * Strategy: subscribe to the lib's `'camera'` event and debounce-save
+ * 200ms after the camera stops moving. Catches pan + zoom + any
+ * programmatic `setCamera` (URL deep-link, presentation-mode exit,
+ * zoom-reset button) uniformly. Replaces a prior interaction-mode
+ * gating approach that missed the Windows / mouse pan path
+ * (`panning → marqueeing → idle`) because the marquee gesture
+ * intercepts the gesture end before idle.
  *
  * Restore: read the saved camera once after the caller signals
  * `ready` (i.e., after the scene has hydrated) and call
  * `store.setCamera` with the stored value. Skipped silently if no
  * entry exists for this scope.
+ *
+ * Cleanup flushes any pending save before unsubscribing — covers the
+ * pan-then-navigate-fast race where the user moves to another board
+ * within the debounce window.
  *
  * Pass `boardId = null` (e.g., between routes) to suspend both restore
  * and save without unmounting.
@@ -38,22 +53,23 @@ export const useViewportPersistence = (
     restoredKeyRef.current = key
   }, [store, boardId, rootId, ready])
 
-  // Save on every gesture-end. `'interaction'` event fires on mode
-  // changes only — a typical pan is two fires (idle→panning + panning
-  // →idle), nowhere near per-frame.
+  // Save the camera after it's been stable for DEBOUNCE_MS.
   useEffect(() => {
     if (!boardId) return
     const key = viewportScopeKey(boardId, rootId)
-    let prevMode: InteractionState["mode"] = store.getInteractionState().mode
+    let timer: ReturnType<typeof setTimeout> | null = null
 
-    return store.subscribe("interaction", (state) => {
-      const nextMode = state.mode
-      const wasMoving = prevMode === "panning" || prevMode === "zooming"
-      const isIdle = nextMode === "idle"
-      prevMode = nextMode
-      if (wasMoving && isIdle) {
+    const unsub = store.subscribe("camera", (camera) => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => saveViewport(key, camera), DEBOUNCE_MS)
+    })
+
+    return () => {
+      if (timer) {
+        clearTimeout(timer)
         saveViewport(key, store.getCamera())
       }
-    })
+      unsub()
+    }
   }, [store, boardId, rootId])
 }
