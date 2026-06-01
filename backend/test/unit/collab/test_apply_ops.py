@@ -121,6 +121,69 @@ async def test_node_update_resize_emits_node_size():
     }
 
 
+async def test_node_update_height_only_does_not_zero_width():
+    """A `node.update` with only `h` (no `w`) emits height alone.
+
+    Regression: canvas-harness's `commitEdit` runs autofit and emits
+    `{ content, h }` with the recomputed height — `w` stays unchanged
+    so the patch doesn't include it. The translator used to default
+    the missing dimension to 0, producing `node_size.size = {width: 0,
+    height: <correct>}`, which then deep-merged over the existing
+    note and wiped its width on the DB. On refresh the node came back
+    with width=0 and collapsed to invisible.
+    """
+    store = _RecordingGraphStore()
+    op = {"type": "node.update", "id": "n1", "patch": {"content": "abc", "h": 250}, "prev": {}}
+
+    await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    data = store.patch_calls[0]["data"]
+    # Only `height` is in the size patch — width is absent so deep-merge
+    # leaves the existing width alone.
+    assert data["properties"]["node_size"] == {
+        "type": "size",
+        "size": {"height": 250.0},
+    }
+    assert "width" not in data["properties"]["node_size"]["size"]
+
+
+async def test_node_update_width_only_does_not_zero_height():
+    """Symmetric to the height-only case.
+
+    A `w`-only patch must not write `height: 0` and clobber the
+    existing height on the DB.
+    """
+    store = _RecordingGraphStore()
+    op = {"type": "node.update", "id": "n1", "patch": {"w": 400}, "prev": {}}
+
+    await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    data = store.patch_calls[0]["data"]
+    assert data["properties"]["node_size"] == {
+        "type": "size",
+        "size": {"width": 400.0},
+    }
+    assert "height" not in data["properties"]["node_size"]["size"]
+
+
+async def test_node_update_x_only_does_not_zero_y():
+    """Position patch with only `x` (no `y`) emits `x` alone.
+
+    Defends against the same partial-dimension class of bug as size.
+    """
+    store = _RecordingGraphStore()
+    op = {"type": "node.update", "id": "n1", "patch": {"x": 200}, "prev": {}}
+
+    await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    data = store.patch_calls[0]["data"]
+    assert data["properties"]["node_position"] == {
+        "type": "position",
+        "position": {"x": 200.0},
+    }
+    assert "y" not in data["properties"]["node_position"]["position"]
+
+
 async def test_node_update_z_index():
     """Node update z index."""
     store = _RecordingGraphStore()

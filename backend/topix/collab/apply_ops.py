@@ -246,21 +246,31 @@ def _node_patch_to_note_data(patch: dict[str, Any]) -> dict[str, Any]:  # noqa: 
         refresh shows the old value.
     """
     properties: dict[str, Any] = {}
+    # Only emit the dimension fields actually in the patch. Defaulting
+    # the missing one to 0 corrupts the DB on partial updates — e.g.
+    # `commitEdit` ships `{ content, h }` after autofit, and
+    # `patch_notes`'s deep-merge would replace `width=<correct>` with
+    # `width=0` because the patched `node_size.size` carried both
+    # fields with `w` defaulted.
     if "x" in patch or "y" in patch:
+        position: dict[str, float] = {}
+        if "x" in patch:
+            position["x"] = float(patch["x"])
+        if "y" in patch:
+            position["y"] = float(patch["y"])
         properties["node_position"] = {
             "type": "position",
-            "position": {
-                "x": float(patch.get("x", 0)),
-                "y": float(patch.get("y", 0)),
-            },
+            "position": position,
         }
     if "w" in patch or "h" in patch:
+        size: dict[str, float] = {}
+        if "w" in patch:
+            size["width"] = float(patch["w"])
+        if "h" in patch:
+            size["height"] = float(patch["h"])
         properties["node_size"] = {
             "type": "size",
-            "size": {
-                "width": float(patch.get("w", 0)),
-                "height": float(patch.get("h", 0)),
-            },
+            "size": size,
         }
     if "z" in patch:
         properties["node_z_index"] = {
