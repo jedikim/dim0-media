@@ -1,3 +1,9 @@
+## v0.3.26 (2026-06-01)
+
+### Fix
+
+- **collab**: only emit dimensions actually in the wire patch (#95)
+
 ## v0.3.25 (2026-06-01)
 
 ## v0.3.24 (2026-05-31)
