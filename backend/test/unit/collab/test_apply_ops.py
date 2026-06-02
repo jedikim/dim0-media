@@ -604,6 +604,149 @@ async def test_node_add_persists_style_roundness_from_wire():
     assert note.style.font_family == "serif"
 
 
+async def test_node_add_persists_image_url_from_data_properties():
+    """An image node round-trips its URL via `data.properties.imageUrl`.
+
+    Regression: `_wire_node_to_note` previously only extracted
+    position/size/zindex from the wire. `imageUrl` lives on
+    `data.properties` (stashed there by `note-to-node.ts`) and was
+    silently dropped — refresh loaded a Note with an empty `image_url`
+    and the image rendered blank.
+    """
+    store = _RecordingGraphStore()
+    op = {
+        "type": "node.add",
+        "node": {
+            "id": "n1",
+            "x": 0, "y": 0, "w": 200, "h": 200, "z": 0,
+            "angle": 0,
+            "type": "image",
+            "data": {
+                "noteType": "note",
+                "styleType": "image",
+                "version": 1,
+                "properties": {
+                    "imageUrl": {
+                        "type": "image",
+                        "image": {"url": "https://example.com/cat.png"},
+                    },
+                },
+            },
+        },
+    }
+
+    results = await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    assert results[0].applied is True
+    [note] = store.add_notes_calls[0]
+    assert note.properties.image_url.image is not None
+    assert note.properties.image_url.image.url == "https://example.com/cat.png"
+
+
+async def test_node_add_persists_icon_name_from_data_properties():
+    """An icon node round-trips its identifier via `data.properties.iconData`.
+
+    Same regression as image — without this lift, the icon name was
+    lost on save and `use-hydrate-icon-nodes` had nothing to refetch
+    on reload, so the icon rendered blank.
+    """
+    store = _RecordingGraphStore()
+    op = {
+        "type": "node.add",
+        "node": {
+            "id": "n1",
+            "x": 0, "y": 0, "w": 64, "h": 64, "z": 0,
+            "angle": 0,
+            "type": "svg-icon",
+            "data": {
+                "noteType": "note",
+                "styleType": "icon",
+                "version": 1,
+                "properties": {
+                    "iconData": {
+                        "type": "icon",
+                        "icon": {"type": "icon", "icon": "star"},
+                    },
+                },
+            },
+        },
+    }
+
+    results = await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    assert results[0].applied is True
+    [note] = store.add_notes_calls[0]
+    assert note.properties.icon_data.icon is not None
+    assert note.properties.icon_data.icon.icon == "star"
+
+
+async def test_node_update_lifts_data_properties_to_patch_dict():
+    """`patch.data.properties` propagates so partial updates survive deep-merge.
+
+    Companion of the add-path test: `_node_patch_to_note_data` is the
+    shared extractor, so the lift applies to both wire paths.
+    """
+    store = _RecordingGraphStore()
+    op = {
+        "type": "node.update",
+        "id": "n1",
+        "patch": {
+            "data": {
+                "properties": {
+                    "imageUrl": {
+                        "type": "image",
+                        "image": {"url": "https://example.com/v2.png"},
+                    },
+                },
+            },
+        },
+        "prev": {},
+    }
+
+    await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    data = store.patch_calls[0]["data"]
+    assert data["properties"]["image_url"]["image"]["url"] == "https://example.com/v2.png"
+
+
+async def test_node_add_data_properties_cannot_override_top_level_size():
+    """A bogus `data.properties.nodeSize` doesn't clobber top-level w/h.
+
+    Defensive: the convert layer strips nodeSize/nodePosition/nodeZIndex
+    from `data.properties` before sending, but a malformed peer could
+    echo them back. The explicit top-level `w`/`h` lift must win.
+    """
+    store = _RecordingGraphStore()
+    op = {
+        "type": "node.add",
+        "node": {
+            "id": "n1",
+            "x": 0, "y": 0, "w": 100, "h": 80, "z": 0,
+            "angle": 0,
+            "type": "rect",
+            "data": {
+                "noteType": "note",
+                "version": 1,
+                "properties": {
+                    # Top-level w/h say 100x80; this attempts to override.
+                    "nodeSize": {
+                        "type": "size",
+                        "size": {"width": 999, "height": 999},
+                    },
+                },
+            },
+        },
+    }
+
+    results = await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    assert results[0].applied is True
+    [note] = store.add_notes_calls[0]
+    assert note.properties.node_size.size is not None
+    assert note.properties.node_size.size.width == 100
+    assert note.properties.node_size.size.height == 80
+
+
 # ---------------------------------------------------------------------------
 # edge.* — Link round-trip
 # ---------------------------------------------------------------------------

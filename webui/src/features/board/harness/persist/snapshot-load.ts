@@ -5,6 +5,27 @@ import { linkToEdge } from "../convert/link-to-edge"
 import { noteToNode } from "../convert/note-to-node"
 
 
+/**
+ * Merge an incoming `data` blob over an existing one such that:
+ *  - fields the server tracks (in incoming) win
+ *  - client-side-only fields (e.g. `src`, `alt`, `naturalW`, `naturalH`
+ *    on icons / images — added by hydrate hooks, never round-tripped
+ *    to the server) survive
+ *
+ * Used by merge mode so the WS welcome doesn't wipe local-only data
+ * fields. Equivalent to `{...curData, ...nData}` — server-fresh
+ * overrides; absent-from-server fields preserved.
+ */
+const mergePreservingClientOnly = (
+  curData: unknown,
+  incomingData: unknown,
+): unknown => {
+  const cur = (curData ?? {}) as Record<string, unknown>
+  const next = (incomingData ?? {}) as Record<string, unknown>
+  return { ...cur, ...next }
+}
+
+
 export type HydrateResult = {
   graph: Graph
   canEdit: boolean
@@ -115,11 +136,26 @@ export const applyGraphToStore = (
   // store's identity-stable refs survive merge (selection / focus stay
   // attached to the same id). `prev: cur` makes the conflict check a
   // field-by-field no-op — hydration is server-truth, never a conflict.
+  //
+  // Deep-merge `data` instead of letting incoming replace it wholesale.
+  // canvas-harness's `applyOpInternal` does `next = {...current, ...patch}`,
+  // a shallow merge — so `patch.data = n.data` would replace the entire
+  // `data` object on the existing node, wiping client-only fields like
+  // `data.src` / `data.alt` that aren't round-tripped to the server.
+  // The visible symptom: icon nodes flash their SVG (set by
+  // `useHydrateIconNodes`) and then the WS welcome merge wipes it
+  // because the server snapshot doesn't carry the SVG.
   for (const n of nodes) {
     const id = n.id as unknown as string
     const cur = currentNodeMap.get(id)
     if (cur) {
-      ops.push({ type: "node.update", id: n.id, patch: n, prev: cur })
+      const mergedData = mergePreservingClientOnly(cur.data, n.data)
+      ops.push({
+        type: "node.update",
+        id: n.id,
+        patch: { ...n, data: mergedData },
+        prev: cur,
+      })
     } else {
       ops.push({ type: "node.add", node: n })
     }
@@ -128,7 +164,13 @@ export const applyGraphToStore = (
     const id = e.id as unknown as string
     const cur = currentEdgeMap.get(id)
     if (cur) {
-      ops.push({ type: "edge.update", id: e.id, patch: e, prev: cur })
+      const mergedData = mergePreservingClientOnly(cur.data, e.data)
+      ops.push({
+        type: "edge.update",
+        id: e.id,
+        patch: { ...e, data: mergedData },
+        prev: cur,
+      })
     } else {
       ops.push({ type: "edge.add", edge: e })
     }

@@ -278,6 +278,28 @@ def _node_patch_to_note_data(patch: dict[str, Any]) -> dict[str, Any]:  # noqa: 
             "number": float(patch["z"]),
         }
 
+    # Lift extra NoteProperty sub-fields stashed in `data.properties`
+    # by the client convert layer. `note-to-node.ts` strips
+    # nodePosition/nodeSize/nodeZIndex from `note.properties` and dumps
+    # the rest onto `data.properties` so the wire shape stays flat at
+    # the top level. Without this lift, `imageUrl` / `iconData` /
+    # `emoji` / `pinned` / `listOrder` / `slide*` / etc. are silently
+    # dropped on every wire op and refresh reveals the pydantic-default
+    # empty values (blank image, missing icon, etc.).
+    wire_data_for_props = patch.get("data")
+    if isinstance(wire_data_for_props, dict):
+        wire_properties = wire_data_for_props.get("properties")
+        if isinstance(wire_properties, dict):
+            for camel_key, value in wire_properties.items():
+                snake_key = _camel_to_snake(camel_key)
+                # Top-level x/y/w/h/z are authoritative for position /
+                # size / zindex. Skip any echo of them in
+                # `data.properties` so a malformed peer can't clobber
+                # the explicit lift.
+                if snake_key in {"node_position", "node_size", "node_z_index"}:
+                    continue
+                properties[snake_key] = value
+
     data: dict[str, Any] = {}
     if properties:
         data["properties"] = properties
