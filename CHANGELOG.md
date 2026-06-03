@@ -1,3 +1,9 @@
+## v0.3.29 (2026-06-03)
+
+### Feat
+
+- minor ui fixes and alignments (#98)
+
 ## v0.3.28 (2026-06-02)
 
 ### Fix
