@@ -218,6 +218,7 @@ export function HarnessCanvas() {
       }
       const styled = applyStyleMemory(noteToNode(note), styleMemory)
       store.addNode(styled)
+      store.setSelection([styled.id as NodeId])
       store.beginEdit(styled.id as NodeId)
     },
     [store, boardId, rootId, canEdit, navigate, styleMemory],
@@ -281,7 +282,7 @@ export function HarnessCanvas() {
               rendererRef.current = r
             }}
           />
-          <CanvasContextMenu wrapRef={wrapRef} store={store} />
+          <CanvasContextMenu wrapRef={wrapRef} store={store} rendererRef={rendererRef} />
         </div>
       </HarnessWrapRefProvider>
     </CanvasProvider>
@@ -323,6 +324,11 @@ function HarnessCanvasInner({
 }: InnerProps) {
   const renderView = useRenderCustomNodeView()
   const isBoard = viewMode === "board"
+  // Hide non-essential chrome (toolbar, viewport controls, minimap)
+  // during presentation so the canvas reads as a clean slide. Other
+  // already-self-hiding chrome (readonly chip, top-right strip) stays
+  // managed by their own components.
+  const presenting = useBoardAppStore((s) => s.presentationMode)
   return (
     <>
       {isBoard ? (
@@ -340,23 +346,25 @@ function HarnessCanvasInner({
             onDoubleClick={onDoubleClick}
             onRenderer={onRenderer}
           />
-          <Minimap
-            width={200}
-            height={140}
-            viewportColor={theme.minimap.viewportColor}
-            backgroundColor={theme.minimap.backgroundColor}
-            borderColor={theme.minimap.borderColor}
-            defaultNodeColor={theme.minimap.defaultNodeColor}
-            style={{
-              position: "absolute",
-              bottom: 16,
-              right: 16,
-              borderRadius: 6,
-              overflow: "hidden",
-              zIndex: 50,
-            }}
-          />
-          <HarnessViewportControls />
+          {!presenting && (
+            <Minimap
+              width={200}
+              height={140}
+              viewportColor={theme.minimap.viewportColor}
+              backgroundColor={theme.minimap.backgroundColor}
+              borderColor={theme.minimap.borderColor}
+              defaultNodeColor={theme.minimap.defaultNodeColor}
+              style={{
+                position: "absolute",
+                bottom: 16,
+                right: 16,
+                borderRadius: 6,
+                overflow: "hidden",
+                zIndex: 50,
+              }}
+            />
+          )}
+          {!presenting && <HarnessViewportControls />}
           <StyleSidebar />
           <RemoteCursors />
         </>
@@ -370,7 +378,7 @@ function HarnessCanvasInner({
         status badge, slide-related surfaces. NodeSurfaceHost stays
         mounted everywhere so the modal editor opens from any view.
       */}
-      <HarnessToolbar />
+      {!presenting && <HarnessToolbar />}
       {/*
         Top-right chrome row: save status + share button live in one
         flex container so they never overlap (z-stack collisions cost

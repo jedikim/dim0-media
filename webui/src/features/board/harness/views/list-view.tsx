@@ -165,7 +165,7 @@ export const ListView = memo(function ListView() {
   const nodes = useDocumentLikeNodes(store)
   return (
     <div className="absolute inset-0 h-full w-full overflow-y-auto overflow-x-hidden scrollbar-thin">
-      <div className="mx-auto flex w-full max-w-[880px] flex-col gap-3 px-4 pb-8 pt-24 md:px-8 md:pb-20 md:pt-28">
+      <div className="mx-auto flex w-full max-w-[880px] flex-col gap-0 px-4 pb-8 pt-24 md:px-8 md:pb-20 md:pt-28">
         {nodes.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
             Nothing to list yet. Add a note, folder, or document from the toolbar.

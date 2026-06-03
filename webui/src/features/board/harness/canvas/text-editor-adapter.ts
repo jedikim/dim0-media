@@ -92,6 +92,13 @@ export const createHarnessTextareaEditor: EditorAdapterFactory = ({
   wrap.style.borderRadius = "4px"
   wrap.style.background = wrapBg ?? "var(--card)"
   wrap.style.zIndex = "20"
+  // EditorMount's host div is `pointer-events: none` so the canvas
+  // behind still receives pan/select events while editing; the
+  // editor adapter has to opt back in. Without this, mouse clicks
+  // pass through and the caret can't be positioned by clicking —
+  // only arrow keys work. Mirrors `createDefaultTextareaEditor` in
+  // canvas-harness.
+  wrap.style.pointerEvents = "auto"
 
   const ta = document.createElement("textarea")
   ta.value = node.content ?? ""

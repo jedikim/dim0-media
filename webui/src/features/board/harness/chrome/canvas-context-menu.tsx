@@ -7,7 +7,7 @@ import {
   type RefObject,
 } from "react"
 import { toast } from "sonner"
-import type { CanvasStore, NodeId } from "@canvas-harness/core"
+import type { CanvasStore, NodeId, Renderer } from "@canvas-harness/core"
 import { exportSelection, exportSelectionSvg } from "@canvas-harness/core"
 import {
   Clipboard as ClipboardIcon,
@@ -36,6 +36,12 @@ export type CanvasContextMenuProps = {
   /** Canvas wrap ref — the menu's contextmenu listener attaches here. */
   wrapRef: RefObject<HTMLElement | null>
   store: CanvasStore
+  /**
+   * Renderer ref — read at export time to pass the live asset cache
+   * into `exportSelection`. Without the cache, image and icon nodes
+   * are silently skipped in the PNG output (canvas-harness 0.1.15+).
+   */
+  rendererRef: RefObject<Renderer | null>
 }
 
 
@@ -96,7 +102,7 @@ const buildSelectedContextText = (
  * Translate sections — wired entirely against the harness store +
  * lib export helpers (no react-flow).
  */
-export function CanvasContextMenu({ wrapRef, store }: CanvasContextMenuProps) {
+export function CanvasContextMenu({ wrapRef, store, rendererRef }: CanvasContextMenuProps) {
   const boardId = useBoardAppStore((s) => s.boardId)
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
   const [aiOpen, setAiOpen] = useState(false)
@@ -186,6 +192,11 @@ export function CanvasContextMenu({ wrapRef, store }: CanvasContextMenuProps) {
     try {
       const blob = await exportSelection(store, {
         transparentBackground: exportTransparent,
+        // Pass the live renderer's asset cache so image + icon nodes
+        // paint from already-decoded bitmaps. Without this, the lib
+        // silently skips those node types in the output (back-compat
+        // shape from canvas-harness 0.1.15).
+        assetCache: rendererRef.current?.getAssetCache(),
       })
       try {
         // Try clipboard first (Notion / Figma-style behavior).
@@ -208,7 +219,7 @@ export function CanvasContextMenu({ wrapRef, store }: CanvasContextMenuProps) {
     } finally {
       closeMenu()
     }
-  }, [store, exportTransparent, closeMenu])
+  }, [store, exportTransparent, closeMenu, rendererRef])
 
   const handleExportSvg = useCallback(() => {
     try {

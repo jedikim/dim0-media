@@ -40,6 +40,23 @@ const isShapeTool = (tool: string): boolean => SHAPE_TOOLS.has(tool)
 
 
 /**
+ * Subset of shape tools where a bare click (no drag) still places a
+ * node. Click-to-place is the established UX for text and for fixed-
+ * size surfaces (folders / sheets / code-sandboxes / widgets); the
+ * resizable shapes (rect, ellipse, diamond, …) require an actual
+ * drag — sub-5px drags fall through to onClick as a no-op so
+ * accidental taps don't litter the canvas with default-size shapes.
+ */
+const CLICK_PLACE_TOOLS = new Set([
+  "text",
+  "folder",
+  "sheet",
+  "code-sandbox",
+  "widget",
+])
+
+
+/**
  * Fold the user's sticky style memory into a freshly-converted Node
  * for stylable tool types. Custom node types and frames are excluded
  * so they keep their built-in visual identity.
@@ -110,14 +127,19 @@ export const useCreateHandlers = (
         type: "size",
         size: { width: e.rect.w, height: e.rect.h },
       }
-      store.addNode(applyStyleMemory(noteToNode(note), styleMemory))
+      // Auto-select the freshly-created node so the user can
+      // immediately resize / style / move it without round-tripping
+      // through the select tool. Matches tldraw / excalidraw /
+      // figma. Same pattern at every single-node create path.
+      const id = store.addNode(applyStyleMemory(noteToNode(note), styleMemory))
+      store.setSelection([id])
     },
     [store, boardId, rootId, styleMemory],
   )
 
   const handleClick = useCallback(
     (e: CanvasPointerEvent): void => {
-      if (!isShapeTool(e.tool)) return
+      if (!CLICK_PLACE_TOOLS.has(e.tool)) return
       const dim0Type = canvasTypeToDim0(e.tool)
       const note = createDefaultNote({ boardId: boardId ?? "", nodeType: dim0Type })
       if (rootId) note.parentId = rootId
@@ -127,7 +149,8 @@ export const useCreateHandlers = (
         type: "position",
         position: { x: e.world.x - width / 2, y: e.world.y - height / 2 },
       }
-      store.addNode(applyStyleMemory(noteToNode(note), styleMemory))
+      const id = store.addNode(applyStyleMemory(noteToNode(note), styleMemory))
+      store.setSelection([id])
     },
     [store, boardId, rootId, styleMemory],
   )

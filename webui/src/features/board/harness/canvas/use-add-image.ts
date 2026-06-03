@@ -87,7 +87,8 @@ export const useHarnessAddImage = (
         note.properties.nodeSize = { type: "size", size }
         note.properties.nodePosition = { type: "position", position }
 
-        store.addNode(noteToNode(note))
+        const id = store.addNode(noteToNode(note))
+        store.setSelection([id])
         return true
       } catch (err) {
         console.error("[useHarnessAddImage] failed", err)

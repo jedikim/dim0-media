@@ -136,7 +136,7 @@ export function HarnessToolbar() {
                 aria-label="Change view"
                 className={activeClass}
               >
-                <ActiveViewIcon className="size-4 shrink-0" />
+                <ActiveViewIcon className="size-4 shrink-0" weight="fill" />
                 <span className="sr-only text-[10px] md:not-sr-only">
                   {activeView.label}
                 </span>
@@ -155,7 +155,10 @@ export function HarnessToolbar() {
                 onSelect={() => setViewMode(option.id)}
                 className="gap-2 text-sm"
               >
-                <Icon className="size-4 shrink-0" />
+                <Icon
+                  className="size-4 shrink-0"
+                  weight={option.id === viewMode ? "fill" : undefined}
+                />
                 <span>{option.label}</span>
               </DropdownMenuItem>
             )
@@ -231,7 +234,10 @@ export function HarnessToolbar() {
                 className={isShape ? activeClass : inactiveClass}
               >
                 <div className="relative flex flex-col items-center gap-0.5">
-                  <ActiveShape className="size-4 shrink-0" />
+                  <ActiveShape
+                    className="size-4 shrink-0"
+                    weight={isShape ? "fill" : undefined}
+                  />
                   <ShortcutHint shortcut="S" />
                   <ChevronDownIcon className="absolute inset-x-0 -bottom-3.5 size-3 text-muted-foreground" />
                 </div>
@@ -268,7 +274,10 @@ export function HarnessToolbar() {
             className={tool === "arrow" ? activeClass : inactiveClass}
           >
             <div className="relative">
-              <ConnectorPathIcon className="size-4 shrink-0" />
+              <ConnectorPathIcon
+                className="size-4 shrink-0"
+                weight={tool === "arrow" ? "fill" : undefined}
+              />
               <ShortcutHint shortcut="A" />
             </div>
           </button>
@@ -286,7 +295,10 @@ export function HarnessToolbar() {
             className={tool === "text" ? activeClass : inactiveClass}
           >
             <div className="relative">
-              <TextTIcon className="size-4 shrink-0" />
+              <TextTIcon
+                className="size-4 shrink-0"
+                weight={tool === "text" ? "fill" : undefined}
+              />
               <ShortcutHint shortcut="T" />
             </div>
           </button>
@@ -304,7 +316,10 @@ export function HarnessToolbar() {
             className={tool === "sheet" ? activeClass : inactiveClass}
           >
             <div className="relative">
-              <NotepadIcon className="size-4 shrink-0" />
+              <NotepadIcon
+                className="size-4 shrink-0"
+                weight={tool === "sheet" ? "fill" : undefined}
+              />
               <ShortcutHint shortcut="N" />
             </div>
           </button>
