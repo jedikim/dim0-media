@@ -92,11 +92,21 @@ async def list_board_contents(
         kind = node.style.type if node.style else None
         if kind not in surface_kinds:
             continue
+        # Serialize the inner icon value only (drop the IconProperty wrapper)
+        # so the response matches the frontend's IconProperty["icon"] shape
+        # and stays small for big sidebars.
+        icon_property = node.properties.icon_data
+        icon_payload = (
+            icon_property.icon.model_dump()
+            if icon_property and icon_property.icon
+            else None
+        )
         items.append({
             "id": node.id,
             "label": node.label.markdown if node.label else None,
             "kind": kind,
             "parent_id": node.parent_id,
+            "icon_data": icon_payload,
         })
     return {"items": items}
 

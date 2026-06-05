@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 import camelcaseKeys from "camelcase-keys"
 import { apiFetch } from "@/api"
+import type { IconProperty } from "@/features/newsfeed/types/properties"
 
 
 export type BoardContentKind = "sheet" | "folder" | "code-sandbox" | "widget"
@@ -11,6 +12,12 @@ export interface BoardContentItem {
   label?: string | null
   kind: BoardContentKind
   parentId?: string | null
+  /**
+   * Inner icon value (no IconProperty wrapper). `null` / absent when the
+   * user hasn't picked an icon; sidebar / list-view consumers should fall
+   * back to a kind-default icon in that case.
+   */
+  iconData?: IconProperty["icon"] | null
 }
 
 
@@ -21,6 +28,7 @@ interface ListBoardContentsResponse {
       label?: string | null
       kind: BoardContentKind
       parent_id?: string | null
+      icon_data?: IconProperty["icon"] | null
     }>
   }
 }

@@ -9,6 +9,7 @@ import {
   StockWidgetIcon,
   type AppIconComponent,
 } from "@/components/icons"
+import { IconPropertyView } from "@/components/icons/icon-property-view"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useBoardContents, type BoardContentItem, type BoardContentKind } from "@/features/board/api/list-board-contents"
 import { trimText } from "@/lib/common"
@@ -58,6 +59,7 @@ export function BoardTreeNode({ boardId, item, depth, parentFolderId }: BoardTre
   const isSheet = item.kind === "sheet"
   const isExpandable = isFolder || isSheet
   const KindIcon = ICON_BY_KIND[item.kind]
+  const customIcon = item.iconData ?? null
 
   const visualDepth = Math.min(depth, MAX_VISUAL_DEPTH)
   const paddingLeft = BASE_PADDING_PX + visualDepth * INDENT_PX_PER_LEVEL
@@ -147,14 +149,26 @@ export function BoardTreeNode({ boardId, item, depth, parentFolderId }: BoardTre
             className="size-5 shrink-0 grid place-items-center rounded hover:bg-sidebar-accent-foreground/10"
             aria-label={expanded ? `Collapse ${item.kind}` : `Expand ${item.kind}`}
           >
-            <KindIcon
-              className={cn(
-                "size-4 text-muted-foreground transition-opacity",
-                "group-hover/tree-row:hidden",
-                expanded && "hidden",
-              )}
-              strokeWidth={2}
-            />
+            {customIcon ? (
+              <span
+                className={cn(
+                  "transition-opacity",
+                  "group-hover/tree-row:hidden",
+                  expanded && "hidden",
+                )}
+              >
+                <IconPropertyView icon={customIcon} size={16} />
+              </span>
+            ) : (
+              <KindIcon
+                className={cn(
+                  "size-4 text-muted-foreground transition-opacity",
+                  "group-hover/tree-row:hidden",
+                  expanded && "hidden",
+                )}
+                strokeWidth={2}
+              />
+            )}
             <ChevronRightIcon
               className={cn(
                 "size-4 text-muted-foreground transition-transform",
@@ -167,7 +181,11 @@ export function BoardTreeNode({ boardId, item, depth, parentFolderId }: BoardTre
           </button>
         ) : (
           <span className="size-5 shrink-0 grid place-items-center">
-            <KindIcon className="size-4 text-muted-foreground" strokeWidth={2} />
+            {customIcon ? (
+              <IconPropertyView icon={customIcon} size={16} />
+            ) : (
+              <KindIcon className="size-4 text-muted-foreground" strokeWidth={2} />
+            )}
           </span>
         )}
 

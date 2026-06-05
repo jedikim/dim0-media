@@ -11,7 +11,9 @@ import {
   PdfIcon,
   type AppIconComponent,
 } from "@/components/icons"
+import { IconPropertyView } from "@/components/icons/icon-property-view"
 import { formatDistanceToNow } from "@/features/board/utils/date"
+import type { IconProperty } from "@/features/newsfeed/types/properties"
 import { useDocumentLikeNodes } from "../canvas/use-document-like-nodes"
 import type { NoteNodeData } from "../convert/note-to-node"
 import {
@@ -22,6 +24,8 @@ import {
 
 type RowMeta = {
   icon: AppIconComponent
+  /** User-picked icon (any node kind); falls back to `icon` when unset. */
+  customIcon?: IconProperty["icon"] | null
   label: string
   surfaceKind?: NodeSurfaceKind
   isFolder?: boolean
@@ -36,21 +40,23 @@ type RowMeta = {
 const metaOf = (node: Node): RowMeta => {
   const data = (node.data ?? {}) as Partial<NoteNodeData>
   const label = data.label?.markdown?.trim() ?? ""
+  const customIcon = data.properties?.iconData?.icon ?? null
   switch (node.type) {
     case "folder":
-      return { icon: FolderIcon, label: label || "Untitled folder", isFolder: true }
+      return { icon: FolderIcon, customIcon, label: label || "Untitled folder", isFolder: true }
     case "document":
-      return { icon: PdfIcon, label: label || "Untitled document" }
+      return { icon: PdfIcon, customIcon, label: label || "Untitled document" }
     case "widget":
-      return { icon: LearnWidgetIcon, label: label || "Untitled widget", surfaceKind: "widget" }
+      return { icon: LearnWidgetIcon, customIcon, label: label || "Untitled widget", surfaceKind: "widget" }
     case "code-sandbox":
       return {
         icon: ConsoleIcon,
+        customIcon,
         label: label || "Untitled sandbox",
         surfaceKind: "code-sandbox",
       }
     default:
-      return { icon: NotepadIcon, label: label || "Untitled note", surfaceKind: "sheet" }
+      return { icon: NotepadIcon, customIcon, label: label || "Untitled note", surfaceKind: "sheet" }
   }
 }
 
@@ -126,7 +132,13 @@ const ListRow = memo(function ListRow({ node, index, isLast }: RowProps) {
         onDoubleClick={handleOpen}
         title={`Double-click to open ${meta.label}`}
       >
-        <Icon className="size-5 shrink-0 text-muted-foreground" strokeWidth={1.9} />
+        {meta.customIcon ? (
+          <span className="shrink-0">
+            <IconPropertyView icon={meta.customIcon} size={20} />
+          </span>
+        ) : (
+          <Icon className="size-5 shrink-0 text-muted-foreground" strokeWidth={1.9} />
+        )}
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
           {meta.label}
         </span>

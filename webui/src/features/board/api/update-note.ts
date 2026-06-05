@@ -73,14 +73,19 @@ export const useUpdateNote = () => {
     onSettled: (_data, _error, variables, ctx) => {
       const key = ctx?.key ?? ["note", variables.boardId, variables.noteId]
       queryClient.invalidateQueries({ queryKey: key })
-      // Title may have changed → the board's contents tree (sidebar) and
-      // any path query that includes this note both need to refresh. The
-      // path query is keyed by id and stale-revalidated by React Query;
-      // we just invalidate the contents listings here. Also clear the
-      // editor's page-cache for this id so subpage cards / @-mention
-      // chips that resolve titles through it pick up the new label.
-      if (variables.noteData.label !== undefined) {
+      // Title or icon may have changed → the board's contents tree
+      // (sidebar) and any path query that includes this note both need
+      // to refresh. The path query is keyed by id and stale-revalidated
+      // by React Query; we just invalidate the contents listings here.
+      // Also clear the editor's page-cache for this id on label changes
+      // so subpage cards / @-mention chips that resolve titles pick up
+      // the new label.
+      const labelChanged = variables.noteData.label !== undefined
+      const propsChanged = variables.noteData.properties !== undefined
+      if (labelChanged || propsChanged) {
         invalidateBoardContents(variables.boardId, undefined, queryClient)
+      }
+      if (labelChanged) {
         invalidatePage(variables.noteId)
       }
     },

@@ -709,6 +709,75 @@ async def test_node_update_lifts_data_properties_to_patch_dict():
     assert data["properties"]["image_url"]["image"]["url"] == "https://example.com/v2.png"
 
 
+async def test_node_update_lifts_phosphor_icon_data_with_color():
+    """A `node.update` carrying a phosphor-variant iconData lifts through
+    the `data.properties` extractor without losing the name or color.
+
+    Defends the sheet-icon-picker persist path: a client writes
+    `data.properties.iconData = {type:'icon', icon:{type:'phosphor', name, color}}`
+    and the server must merge it into `properties.icon_data` keeping the
+    nested phosphor payload intact (Pydantic discriminator deserializes
+    later from the same dict shape).
+    """
+    store = _RecordingGraphStore()
+    op = {
+        "type": "node.update",
+        "id": "n1",
+        "patch": {
+            "data": {
+                "properties": {
+                    "iconData": {
+                        "type": "icon",
+                        "icon": {"type": "phosphor", "name": "Lightbulb", "color": "#dc2626"},
+                    },
+                },
+            },
+        },
+        "prev": {},
+    }
+
+    await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    data = store.patch_calls[0]["data"]
+    assert data["properties"]["icon_data"] == {
+        "type": "icon",
+        "icon": {"type": "phosphor", "name": "Lightbulb", "color": "#dc2626"},
+    }
+
+
+async def test_node_update_phosphor_icon_with_css_var_color():
+    """The CSS-var color form (`var(--color-foreground)`) round-trips as-is.
+
+    The dark-mode adapter is a render-time concern; the wire should
+    never see an adapted color. Bare string, no parsing.
+    """
+    store = _RecordingGraphStore()
+    op = {
+        "type": "node.update",
+        "id": "n1",
+        "patch": {
+            "data": {
+                "properties": {
+                    "iconData": {
+                        "type": "icon",
+                        "icon": {
+                            "type": "phosphor",
+                            "name": "Heart",
+                            "color": "var(--color-foreground)",
+                        },
+                    },
+                },
+            },
+        },
+        "prev": {},
+    }
+
+    await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    data = store.patch_calls[0]["data"]
+    assert data["properties"]["icon_data"]["icon"]["color"] == "var(--color-foreground)"
+
+
 async def test_node_add_data_properties_cannot_override_top_level_size():
     """A bogus `data.properties.nodeSize` doesn't clobber top-level w/h.
 

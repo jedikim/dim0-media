@@ -57,6 +57,7 @@ export interface IconProperty extends BaseProperty<'icon'> {
   icon?:
     | { type: 'icon', icon: string }
     | { type: 'emoji', emoji: string }
+    | { type: 'phosphor', name: string, color?: string | null }
 }
 
 export interface ImageProperty extends BaseProperty<'image'> {

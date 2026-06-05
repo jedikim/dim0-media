@@ -39,6 +39,9 @@ class NoteProperties(ResourceProperties):
     node_z_index: NumberProperty = Field(
         default_factory=lambda: NumberProperty(number=0)
     )
+    # DEPRECATED: not read by any view; superseded by `icon_data`. Kept
+    # to preserve wire compatibility for existing rows. Do not set new
+    # values on this field — write to `icon_data` instead.
     emoji: IconProperty = Field(
         default_factory=lambda: IconProperty(
             icon=IconProperty.Emoji(emoji="")

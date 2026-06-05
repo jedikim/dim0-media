@@ -7,16 +7,23 @@
 ## Repo Map
 - `backend/`: API, assistant agents, prompts, model/service configs.
 - `webui/`: frontend app (routes, features, components, stores, styles).
+- `canvas-harness/`: in-house canvas engine (source; ships as npm packages consumed by webui).
 - `build/`: generated/build artifacts.
 
 ## Core Features
 - `webui` has two core domains:
   - `agent/`: chat input flow, streaming lifecycle, tool-call rendering, assistant UX.
-  - `board/`: whiteboard workspace for visual note organization.
-- `board` is a core product surface:
-  - Store: `webui/src/features/board/store/graph-store.ts`
-  - Main editor: `webui/src/features/board/components/flow/graph-editor.tsx`
-  - Node rendering: `webui/src/features/board/components/flow/node-view.tsx`, `webui/src/features/board/components/flow/note-card.tsx`, `webui/src/features/board/components/flow/shapes.tsx`
+  - `board/`: whiteboard workspace for visual note organization. Rendered by canvas-harness.
+- `board` lives under `webui/src/features/board/harness/`:
+  - Mount: `harness/canvas/harness-canvas.tsx` — wires the lib `<Canvas>` to Dim0 state.
+  - Convert layer (Dim0 Note/Link ↔ harness Node/Edge): `harness/convert/`.
+  - Custom node-type views: `harness/node-types/`.
+  - Collab persistence: `harness/canvas/use-ws-collab.ts` ⇄ `backend/topix/collab/apply_ops.py`.
+
+## Tech Stack
+- Frontend: React + TypeScript, Vite, Tailwind v4, Tanstack Router, Zustand, Phosphor icons.
+- Canvas engine: in-house `@canvas-harness/core` + `@canvas-harness/react` (source at `canvas-harness/`).
+- Backend: FastAPI (Python), Pydantic, Postgres, WebSocket collab.
 
 ## Frontend Code Style
 - Use TypeScript for frontend code (`.ts` / `.tsx`), not plain JavaScript.

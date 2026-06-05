@@ -88,8 +88,21 @@ class IconProperty(Property):
         type: Literal['emoji'] = 'emoji'
         emoji: str
 
+    class Phosphor(BaseModel):
+        """Phosphor icon by name with an optional color tint.
+
+        `color` stores either a hex like '#dc2626' (paper-adapted Tailwind
+        palette) or a CSS variable reference like 'var(--color-foreground)'.
+        The raw value is what reaches the wire — dark-mode adaptation is a
+        render-time concern, never persisted.
+        """
+
+        type: Literal['phosphor'] = 'phosphor'
+        name: str
+        color: str | None = None
+
     type: Literal[PropertyType.ICON] = PropertyType.ICON
-    icon: Icon | Emoji | None = None
+    icon: Icon | Emoji | Phosphor | None = None
 
 
 class ImageProperty(Property):

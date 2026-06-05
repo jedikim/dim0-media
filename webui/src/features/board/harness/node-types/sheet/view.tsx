@@ -2,6 +2,7 @@ import { useRef } from "react"
 import { NotepadIcon } from "@phosphor-icons/react"
 import { type NodeId } from "@canvas-harness/core"
 import { useCanvasStore, useNode } from "@canvas-harness/react"
+import { IconPropertyView } from "@/components/icons/icon-property-view"
 import { MarkdownView } from "@/components/markdown/markdown-view"
 import { cn } from "@/lib/utils"
 import type { NoteNodeData } from "../../convert/note-to-node"
@@ -57,6 +58,7 @@ export function SheetView({ id }: SheetViewProps) {
   const data = (node.data ?? {}) as Partial<NoteNodeData>
   const label = data.label?.markdown
   const body = node.content?.trim() ?? ""
+  const iconValue = data.properties?.iconData?.icon ?? null
 
   return (
     <div
@@ -95,6 +97,11 @@ export function SheetView({ id }: SheetViewProps) {
         title={canEdit ? "Open sheet" : undefined}
       >
         <div className="scrollbar-thin min-h-0 flex-1 overflow-hidden px-4 pb-3 pt-10 text-sm leading-relaxed text-foreground">
+          {iconValue && (
+            <div className="pointer-events-none mb-2">
+              <IconPropertyView icon={iconValue} size={24} />
+            </div>
+          )}
           {body && isInView ? (
             // pointer-events-none so links / images inside the preview
             // don't intercept the card's click → surface-open handler.

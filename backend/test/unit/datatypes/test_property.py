@@ -45,6 +45,50 @@ def test_icon_property_accepts_icon_and_emoji_variants():
     assert emoji_prop.icon.emoji == ":)"
 
 
+def test_icon_property_accepts_phosphor_variant():
+    """IconProperty should parse the phosphor variant with name + optional color."""
+    bare = IconProperty(icon={"type": "phosphor", "name": "Lightbulb"})
+    tinted = IconProperty(
+        icon={"type": "phosphor", "name": "Rocket", "color": "#dc2626"}
+    )
+    themed = IconProperty(
+        icon={"type": "phosphor", "name": "Heart", "color": "var(--color-foreground)"}
+    )
+
+    assert bare.icon.type == "phosphor"
+    assert bare.icon.name == "Lightbulb"
+    assert bare.icon.color is None
+
+    assert tinted.icon.name == "Rocket"
+    assert tinted.icon.color == "#dc2626"
+
+    assert themed.icon.color == "var(--color-foreground)"
+
+
+def test_icon_property_round_trips_phosphor_variant_through_dump():
+    """The phosphor variant should survive a model_dump / re-parse cycle.
+
+    Mirrors how the wire serializes properties for persistence; if this
+    drops fields the apply_ops lift would silently lose icon state.
+    """
+    original = IconProperty(
+        icon=IconProperty.Phosphor(name="MapPin", color="#2563eb")
+    )
+
+    raw = original.model_dump()
+    restored = IconProperty.model_validate(raw)
+
+    assert restored.icon.type == "phosphor"
+    assert restored.icon.name == "MapPin"
+    assert restored.icon.color == "#2563eb"
+
+
+def test_icon_property_rejects_phosphor_without_name():
+    """A missing `name` should fail validation rather than coerce."""
+    with pytest.raises(ValidationError):
+        IconProperty(icon={"type": "phosphor"})
+
+
 def test_mutable_defaults_are_not_shared_between_instances():
     """Each instance should get its own list defaults."""
     first_texts = MultiTextProperty()

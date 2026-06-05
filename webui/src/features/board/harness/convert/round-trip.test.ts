@@ -146,6 +146,42 @@ describe("note ↔ node round-trip", () => {
     expect(back.properties.slideName).toEqual(note.properties.slideName)
   })
 
+  it("round-trips the phosphor icon variant with a hex color", () => {
+    const note = createDefaultNote({ boardId: BOARD_ID, nodeType: "sheet" })
+    note.properties.iconData = {
+      type: "icon",
+      icon: { type: "phosphor", name: "Lightbulb", color: "#dc2626" },
+    }
+
+    const back = nodeToNote(noteToNode(note))
+
+    expect(back.properties.iconData).toEqual(note.properties.iconData)
+  })
+
+  it("round-trips the phosphor variant with a CSS variable color (theme token)", () => {
+    const note = createDefaultNote({ boardId: BOARD_ID, nodeType: "sheet" })
+    note.properties.iconData = {
+      type: "icon",
+      icon: { type: "phosphor", name: "Heart", color: "var(--color-foreground)" },
+    }
+
+    const back = nodeToNote(noteToNode(note))
+
+    expect(back.properties.iconData).toEqual(note.properties.iconData)
+  })
+
+  it("round-trips the phosphor variant with no color set", () => {
+    const note = createDefaultNote({ boardId: BOARD_ID, nodeType: "sheet" })
+    note.properties.iconData = {
+      type: "icon",
+      icon: { type: "phosphor", name: "Rocket" },
+    }
+
+    const back = nodeToNote(noteToNode(note))
+
+    expect(back.properties.iconData).toEqual(note.properties.iconData)
+  })
+
   it("drops content when node.content is empty (avoids spurious body)", () => {
     const note = createDefaultNote({ boardId: BOARD_ID, nodeType: "rectangle" })
     note.content = undefined

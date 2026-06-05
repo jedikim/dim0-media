@@ -1,5 +1,5 @@
 import path from "path"
-import { readFileSync } from "fs"
+import { readFileSync, readdirSync, statSync } from "fs"
 import tailwindcss from "@tailwindcss/vite"
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
@@ -14,6 +14,71 @@ const shouldAnalyzeBundle = process.env.ANALYZE === "true"
 const allowedHosts = [
   "app.dim0.net",
 ]
+
+
+/**
+ * Icon names listed in the lazy picker's category entries. Extracted via
+ * regex on `name: "Foo"` patterns inside picker-set.ts so the build stays
+ * in sync without a separate registry file.
+ */
+const PICKER_ICON_NAMES = (() => {
+  const content = readFileSync(
+    path.resolve(__dirname, "src/components/icons/picker-set.ts"),
+    "utf8",
+  )
+  return new Set(
+    [...content.matchAll(/name:\s*"([A-Z][a-zA-Z]+)"/g)].map((m) => m[1]),
+  )
+})()
+
+
+/**
+ * Best-effort scan: every `FooIcon` token in files that import from
+ * `@phosphor-icons/react` outside the lazily-loaded picker code. Treated
+ * as a superset of icons that must stay in the eager `phosphor` chunk —
+ * false positives are harmless (they just keep an icon eager). Skips
+ * the picker module files themselves so their 261 named imports don't
+ * mark every picker icon as "eager."
+ */
+const EAGER_PHOSPHOR_NAMES = (() => {
+  const names = new Set<string>()
+  const SKIP_FILES = new Set([
+    "picker-set.ts",
+    "icon-picker.tsx",
+    "icon-property-view.tsx",
+  ])
+
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir)) {
+      const full = path.join(dir, entry)
+      const stat = statSync(full)
+      if (stat.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (!/\.(ts|tsx)$/.test(entry)) continue
+      if (SKIP_FILES.has(entry)) continue
+      const text = readFileSync(full, "utf8")
+      if (!text.includes("@phosphor-icons/react")) continue
+      for (const m of text.matchAll(/\b([A-Z][a-zA-Z]+)Icon\b/g)) {
+        names.add(m[1])
+      }
+    }
+  }
+
+  walk(path.resolve(__dirname, "src"))
+  return names
+})()
+
+
+/**
+ * Picker icons that are NOT eagerly used anywhere else in the app —
+ * safe to route into the lazy `phosphor-picker` chunk so they don't
+ * inflate the eager `phosphor` chunk loaded on first paint.
+ */
+const PICKER_ONLY_ICON_NAMES = new Set(
+  [...PICKER_ICON_NAMES].filter((name) => !EAGER_PHOSPHOR_NAMES.has(name)),
+)
 
 
 export default defineConfig({
@@ -61,6 +126,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        // The bundle visualizer is huge and irrelevant to the runtime
+        // — never precache it. Without this, prod builds with
+        // ANALYZE=true fail the 2 MiB workbox cache-entry limit.
+        globIgnores: ["**/stats.html"],
       },
     }),
   ],
@@ -82,6 +151,19 @@ export default defineConfig({
             if (id.includes("lucide-react")) return "lucide"
             if (id.includes("@lobehub/icons")) return "lobehub-icons"
             if (id.includes("simple-icons")) return "simple-icons"
+            // Phosphor icons used ONLY by the lazy picker get their own
+            // chunk so the eager `phosphor` chunk (chrome icons) doesn't
+            // carry weight that only matters when the picker opens. The
+            // picker-only set is auto-derived from `picker-set.ts` and a
+            // src/ scan above. Icons used by both chrome and picker stay
+            // in the eager chunk to avoid eagerly-loading two chunks.
+            if (
+              id.includes("@phosphor-icons/react/dist/csr/") ||
+              id.includes("@phosphor-icons/react/dist/defs/")
+            ) {
+              const m = id.match(/\/(?:csr|defs)\/([A-Za-z]+)\.es\.js$/)
+              if (m && PICKER_ONLY_ICON_NAMES.has(m[1])) return "phosphor-picker"
+            }
             if (id.includes("@phosphor-icons")) return "phosphor"
             if (id.includes("@iconify")) return "iconify"
             if (id.includes("@tanstack")) return "tanstack"

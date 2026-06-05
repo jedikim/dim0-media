@@ -10,6 +10,10 @@ export interface NoteProperties {
   nodePosition: PositionProperty
   nodeSize: SizeProperty
   nodeZIndex: NumberProperty
+  /**
+   * @deprecated Not read by any view. Superseded by `iconData`. Kept for
+   * wire compatibility with existing rows; do not write new values here.
+   */
   emoji: IconProperty
   pinned: BooleanProperty
   listOrder: NumberProperty
