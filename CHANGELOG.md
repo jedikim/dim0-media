@@ -1,3 +1,9 @@
+## v0.3.30 (2026-06-05)
+
+### Feat
+
+- add sheet note icon picker (#99)
+
 ## v0.3.29 (2026-06-03)
 
 ### Feat
