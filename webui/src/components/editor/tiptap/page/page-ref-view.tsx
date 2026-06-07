@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
 import { NodeViewWrapper } from "@tiptap/react"
 import type { NodeViewProps } from "@tiptap/react"
-import { Notepad } from "@phosphor-icons/react"
+import { NotepadIcon } from "@phosphor-icons/react"
+import { IconPropertyView } from "@/components/icons/icon-property-view"
 import type { Page, PageProvider } from "./types"
 import { readCachedPage, resolvePage, subscribePage } from "./page-cache"
 import { PageHoverCard } from "./page-hover-card"
@@ -55,6 +56,7 @@ export function PageRefView({ node, editor }: NodeViewProps) {
   const isDeleted = cached === null
   const liveTitle = cached?.title?.trim()
   const displayTitle = liveTitle || fallbackTitle
+  const icon = cached?.icon ?? null
 
   function navigate() {
     if (isDeleted) return
@@ -72,7 +74,11 @@ export function PageRefView({ node, editor }: NodeViewProps) {
           disabled={isDeleted}
         >
           <span className="page-ref-prefix" aria-hidden="true">@</span>
-          <Notepad size={16} weight="duotone" className="page-ref-icon" />
+          {icon ? (
+            <IconPropertyView icon={icon} size={16} className="page-ref-icon" />
+          ) : (
+            <NotepadIcon size={16} weight="duotone" className="page-ref-icon" />
+          )}
           <span className="page-ref-title">{displayTitle}</span>
           {isDeleted && <span className="page-ref-suffix">(deleted)</span>}
         </button>

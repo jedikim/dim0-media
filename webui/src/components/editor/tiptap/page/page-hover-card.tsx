@@ -1,4 +1,5 @@
-import { Notepad } from "@phosphor-icons/react"
+import { NotepadIcon } from "@phosphor-icons/react"
+import { IconPropertyView } from "@/components/icons/icon-property-view"
 import {
   HoverCard,
   HoverCardContent,
@@ -30,6 +31,7 @@ export function PageHoverCard({ cached, fallbackTitle, children }: Props) {
   const liveTitle = cached?.title?.trim()
   const title = liveTitle || fallbackTitle
   const snippet = cached?.snippet?.trim()
+  const icon = cached?.icon ?? null
 
   return (
     <HoverCard openDelay={300} closeDelay={100}>
@@ -41,11 +43,17 @@ export function PageHoverCard({ cached, fallbackTitle, children }: Props) {
         className="w-72 p-3"
       >
         <div className="flex items-start gap-2">
-          <Notepad
-            size={18}
-            weight="duotone"
-            className="shrink-0 mt-0.5 text-muted-foreground"
-          />
+          {icon ? (
+            <span className="shrink-0 mt-0.5">
+              <IconPropertyView icon={icon} size={18} />
+            </span>
+          ) : (
+            <NotepadIcon
+              size={18}
+              weight="duotone"
+              className="shrink-0 mt-0.5 text-muted-foreground"
+            />
+          )}
           <div className="min-w-0 flex-1">
             <p className="text-sm font-medium truncate">
               {isDeleted ? `${title} (deleted)` : title}

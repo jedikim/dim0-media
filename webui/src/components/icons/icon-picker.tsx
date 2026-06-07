@@ -90,7 +90,7 @@ export const IconPicker = ({ value, onChange, onRemove, className }: IconPickerP
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="scrollbar-thin flex-1 overflow-y-auto p-2">
         {hasResults ? (
           filtered.map((category) =>
             category.icons.length === 0 ? null : (

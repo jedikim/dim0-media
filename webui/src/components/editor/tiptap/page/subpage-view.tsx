@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
 import { NodeViewWrapper } from "@tiptap/react"
 import type { NodeViewProps } from "@tiptap/react"
-import { Notepad } from "@phosphor-icons/react"
+import { NotepadIcon } from "@phosphor-icons/react"
+import { IconPropertyView } from "@/components/icons/icon-property-view"
 import type { Page, PageProvider } from "./types"
 import { readCachedPage, resolvePage, subscribePage } from "./page-cache"
 import { PageHoverCard } from "./page-hover-card"
@@ -52,6 +53,7 @@ export function SubpageView({ node, editor }: NodeViewProps) {
   const isDeleted = cached === null
   const liveTitle = cached?.title?.trim()
   const displayTitle = liveTitle || fallbackTitle
+  const icon = cached?.icon ?? null
 
   function navigate() {
     if (isDeleted) return
@@ -71,7 +73,11 @@ export function SubpageView({ node, editor }: NodeViewProps) {
           disabled={isDeleted}
           className={isDeleted ? "subpage-card subpage-card--deleted" : "subpage-card"}
         >
-          <Notepad size={16} weight="duotone" className="subpage-card-icon" />
+          {icon ? (
+            <IconPropertyView icon={icon} size={16} className="subpage-card-icon" />
+          ) : (
+            <NotepadIcon size={16} weight="duotone" className="subpage-card-icon" />
+          )}
           <span className="subpage-card-title">{displayTitle}</span>
           {isDeleted && <span className="subpage-card-suffix">(deleted)</span>}
         </button>

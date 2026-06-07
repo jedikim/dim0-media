@@ -1,7 +1,14 @@
+import type { IconProperty } from "@/features/newsfeed/types/properties"
+
+
 export interface Page {
   id: string
   title: string
-  icon?: string
+  /**
+   * Custom icon the host resolved for the page (phosphor / emoji / iconify).
+   * `null` / absent means no custom icon — chips fall back to a default.
+   */
+  icon?: IconProperty["icon"] | null
   parentId?: string
   /** Optional short body preview, used for hover (added in a later step). */
   snippet?: string

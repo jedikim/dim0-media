@@ -1,7 +1,10 @@
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import clsx from "clsx"
+import { useQueryClient } from "@tanstack/react-query"
 import type { NodeId } from "@canvas-harness/core"
 import { useCanvasStore } from "@canvas-harness/react"
+import { applyTitleUpdateToBoardContents } from "@/features/board/api/apply-title-update-to-board-contents"
+import type { BoardContentItem } from "@/features/board/api/list-board-contents"
 import { useBoardAppStore } from "../store/board-app-store"
 import { useStopCanvasGesture } from "./use-stop-canvas-gesture"
 
@@ -50,6 +53,7 @@ export const NodeTitleCaption = memo(function NodeTitleCaption({
   onEditingChange,
 }: NodeTitleCaptionProps) {
   const store = useCanvasStore()
+  const queryClient = useQueryClient()
   const canEdit = useBoardAppStore((s) => s.canEdit)
 
   const [editing, setEditing] = useState(false)
@@ -99,8 +103,20 @@ export const NodeTitleCaption = memo(function NodeTitleCaption({
           label: next ? { markdown: next } : undefined,
         },
       })
+      // The list view reads this node live from the store (updated above);
+      // the sidebar reads the ["boardContents", boardId] cache, so patch it
+      // optimistically too — otherwise a canvas rename leaves the sidebar
+      // stale until a refetch. Mirror of the icon path.
+      const boardId = (prevData.graphUid as string | undefined) ?? undefined
+      if (boardId) {
+        queryClient.setQueriesData<BoardContentItem[]>(
+          { queryKey: ["boardContents", boardId] },
+          (old) =>
+            applyTitleUpdateToBoardContents(old, nodeId as unknown as string, next || null),
+        )
+      }
     },
-    [nodeId, label, store],
+    [nodeId, label, store, queryClient],
   )
 
   const stopEdit = useCallback(

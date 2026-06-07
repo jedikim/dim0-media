@@ -7,7 +7,6 @@
 ## Repo Map
 - `backend/`: API, assistant agents, prompts, model/service configs.
 - `webui/`: frontend app (routes, features, components, stores, styles).
-- `canvas-harness/`: in-house canvas engine (source; ships as npm packages consumed by webui).
 - `build/`: generated/build artifacts.
 
 ## Core Features
@@ -22,7 +21,7 @@
 
 ## Tech Stack
 - Frontend: React + TypeScript, Vite, Tailwind v4, Tanstack Router, Zustand, Phosphor icons.
-- Canvas engine: in-house `@canvas-harness/core` + `@canvas-harness/react` (source at `canvas-harness/`).
+- Canvas engine: in-house `@canvas-harness/core` + `@canvas-harness/react` npm packages.
 - Backend: FastAPI (Python), Pydantic, Postgres, WebSocket collab.
 
 ## Frontend Code Style

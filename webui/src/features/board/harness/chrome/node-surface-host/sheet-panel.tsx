@@ -7,6 +7,7 @@ import { CancelPlainIcon, DownloadIcon } from "@/components/icons"
 import { NoteIconControl } from "@/components/icons/note-icon-control"
 import { Button } from "@/components/ui/button"
 import { applyIconUpdateToBoardContents } from "@/features/board/api/apply-icon-update-to-board-contents"
+import { applyTitleUpdateToBoardContents } from "@/features/board/api/apply-title-update-to-board-contents"
 import { useGetNote } from "@/features/board/api/get-note"
 import { useGetNotePath } from "@/features/board/api/get-note-path"
 import type { BoardContentItem } from "@/features/board/api/list-board-contents"
@@ -47,6 +48,7 @@ export const SheetPanel = memo(function SheetPanel({
 }: SheetPanelProps) {
   const store = useCanvasStore()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const localNode = useNode(nodeId as NodeId)
   const localData = (localNode?.data ?? {}) as Partial<NoteNodeData>
   const activeBoardId = useBoardAppStore((s) => s.boardId)
@@ -79,7 +81,25 @@ export const SheetPanel = memo(function SheetPanel({
     enabled: !!boardId,
   })
   const ancestors = useMemo(() => notePath.slice(0, -1), [notePath])
-  const currentSegment: Note | undefined = notePath[notePath.length - 1]
+  // The open note's live title/icon are `noteLabel` / its iconData (store for
+  // local notes, fetch for sub-pages); the path's trailing segment can lag a
+  // just-made rename or icon change, so override it. Ancestor crumbs resolve
+  // their own live values inside the breadcrumb.
+  const liveIcon =
+    localData.properties?.iconData?.icon ??
+    fetchedNote?.properties?.iconData?.icon ??
+    null
+  const lastSegment = notePath[notePath.length - 1]
+  const currentSegment: Note | undefined = lastSegment
+    ? {
+        ...lastSegment,
+        label: noteLabel ? { markdown: noteLabel } : lastSegment.label,
+        properties: {
+          ...lastSegment.properties,
+          iconData: liveIcon ? { type: "icon", icon: liveIcon } : { type: "icon" },
+        },
+      }
+    : undefined
 
   // Page provider — backs TipTap's /subpage slash command. List/get
   // hit the board API; create inserts a new sheet under this one;
@@ -149,6 +169,16 @@ export const SheetPanel = memo(function SheetPanel({
       const trimmed = next.trim()
       const prev = noteLabel?.trim() ?? ""
       if (trimmed === prev) return
+      // Optimistically patch the sidebar tree so the rename shows before the
+      // WS persist (local path) / HTTP round-trip (REST path) lands — mirror
+      // of handleIconChange. The list view reads the live store, so its
+      // store.updateNode below already keeps it in sync.
+      if (boardId) {
+        queryClient.setQueriesData<BoardContentItem[]>(
+          { queryKey: ["boardContents", boardId] },
+          (old) => applyTitleUpdateToBoardContents(old, nodeId, trimmed || null),
+        )
+      }
       if (isLocalNote) {
         const prevData = (localNode?.data ?? {}) as Record<string, unknown>
         store.updateNode(nodeId as NodeId, {
@@ -161,7 +191,7 @@ export const SheetPanel = memo(function SheetPanel({
         persistRemote({ label: trimmed ? { markdown: trimmed } : undefined })
       }
     },
-    [isLocalNote, localNode?.data, nodeId, noteLabel, persistRemote, store],
+    [isLocalNote, localNode?.data, nodeId, noteLabel, persistRemote, store, boardId, queryClient],
   )
 
   const stopTitleEdit = useCallback(
@@ -190,8 +220,6 @@ export const SheetPanel = memo(function SheetPanel({
     fetchedNote?.properties
 
   const currentIconValue = currentProperties?.iconData?.icon ?? null
-
-  const queryClient = useQueryClient()
 
   const handleIconChange = useCallback(
     (next: IconProperty["icon"] | null) => {

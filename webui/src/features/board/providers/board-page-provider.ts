@@ -3,7 +3,7 @@ import { listBoardContents } from "../api/list-board-contents"
 import { getNote } from "../api/get-note"
 import { addNotes } from "../api/add-notes"
 import { invalidateBoardContents } from "../api/invalidate-board-contents"
-import { createDefaultNote } from "../types/note"
+import { createDefaultNote, type Note } from "../types/note"
 
 
 /**
@@ -36,6 +36,23 @@ function snippetFromMarkdown(markdown: string | undefined): string | undefined {
 
 
 /**
+ * Map a board Note onto the editor's `Page` shape: title (falling back to
+ * "Untitled"), the user's custom icon (`iconData.icon`, else null so the
+ * chip uses its default), parent id, and a body snippet for the hover card.
+ * Pure so the title/icon mapping can be unit-tested without the network.
+ */
+export function noteToPage(note: Note): Page {
+  return {
+    id: note.id,
+    title: note.label?.markdown?.trim() || "Untitled",
+    icon: note.properties?.iconData?.icon ?? null,
+    parentId: note.parentId,
+    snippet: snippetFromMarkdown(note.content?.markdown),
+  }
+}
+
+
+/**
  * Build a `PageProvider` backed by the existing board API helpers.
  * Filters listings to sheet-kind notes (treating sheets as pages); titles
  * are matched case-insensitively client-side since the backend's contents
@@ -61,12 +78,7 @@ export function createBoardPageProvider(
     async get(id: string) {
       try {
         const note = await getNote(boardId, id)
-        return {
-          id: note.id,
-          title: note.label?.markdown?.trim() || "Untitled",
-          parentId: note.parentId,
-          snippet: snippetFromMarkdown(note.content?.markdown),
-        }
+        return noteToPage(note)
       } catch (err) {
         console.warn("[boardPageProvider] get failed", id, err)
         return null

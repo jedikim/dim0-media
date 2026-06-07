@@ -85,7 +85,9 @@ export const useUpdateNote = () => {
       if (labelChanged || propsChanged) {
         invalidateBoardContents(variables.boardId, undefined, queryClient)
       }
-      if (labelChanged) {
+      // Label or icon (a property) changed → drop the editor page-cache so
+      // subpage cards / @-mention chips re-resolve the new title and icon.
+      if (labelChanged || propsChanged) {
         invalidatePage(variables.noteId)
       }
     },
