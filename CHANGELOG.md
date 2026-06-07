@@ -1,3 +1,9 @@
+## v0.3.31 (2026-06-07)
+
+### Fix
+
+- sheet breadcrumb and subpage icons (#100)
+
 ## v0.3.30 (2026-06-05)
 
 ### Feat
