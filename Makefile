@@ -136,3 +136,29 @@ version-check: ## Check whether repo manifests match VERSION
 version-bump: ## Bump repo version with commitizen, then sync manifests
 	uv run --with commitizen cz bump
 	python3 scripts/sync_version.py
+
+# -------- CI / Tests --------
+# Lightweight targets so GitHub Actions and local dev share one entry point.
+# Backend integration tests require live DBs and live in test/integration/ —
+# `test-backend` runs unit-only on purpose.
+.PHONY: lint-ui
+lint-ui: ## Webui type-check + eslint (check-all)
+	cd webui && npm run check-all
+
+.PHONY: test-ui
+test-ui: ## Webui vitest suite (one-shot)
+	cd webui && npm run test:run
+
+.PHONY: lint-backend
+lint-backend: ## Backend ruff check (runs before backend tests in CI)
+	cd backend && uv run ruff check topix test/unit
+
+.PHONY: test-backend
+test-backend: ## Backend unit tests (integration deferred — they need DBs)
+	cd backend && uv run pytest test/unit
+
+.PHONY: test-ci
+test-ci: lint-ui test-ui lint-backend test-backend ## Full CI suite: lint+test for webui then backend
+
+.PHONY: check
+check: test-ci ## Alias for test-ci — run every lint + test locally

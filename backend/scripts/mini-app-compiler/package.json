@@ -1,0 +1,10 @@
+{
+  "name": "mini-app-compiler",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Server-side sucrase compile + sanity check for agent-authored mini-app JSX. Invoked from Python as a subprocess by topix.mini_app.compile.",
+  "dependencies": {
+    "sucrase": "^3.35.1"
+  }
+}

@@ -710,8 +710,7 @@ async def test_node_update_lifts_data_properties_to_patch_dict():
 
 
 async def test_node_update_lifts_phosphor_icon_data_with_color():
-    """A `node.update` carrying a phosphor-variant iconData lifts through
-    the `data.properties` extractor without losing the name or color.
+    """Lift phosphor-variant iconData through the `data.properties` extractor without dropping name/color.
 
     Defends the sheet-icon-picker persist path: a client writes
     `data.properties.iconData = {type:'icon', icon:{type:'phosphor', name, color}}`

@@ -32,7 +32,8 @@ const SHAPE_TOOLS = new Set([
   "folder",
   "sheet",
   "code-sandbox",
-  "widget",
+  "widget",   // legacy — agent + paste can still produce these
+  "mini-app", // default custom-rendered artifact; toolbar creates this
 ])
 
 
@@ -53,6 +54,7 @@ const CLICK_PLACE_TOOLS = new Set([
   "sheet",
   "code-sandbox",
   "widget",
+  "mini-app",
 ])
 
 

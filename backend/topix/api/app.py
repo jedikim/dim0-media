@@ -11,7 +11,21 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from topix.api.router import billing, boards, chats, collab, documents, files, finance, sharing, subscriptions, tools, users, utils
+from topix.api.router import (
+    billing,
+    boards,
+    chats,
+    collab,
+    documents,
+    files,
+    finance,
+    mini_app_state,
+    sharing,
+    subscriptions,
+    tools,
+    users,
+    utils,
+)
 from topix.collab.agent_bridge import AgentBoardBridge
 from topix.collab.room import RoomRegistry
 from topix.config.config import Config
@@ -21,6 +35,7 @@ from topix.setup import setup
 from topix.store.chat import ChatStore
 from topix.store.email_verification import EmailVerificationStore
 from topix.store.graph import GraphStore
+from topix.store.mini_app_state import MiniAppStateStore
 from topix.store.password_reset import PasswordResetStore
 from topix.store.postgres.pool import create_pool
 from topix.store.postgres.schema import apply_schema
@@ -60,6 +75,8 @@ def create_app(stage: StageEnum):
         await app.email_verification_store.open(app.pg_pool)
         app.password_reset_store = PasswordResetStore()
         await app.password_reset_store.open(app.pg_pool)
+        app.mini_app_state_store = MiniAppStateStore()
+        await app.mini_app_state_store.open(app.pg_pool)
         app.subscription_store = SubscriptionStore()
         await app.subscription_store.open()
         app.parser_pipeline = ParsingPipeline()
@@ -86,6 +103,7 @@ def create_app(stage: StageEnum):
         await app.user_billing_store.close()
         await app.email_verification_store.close()
         await app.password_reset_store.close()
+        await app.mini_app_state_store.close()
         await app.subscription_store.close()
         # Close Redis
         await app.redis_store.close()
@@ -120,6 +138,7 @@ def create_app(stage: StageEnum):
     app.include_router(users.router)
     app.include_router(subscriptions.router)
     app.include_router(billing.router)
+    app.include_router(mini_app_state.router)
     app.include_router(utils.router)
     app.include_router(finance.router)
     app.include_router(files.router)

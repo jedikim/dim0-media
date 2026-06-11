@@ -1,0 +1,73 @@
+name: Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+
+jobs:
+  webui:
+    name: webui (lint + tests)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: webui/package-lock.json
+
+      - name: Install webui dependencies
+        run: npm ci
+        working-directory: webui
+
+      - name: Lint (type-check + eslint)
+        run: make lint-ui
+
+      - name: Unit tests
+        run: make test-ui
+
+  backend:
+    name: backend (ruff + unit tests)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: backend/scripts/mini-app-compiler/package-lock.json
+
+      - name: Sync backend dependencies
+        run: uv sync --extra dev
+        working-directory: backend
+
+      - name: Install mini-app compiler dependencies
+        run: npm ci --omit=dev
+        working-directory: backend/scripts/mini-app-compiler
+
+      - name: Ruff check
+        run: make lint-backend
+
+      - name: Unit tests
+        run: make test-backend

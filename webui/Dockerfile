@@ -9,14 +9,22 @@ ENV NODE_OPTIONS=--max_old_space_size=4096
 COPY webui/package.json webui/package-lock.json* ./
 RUN npm ci
 
-# Copy source and build
+# Copy source and build BOTH bundles:
+#   * dist/           the host app, served on :80
+#   * dist-mini-app/  the iframe runtime, served on :5001
+# Cross-origin between :80 and :5001 (different ports → different
+# origins) is the load-bearing security primitive — see
+# mini-app-archi.md §5.
 COPY webui/ ./
-RUN npm run build   # outputs to /app/dist
+RUN npm run build
+RUN npm run build:mini-app
 
-# Add runtime config template + entrypoint script
-COPY webui/config.template.js /app/dist/config.template.js
+# Runtime config template — same file feeds BOTH bundles via the
+# entrypoint, which sed-substitutes per-env values and writes the
+# resulting config.js into each dist dir.
+COPY webui/config.template.js /app/config.template.js
 COPY webui/docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-EXPOSE 80
+EXPOSE 80 5001
 CMD ["/bin/sh", "-c", "/docker-entrypoint.sh"]

@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/vcmf/dim0/releases"><img src="https://img.shields.io/github/v/release/vcmf/dim0?style=for-the-badge&labelColor=171611&color=965e30" alt="Release" /></a>
-  <a href="https://github.com/vcmf/dim0/commits/main"><img src="https://img.shields.io/github/last-commit/vcmf/dim0/main?style=for-the-badge&labelColor=171611&color=3439c9" alt="Last commit" /></a>
+  <a href="https://github.com/vcmf/dim0/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/vcmf/dim0/tests.yml?branch=main&style=for-the-badge&labelColor=171611&color=3439c9&label=tests" alt="Tests" /></a>
   <a href="https://github.com/vcmf/dim0/pulse"><img src="https://img.shields.io/github/commit-activity/m/vcmf/dim0?style=for-the-badge&labelColor=171611&color=a6395c" alt="Commit activity" /></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-336d3f?style=for-the-badge&labelColor=171611" alt="License: MIT" /></a>
 </p>

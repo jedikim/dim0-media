@@ -33,6 +33,7 @@ const DIM0_TO_CANVAS: Record<Dim0NodeType, CanvasNodeType> = {
   sheet: "sheet",
   "code-sandbox": "code-sandbox",
   widget: "widget",
+  "mini-app": "mini-app",
 }
 
 

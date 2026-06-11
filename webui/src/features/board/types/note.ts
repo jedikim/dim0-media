@@ -65,6 +65,11 @@ export interface Note extends Record<string, unknown> {
 }
 
 
+// IMPORTANT: keep these constants in sync with `get_default_note_size`
+// in backend/topix/agents/notes/service.py. The frontend handles
+// canvas-toolbar creates; the backend handles agent-side `write_note`
+// creates. A drift between them means agent-created notes land at
+// different sizes than user-created ones.
 export const DEFAULT_RECTANGLE_NOTE_WIDTH = 320
 export const DEFAULT_RECTANGLE_NOTE_HEIGHT = 180
 export const DEFAULT_ELLIPSE_NOTE_WIDTH = 320
@@ -75,8 +80,15 @@ export const DEFAULT_DIAMOND_NOTE_HEIGHT = 340
 export const DEFAULT_TEXT_NOTE_WIDTH = 150
 export const DEFAULT_TEXT_NOTE_HEIGHT = 20
 
-export const DEFAULT_SHEET_WIDTH = 320
-export const DEFAULT_SHEET_HEIGHT = 200
+// Sheet default size targets the typography sweet spot for prose.
+// At ~14px text + standard padding, 560px width yields ~65-70 chars
+// per line — comfortable for sustained reading without crossing into
+// the "too long" territory past ~75 chars. The earlier 320px default
+// felt sticky-note-cramped for anything beyond a short reminder.
+// Min width stays at 200 — the user can still shrink a sheet to
+// sticky-note size manually when that's the intent.
+export const DEFAULT_SHEET_WIDTH = 560
+export const DEFAULT_SHEET_HEIGHT = 320
 export const SHEET_MIN_WIDTH = 200
 export const SHEET_MIN_HEIGHT = 120
 
@@ -89,6 +101,15 @@ export const DEFAULT_CODE_SANDBOX_WIDTH = 320
 export const DEFAULT_CODE_SANDBOX_HEIGHT = 320
 export const DEFAULT_WIDGET_WIDTH = 800
 export const DEFAULT_WIDGET_HEIGHT = 500
+// Mini-apps trend toward interactive dashboards (charts + controls, lists
+// with KPI rows, multi-section step-throughs) — wider than the earlier
+// "counter / stepper" assumption. Paired with the 1200px auto-grow cap in
+// view.tsx, this width keeps a max-grown card at a usable ~1.67:1
+// portrait ratio instead of a thin column. Auto-resize via mini-app:resize
+// still shrinks/grows the height; width is set once at creation and the
+// user can drag-resize from there.
+export const DEFAULT_MINI_APP_WIDTH = 720
+export const DEFAULT_MINI_APP_HEIGHT = 440
 
 
 /**
@@ -108,6 +129,8 @@ export const createDefaultNoteProperties = ({ type = 'rectangle' }: { type?: Nod
     ? { width: DEFAULT_CODE_SANDBOX_WIDTH, height: DEFAULT_CODE_SANDBOX_HEIGHT }
     : type === 'widget'
     ? { width: DEFAULT_WIDGET_WIDTH, height: DEFAULT_WIDGET_HEIGHT }
+    : type === 'mini-app'
+    ? { width: DEFAULT_MINI_APP_WIDTH, height: DEFAULT_MINI_APP_HEIGHT }
     : type === 'ellipse' || type === 'layered-circle'
     ? { width: DEFAULT_ELLIPSE_NOTE_WIDTH, height: DEFAULT_ELLIPSE_NOTE_HEIGHT }
     : type === 'diamond' || type === 'soft-diamond' || type === 'layered-diamond'
@@ -183,6 +206,8 @@ export const createDefaultNote = ({
       ? DEFAULT_CODE_SANDBOX_WIDTH
       : nodeType === 'widget'
       ? DEFAULT_WIDGET_WIDTH
+      : nodeType === 'mini-app'
+      ? DEFAULT_MINI_APP_WIDTH
       : nodeType === 'ellipse' || nodeType === 'layered-circle'
       ? DEFAULT_ELLIPSE_NOTE_WIDTH
       : nodeType === 'diamond' || nodeType === 'soft-diamond' || nodeType === 'layered-diamond'
@@ -200,6 +225,8 @@ export const createDefaultNote = ({
       ? DEFAULT_CODE_SANDBOX_HEIGHT
       : nodeType === 'widget'
       ? DEFAULT_WIDGET_HEIGHT
+      : nodeType === 'mini-app'
+      ? DEFAULT_MINI_APP_HEIGHT
       : nodeType === 'ellipse' || nodeType === 'layered-circle'
       ? DEFAULT_ELLIPSE_NOTE_HEIGHT
       : nodeType === 'diamond' || nodeType === 'soft-diamond' || nodeType === 'layered-diamond'

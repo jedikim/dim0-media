@@ -32,6 +32,7 @@ const AUTOFIT_DISABLED_TYPES = new Set([
   "sheet",
   "code-sandbox",
   "widget",
+  "mini-app",
   "document",
 ])
 

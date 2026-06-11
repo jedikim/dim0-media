@@ -130,6 +130,25 @@ CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user_uid ON password_reset_
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires_at ON password_reset_tokens(expires_at);
 
 
+-- Per-user, per-note state for mini-app widgets (see mini-app-archi.md §12).
+-- Stores whatever JSON the agent's widget passes to host.saveState().
+-- Per-user on purpose: two viewers of the same note may have independent
+-- counter values, todo selections, etc.
+--
+-- note_uid is NOT a foreign key because notes live in the qdrant content
+-- store, not in postgres — so on note delete the cleanup happens at the
+-- app layer (or rows become harmless orphans).
+CREATE TABLE IF NOT EXISTS mini_app_state (
+    note_uid TEXT NOT NULL,
+    user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+    state JSONB NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (note_uid, user_uid)
+);
+CREATE INDEX IF NOT EXISTS idx_mini_app_state_user_uid ON mini_app_state(user_uid);
+
+
 -- ============================================================================
 -- Additive deltas for older self-hosted DBs.
 -- For each column added to an existing table after its CREATE TABLE was first

@@ -1,0 +1,58 @@
+/*
+ * Mini-app runtime stylesheet.
+ *
+ * Re-uses the host's `src/index.css` directly so the iframe ships the
+ * same Tailwind theme + tokens (parchment / dark / etc.). Bundled
+ * twice — once into the host bundle, once here — but the source of
+ * truth stays single.
+ *
+ * Active theme is synced from the host via postMessage:
+ *   - `mini-app:render` carries the current { id, mode } on first paint
+ *   - `mini-app:theme` flips data attributes on host theme changes
+ * The runtime writes both onto <html>; selectors in index.css
+ * (`[data-theme="X"][data-mode="Y"]`) take it from there.
+ */
+
+@import "../src/index.css";
+
+/*
+ * Widen Tailwind's source scan to webui/src/ so utilities used by
+ * imported host components (Card, Button, Chart, …) appear in the
+ * iframe's compiled CSS. Without this, the iframe's vite root
+ * (`mini-app-runtime/`) only scans iframe-local files and emits a
+ * stripped utility set — `bg-card`, `bg-background`, `text-foreground`,
+ * etc. silently fall through to no-op, leaving cards transparent and
+ * outline buttons with currentColor (black) borders.
+ *
+ * `inline(...)` explicitly enumerates classes the AGENT may use at
+ * runtime but that aren't in any scanned source file — without it
+ * those classes can't be JIT'd inside the sandboxed iframe (the
+ * `@tailwindcss/browser` build doesn't know our @theme tokens).
+ */
+@source "../src";
+@source inline("{,hover:,focus:,dark:}{bg,text,border,ring}-{background,foreground,card,card-foreground,popover,popover-foreground,primary,primary-foreground,secondary,secondary-foreground,muted,muted-foreground,accent,accent-foreground,destructive,destructive-foreground,border,input,ring}");
+@source inline("font-{handwriting,mono,sans,serif,informal}");
+
+
+/* The runtime root element fills the iframe so the host can
+   measure its scroll height for auto-resize. */
+html, body {
+  margin: 0;
+  padding: 0;
+}
+
+/* Center the agent's widget horizontally so cards like `max-w-3xl`
+   sit in the middle of the iframe instead of pinned to the left.
+   The `padding` gives breathing room from the iframe edges (the
+   canvas card already provides its own outer chrome).
+   `flex-direction: column` + `align-items: center` keeps horizontal
+   centering working even when the content is taller than the
+   viewport — taller widgets just overflow downward as expected. */
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+  box-sizing: border-box;
+}

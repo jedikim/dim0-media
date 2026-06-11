@@ -78,6 +78,24 @@ class _FakeUserBillingStore:
         return None
 
 
+def _stub_token_issuance(monkeypatch):
+    """Bypass JWT encoding so tests don't require a Config singleton.
+
+    `create_access_token` / `create_refresh_token` round-trip through
+    `Config.instance()`; in pure-unit tests the singleton is never
+    initialized, so the real implementations 500. Stubbing them at the
+    router-module level keeps the rest of `_issue_tokens` real.
+    """
+    monkeypatch.setattr(
+        "topix.api.router.users.create_access_token",
+        lambda data, expires_delta=None: "test-access-token",
+    )
+    monkeypatch.setattr(
+        "topix.api.router.users.create_refresh_token",
+        lambda data, expires_delta=None: "test-refresh-token",
+    )
+
+
 def _build_client(
     *,
     user_uid: str = "user-1",
@@ -143,6 +161,7 @@ def test_google_signin_creates_new_google_user(monkeypatch):
     monkeypatch.setenv("GOOGLE_CONNECT_ENABLED", "true")
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-id.apps.googleusercontent.com")
     monkeypatch.delenv("VITE_BILLING_ENABLED", raising=False)
+    _stub_token_issuance(monkeypatch)
 
     def _fake_verify_google_id_token(id_token: str) -> dict:
         assert id_token == "google-token"
@@ -180,6 +199,7 @@ def test_google_signin_returns_existing_google_user(monkeypatch):
     monkeypatch.setenv("GOOGLE_CONNECT_ENABLED", "true")
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-id.apps.googleusercontent.com")
     monkeypatch.delenv("VITE_BILLING_ENABLED", raising=False)
+    _stub_token_issuance(monkeypatch)
 
     def _fake_verify_google_id_token(_: str) -> dict:
         return {
@@ -360,6 +380,7 @@ def test_signup_enabled_creates_verification_token(monkeypatch):
     monkeypatch.setenv("RESEND_FROM_EMAIL", "noreply@test.com")
     monkeypatch.setenv("APP_BASE_URL", "http://localhost:3175")
     monkeypatch.delenv("VITE_BILLING_ENABLED", raising=False)
+    _stub_token_issuance(monkeypatch)
 
     sent_payloads: list[dict] = []
 

@@ -64,9 +64,17 @@ def build_default_note_style(note_type: NodeType) -> Style:
 
 
 def get_default_note_size(note_type: NodeType) -> tuple[int, int]:  # noqa: C901
-    """Mirror the frontend default note sizes for the supported node types."""
+    """Return the default (width, height) for a freshly-created note of `note_type`.
+
+    Mirrors the frontend constants in webui/src/features/board/types/note.ts.
+    Keep both files in sync — the frontend handles canvas-toolbar creates,
+    this function handles agent-side `write_note` creates. A drift between
+    them means agent-created notes land at different sizes than user-
+    created ones.
+    """
     if note_type == NodeType.SHEET:
-        return 320, 200
+        # Prose-friendly reading width (~65-70 chars/line at 14px text).
+        return 560, 320
     if note_type == NodeType.TEXT:
         return 300, 20
     if note_type == NodeType.SLIDE:
@@ -77,6 +85,11 @@ def get_default_note_size(note_type: NodeType) -> tuple[int, int]:  # noqa: C901
         return 320, 320
     if note_type == NodeType.WIDGET:
         return 800, 500
+    if note_type == NodeType.MINI_APP:
+        # Tablet-portrait proportions; paired with the 1200px auto-grow
+        # cap in webui's MiniAppView, a max-grown card reads at 1:1.67
+        # instead of a thin column.
+        return 720, 440
     if note_type == NodeType.ELLIPSE:
         return 320, 320
     if note_type == NodeType.LAYERED_CIRCLE:

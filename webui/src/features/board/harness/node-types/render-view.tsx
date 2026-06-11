@@ -4,8 +4,10 @@ import { useCanvasStore } from "@canvas-harness/react"
 import { CodeSandboxView } from "./code-sandbox"
 import { DocumentView } from "./document"
 import { FolderView } from "./folder"
+import { MiniAppView } from "./mini-app"
 import { SheetView } from "./sheet"
 import { WidgetView } from "./widget"
+import { NodeErrorBoundary } from "../shared-views"
 
 
 /**
@@ -18,6 +20,7 @@ const VIEW_REGISTRY: Readonly<Record<string, (props: { id: NodeId }) => ReactNod
   folder: FolderView,
   document: DocumentView,
   widget: WidgetView,
+  "mini-app": MiniAppView,
   "code-sandbox": CodeSandboxView,
   sheet: SheetView,
 }
@@ -35,7 +38,15 @@ export const useRenderCustomNodeView = (): ((id: NodeId) => ReactNode) => {
       const node = store.getNode(id)
       if (!node) return null
       const View = VIEW_REGISTRY[node.type]
-      return View ? <View id={id} /> : null
+      if (!View) return null
+      // Per-node error boundary: one bad render shouldn't blank the
+      // whole canvas. Keyed on id so a node that switches type (rare)
+      // resets its error state rather than carrying it across.
+      return (
+        <NodeErrorBoundary key={id} nodeId={id} nodeType={node.type}>
+          <View id={id} />
+        </NodeErrorBoundary>
+      )
     },
     [store],
   )

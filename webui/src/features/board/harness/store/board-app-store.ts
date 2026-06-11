@@ -11,7 +11,7 @@ import {
 import { nodeSurfacePath } from "@/features/board/utils/node-surface-url"
 
 
-export type NodeSurfaceKind = "sheet" | "code-sandbox" | "widget"
+export type NodeSurfaceKind = "sheet" | "code-sandbox" | "widget" | "mini-app"
 
 
 /**

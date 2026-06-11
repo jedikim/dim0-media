@@ -47,6 +47,7 @@ _DIM0_TO_CANVAS_TYPE: dict[str, str] = {
     "sheet": "sheet",
     "code-sandbox": "code-sandbox",
     "widget": "widget",
+    "mini-app": "mini-app",
 }
 
 # Inverse map for the inbound persistence fallback (apply_ops.py). Auto-

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>mini-app cross-origin smoke test</title>
+  <style>
+    body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding: 24px; max-width: 720px; }
+    iframe { width: 100%; height: 320px; border: 1px solid #ccc; margin: 12px 0; }
+    .log { background: #f5f5f5; padding: 12px; min-height: 80px; white-space: pre-wrap; font-size: 12px; }
+    .ok  { color: #2a7a3b; }
+    .err { color: #b00020; }
+    code { background: #eee; padding: 1px 4px; }
+  </style>
+</head>
+<body>
+  <h1>Mini-app runtime — cross-origin smoke test</h1>
+  <p>
+    Loads the runtime in a sandboxed iframe and verifies the
+    <code>mini-app:ready</code> handshake. Run both Vite servers first:
+  </p>
+  <pre>npm run dev          # host on $APP_PORT
+npm run dev:mini-app # runtime on $MINI_APP_PORT</pre>
+
+  <p>Runtime origin: <code id="runtime-origin">(unset)</code></p>
+
+  <p>
+    <button onclick="localStorage.removeItem('mini-app-smoke-state'); location.reload()">
+      clear saved state &amp; reload
+    </button>
+  </p>
+
+  <!-- See MiniAppMount in src/features/mini-app/mount.tsx for the
+       reasoning behind allow-same-origin alongside allow-scripts. -->
+  <iframe id="frame" sandbox="allow-scripts allow-same-origin"></iframe>
+
+  <div class="log" id="log">waiting…</div>
+
+  <script>
+    // The host bundle would normally read VITE_MINI_APP_ORIGIN at build
+    // time. This smoke page is plain HTML, so we hard-derive the runtime
+    // origin from a hash param or fall back to "same hostname, port+1".
+    // Keep it simple: use port 3176 by default (matches dev .env default).
+    const params = new URLSearchParams(location.hash.slice(1))
+    const runtimeOrigin =
+      params.get("runtime") ||
+      `${location.protocol}//${location.hostname}:3176`
+
+    document.getElementById("runtime-origin").textContent = runtimeOrigin
+
+    const frame = document.getElementById("frame")
+    const log = document.getElementById("log")
+    const lines = []
+    function append(line, cls) {
+      const entry = cls ? `[${cls}] ${line}` : line
+      lines.push(entry)
+      log.textContent = lines.join("\n")
+    }
+
+    frame.src = `${runtimeOrigin}/index.html`
+
+    // Counter widget for Phase 2 verification. Reads host.initialState
+    // for persisted value on mount, saves via host.saveState() on every
+    // change, and exercises host.toast() + the not-yet-implemented
+    // callTool stub so we can see rejections surface as alerts in the
+    // log box below.
+    const COUNTER_SOURCE = `
+      function Widget() {
+        const [count, setCount] = useState(host.initialState ?? 0)
+        useEffect(() => { host.saveState(count) }, [count])
+        return (
+          <Card className="m-4 max-w-sm">
+            <CardHeader>
+              <CardTitle>Counter (persisted)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold mb-3">{count}</div>
+              <div className="flex gap-2 flex-wrap">
+                <Button onClick={() => setCount(count - 1)} variant="outline">-</Button>
+                <Button onClick={() => setCount(count + 1)}>+</Button>
+                <Button onClick={() => setCount(0)} variant="ghost">reset</Button>
+                <Button onClick={() => host.toast("hello from the widget", "info")} variant="secondary">toast</Button>
+                <Button
+                  onClick={() => {
+                    host.callTool("search", { q: "x" }).catch((e) => {
+                      host.toast("callTool rejected: " + e.message, "error")
+                    })
+                  }}
+                  variant="ghost"
+                >
+                  try callTool
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )
+      }
+    `
+
+    // Mock host-side RPC handler. localStorage stands in for the real
+    // backend persistence that lands in commit 2.
+    const STORAGE_KEY = "mini-app-smoke-state"
+
+    function loadSavedState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY)
+        return raw == null ? null : JSON.parse(raw)
+      } catch {
+        return null
+      }
+    }
+
+    function handleRpc({ id, method, args }) {
+      let result, error
+      try {
+        if (method === "saveState") {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(args))
+          append(`saveState: ${JSON.stringify(args)}`, "ok")
+        } else if (method === "toast") {
+          append(`toast (${args.level ?? "info"}): ${args.message}`, "ok")
+        } else {
+          throw new Error(method + " not implemented in v1")
+        }
+      } catch (e) {
+        error = e?.message ?? String(e)
+      }
+      frame.contentWindow.postMessage(
+        { type: "mini-app:rpc-result", id, result, error },
+        runtimeOrigin,
+      )
+    }
+
+    window.addEventListener("message", (e) => {
+      if (e.origin !== runtimeOrigin) {
+        append(`ignored message from foreign origin: ${e.origin}`, "err")
+        return
+      }
+
+      if (e.data && e.data.type === "mini-app:rpc") {
+        handleRpc(e.data)
+        return
+      }
+
+      append(`message: ${JSON.stringify(e.data)}`, "ok")
+
+      if (e.data && e.data.type === "mini-app:ready") {
+        append("handshake OK — runtime is reachable cross-origin", "ok")
+        try {
+          // eslint-disable-next-line no-unused-expressions
+          frame.contentDocument
+          append("parent.contentDocument accessible — sandbox/origin misconfigured!", "err")
+        } catch (err) {
+          append(`parent.contentDocument throws (good): ${err.name}`, "ok")
+        }
+        const savedState = loadSavedState()
+        if (savedState != null) {
+          append(`restoring savedState: ${JSON.stringify(savedState)}`, "ok")
+        }
+        frame.contentWindow.postMessage(
+          { type: "mini-app:render", source: COUNTER_SOURCE, savedState },
+          runtimeOrigin,
+        )
+        append("sent mini-app:render — widget should appear above", "ok")
+      }
+    })
+
+    setTimeout(() => {
+      if (lines.length === 1) {
+        append("no message after 3s. Is the mini-app dev server running on " + runtimeOrigin + "?", "err")
+      }
+    }, 3000)
+  </script>
+</body>
+</html>

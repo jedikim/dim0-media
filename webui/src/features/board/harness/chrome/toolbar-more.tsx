@@ -1,10 +1,11 @@
+import { CursorClickIcon } from "@phosphor-icons/react"
+
 import {
   CodeFileIcon,
   DocumentFileIcon,
   EllipsisIcon,
   FolderPlusActionIcon,
   ImageStackIcon,
-  LearnWidgetIcon,
   PuzzlePieceIcon,
 } from "@/components/icons"
 import {
@@ -109,11 +110,11 @@ export function HarnessToolbarMore() {
             <DropdownMenuShortcut>Y</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuItem
-            onSelect={() => setTool("widget")}
+            onSelect={() => setTool("mini-app")}
             className="gap-2 text-sm"
           >
-            <LearnWidgetIcon className="size-4 shrink-0" />
-            <span>Widget</span>
+            <CursorClickIcon className="size-4 shrink-0" />
+            <span>Mini-app</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

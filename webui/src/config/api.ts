@@ -3,6 +3,10 @@ declare global {
     __APP_CONFIG__?: {
       apiBase?: string
       billingEnabled?: string
+      /** Mini-app iframe runtime origin (set per-env by docker-entrypoint.sh). */
+      miniAppOrigin?: string
+      /** Host app origin — read by the iframe runtime, never the host. */
+      hostOrigin?: string
     }
   }
 }

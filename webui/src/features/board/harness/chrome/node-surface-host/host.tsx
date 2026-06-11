@@ -2,6 +2,7 @@ import { memo, useEffect } from "react"
 import { useCanvasStore } from "@canvas-harness/react"
 import { useBoardAppStore } from "../../store/board-app-store"
 import { CodeSandboxPanel } from "./code-sandbox-panel"
+import { MiniAppPanel } from "./mini-app-panel"
 import { SheetPanel } from "./sheet-panel"
 import { WidgetPanel } from "./widget-panel"
 
@@ -60,6 +61,11 @@ export const NodeSurfaceHost = memo(function NodeSurfaceHost() {
         />
       ) : activeNodeSurface.kind === "code-sandbox" ? (
         <CodeSandboxPanel
+          nodeId={activeNodeSurface.nodeId}
+          onClose={closeNodeSurface}
+        />
+      ) : activeNodeSurface.kind === "mini-app" ? (
+        <MiniAppPanel
           nodeId={activeNodeSurface.nodeId}
           onClose={closeNodeSurface}
         />

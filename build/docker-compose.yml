@@ -248,10 +248,16 @@ services:
       # Used by FE runtime (see Dockerfile entrypoint template) to call API
       API_ORIGIN: ${API_ORIGIN:-http://localhost:${API_PORT:-8081}}
       VITE_BILLING_ENABLED: ${VITE_BILLING_ENABLED:-false}
+      # Mini-app sandboxed iframe runtime — see mini-app-archi.md §6.1.
+      # Both bundles read these from window.__APP_CONFIG__ at boot;
+      # docker-entrypoint.sh substitutes them into config.js per-env.
+      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-http://localhost:${MINI_APP_PORT:-5001}}
+      VITE_HOST_ORIGIN: ${VITE_HOST_ORIGIN:-http://localhost:${APP_PORT:-3000}}
     depends_on:
       - backend-local
     ports:
       - "${APP_PORT:-3000}:80"
+      - "${MINI_APP_PORT:-5001}:5001"
 
   # ---- Backend (DEV) ----
   backend-dev:
@@ -291,10 +297,13 @@ services:
     environment:
       API_ORIGIN: ${API_ORIGIN:-http://localhost:${API_PORT:-8081}}
       VITE_BILLING_ENABLED: ${VITE_BILLING_ENABLED:-false}
+      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-http://localhost:${MINI_APP_PORT:-5181}}
+      VITE_HOST_ORIGIN: ${VITE_HOST_ORIGIN:-http://localhost:${APP_PORT:-5174}}
     depends_on:
       - backend-dev
     ports:
       - "${APP_PORT:-5174}:80"
+      - "${MINI_APP_PORT:-5181}:5001"
 
   backend-test:
     build:
@@ -332,10 +341,13 @@ services:
     environment:
       API_ORIGIN: ${API_ORIGIN:-http://localhost:${API_PORT:-8082}}
       VITE_BILLING_ENABLED: ${VITE_BILLING_ENABLED:-false}
+      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-http://localhost:${MINI_APP_PORT:-5182}}
+      VITE_HOST_ORIGIN: ${VITE_HOST_ORIGIN:-http://localhost:${APP_PORT:-5175}}
     depends_on:
       - backend-test
     ports:
       - "${APP_PORT:-5175}:80"
+      - "${MINI_APP_PORT:-5182}:5001"
 
   backend-staging:
     build:
@@ -373,10 +385,13 @@ services:
     environment:
       API_ORIGIN: ${API_ORIGIN:-http://localhost:${API_PORT:-8083}}
       VITE_BILLING_ENABLED: ${VITE_BILLING_ENABLED:-false}
+      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-http://localhost:${MINI_APP_PORT:-5183}}
+      VITE_HOST_ORIGIN: ${VITE_HOST_ORIGIN:-http://localhost:${APP_PORT:-5176}}
     depends_on:
       - backend-staging
     ports:
       - "${APP_PORT:-5176}:80"
+      - "${MINI_APP_PORT:-5183}:5001"
 
   backend-prod:
     build:
@@ -414,10 +429,13 @@ services:
     environment:
       API_ORIGIN: ${API_ORIGIN:-http://localhost:${API_PORT:-8084}}
       VITE_BILLING_ENABLED: ${VITE_BILLING_ENABLED:-false}
+      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-http://localhost:${MINI_APP_PORT:-5184}}
+      VITE_HOST_ORIGIN: ${VITE_HOST_ORIGIN:-http://localhost:${APP_PORT:-5177}}
     depends_on:
       - backend-prod
     ports:
       - "${APP_PORT:-5177}:80"
+      - "${MINI_APP_PORT:-5184}:5001"
 
 volumes:
   qdrant_data_local:

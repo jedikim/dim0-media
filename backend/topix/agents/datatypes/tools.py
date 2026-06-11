@@ -28,6 +28,8 @@ class AgentToolName(StrEnum):
     DISPLAY_WEATHER_WIDGET = "display_weather_widget"
     DISPLAY_IMAGE_SEARCH_WIDGET = "display_image_search_widget"
     LEARN_GENERATE_HTML_WIDGET = "learn_generate_html_widget"
+    LEARN_GENERATE_MINI_APP = "learn_generate_mini_app"
+    LEARN_GENERATE_DIAGRAM = "learn_generate_diagram"
 
     RAW_MESSAGE = "raw_message"
 
@@ -77,6 +79,17 @@ tool_descriptions = {
     AgentToolName.LEARN_GENERATE_HTML_WIDGET: (
         "Learn how to create visual explainers and interactive "
         "HTML widgets such as charts, flash cards, mini slides, and infographics"
+    ),
+    AgentToolName.LEARN_GENERATE_MINI_APP: (
+        "Learn how to author a sandboxed interactive React mini-app "
+        "(counter, todo, calculator, algorithm visualizer) before writing "
+        "one with `write_note(note_type=\"mini-app\")`"
+    ),
+    AgentToolName.LEARN_GENERATE_DIAGRAM: (
+        "Learn how to compose a structured multi-note answer (mindmap, "
+        "taxonomy, schema, flowchart) — brevity rules per node and when "
+        "to mix rectangle / ellipse / diamond shapes — before issuing "
+        "the parallel write_note + link_notes calls"
     ),
     AgentToolName.IMAGE_GENERATION: "Generate images based on text prompts",
 }

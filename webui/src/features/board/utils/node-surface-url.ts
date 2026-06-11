@@ -1,17 +1,18 @@
-import { CodeSandboxUrl, SheetUrl, WidgetUrl } from "@/routes"
+import { CodeSandboxUrl, MiniAppUrl, SheetUrl, WidgetUrl } from "@/routes"
 import type { NodeSurfaceKind } from "../harness/store/board-app-store"
 
 
 /**
  * Map a node-surface kind to its URL path. The dialog system shares one
  * sub-tree under the board route — only the path segment (`sheets`,
- * `code-sandbox`, `widgets`) differs per kind.
+ * `code-sandbox`, `widgets`, `mini-apps`) differs per kind.
  */
 export function nodeSurfacePath(kind: NodeSurfaceKind): string {
   switch (kind) {
     case "sheet": return SheetUrl
     case "code-sandbox": return CodeSandboxUrl
     case "widget": return WidgetUrl
+    case "mini-app": return MiniAppUrl
   }
 }
 
@@ -25,5 +26,6 @@ export function nodeSurfaceKindFromPath(pathname: string): NodeSurfaceKind | nul
   if (pathname.includes("/sheets/")) return "sheet"
   if (pathname.includes("/code-sandbox/")) return "code-sandbox"
   if (pathname.includes("/widgets/")) return "widget"
+  if (pathname.includes("/mini-apps/")) return "mini-app"
   return null
 }

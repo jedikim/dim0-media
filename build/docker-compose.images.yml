@@ -78,10 +78,16 @@ services:
     environment:
       API_ORIGIN: ${API_ORIGIN:-http://localhost:${API_PORT:-8888}}
       VITE_BILLING_ENABLED: ${VITE_BILLING_ENABLED:-false}
+      # Mini-app sandboxed iframe runtime — see mini-app-archi.md §6.1.
+      # In prod set these to https://mini-app.dim0.net and
+      # https://dim0.net via the deploy-time .env override.
+      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-http://localhost:${MINI_APP_PORT:-5001}}
+      VITE_HOST_ORIGIN: ${VITE_HOST_ORIGIN:-http://localhost:${APP_PORT:-3000}}
     depends_on:
       - backend
     ports:
       - "${APP_PORT:-3000}:80"
+      - "${MINI_APP_PORT:-5001}:5001"
 
 volumes:
   qdrant_data:

@@ -1,0 +1,57 @@
+<!doctype html>
+<!--
+  Initial theme defaults live on <html> to match where the host writes
+  them (theme-provider.tsx). The inline script below upgrades these
+  from URL query params (`?theme=parchment&mode=dark`) BEFORE any CSS
+  paint, so the iframe boots in the host's active palette without a
+  parchment-light flash. main.tsx then keeps them in sync via the
+  `mini-app:theme` postMessage protocol on live changes.
+-->
+<html lang="en" data-theme="parchment" data-mode="light">
+  <script>
+    (function () {
+      try {
+        var p = new URLSearchParams(location.search)
+        var t = p.get("theme")
+        var m = p.get("mode")
+        if (t) document.documentElement.dataset.theme = t
+        if (m === "light" || m === "dark") document.documentElement.dataset.mode = m
+      } catch (_) {
+        // No URL or bad params → fall back to the hardcoded defaults
+        // above. Not worth bailing out of the iframe over.
+      }
+    })()
+  </script>
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      Content Security Policy is intentionally NOT set as a meta-tag.
+      Why: the iframe loads with sandbox="allow-scripts" (no
+      allow-same-origin), giving it an opaque "null" origin. Browsers
+      then refuse to match `'self'` in script-src/style-src against
+      same-host scripts — so a meta-tag CSP with `'self'` blocks
+      everything including main.tsx. The iframe's sandbox attribute is
+      already the load-bearing security boundary; Phase 4 hardening
+      will move CSP to HTTP response headers from the asset host
+      where 'self' isn't ambiguous (production serves from a real
+      origin, not via meta-tag inside a sandboxed document).
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mini-app runtime</title>
+    <link rel="stylesheet" href="/runtime.css" />
+    <!--
+      Runtime config injection — docker-entrypoint.sh generates
+      /config.js from config.template.js with per-env substitutions
+      and copies it into dist-mini-app/. main.tsx reads
+      window.__APP_CONFIG__.hostOrigin to know which origin's
+      postMessage events to trust. In vite-dev there's no config.js
+      (the dev server doesn't run the entrypoint) — main.tsx falls
+      back to import.meta.env.VITE_HOST_ORIGIN there.
+    -->
+    <script src="/config.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/main.tsx"></script>
+  </body>
+</html>
