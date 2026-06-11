@@ -1,3 +1,9 @@
+## v0.3.34 (2026-06-11)
+
+### Fix
+
+- parchment secondary color (#104)
+
 ## v0.3.33 (2026-06-11)
 
 ### Feat
