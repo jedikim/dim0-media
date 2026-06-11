@@ -33,7 +33,7 @@ export const CopyAnswer = ({ answer, compact = false }: { answer: string, compac
       aria-label={actionLabel}
       title={actionLabel}
     >
-      <Icon className='size-4 shrink-0' strokeWidth={2} />
+      <Icon className='size-4 shrink-0' strokeWidth={2} weight={compact ? "duotone" : undefined} />
       {!compact && <span>Copy</span>}
     </button>
   )

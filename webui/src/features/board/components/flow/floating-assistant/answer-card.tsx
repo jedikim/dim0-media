@@ -75,7 +75,7 @@ export const AnswerCard = ({ onOpenFullSheet }: AnswerCardProps) => {
       </div>
       <div
         className={cn(
-          "bg-sidebar border border-sidebar-border rounded-lg shadow-lg",
+          "bg-sidebar border border-sidebar-border rounded-xl shadow-lg",
           "ring-2 ring-secondary-foreground/30",
           "animate-ring-blink",
           "flex flex-col max-h-[calc(100vh-10rem)] overflow-hidden"

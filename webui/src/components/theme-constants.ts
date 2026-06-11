@@ -1,7 +1,7 @@
 import type { BundledTheme } from "shiki"
 
 
-export type ThemeId = "parchment" | "catppuccin" | "tokyo-night" | "gruvbox" | "monokai-pro" | "rose-pine"
+export type ThemeId = "parchment" | "matcha" | "noir" | "catppuccin" | "tokyo-night" | "gruvbox" | "monokai-pro" | "rose-pine"
 
 
 export type ShikiThemePair = readonly [BundledTheme, BundledTheme]
@@ -15,6 +15,8 @@ export type ShikiThemePair = readonly [BundledTheme, BundledTheme]
  */
 export const THEME_SHIKI_MAP: Record<ThemeId, ShikiThemePair> = {
   parchment:     ["rose-pine-dawn",       "rose-pine"],
+  matcha:        ["everforest-light",     "everforest-dark"],
+  noir:          ["vitesse-light",        "vitesse-dark"],
   catppuccin:    ["catppuccin-latte",     "catppuccin-mocha"],
   "tokyo-night": ["github-light",         "tokyo-night"],
   gruvbox:       ["gruvbox-light-medium", "gruvbox-dark-medium"],
@@ -40,7 +42,19 @@ export const THEMES: ThemeMeta[] = [
     id: "parchment",
     label: "Parchment",
     swatchLight: ["#f7f1e4", "#33312c", "#e4c9a8"],
-    swatchDark:  ["#26221e", "#d49a78", "#3a2e26"],
+    swatchDark:  ["#222121", "#d49a78", "#462d25"],
+  },
+  {
+    id: "matcha",
+    label: "Matcha",
+    swatchLight: ["#f8f5ec", "#293027", "#cfe7c2"],
+    swatchDark:  ["#1d241e", "#9ecd8e", "#293926"],
+  },
+  {
+    id: "noir",
+    label: "Noir",
+    swatchLight: ["#f6f7f8", "#1e1f22", "#e7e8ea"],
+    swatchDark:  ["#202224", "#e3e4e6", "#333437"],
   },
   {
     id: "catppuccin",

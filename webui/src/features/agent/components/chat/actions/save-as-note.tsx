@@ -234,7 +234,7 @@ export const SaveAsNote = ({
 
   const iconCpn = processing ?
     <LoadingIcon /> :
-    <Icon className="size-4" strokeWidth={2} />
+    <Icon className="size-4" strokeWidth={2} weight={compact ? "duotone" : undefined} />
 
   const dropdownTrigger = (
     <DropdownMenuTrigger asChild>
