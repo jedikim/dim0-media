@@ -121,7 +121,12 @@ export const createHarnessTextareaEditor: EditorAdapterFactory = ({
   ta.style.wordBreak = "break-word"
 
   const autosize = (): void => {
-    ta.style.height = "auto"
+    // Collapse to 0 before measuring — a bare <textarea> defaults to
+    // rows=2, so `height: auto` keeps a 2-row floor and `scrollHeight`
+    // over-reports by a blank line for short content (which then sits
+    // high in the vertically-centered wrap). Matches the lib's
+    // createDefaultTextareaEditor.
+    ta.style.height = "0px"
     ta.style.height = `${ta.scrollHeight}px`
   }
 
