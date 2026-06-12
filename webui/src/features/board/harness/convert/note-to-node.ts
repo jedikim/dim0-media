@@ -27,7 +27,7 @@ const DEG_TO_RAD = Math.PI / 180
  * enough for the whole body the user can't see, breaking height
  * resize. See migration plan §4.x.
  */
-const AUTOFIT_DISABLED_TYPES = new Set([
+export const AUTOFIT_DISABLED_TYPES = new Set([
   "folder",
   "sheet",
   "code-sandbox",

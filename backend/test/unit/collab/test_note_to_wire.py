@@ -218,6 +218,50 @@ def test_wire_node_lifts_group_ids_onto_node_groups() -> None:
     assert wire["groups"] == ["g1", "g2"]
 
 
+# ---------------------------------------------------------------------------
+# Height auto-fit must be disabled for preview-rendered custom types
+# ---------------------------------------------------------------------------
+
+# Custom canvas types whose lib grow-to-fit must be off on the wire — they
+# render only a preview of `node.content`, so auto-fit would snap the node
+# tall enough for the unseen full body, uncapped. Mirrors the frontend's
+# `AUTOFIT_DISABLED_TYPES` in convert/note-to-node.ts.
+AUTOFIT_DISABLED = [
+    NodeType.FOLDER,
+    NodeType.SHEET,
+    NodeType.CODE_SANDBOX,
+    NodeType.WIDGET,
+    NodeType.MINI_APP,
+]
+
+
+@pytest.mark.parametrize("dim0_type", AUTOFIT_DISABLED)
+def test_wire_disables_autofit_for_preview_types(dim0_type: NodeType) -> None:
+    """Sheet/code-sandbox/widget/mini-app/folder ship `style.autoFit = False`.
+
+    Without it, an agent-created sheet reaches peers with autoFit unset
+    (defaults on in the lib) and the node auto-grows to fit the entire
+    markdown body with no cap — the runaway-tall-sheet bug.
+    """
+    note = _note_with_style_type(dim0_type)
+    wire = note_to_wire_node(note)
+    assert wire["style"]["autoFit"] is False
+
+
+def test_wire_disables_autofit_for_documents() -> None:
+    """Documents (separate subclass) also ship `style.autoFit = False`."""
+    doc = Document(id="n1", graph_uid="b1", style=Style(type=NodeType.RECTANGLE))
+    wire = note_to_wire_node(doc)
+    assert wire["style"]["autoFit"] is False
+
+
+def test_wire_leaves_autofit_unset_for_plain_shapes() -> None:
+    """Built-in primitives keep the lib default (auto-fit on) — no `autoFit` key."""
+    note = _note_with_style_type(NodeType.RECTANGLE)
+    wire = note_to_wire_node(note)
+    assert "autoFit" not in wire["style"]
+
+
 def test_unknown_style_type_passes_through_unchanged() -> None:
     """A future Dim0 enum value not yet in the map renders as a custom type.
 

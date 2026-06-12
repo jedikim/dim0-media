@@ -551,8 +551,8 @@ export function StylePanel({
         className,
       )}
     >
-      <CardContent className="h-auto max-h-[60vh] p-0">
-        <div className="scrollbar-thin h-full overflow-y-auto p-1 [scrollbar-gutter:stable_both-edges]">
+      <CardContent className="p-0">
+        <div className="scrollbar-thin max-h-[60vh] overflow-y-auto p-1 [scrollbar-gutter:stable_both-edges]">
           <div className="space-y-0">
             {ORDER.map((key) => (
               <Popover key={key}>

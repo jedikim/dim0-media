@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { hitTestAny, type CanvasStore, type NodeId, type Renderer } from "@canvas-harness/core"
@@ -54,6 +54,7 @@ import { useBlockFolderCopy } from "./use-block-folder-copy"
 import { useStampNewEdges } from "./use-stamp-new-edges"
 import { useStampNewNodes } from "./use-stamp-new-nodes"
 import { useStyleMemory } from "./use-style-memory"
+import { CUSTOM_NODE_TYPES } from "./custom-node-types"
 import { useLocalPresence } from "./use-local-presence"
 import { useWsCollab } from "./use-ws-collab"
 import { useThumbnailCapture } from "./use-thumbnail-capture"
@@ -131,7 +132,8 @@ export function HarnessCanvas() {
   useBoardKeyboard(store)
   useViewportPersistence(store, boardId, rootId, ready)
   useCenterFromUrl(store, wrapRef, ready)
-  useStampNewEdges(store, boardId, rootId)
+  const styleMemory = useStyleMemory(store)
+  useStampNewEdges(store, boardId, rootId, styleMemory.getEdgeStoredColors)
   useStampNewNodes(store, boardId, rootId)
   useBlockFolderCopy(store)
   useHarnessApplyMindMap(store, boardId, rootId)
@@ -147,15 +149,18 @@ export function HarnessCanvas() {
   useWsCollab(store, boardId, ready, rootId)
   useLocalPresence(store, wrapRef, ready)
 
-  const styleMemory = useStyleMemory(store)
   const { handleCreateDrag, handleClick } = useCreateHandlers(store, boardId, rootId, styleMemory)
-  const arrowDefaults = useMemo<ArrowToolDefaults>(
-    () => ({
-      pathStyle: styleMemory.getEdgePathStyle(),
-      style: styleMemory.getEdgeStyle(),
-    }),
-    [styleMemory],
-  )
+  // Recompute every render — NOT memoized on `styleMemory`. The memory
+  // object is intentionally identity-stable for its whole lifetime, so a
+  // `useMemo([styleMemory])` would compute once at mount and freeze the
+  // edge defaults at their initial (usually empty) value, ignoring every
+  // later restyle. The lib reads `arrowDefaults` lazily at edge-draw time
+  // (defaultsRef) and keys no effect off it, so a fresh object per render
+  // is cheap and is what lets sticky edge styles actually take effect.
+  const arrowDefaults: ArrowToolDefaults = {
+    pathStyle: styleMemory.getEdgePathStyle(),
+    style: styleMemory.getEdgeStyle(),
+  }
   const { onDragOver, onDrop } = useHarnessDropFiles(wrapRef, store, boardId, rootId, canEdit)
   const navigate = useNavigate()
 
@@ -288,16 +293,6 @@ export function HarnessCanvas() {
     </CanvasProvider>
   )
 }
-
-
-/** canvas node.type values whose dbl-click should NOT trigger the lib's beginEdit. */
-const CUSTOM_NODE_TYPES = new Set([
-  "folder",
-  "document",
-  "sheet",
-  "code-sandbox",
-  "widget",
-])
 
 
 type InnerProps = {

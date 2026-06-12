@@ -10,6 +10,8 @@ import type { NoteNodeData } from "../convert/note-to-node"
 import {
   applyColorsToEdgeStyle,
   applyColorsToStyle,
+  pickStoredEdgeColors,
+  type StoredEdgeColors,
 } from "../theme/color-adapter"
 
 
@@ -23,8 +25,8 @@ import {
  * One shared bucket for non-custom nodes (rect, ellipse, diamond,
  * text, etc.) — picking a color on a rect carries to the next
  * ellipse. Custom node types (folder, sheet, code-sandbox, widget,
- * document) are intentionally excluded both as memory inputs AND
- * outputs: they have a fixed visual identity and shouldn't bleed
+ * document, mini-app) are intentionally excluded both as memory inputs
+ * AND outputs: they have a fixed visual identity and shouldn't bleed
  * styles in or out.
  *
  * Persisted to localStorage so preferences survive reloads. Version
@@ -41,6 +43,7 @@ const EXCLUDED_TYPES: ReadonlySet<string> = new Set([
   "code-sandbox",
   "widget",
   "document",
+  "mini-app",
 ])
 
 
@@ -94,6 +97,7 @@ export type StyleMemoryApi = {
   getNodeStyle: () => Style | undefined
   getEdgeStyle: () => EdgeStyle | undefined
   getEdgePathStyle: () => PathStyle | undefined
+  getEdgeStoredColors: () => StoredEdgeColors | undefined
 }
 
 
@@ -178,6 +182,21 @@ export const useStyleMemory = (store: CanvasStore): StyleMemoryApi => {
       },
       getEdgeStyle: () => memoryRef.current.edge.style,
       getEdgePathStyle: () => memoryRef.current.edge.pathStyle,
+      // Canonical (light-space) stroke/label colors the user last picked.
+      // `edge.style` already holds canonical colors — the capture path
+      // overlays `_storedColors` before folding into memory — so we can
+      // pluck them directly. Returns undefined when no color was ever
+      // picked (e.g. only width changed) so callers fall back to canonical
+      // defaults rather than stamping `undefined` colors.
+      getEdgeStoredColors: () => {
+        const style = memoryRef.current.edge.style
+        if (!style) return undefined
+        const colors = pickStoredEdgeColors(style)
+        if (colors.strokeColor === undefined && colors.textColor === undefined) {
+          return undefined
+        }
+        return colors
+      },
     }),
     [],
   )

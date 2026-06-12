@@ -32,9 +32,11 @@ const CANONICAL_EDGE_COLORS: StoredEdgeColors = {
  *
  *   - **init stamp** (`version === undefined`): a freshly-drawn arrow
  *     from canvas-harness's `useArrowTool` arrives with no `data`.
- *     Set version/createdAt, capture `_storedColors`, and (in dark
- *     mode) project to dark-adapted display style. Without this, the
- *     edge has no source-of-truth for theme adaptation later.
+ *     Set version/createdAt, capture `_storedColors` (from sticky style
+ *     memory via `rememberedEdgeColors`, falling back to canonical
+ *     defaults), and (in dark mode) project to dark-adapted display
+ *     style. Without this, the edge has no source-of-truth for theme
+ *     adaptation later, and would ignore the user's last-picked colors.
  *
  *   - **rescope stamp** (scope mismatch): a pasted edge carries
  *     `version` + `_storedColors` from the source but its
@@ -65,6 +67,7 @@ export const useStampNewEdges = (
   store: CanvasStore,
   boardId: string | null,
   rootId: string | null,
+  rememberedEdgeColors: () => StoredEdgeColors | undefined,
 ): void => {
   useEffect(() => {
     if (!boardId) return
@@ -79,12 +82,23 @@ export const useStampNewEdges = (
         const scopeMismatched =
           data.graphUid !== boardId || data.parentId !== wantedParentId
 
-        // Resolve final stored colors: existing on data, or canonical
-        // light defaults for fresh draws. NEVER read from `style.*` —
-        // arrow-tool dark defaults are display values that masquerade
-        // as canonical (see CANONICAL_EDGE_COLORS comment).
+        // Resolve final stored colors. Priority:
+        //   1. `_storedColors` already on the edge (e.g. a pasted edge
+        //      carrying its source colors) — always wins.
+        //   2. The last color the user picked, from sticky style memory
+        //      (canonical/light-space) — so a freshly-drawn edge inherits
+        //      it, matching how new nodes inherit via `applyStyleMemory`.
+        //      The arrow tool can't carry `_storedColors` through
+        //      `ArrowToolDefaults`, so memory is the trusted channel.
+        //   3. Canonical light defaults.
+        // NEVER read from `style.*` — arrow-tool dark defaults are display
+        // values that masquerade as canonical (see CANONICAL_EDGE_COLORS).
         const existingStored = data._storedColors as StoredEdgeColors | undefined
-        const storedColors: StoredEdgeColors = existingStored ?? CANONICAL_EDGE_COLORS
+        const remembered = rememberedEdgeColors()
+        const storedColors: StoredEdgeColors = existingStored ?? {
+          strokeColor: remembered?.strokeColor ?? CANONICAL_EDGE_COLORS.strokeColor,
+          textColor: remembered?.textColor ?? CANONICAL_EDGE_COLORS.textColor,
+        }
 
         const mode = getBoardThemeMode()
         const displayColors =
@@ -116,5 +130,5 @@ export const useStampNewEdges = (
         store.updateEdge(op.edge.id, patch)
       }
     })
-  }, [store, boardId, rootId])
+  }, [store, boardId, rootId, rememberedEdgeColors])
 }

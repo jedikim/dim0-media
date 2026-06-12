@@ -37,6 +37,7 @@ import {
   type StoredEdgeColors,
 } from "../theme/color-adapter"
 import { getBoardThemeMode } from "../theme/theme-mode-ref"
+import { normalizeBatchAutoFit } from "./normalize-autofit"
 
 
 /**
@@ -713,6 +714,7 @@ const createWebSocketSyncAdapter = ({
         for (const batch of msg.batches) {
           if (batch.clientId === clientId) continue
           normalizeBatchColorsForLocalTheme(batch)
+          normalizeBatchAutoFit(batch, store)
           patchMissingEdgeEndpoints(batch, store)
           for (const cb of batchListeners) cb(batch)
         }
@@ -745,6 +747,7 @@ const createWebSocketSyncAdapter = ({
       // store and paint as a dark color on a white canvas (and vice
       // versa). See [color-adapter.ts] for the projection rules.
       normalizeBatchColorsForLocalTheme(msg.batch)
+      normalizeBatchAutoFit(msg.batch, store)
       // Defense-in-depth: any attached EdgeEnd without a localOffset
       // would crash canvas-harness's `projectEndToWorld` on
       // `undefined.x`. Server-side `link_to_wire_edge` defaults to

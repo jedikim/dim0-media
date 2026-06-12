@@ -55,6 +55,18 @@ _DIM0_TO_CANVAS_TYPE: dict[str, str] = {
 _CANVAS_TO_DIM0_TYPE: dict[str, str] = {v: k for k, v in _DIM0_TO_CANVAS_TYPE.items()}
 
 
+# Canvas types whose lib height-autoFit must be off. These render only a
+# preview of `node.content` (full sheet markdown, code source, etc.), so
+# the lib's grow-to-fit would snap the node tall enough for the unseen
+# body, with no cap. Without setting this on the wire, an agent-created
+# sheet reaches peers with autoFit unset (→ on) and grows unbounded.
+# IMPORTANT: keep in sync with webui/.../convert/note-to-node.ts
+# (`AUTOFIT_DISABLED_TYPES`).
+_AUTOFIT_DISABLED_CANVAS_TYPES: frozenset[str] = frozenset({
+    "folder", "sheet", "code-sandbox", "widget", "mini-app", "document",
+})
+
+
 # Lifted / dropped Dim0 style keys — handled out-of-band before the
 # remaining fields auto-translate snake_case → camelCase for the wire.
 #   - `type`: discriminator; goes onto wire `data.styleType` instead.
@@ -113,6 +125,12 @@ def note_to_wire_node(note: Note) -> dict[str, Any]:
         style_dict.pop(key, None)
     wire_style = {_snake_to_camel(k): v for k, v in style_dict.items()}
 
+    # Disable the lib's grow-to-fit for preview-rendered custom types so
+    # agent-created sheets don't auto-grow unbounded on the receiver.
+    canvas_type = _canvas_type_for(note)
+    if canvas_type in _AUTOFIT_DISABLED_CANVAS_TYPES:
+        wire_style["autoFit"] = False
+
     data: dict[str, Any] = {
         "noteType": note.type,
         "styleType": style_type or note.style.type,
@@ -130,7 +148,7 @@ def note_to_wire_node(note: Note) -> dict[str, Any]:
 
     return {
         "id": note.id,
-        "type": _canvas_type_for(note),
+        "type": canvas_type,
         "x": float(pos.x),
         "y": float(pos.y),
         "w": float(size.width),
