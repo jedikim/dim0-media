@@ -283,6 +283,7 @@ GitHub Actions handle the version check, releases, and Docker publishing.
 - Port already in use? Change `API_PORT` or `APP_PORT`.
 - Env change not picked up? Restart backend and frontend after editing `.env`.
 - Want to see the resolved Compose config? `make config`.
+- Backend tests failing with odd import errors (e.g. `cannot import name 'Docstring' from 'griffe'`)? The local `backend/.venv` is stale or half-installed — a plain `uv sync` won't repair a partially-deleted package. Rebuild it: `rm -rf backend/.venv && uv sync --extra dev`.
 
 ## License
 
