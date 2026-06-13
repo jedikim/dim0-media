@@ -136,5 +136,8 @@
     "vite": "^7.0.6",
     "vite-plugin-pwa": "^1.2.0",
     "vitest": "^4.1.7"
+  },
+  "engines": {
+    "node": "^20 || ^22"
   }
 }
