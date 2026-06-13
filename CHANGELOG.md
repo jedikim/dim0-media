@@ -1,3 +1,9 @@
+## v0.3.39 (2026-06-13)
+
+### Fix
+
+- **mini-app**: externalize theme bootstrap so it survives the prod CSP (#114)
+
 ## v0.3.38 (2026-06-13)
 
 ### Fix
