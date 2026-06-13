@@ -3,9 +3,10 @@
 These run the real Node subprocess against
 ``backend/scripts/mini-app-compiler/compile.mjs`` — they're effectively
 integration tests for the Python↔Node bridge. The script's
-``node_modules`` must be installed (``npm install`` in that dir);
-both CI and the Dockerfile do this. Tests are skipped with a helpful
-message when ``node`` isn't on PATH.
+``node_modules`` must be installed (``npm ci`` in that dir, or
+``make setup-mini-app-compiler``); both CI and the Dockerfile do this.
+Tests skip with a helpful message when ``node`` isn't on PATH **or** the
+compiler's ``node_modules`` is absent.
 """
 
 from __future__ import annotations
@@ -14,15 +15,22 @@ import shutil
 
 import pytest
 
-from topix.mini_app.compile import compile_mini_app_source
+from topix.mini_app.compile import _COMPILER_SCRIPT, compile_mini_app_source
 
-# All tests in this module need a real Node binary + an installed
-# node_modules. Skip cleanly when either is missing so a contributor
-# without the local setup gets a green-by-skip rather than a confusing
-# failure.
+# All tests in this module need a real Node binary AND the compiler's
+# installed node_modules (sucrase). Skip cleanly when either is missing
+# so a contributor without the local setup gets a green-by-skip rather
+# than a confusing `subprocess_failure` from an ERR_MODULE_NOT_FOUND.
+# CI / the Dockerfile install the deps; locally run `make
+# setup-mini-app-compiler` (or `npm ci` in that dir).
+_NODE_MISSING = shutil.which("node") is None
+_DEPS_MISSING = not (_COMPILER_SCRIPT.parent / "node_modules").is_dir()
 pytestmark = pytest.mark.skipif(
-    shutil.which("node") is None,
-    reason="`node` not on PATH — mini-app compile bridge cannot run",
+    _NODE_MISSING or _DEPS_MISSING,
+    reason=(
+        "mini-app compile bridge unavailable — needs `node` on PATH and the "
+        "compiler's node_modules (run `make setup-mini-app-compiler`)"
+    ),
 )
 
 

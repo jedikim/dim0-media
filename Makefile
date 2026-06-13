@@ -153,8 +153,19 @@ test-ui: ## Webui vitest suite (one-shot)
 lint-backend: ## Backend ruff check (runs before backend tests in CI)
 	cd backend && uv run ruff check topix test/unit
 
+.PHONY: setup-mini-app-compiler
+setup-mini-app-compiler: ## Install mini-app compiler node deps (sucrase) for the compile-bridge tests
+	@if [ ! -d backend/scripts/mini-app-compiler/node_modules ]; then \
+		if command -v npm >/dev/null 2>&1; then \
+			echo "Installing mini-app compiler deps (sucrase)…"; \
+			cd backend/scripts/mini-app-compiler && npm ci --omit=dev; \
+		else \
+			echo "npm not found — skipping mini-app compiler deps; compile-bridge tests will skip"; \
+		fi; \
+	fi
+
 .PHONY: test-backend
-test-backend: ## Backend unit tests (integration deferred — they need DBs)
+test-backend: setup-mini-app-compiler ## Backend unit tests (integration deferred — they need DBs)
 	cd backend && uv run pytest test/unit
 
 .PHONY: test-ci
