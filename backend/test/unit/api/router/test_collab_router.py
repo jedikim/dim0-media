@@ -1,5 +1,9 @@
 """Router tests for the collab ticket mint endpoint and the WS relay."""
 
+import contextlib
+
+import pytest
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -7,6 +11,30 @@ from topix.api.router.collab import router
 from topix.api.utils.security import get_current_user_uid
 from topix.collab.room import RoomRegistry
 from topix.collab.tickets import mint_ticket
+
+# Every TestClient built in a test must run all its WebSocket sessions on
+# ONE event loop. Starlette's TestClient only shares a single portal
+# (loop + thread) across `websocket_connect` calls when it's entered as a
+# context manager; an un-entered client spins up a fresh portal per
+# connect. Two peers in the same room would then run on different loops
+# and share the room's `asyncio.Lock` across them — and a cross-loop lock
+# wakeup is lost (not thread-safe), intermittently hanging multi-peer
+# tests. This autouse stack enters every client so they share one loop,
+# and tears them down cleanly afterwards. (Production is single-loop, so
+# this only affects the test harness.)
+_active_stack: contextlib.ExitStack | None = None
+
+
+@pytest.fixture(autouse=True)
+def _shared_client_portal():
+    """Scope an ExitStack that `_build_app` enters each TestClient into."""
+    global _active_stack
+    with contextlib.ExitStack() as stack:
+        _active_stack = stack
+        try:
+            yield
+        finally:
+            _active_stack = None
 
 
 class _FakeRedis:
@@ -130,7 +158,11 @@ def _build_app(
         return user_uid
 
     app.dependency_overrides[get_current_user_uid] = _fake_current_user_uid
-    return TestClient(app), app
+    # Enter the client (context-manager mode) so all its WebSocket
+    # sessions share one portal/event loop — see `_shared_client_portal`.
+    assert _active_stack is not None, "_build_app called outside a test"
+    client = _active_stack.enter_context(TestClient(app))
+    return client, app
 
 
 # ---------------------------------------------------------------------------
