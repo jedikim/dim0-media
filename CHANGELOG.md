@@ -1,3 +1,9 @@
+## v0.3.38 (2026-06-13)
+
+### Fix
+
+- **mini-app**: allowlist mini-app.dim0.net in vite preview Host filter (#113)
+
 ## v0.3.37 (2026-06-13)
 
 ### Fix
