@@ -1,13 +1,8 @@
 <p align="center">
-  <img src="docs/images/dim0-icon.png" alt="Dim0" width="96" />
+  <img src="docs/images/long-affiche-with-icon.png" alt="Dim0 — Your canvas thinks back. Together. Notes, mini-apps, and agents on one infinite board." width="100%" />
 </p>
 
 <h1 align="center">Dim0 — Your canvas thinks back. Together.</h1>
-
-<p align="center">
-  <strong>The open-source, real-time collaborative AI canvas.</strong><br/>
-  Notes, mini-apps, and agents on one infinite board — solo or with your team.
-</p>
 
 <p align="center">
   <a href="https://github.com/vcmf/dim0/releases"><img src="https://img.shields.io/github/v/release/vcmf/dim0?style=for-the-badge&labelColor=171611&color=965e30" alt="Release" /></a>
@@ -19,10 +14,6 @@
 
 <p align="center">
   <a href="https://dim0.net">🌐 Website</a> · <a href="https://app.dim0.net">🚀 Live App</a> · 🤝 Real-time collab · 🔒 Privacy-first · 📄 MIT
-</p>
-
-<p align="center">
-  <img src="docs/images/affiche-long.png" alt="Dim0 — Your canvas thinks back. Together." width="100%" />
 </p>
 
 <p align="center">
