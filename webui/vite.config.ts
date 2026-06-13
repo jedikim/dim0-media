@@ -11,8 +11,17 @@ const packageJson = JSON.parse(
 ) as { version?: string }
 const appVersion = packageJson.version ?? "0.0.0"
 const shouldAnalyzeBundle = process.env.ANALYZE === "true"
+// Vite preview Host-header allowlist. Applies to BOTH the host bundle
+// (served at app.dim0.net) AND the mini-app iframe runtime (served at
+// mini-app.dim0.net) — docker-entrypoint.sh runs `vite preview` for
+// each bundle without passing `--config`, so both processes load this
+// single config file and share its `preview.allowedHosts`. Forgetting
+// `mini-app.dim0.net` here makes Caddy → vite reverse-proxy 403 the
+// iframe runtime ("Host not allowed"), while the host bundle keeps
+// working — easy to miss.
 const allowedHosts = [
   "app.dim0.net",
+  "mini-app.dim0.net",
 ]
 
 
