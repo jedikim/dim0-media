@@ -1,0 +1,35 @@
+name: 💡 Feature request
+description: Suggest an idea or improvement
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got an idea? We'd love to hear it. The more it's framed around a real
+        problem you hit, the easier it is for us to act on.
+
+        For open-ended ideas or "would it be cool if..." questions, a
+        [discussion](https://github.com/vcmf/dim0/discussions) is often a better
+        fit than an issue.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: What were you doing when you wished Dim0 did this?
+      placeholder: When I work with a big board, I can't...
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to see?
+      placeholder: A way to...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you've tried or considered?
+    validations:
+      required: false

@@ -1,0 +1,61 @@
+name: 🐞 Bug report
+description: Something broke or behaved unexpectedly
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this! We're a small team — clear
+        repro steps genuinely help us fix things faster.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, and what went wrong?
+      placeholder: I created a mini-app and it...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      placeholder: I expected the mini-app to render on the board.
+    validations:
+      required: false
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: A numbered list helps a lot.
+      placeholder: |
+        1. Open a board
+        2. Ask the agent to "build a calculator"
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Where are you running Dim0?
+      options:
+        - Hosted (app.dim0.net)
+        - Self-hosted (published Docker images)
+        - Self-hosted (from source)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Release tag or commit, if you know it (self-hosters).
+      placeholder: "0.3.41"
+    validations:
+      required: false
+  - type: textarea
+    id: context
+    attributes:
+      label: Logs, screenshots, or anything else
+      description: Browser console errors or backend logs are especially useful.
+    validations:
+      required: false
