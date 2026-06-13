@@ -2,14 +2,14 @@
   <img src="docs/images/long-affiche-with-icon.png" alt="Dim0 — Your canvas thinks back. Together. Notes, mini-apps, and agents on one infinite board." width="100%" />
 </p>
 
-<h1 align="center">Dim0 — Your canvas thinks back. Together.</h1>
+<h1 align="center">Dim0 — The Thinking Canvas</h1>
 
 <p align="center">
-  <a href="https://github.com/vcmf/dim0/releases"><img src="https://img.shields.io/github/v/release/vcmf/dim0?style=for-the-badge&labelColor=171611&color=965e30" alt="Release" /></a>
-  <a href="https://github.com/vcmf/dim0/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/vcmf/dim0/tests.yml?branch=main&style=for-the-badge&labelColor=171611&color=3439c9&label=tests" alt="Tests" /></a>
-  <a href="https://github.com/vcmf/dim0/pulse"><img src="https://img.shields.io/github/commit-activity/m/vcmf/dim0?style=for-the-badge&labelColor=171611&color=a6395c" alt="Commit activity" /></a>
-  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-336d3f?style=for-the-badge&labelColor=171611" alt="License: MIT" /></a>
-  <a href="https://app.dim0.net"><img src="https://img.shields.io/badge/▶_live_app-app.dim0.net-3439c9?style=for-the-badge&labelColor=171611" alt="Live App" /></a>
+  <a href="https://github.com/vcmf/dim0/releases"><img src="https://img.shields.io/github/v/release/vcmf/dim0?style=flat&labelColor=171611&color=965e30" alt="Release" /></a>
+  <a href="https://github.com/vcmf/dim0/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/vcmf/dim0/tests.yml?branch=main&style=flat&labelColor=171611&color=3439c9&label=tests" alt="Tests" /></a>
+  <a href="https://github.com/vcmf/dim0/pulse"><img src="https://img.shields.io/github/commit-activity/m/vcmf/dim0?style=flat&labelColor=171611&color=a6395c" alt="Commit activity" /></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-336d3f?style=flat&labelColor=171611" alt="License: MIT" /></a>
+  <a href="https://app.dim0.net"><img src="https://img.shields.io/badge/▶_live_app-app.dim0.net-3439c9?style=flat&labelColor=171611" alt="Live App" /></a>
 </p>
 
 <p align="center">
