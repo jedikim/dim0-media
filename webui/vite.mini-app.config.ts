@@ -61,6 +61,15 @@ export default defineConfig({
     port: Number(process.env.MINI_APP_PORT) || 5174,
     strictPort: true,
     cors: { origin: "*" },
+    // Accept any Host header. Vite preview defaults to rejecting
+    // unknown Host headers as a defense against DNS rebinding, but the
+    // mini-app runtime sits behind Caddy in prod (mini-app.dim0.net →
+    // 127.0.0.1:5004) — Caddy's reverse_proxy forwards the public
+    // Host header, and the iframe-sandbox + cross-origin + CSP +
+    // frame-ancestors stack is what actually fences off this runtime.
+    // Vite's Host filter adds no security on top of that; without
+    // disabling it, every prod request gets 403'd at this layer.
+    allowedHosts: true,
   },
   build: {
     outDir: path.resolve(__dirname, "dist-mini-app"),
