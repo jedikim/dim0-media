@@ -6,7 +6,7 @@ on:
       bump:
         description: Semantic version bump to apply
         required: true
-        default: minor
+        default: patch
         type: choice
         options:
           - patch
