@@ -1,3 +1,9 @@
+## v0.3.37 (2026-06-13)
+
+### Fix
+
+- **mini-app**: allowedHosts:true so vite preview doesn't 403 behind Caddy (#112)
+
 ## v0.3.36 (2026-06-13)
 
 ## v0.3.35 (2026-06-12)
