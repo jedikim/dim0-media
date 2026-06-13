@@ -45,6 +45,7 @@ dependencies = [
 dev = [
     "pytest>=8.4.1",
     "pytest-asyncio>=1.0.0",
+    "pytest-timeout>=2.3.1",
     "flake8>=7.3.0",
     "ruff>=0.12.2",
     "black>=25.1.0",
@@ -88,6 +89,17 @@ lines-between-types = 1
 [tool.setuptools.packages.find]
 exclude = ["build", "test"]
 
+[tool.pytest.ini_options]
+# Safety net: no single unit test should run this long. The collab
+# WebSocket tests drive real sessions through Starlette's TestClient
+# with blocking, un-timed `receive_*()` calls; a rare cross-peer
+# frame-ordering race would otherwise wedge a test — and the whole CI
+# job — indefinitely. Turning a hang into a per-test failure surfaces
+# the exact blocked receive instead. `thread` can interrupt a blocked
+# C-level queue.get (the default `signal` method can't, on a worker).
+timeout = 30
+timeout_method = "thread"
+
 [dependency-groups]
 dev = [
     "black>=25.1.0",
@@ -95,5 +107,6 @@ dev = [
     "flake8>=7.3.0",
     "pytest>=8.4.1",
     "pytest-asyncio>=1.0.0",
+    "pytest-timeout>=2.3.1",
     "ruff>=0.12.2",
 ]

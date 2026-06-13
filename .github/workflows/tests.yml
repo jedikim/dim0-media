@@ -38,6 +38,10 @@ jobs:
   backend:
     name: backend (ruff + unit tests)
     runs-on: ubuntu-latest
+    # Backstop so a wedged test (e.g. a collab WebSocket frame-ordering
+    # race) can't pin the runner until GitHub's ~6h default. The per-test
+    # pytest-timeout is the primary guard; this caps the whole job.
+    timeout-minutes: 15
 
     steps:
       - name: Check out repository
