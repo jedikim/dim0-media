@@ -1,43 +1,35 @@
 <!doctype html>
 <!--
-  Initial theme defaults live on <html> to match where the host writes
-  them (theme-provider.tsx). The inline script below upgrades these
+  Initial theme defaults on <html> match where the host writes them
+  (theme-provider.tsx). `/theme-bootstrap.js` in <head> upgrades these
   from URL query params (`?theme=parchment&mode=dark`) BEFORE any CSS
-  paint, so the iframe boots in the host's active palette without a
-  parchment-light flash. main.tsx then keeps them in sync via the
-  `mini-app:theme` postMessage protocol on live changes.
+  paints, so the iframe boots in the host's active palette without a
+  flash. main.tsx then keeps them in sync via the `mini-app:theme`
+  postMessage protocol on live changes.
+
+  The bootstrap script is external (not inline) so the production CSP
+  `script-src 'self' 'unsafe-eval'` allows it — an inline <script>
+  would be blocked silently and the flash-prevention would regress.
 -->
 <html lang="en" data-theme="parchment" data-mode="light">
-  <script>
-    (function () {
-      try {
-        var p = new URLSearchParams(location.search)
-        var t = p.get("theme")
-        var m = p.get("mode")
-        if (t) document.documentElement.dataset.theme = t
-        if (m === "light" || m === "dark") document.documentElement.dataset.mode = m
-      } catch (_) {
-        // No URL or bad params → fall back to the hardcoded defaults
-        // above. Not worth bailing out of the iframe over.
-      }
-    })()
-  </script>
   <head>
     <meta charset="utf-8" />
     <!--
-      Content Security Policy is intentionally NOT set as a meta-tag.
-      Why: the iframe loads with sandbox="allow-scripts" (no
-      allow-same-origin), giving it an opaque "null" origin. Browsers
-      then refuse to match `'self'` in script-src/style-src against
-      same-host scripts — so a meta-tag CSP with `'self'` blocks
-      everything including main.tsx. The iframe's sandbox attribute is
-      already the load-bearing security boundary; Phase 4 hardening
-      will move CSP to HTTP response headers from the asset host
-      where 'self' isn't ambiguous (production serves from a real
-      origin, not via meta-tag inside a sandboxed document).
+      Content Security Policy is NOT set as a meta-tag — it ships via
+      HTTP response headers from Caddy in production (see
+      mini-app-deploy.md §2). Meta-tag CSPs don't support all
+      directives we need (notably `frame-ancestors`), and the iframe
+      sandbox + cross-origin deploy is what actually fences off the
+      runtime; CSP is the network-layer defense on top of that.
     -->
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Mini-app runtime</title>
+    <!--
+      Theme bootstrap MUST come before runtime.css so the <html> data
+      attributes are settled before any [data-theme=...] selectors
+      evaluate. Synchronous external script — no async/defer.
+    -->
+    <script src="/theme-bootstrap.js"></script>
     <link rel="stylesheet" href="/runtime.css" />
     <!--
       Runtime config injection — docker-entrypoint.sh generates
