@@ -1,7 +1,7 @@
 {
   "name": "webui",
   "private": true,
-  "version": "0.3.39",
+  "version": "0.3.40",
   "type": "module",
   "scripts": {
     "dev": "dotenv -e ../${npm_config_envfile:-.env} -- vite",
