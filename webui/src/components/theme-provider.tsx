@@ -10,7 +10,7 @@ import {
 } from "@/components/theme-constants"
 
 
-const DEFAULT_THEME_ID: ThemeId = "matcha"
+const DEFAULT_THEME_ID: ThemeId = "noir"
 
 const DEFAULT_MODE: Mode = "system"
 
