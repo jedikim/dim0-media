@@ -1,3 +1,9 @@
+## v0.3.43 (2026-06-14)
+
+### Feat
+
+- **mini-app**: Graph auto-layout, color/overflow fixes, and a Map primitive (#126)
+
 ## v0.3.42 (2026-06-14)
 
 ### Feat
