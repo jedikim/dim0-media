@@ -16,6 +16,19 @@ const isTypingTarget = (target: EventTarget | null): boolean => {
 }
 
 
+/**
+ * Whether the event originated from a focused button-like control.
+ * Space "clicks" a focused button by default, which collides with
+ * hold-Space-to-pan: after clicking e.g. the sidebar trigger, every
+ * Space press meant for panning would re-fire that button. We suppress
+ * Space's default activation only for these targets.
+ */
+const isButtonTarget = (target: EventTarget | null): boolean => {
+  if (!(target instanceof HTMLElement)) return false
+  return target.closest("button, [role='button']") !== null
+}
+
+
 /** Single-key shortcuts that map straight to a tool-mode swap. */
 const TOOL_SHORTCUTS: Record<string, string> = {
   p: "pan",
@@ -56,6 +69,16 @@ export const useBoardKeyboard = (store: CanvasStore): void => {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (isTypingTarget(e.target)) return
+
+      // Reserve Space for hold-to-pan: stop a focused button from
+      // re-firing its click on each Space press (e.g. the sidebar
+      // trigger after it's been clicked). The lib's pan handler reads
+      // its own keydown listener, so this doesn't affect panning.
+      if (e.code === "Space" && isButtonTarget(e.target)) {
+        e.preventDefault()
+        return
+      }
+
       const meta = e.metaKey || e.ctrlKey
 
       if (meta && (e.key === "z" || e.key === "Z")) {
