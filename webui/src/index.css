@@ -1162,6 +1162,13 @@
     opacity: 0.10;
     filter: invert(1);
   }
+  /* Auth screens use the same grain, dialed up a touch. */
+  .auth-paper-grain {
+    opacity: 0.3;
+  }
+  [data-mode="dark"] .auth-paper-grain {
+    opacity: 0.14;
+  }
 
   /* ── paper note texture ─────────────────────────────────── */
   .paper-note-texture {

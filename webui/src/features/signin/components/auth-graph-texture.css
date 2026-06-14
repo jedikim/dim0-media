@@ -1,0 +1,56 @@
+/*
+ * Decorative graph texture for the auth screens. Purely ambient — a
+ * sparse scatter of notes / idea-bubbles / chips / dots with wobbly
+ * connectors and a gentle drift, layered over the dot grid. Mirrors the
+ * dim0 landing-page / board aesthetic. Non-interactive; never competes
+ * with the sign-in card.
+ */
+
+.auth-graph {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  animation: auth-graph-fade-in 800ms ease both;
+}
+
+.auth-graph-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  will-change: transform;
+  user-select: none;
+}
+
+.auth-graph-float {
+  animation-name: auth-graph-float;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+@keyframes auth-graph-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes auth-graph-float {
+  from {
+    transform: translate(-50%, -50%) translateY(-5px);
+  }
+  to {
+    transform: translate(-50%, -50%) translateY(5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-graph {
+    animation: none;
+  }
+  .auth-graph-float {
+    animation: none;
+  }
+}

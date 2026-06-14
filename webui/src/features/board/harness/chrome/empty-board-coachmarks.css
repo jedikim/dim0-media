@@ -1,0 +1,61 @@
+/*
+ * Empty-board coachmark overlay. A purely decorative onboarding layer
+ * shown only while the canvas has no nodes/edges. Mirrors the dim0
+ * landing-page graph aesthetic (sticky notes, dashed idea bubbles,
+ * mono chips, dots) with a gentle drift and curved connectors that
+ * point at the real board chrome.
+ */
+
+.coachmark-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  pointer-events: none;
+  overflow: hidden;
+  /* Fade the whole layer in once mounted; it unmounts the instant the
+     board stops being empty (first node/edge created). */
+  animation: coachmark-fade-in 600ms ease both;
+}
+
+.coachmark-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  will-change: transform;
+  user-select: none;
+}
+
+/* Each node drifts on its own slow loop; per-node delay/duration are
+   set inline so the field never pulses in unison. */
+.coachmark-float {
+  animation-name: coachmark-float;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+@keyframes coachmark-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes coachmark-float {
+  from {
+    transform: translate(-50%, -50%) translateY(-5px);
+  }
+  to {
+    transform: translate(-50%, -50%) translateY(5px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coachmark-layer {
+    animation: none;
+  }
+  .coachmark-float {
+    animation: none;
+  }
+}

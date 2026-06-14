@@ -1,5 +1,6 @@
 export { CanvasContextMenu } from "./canvas-context-menu"
 export { HarnessCollabStatus } from "./collab-status"
+export { EmptyBoardCoachmarks } from "./empty-board-coachmarks"
 export { HarnessPeerChip } from "./peer-chip"
 export { HarnessReadonlyChip } from "./readonly-chip"
 export { NodeSurfaceHost } from "./node-surface-host"

@@ -126,6 +126,7 @@ export function HarnessToolbar() {
       )}
       role="toolbar"
       aria-label="Board toolbar"
+      data-coachmark="toolbar"
     >
       <DropdownMenu>
         <Tooltip>

@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/sheet"
 import {
   CanvasContextMenu,
+  EmptyBoardCoachmarks,
   HarnessCollabStatus,
   HarnessPeerChip,
   HarnessReadonlyChip,
@@ -278,6 +279,7 @@ export function HarnessCanvas() {
           <HarnessCanvasInner
             theme={theme}
             tool={tool}
+            ready={ready}
             viewMode={viewMode}
             arrowDefaults={arrowDefaults}
             onCreateDrag={handleCreateDrag}
@@ -298,6 +300,7 @@ export function HarnessCanvas() {
 type InnerProps = {
   theme: ReturnType<typeof useBoardTheme>
   tool: string
+  ready: boolean
   viewMode: "board" | "files" | "list"
   arrowDefaults: ArrowToolDefaults
   onCreateDrag: ReturnType<typeof useCreateHandlers>["handleCreateDrag"]
@@ -310,6 +313,7 @@ type InnerProps = {
 function HarnessCanvasInner({
   theme,
   tool,
+  ready,
   viewMode,
   arrowDefaults,
   onCreateDrag,
@@ -341,6 +345,13 @@ function HarnessCanvasInner({
             onDoubleClick={onDoubleClick}
             onRenderer={onRenderer}
           />
+          {/*
+            Paper grain over the canvas surface: sits above the drawn
+            scene (z-index 1) but below all chrome (z-50+), pointer-events
+            none so it never intercepts interaction. Hidden while
+            presenting for clean slides.
+          */}
+          {!presenting && <div className="board-paper-grain" aria-hidden="true" />}
           {!presenting && (
             <Minimap
               width={200}
@@ -362,6 +373,7 @@ function HarnessCanvasInner({
           {!presenting && <HarnessViewportControls />}
           <StyleSidebar />
           <RemoteCursors />
+          <EmptyBoardCoachmarks ready={ready} />
         </>
       ) : viewMode === "files" ? (
         <LinearView />

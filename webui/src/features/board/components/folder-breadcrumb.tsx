@@ -58,6 +58,7 @@ export function FolderBreadcrumb({
             variant="ghost"
             size="sm"
             className="h-auto max-w-[200px] truncate px-0 text-sm font-normal hover:underline"
+            data-coachmark="title"
             title={boardLabel}
             onClick={() =>
               navigate({

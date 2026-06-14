@@ -32,6 +32,7 @@ export function ShareButton() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Share this board"
+        data-coachmark="share"
         className={
           "flex items-center gap-1.5 rounded-md px-1.5 py-1 " +
           "text-xs font-medium text-card-foreground " +

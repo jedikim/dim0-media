@@ -14,6 +14,7 @@ import { useBoardAppStore } from '@/features/board/harness/store/board-app-store
 import { useAuth } from '@/features/signin/hooks/auth'
 import { initConnectionState } from '@/features/connection/connection-state'
 import { OfflineOverlay } from '@/features/connection/offline-overlay'
+import { AuthGraphTexture } from '@/features/signin/components/auth-graph-texture'
 
 export function RootLayout() {
   // only hydrates store from token; does not navigate
@@ -134,17 +135,13 @@ export function RootLayout() {
 
 /**
  * Full-screen auth background:
- * - soft "secondary" blobs
  * - subtle dot grid overlay (matches the dim0.net landing-page graph paper)
+ * - decorative graph texture layered on top
+ * - fractal-noise paper grain (shared with the board) for a tactile finish
  */
 export function AuthBackground() {
   return (
     <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-      {/* soft secondary blobs */}
-      <div className="absolute -top-24 left-1/2 -translate-x-1/2 h-[40vh] w-[70vw] rounded-full bg-secondary-foreground/20 blur-3xl" />
-      <div className="absolute -bottom-24 -left-24 h-[45vh] w-[55vw] rounded-full bg-secondary-foreground/15 blur-3xl" />
-      <div className="absolute -bottom-40 -right-40 h-[35vh] w-[45vw] rounded-full bg-secondary-foreground/10 blur-3xl" />
-
       {/* dot grid overlay */}
       <div
         className="absolute inset-0 opacity-50"
@@ -154,6 +151,12 @@ export function AuthBackground() {
           backgroundSize: "22px 22px",
         }}
       />
+
+      {/* decorative graph layered on top of the dot grid */}
+      <AuthGraphTexture />
+
+      {/* fractal-noise paper grain (same substrate the board uses) */}
+      <div className="board-paper-grain auth-paper-grain" />
     </div>
   )
 }

@@ -58,7 +58,7 @@ export const FloatingIsland = ({ boardId, onOpenFullSheet }: FloatingIslandProps
   }
 
   return (
-    <div className='absolute bottom-1 left-1/2 -translate-x-1/2 z-[60] w-[min(580px,calc(100vw-4rem))] pointer-events-auto hidden md:flex flex-col gap-1.5'>
+    <div data-coachmark='ai-island' className='absolute bottom-1 left-1/2 -translate-x-1/2 z-[60] w-[min(580px,calc(100vw-4rem))] pointer-events-auto hidden md:flex flex-col gap-1.5'>
       <div className={cn(
         "bg-sidebar/80 backdrop-blur-md backdrop-saturate-150",
         "border rounded-2xl flex flex-col",
