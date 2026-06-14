@@ -31,6 +31,12 @@
  */
 @source "../src";
 @source inline("{,hover:,focus:,dark:}{bg,text,border,ring}-{background,foreground,card,card-foreground,popover,popover-foreground,primary,primary-foreground,secondary,secondary-foreground,muted,muted-foreground,accent,accent-foreground,destructive,destructive-foreground,border,input,ring}");
+/* Chart palette as utilities — the agent's JSX is a runtime string the
+   static scan can't see, so chart-N classes (node groups, tags, badges)
+   must be force-emitted here or they silently no-op inside the iframe.
+   The Chart/Graph `color=` props don't need this (they emit var(--chart-N)
+   inline); this is only for raw className usage. */
+@source inline("{,hover:,focus:,dark:}{bg,text,border}-chart-{1,2,3,4,5}");
 @source inline("font-{handwriting,mono,sans,serif,informal}");
 
 

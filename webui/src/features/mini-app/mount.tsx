@@ -151,12 +151,6 @@ export function MiniAppMount({
   // re-render.
   const onContentHeightChangeRef = useRef(onContentHeightChange)
   onContentHeightChangeRef.current = onContentHeightChange
-  // contentHeight is the widget's reported natural height (from
-  // mini-app:resize). When >0, we use it directly; until then the
-  // iframe fills its parent so the user sees the widget at the
-  // canvas card's full size. Once auto-resize kicks in (Phase 4
-  // grows the canvas node too), this becomes the source of truth.
-  const [contentHeight, setContentHeight] = useState<number | null>(null)
 
   // Trip iframeFailed if `mini-app:ready` doesn't arrive within the
   // handshake budget. Reset on `reloadKey` so the retry path gets a
@@ -172,7 +166,6 @@ export function MiniAppMount({
   const retryLoad = useCallback(() => {
     setIframeReady(false)
     setIframeFailed(false)
-    setContentHeight(null)
     setReloadKey((k) => k + 1)
   }, [])
 
@@ -237,7 +230,6 @@ export function MiniAppMount({
         setIframeReady(true)
       },
       onResize: (h) => {
-        setContentHeight(h)
         onContentHeightChangeRef.current?.(h)
       },
     })
@@ -336,10 +328,12 @@ export function MiniAppMount({
       onError={() => setIframeFailed(true)}
       style={{
         width: "100%",
-        // contentHeight wins when the runtime has reported its size;
-        // otherwise fill the parent so the widget is visible at the
-        // canvas card's natural size.
-        height: contentHeight ?? "100%",
+        // Fill the parent slot. The slot height is owned by the host: the
+        // canvas card grows to fit the widget (capped at MAX_AUTO_GROW_PX
+        // in the board view). When content exceeds that cap, the iframe's
+        // own document scrolls — styled by the runtime's scrollbar-thin on
+        // <html> — instead of being clipped.
+        height: "100%",
         border: 0,
         display: "block",
       }}

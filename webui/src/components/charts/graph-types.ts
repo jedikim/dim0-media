@@ -17,14 +17,30 @@ export interface GraphProps {
   edges: GraphEdge[]
   viewBox?: string                  // explicit viewBox; otherwise auto-computed
   height?: number | string          // CSS height; default "auto" for aspect-preserved
-  layout?: "manual"                 // v0 only; "dagre"/"force" come later
+  // How node positions are determined:
+  //   "manual" — use the x/y the agent supplied on each node (algorithm
+  //              visualizers, grids — anything needing exact placement).
+  //   "force"  — auto-arrange via a force-directed simulation (general
+  //              networks, dependency graphs).
+  //   "tree"   — auto-arrange as a top-down hierarchy (taxonomies, org
+  //              charts, decision trees); edges read as parent → child.
+  // Default: "manual" when every node has x/y, otherwise "force".
+  layout?: "manual" | "force" | "tree"
+  // Draw arrowheads on edges (a → b). Defaults to false (undirected lines).
+  directed?: boolean
+  // Tree layout only: id of the root node. When omitted, the root is
+  // inferred as the node with no incoming edge.
+  root?: string
 }
 
 
 export interface GraphNode {
   id: string
-  x: number
-  y: number
+  // Position in viewBox units. Optional: required only for "manual"
+  // layout; "force"/"tree" compute these. When some nodes have x/y and
+  // others don't under manual layout, missing coords default to 0.
+  x?: number
+  y?: number
   label?: string                    // text inside the circle (defaults to id)
   sublabel?: string                 // small text below the circle (e.g. distance, count)
   color?: string                    // background fill — default token: `card`
@@ -49,6 +65,7 @@ export interface LaidOutGraph {
   nodes: PositionedNode[]
   edges: PositionedEdge[]
   viewBox: string
+  directed: boolean                 // render arrowheads (a → b) when true
 }
 
 

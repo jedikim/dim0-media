@@ -11,7 +11,14 @@
   `script-src 'self' 'unsafe-eval'` allows it — an inline <script>
   would be blocked silently and the flash-prevention would regress.
 -->
-<html lang="en" data-theme="parchment" data-mode="light">
+<!--
+  `scrollbar-thin` (defined in src/index.css, shipped via runtime.css) styles
+  the document scrollbar. It only shows when a widget's content exceeds the
+  host's height cap (MAX_AUTO_GROW_PX) — at which point the iframe document
+  scrolls instead of clipping. #root owns the layout; the agent never touches
+  this element, so the thin scrollbar can't be overridden by widget code.
+-->
+<html lang="en" data-theme="parchment" data-mode="light" class="scrollbar-thin">
   <head>
     <meta charset="utf-8" />
     <!--

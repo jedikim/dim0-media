@@ -7,7 +7,7 @@ Your goal is to produce one component and store it via `write_note(content_type=
 
 ## What you're authoring
 
-A sandboxed React component that renders inside the canvas. Use it for anything custom-rendered — charts, dashboards, diagrams, flashcards, comparison tables, counters, todo lists, steppers, quizzes, calculators, algorithm visualizers. Whenever the user asks for something visual or interactive that isn't a sheet, code-sandbox, or document, this is the format.
+A sandboxed React component that renders inside the canvas. Use it for anything custom-rendered — charts, dashboards, diagrams, visual explainers (an annotated diagram or labeled illustration that walks through how something works), flashcards, comparison tables, counters, todo lists, steppers, quizzes, calculators, algorithm visualizers. Whenever the user asks for something visual or interactive that isn't a sheet, code-sandbox, or document, this is the format.
 
 Mini-apps live inside a sandboxed iframe on a different origin. Two consequences:
 - The agent cannot make the widget talk to the host's auth, cookies, storage, parent DOM, or your collab WS. It is genuinely isolated.
@@ -49,7 +49,7 @@ Every identifier listed below is available as a bare name. Anything not listed i
 - `<Card className?>{children}</Card>`, `<CardHeader>`, `<CardTitle>`, `<CardContent>`, `<CardFooter>`
 - `<Button variant? size? onClick?>{children}</Button>` — variants: `default | destructive | outline | secondary | ghost | link`
 
-### Charts + graphs
+### Charts, graphs + maps
 - `<Chart kind data? datasets? labels? yAxis? xAxis? legend? tooltip? height? />` — cartesian or pie chart.
   - `kind`: `"bar" | "line" | "area" | "scatter" | "pie" | "composed"`
   - **Shorthand (one series):** `data={[42, 58, 71]}` + `kind="line"`.
@@ -58,11 +58,20 @@ Every identifier listed below is available as a bare name. Anything not listed i
   - Colors take palette names (`"primary"`, `"destructive"`, `"chart-1"`…`"chart-5"`, `"card"`, `"muted"`, etc.) and re-theme automatically. Raw hex / `rgb()` is allowed but does **not** theme — see the Colors section below before reaching for it.
   - For `kind="pie"`: pass `data` as `[{ name: "A", value: 30 }, ...]`.
 
-- `<Graph nodes edges viewBox? height? />` — node-link diagram (pure SVG).
-  - `nodes`: `[{ id, x, y, label?, sublabel?, color?, border?, textColor? }]`. **Supply `x` and `y` yourself** — no built-in layout engine.
-  - `edges`: `[{ a, b, label?, color? }]` where `a`/`b` are node ids.
-  - `viewBox` auto-computed from node positions when omitted.
-  - Algorithm visualizers, dependency graphs, state machines — anywhere you need nodes connected by lines.
+- `<Graph nodes edges layout? directed? root? viewBox? height? />` — node-link diagram.
+  - `nodes`: `[{ id, label?, sublabel?, color?, border?, textColor?, x?, y? }]`.
+  - `edges`: `[{ a, b, label?, color? }]` where `a`/`b` are node ids (read as `a → b`).
+  - **`layout` picks how nodes are placed — you usually don't compute coordinates:**
+    - `"force"` — auto-arranges a network. **This is the default when you omit `x`/`y`.** Reach for it for dependency graphs, relationships, state machines.
+    - `"tree"` — top-down hierarchy; edges read parent → child. Set `root` to the top node, or it's inferred (the node with no incoming edge). Use for taxonomies, org charts, decision trees, file trees.
+    - `"manual"` — you supply `x` and `y` on every node. Only for layouts that need exact placement: grids, geographic-ish maps, or algorithm visualizers that highlight fixed positions step by step.
+  - `directed={true}` draws arrowheads along `a → b`.
+  - `viewBox` auto-computed from node positions when omitted (you rarely set it).
+
+- `<Map data? markers? color? height? />` — world choropleth + point overlay.
+  - `data`: `[{ id, value?, color? }]`. `id` is a country's **common English name** (`"France"`, `"United States"`) or its ISO numeric code. `value` shades `color` (default `"chart-1"`) by magnitude across the dataset; `color` sets a region's fill outright. Regions with no entry render neutral; unknown ids are dropped.
+  - `markers`: `[{ lat, lng, label?, color?, r? }]` — plot points/bubbles by latitude/longitude (cities, events; vary `r` for a bubble map).
+  - The boundary geometry is built in — supply only data, never coordinates. Use for geographic distributions, country comparisons, location maps.
 
 ### Helpers
 - `cn(...classes: (string | undefined | false)[]): string` — merge Tailwind classes, later classes win.
@@ -205,7 +214,57 @@ function Widget() {
 }
 ```
 
-### Graph with state-driven highlighting (BFS step-through)
+### Network graph (force layout — no coordinates needed)
+```jsx
+function Widget() {
+  // Just declare what connects to what. `layout="force"` arranges it; this
+  // is also the default when you omit x/y, so you could drop the prop.
+  const nodes = [
+    { id: "api", label: "API" },
+    { id: "web", label: "Web" },
+    { id: "db", label: "DB", color: "chart-1" },
+    { id: "cache", label: "Cache" },
+    { id: "queue", label: "Queue" },
+  ]
+  const edges = [
+    { a: "web", b: "api" }, { a: "api", b: "db" },
+    { a: "api", b: "cache" }, { a: "api", b: "queue" }, { a: "queue", b: "db" },
+  ]
+  return (
+    <Card className="p-4 max-w-md">
+      <CardHeader><CardTitle className="font-handwriting text-xl">Service graph</CardTitle></CardHeader>
+      <CardContent>
+        <Graph nodes={nodes} edges={edges} layout="force" directed height={240} />
+      </CardContent>
+    </Card>
+  )
+}
+```
+
+### Taxonomy (tree layout — edges read parent → child)
+```jsx
+function Widget() {
+  const nodes = [
+    { id: "animal", label: "Animal" },
+    { id: "mammal", label: "Mammal" }, { id: "bird", label: "Bird" },
+    { id: "dog", label: "Dog" }, { id: "cat", label: "Cat" }, { id: "owl", label: "Owl" },
+  ]
+  const edges = [
+    { a: "animal", b: "mammal" }, { a: "animal", b: "bird" },
+    { a: "mammal", b: "dog" }, { a: "mammal", b: "cat" }, { a: "bird", b: "owl" },
+  ]
+  return (
+    <Card className="p-4 max-w-md">
+      <CardHeader><CardTitle className="font-handwriting text-xl">Taxonomy</CardTitle></CardHeader>
+      <CardContent>
+        <Graph nodes={nodes} edges={edges} layout="tree" root="animal" directed height={220} />
+      </CardContent>
+    </Card>
+  )
+}
+```
+
+### Algorithm visualizer (manual layout — you place each node)
 ```jsx
 function Widget() {
   const [step, setStep] = useState(host.initialState ?? 0)
@@ -218,6 +277,8 @@ function Widget() {
   const fillFor = (id) =>
     visited.includes(id) ? "chart-1" : "card"
 
+  // Step-throughs need fixed positions so nodes don't move between steps —
+  // this is the case for layout="manual" (supply x/y on every node).
   const nodes = [
     { id: "A", x: 30,  y: 60, color: fillFor("A") },
     { id: "B", x: 110, y: 30, color: fillFor("B") },
@@ -232,12 +293,39 @@ function Widget() {
     <Card className="p-4 max-w-md">
       <CardHeader><CardTitle className="font-handwriting text-xl">BFS step {step}</CardTitle></CardHeader>
       <CardContent>
-        <Graph nodes={nodes} edges={edges} viewBox="0 0 240 130" height={180} />
+        <Graph nodes={nodes} edges={edges} layout="manual" viewBox="0 0 240 130" height={180} />
         <div className="flex gap-2 mt-3">
           <Button variant="outline" disabled={step === 0} onClick={() => setStep(step - 1)}>back</Button>
           <Button disabled={step === 3} onClick={() => setStep(step + 1)}>next</Button>
           <Button variant="ghost" onClick={() => setStep(0)}>reset</Button>
         </div>
+      </CardContent>
+    </Card>
+  )
+}
+```
+
+### World map (choropleth by value + a marker)
+```jsx
+function Widget() {
+  // id is the country's English name; value shades chart-1 by magnitude.
+  const data = [
+    { id: "United States", value: 331 },
+    { id: "Brazil", value: 214 },
+    { id: "Nigeria", value: 223 },
+    { id: "India", value: 1428 },
+    { id: "France", value: 68 },
+  ]
+  return (
+    <Card className="p-4 max-w-2xl">
+      <CardHeader><CardTitle className="font-handwriting text-xl">Population (millions)</CardTitle></CardHeader>
+      <CardContent>
+        <Map
+          data={data}
+          color="chart-1"
+          markers={[{ lat: 48.85, lng: 2.35, label: "Paris" }]}
+          height={360}
+        />
       </CardContent>
     </Card>
   )
@@ -280,22 +368,36 @@ Don't apply `font-handwriting` to long blocks — it's playful but tiring to rea
 
 The host runs six themes × {light, dark}, and the iframe inherits whichever is active. The agent's job is to stay inside the semantic palette so the widget themes for free.
 
-**Always-safe — use semantic Tailwind tokens.**
+**Two rules that matter most:**
+
+1. **Every colored background needs its matching foreground.** A `bg-*` token always has a paired `*-foreground` made to be legible on it — use them together, never one without the other:
+   - `bg-primary text-primary-foreground`
+   - `bg-secondary text-secondary-foreground`
+   - `bg-destructive text-destructive-foreground`
+   - `bg-muted text-muted-foreground` / `bg-accent text-accent-foreground`
+   Putting default body text on a colored background is the #1 cause of unreadable widgets.
+
+2. **`primary` is a high-contrast extreme — use it sparingly.** In several themes it's a near-black (light mode) or bright (dark mode) "ink" color, made for the *one* main action. Don't tile surfaces or color many elements with it, and never use `bg-primary` without `text-primary-foreground`. **Reach for `secondary` (with `text-secondary-foreground`) as your default themed surface** — chips, secondary buttons, highlighted rows — it carries the theme's character without screaming. `muted` / `accent` are the calm neutral surfaces.
+
+**For variety and categorical color, use the `chart-1`…`chart-5` ramp.** These five slots are tuned per theme × mode to be vivid *and* harmonious — they're the right palette for graph node groups, chart series, tags, status pills, and anything where you want several distinct colors that still look themed. Available both as `color="chart-1"` props (Chart/Graph) and as `bg-chart-1` / `text-chart-1` / `border-chart-1` classes.
+
+**Semantic token cheat-sheet.**
 
 | Want | Class |
 |---|---|
 | Card background | `bg-card` |
 | Page background | `bg-background` |
-| Primary action | `bg-primary text-primary-foreground` |
-| Secondary action | `bg-secondary text-secondary-foreground` |
-| Muted surface | `bg-muted` |
+| Default themed surface | `bg-secondary text-secondary-foreground` |
+| Main action (use once) | `bg-primary text-primary-foreground` |
+| Muted / neutral surface | `bg-muted` / `bg-accent` |
 | Body text | `text-foreground` (default) |
 | Subdued text | `text-muted-foreground` |
 | Destructive action | `bg-destructive text-destructive-foreground` |
+| Categorical color | `bg-chart-1`…`bg-chart-5` (and `text-`/`border-`) |
 | Border | `border` |
 | Focus ring | `ring-ring` |
 
-For charts and graphs, pass `color="primary"` / `"destructive"` / `"chart-1"`…`"chart-5"` rather than literal hex. The five `chart-N` slots are picked per theme to look good together.
+For charts and graphs, pass `color="chart-1"`…`"chart-5"` (or `"primary"` / `"destructive"`) rather than literal hex. A `<Graph>` with `layout="force"` or `"tree"` auto-colors its nodes from the chart ramp, so you usually don't set node colors at all.
 
 **Last-resort — use a theme-stable color literal.**
 

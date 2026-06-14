@@ -1,11 +1,17 @@
 // Pure function: translate the agent-written `GraphProps` into the
 // renderer-ready `LaidOutGraph`. Resolves color tokens, applies defaults,
-// computes the viewBox from node extent when not provided, and joins edges
-// to their endpoints by node id.
+// computes node positions (manual / force / tree), derives the viewBox from
+// node extent when not provided, and joins edges to their endpoints by id.
+//
+// Layout is internal: the agent never computes coordinates beyond the
+// optional manual case. Given the same props this returns the same result
+// (the force/tree engines are deterministic), so the caller's useMemo holds.
 //
 // Locked-down contract — test suite is the source of truth.
 
-import { resolveColor } from "./color-token"
+import { defaultPaletteColor, resolveColor } from "./color-token"
+import { forceLayout } from "./graph-layout-force"
+import { treeLayout } from "./graph-layout-tree"
 import type {
   GraphProps,
   LaidOutGraph,
@@ -27,17 +33,70 @@ const DEFAULT_EDGE_COLOR = "border"
 const AUTO_VIEWBOX_PADDING = 30
 
 
+// How much of the chart color is mixed into the card surface for an
+// auto-colored node fill. Low enough that the label (foreground) stays
+// readable in both light and dark mode; the full chart color goes on the
+// border, which carries the visible hue.
+const AUTO_FILL_MIX_PCT = 18
+
+
+type Point = { x: number; y: number }
+type LayoutMode = "manual" | "force" | "tree"
+
+
 export class GraphLayoutError extends Error {}
 
 
 export function layoutGraph(props: GraphProps): LaidOutGraph {
   const nodeIndex = indexNodes(props.nodes)
-  const nodes = props.nodes.map(positionNode)
+  const mode = resolveMode(props)
+  const positions = computePositions(props, mode)
+  // Auto-laid graphs (force/tree) get a per-node color ramp so they don't
+  // render as a field of identical neutral circles. Manual layouts stay
+  // neutral by default — algorithm visualizers rely on a calm resting
+  // state they color themselves (e.g. highlighting the visited node).
+  const autoColor = mode === "force" || mode === "tree"
+  const nodes = props.nodes.map((n, i) =>
+    positionNode(n, positions.get(n.id) ?? { x: 0, y: 0 }, i, autoColor),
+  )
   const edges = props.edges
-    .map((e) => positionEdge(e, nodeIndex))
+    .map((e) => positionEdge(e, nodeIndex, positions))
     .filter((e): e is PositionedEdge => e != null)
-  const viewBox = props.viewBox ?? autoViewBox(props.nodes)
-  return { nodes, edges, viewBox }
+  const viewBox = props.viewBox ?? autoViewBox(nodes)
+  return { nodes, edges, viewBox, directed: props.directed ?? false }
+}
+
+
+/**
+ * Pick the layout mode: an explicit `layout` always wins; otherwise use
+ * the agent's manual coordinates when every node has both x and y, and
+ * fall back to force-directed when any are missing.
+ */
+function resolveMode(props: GraphProps): LayoutMode {
+  if (props.layout) return props.layout
+  return props.nodes.every((n) => n.x != null && n.y != null)
+    ? "manual"
+    : "force"
+}
+
+
+/** Resolve every node id to a coordinate according to the chosen layout. */
+function computePositions(
+  props: GraphProps,
+  mode: LayoutMode,
+): Map<string, Point> {
+  const nodeIds = props.nodes.map((n) => n.id)
+  switch (mode) {
+    case "force":
+      return forceLayout(nodeIds, props.edges)
+    case "tree":
+      return treeLayout(nodeIds, props.edges, props.root)
+    case "manual":
+    default:
+      return new Map(
+        props.nodes.map((n) => [n.id, { x: n.x ?? 0, y: n.y ?? 0 }]),
+      )
+  }
 }
 
 
@@ -55,15 +114,29 @@ function indexNodes(
 }
 
 
-function positionNode(n: GraphProps["nodes"][number]): PositionedNode {
+function positionNode(
+  n: GraphProps["nodes"][number],
+  pos: Point,
+  index: number,
+  autoColor: boolean,
+): PositionedNode {
+  // A fully unstyled node under an auto layout gets the chart ramp: a soft
+  // tinted fill plus a full-strength chart border. Any explicit color or
+  // border opts the node out, so agent-decorated nodes are never overridden.
+  const ramp = autoColor && n.color == null && n.border == null
+  const token = `chart-${(index % 5) + 1}`
   return {
     id: n.id,
-    x: n.x,
-    y: n.y,
+    x: pos.x,
+    y: pos.y,
     label: n.label ?? n.id,
     sublabel: n.sublabel ?? null,
-    color: resolveColor(n.color ?? DEFAULT_NODE_FILL),
-    border: resolveColor(n.border ?? DEFAULT_NODE_BORDER),
+    color: ramp
+      ? `color-mix(in oklch, var(--${token}) ${AUTO_FILL_MIX_PCT}%, var(--card))`
+      : resolveColor(n.color ?? DEFAULT_NODE_FILL),
+    border: ramp
+      ? defaultPaletteColor(index)
+      : resolveColor(n.border ?? DEFAULT_NODE_BORDER),
     textColor: resolveColor(n.textColor ?? DEFAULT_NODE_TEXT),
   }
 }
@@ -71,7 +144,8 @@ function positionNode(n: GraphProps["nodes"][number]): PositionedNode {
 
 function positionEdge(
   e: GraphProps["edges"][number],
-  nodeIndex: Map<string, GraphProps["nodes"][number]>
+  nodeIndex: Map<string, GraphProps["nodes"][number]>,
+  positions: Map<string, Point>,
 ): PositionedEdge | null {
   const a = nodeIndex.get(e.a)
   const b = nodeIndex.get(e.b)
@@ -83,20 +157,22 @@ function positionEdge(
     )
     return null
   }
+  const pa = positions.get(e.a) ?? { x: 0, y: 0 }
+  const pb = positions.get(e.b) ?? { x: 0, y: 0 }
   return {
     a: e.a,
     b: e.b,
-    x1: a.x,
-    y1: a.y,
-    x2: b.x,
-    y2: b.y,
+    x1: pa.x,
+    y1: pa.y,
+    x2: pb.x,
+    y2: pb.y,
     label: e.label ?? null,
     color: resolveColor(e.color ?? DEFAULT_EDGE_COLOR),
   }
 }
 
 
-function autoViewBox(nodes: GraphProps["nodes"]): string {
+function autoViewBox(nodes: PositionedNode[]): string {
   if (nodes.length === 0) return "0 0 100 100"
   let minX = Infinity
   let minY = Infinity

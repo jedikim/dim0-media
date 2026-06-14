@@ -206,3 +206,220 @@ describe("layoutGraph — viewBox", () => {
     expect(g.viewBox).toBe("20 20 60 60")
   })
 })
+
+
+describe("layoutGraph — layout mode selection", () => {
+  it("defaults to manual when every node has x and y", () => {
+    const g = layoutGraph({
+      nodes: [
+        { id: "A", x: 10, y: 20 },
+        { id: "B", x: 30, y: 40 },
+      ],
+      edges: [{ a: "A", b: "B" }],
+    })
+    expect(g.nodes[0]).toMatchObject({ id: "A", x: 10, y: 20 })
+    expect(g.nodes[1]).toMatchObject({ id: "B", x: 30, y: 40 })
+  })
+
+
+  it("falls back to force layout when any node lacks coordinates", () => {
+    const g = layoutGraph({
+      nodes: [{ id: "A" }, { id: "B" }, { id: "C" }],
+      edges: [
+        { a: "A", b: "B" },
+        { a: "B", b: "C" },
+      ],
+    })
+    // Force layout assigns finite, distinct positions — not the 0,0 default.
+    const positions = g.nodes.map((n) => `${n.x},${n.y}`)
+    expect(new Set(positions).size).toBe(3)
+    for (const n of g.nodes) {
+      expect(Number.isFinite(n.x)).toBe(true)
+      expect(Number.isFinite(n.y)).toBe(true)
+    }
+  })
+
+
+  it("explicit manual layout keeps coordinates even with missing values", () => {
+    const g = layoutGraph({
+      layout: "manual",
+      nodes: [{ id: "A", x: 5, y: 5 }, { id: "B" }],
+      edges: [],
+    })
+    expect(g.nodes[0]).toMatchObject({ x: 5, y: 5 })
+    // Missing coords default to 0,0 under manual.
+    expect(g.nodes[1]).toMatchObject({ x: 0, y: 0 })
+  })
+})
+
+
+describe("layoutGraph — force layout determinism", () => {
+  it("produces identical positions across repeated runs", () => {
+    const props = {
+      layout: "force" as const,
+      nodes: [{ id: "A" }, { id: "B" }, { id: "C" }, { id: "D" }],
+      edges: [
+        { a: "A", b: "B" },
+        { a: "A", b: "C" },
+        { a: "B", b: "D" },
+        { a: "C", b: "D" },
+      ],
+    }
+    const first = layoutGraph(props).nodes.map((n) => `${n.x},${n.y}`)
+    const second = layoutGraph(props).nodes.map((n) => `${n.x},${n.y}`)
+    expect(first).toEqual(second)
+  })
+})
+
+
+describe("layoutGraph — tree layout", () => {
+  it("places the inferred root above its children", () => {
+    const g = layoutGraph({
+      layout: "tree",
+      nodes: [{ id: "root" }, { id: "a" }, { id: "b" }],
+      edges: [
+        { a: "root", b: "a" },
+        { a: "root", b: "b" },
+      ],
+    })
+    const byId = Object.fromEntries(g.nodes.map((n) => [n.id, n]))
+    // d3-tree puts depth on the y axis: root sits above its children.
+    expect(byId.root.y).toBeLessThan(byId.a.y)
+    expect(byId.root.y).toBeLessThan(byId.b.y)
+    // Siblings are spread on the x axis, not stacked.
+    expect(byId.a.x).not.toBe(byId.b.x)
+  })
+
+
+  it("honors an explicit root", () => {
+    const g = layoutGraph({
+      layout: "tree",
+      root: "b",
+      nodes: [{ id: "a" }, { id: "b" }, { id: "c" }],
+      edges: [
+        { a: "b", b: "a" },
+        { a: "b", b: "c" },
+      ],
+    })
+    const byId = Object.fromEntries(g.nodes.map((n) => [n.id, n]))
+    expect(byId.b.y).toBeLessThan(byId.a.y)
+    expect(byId.b.y).toBeLessThan(byId.c.y)
+  })
+
+
+  it("renders cross-link edges without breaking the hierarchy", () => {
+    // a→b→c is the tree; a→c is an extra cross-link (c already has parent b).
+    const g = layoutGraph({
+      layout: "tree",
+      nodes: [{ id: "a" }, { id: "b" }, { id: "c" }],
+      edges: [
+        { a: "a", b: "b" },
+        { a: "b", b: "c" },
+        { a: "a", b: "c" },
+      ],
+    })
+    // All three edges survive layout.
+    expect(g.edges.length).toBe(3)
+    // c is placed one level below b (its tree parent), not beside a.
+    const byId = Object.fromEntries(g.nodes.map((n) => [n.id, n]))
+    expect(byId.b.y).toBeLessThan(byId.c.y)
+  })
+
+
+  it("places disconnected nodes in a row beneath the tree", () => {
+    const g = layoutGraph({
+      layout: "tree",
+      nodes: [{ id: "root" }, { id: "child" }, { id: "orphan" }],
+      edges: [{ a: "root", b: "child" }],
+    })
+    const byId = Object.fromEntries(g.nodes.map((n) => [n.id, n]))
+    // Orphan sits below the deepest tree node.
+    expect(byId.orphan.y).toBeGreaterThan(byId.child.y)
+  })
+})
+
+
+describe("layoutGraph — auto color ramp", () => {
+  it("cycles chart tokens across nodes under force layout", () => {
+    const g = layoutGraph({
+      layout: "force",
+      nodes: [{ id: "A" }, { id: "B" }, { id: "C" }],
+      edges: [{ a: "A", b: "B" }],
+    })
+    expect(g.nodes[0].border).toBe("var(--chart-1)")
+    expect(g.nodes[1].border).toBe("var(--chart-2)")
+    expect(g.nodes[2].border).toBe("var(--chart-3)")
+    // Fill is a soft tint of the same token, not the neutral card default.
+    expect(g.nodes[0].color).toContain("--chart-1")
+    expect(g.nodes[0].color).toContain("color-mix")
+  })
+
+
+  it("wraps the ramp after five nodes", () => {
+    const g = layoutGraph({
+      layout: "tree",
+      nodes: [
+        { id: "r" },
+        { id: "a" },
+        { id: "b" },
+        { id: "c" },
+        { id: "d" },
+        { id: "e" },
+      ],
+      edges: [
+        { a: "r", b: "a" },
+        { a: "r", b: "b" },
+        { a: "r", b: "c" },
+        { a: "r", b: "d" },
+        { a: "r", b: "e" },
+      ],
+    })
+    // 6th node (index 5) wraps back to chart-1.
+    expect(g.nodes[5].border).toBe("var(--chart-1)")
+  })
+
+
+  it("does not auto-color manual layouts (stays neutral)", () => {
+    const g = layoutGraph({
+      nodes: [
+        { id: "A", x: 0, y: 0 },
+        { id: "B", x: 50, y: 0 },
+      ],
+      edges: [],
+    })
+    expect(g.nodes[0].color).toBe("var(--card)")
+    expect(g.nodes[0].border).toBe("var(--border)")
+  })
+
+
+  it("respects explicit colors and skips the ramp for that node", () => {
+    const g = layoutGraph({
+      layout: "force",
+      nodes: [{ id: "A", color: "primary" }, { id: "B" }],
+      edges: [{ a: "A", b: "B" }],
+    })
+    // A keeps its explicit color and the neutral default border.
+    expect(g.nodes[0].color).toBe("var(--primary)")
+    expect(g.nodes[0].border).toBe("var(--border)")
+    // B is still ramped.
+    expect(g.nodes[1].border).toBe("var(--chart-2)")
+  })
+})
+
+
+describe("layoutGraph — directed flag", () => {
+  it("defaults directed to false", () => {
+    const g = layoutGraph({ nodes: [{ id: "A", x: 0, y: 0 }], edges: [] })
+    expect(g.directed).toBe(false)
+  })
+
+
+  it("carries directed through when set", () => {
+    const g = layoutGraph({
+      directed: true,
+      nodes: [{ id: "A", x: 0, y: 0 }],
+      edges: [],
+    })
+    expect(g.directed).toBe(true)
+  })
+})

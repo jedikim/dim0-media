@@ -49,6 +49,18 @@ async def test_learn_generate_mini_app_returns_skill_prompt() -> None:
     # widgets it ships are limited to a stale subset of the runtime.
     assert "Chart" in prompt
     assert "Graph" in prompt
+    # Map primitive — agents must know the world choropleth exists and that
+    # they supply data by country name, not coordinates.
+    assert "Map" in prompt
+    assert "choropleth" in prompt
+    assert "markers" in prompt
+    # Graph layout vocabulary — the agent must know it can hand over a bare
+    # node/edge list and pick a layout instead of hand-computing every x/y.
+    # If these drop out, the prompt regresses to the old "supply coordinates
+    # yourself" contract and widgets get tangled graphs again.
+    assert "force" in prompt
+    assert "tree" in prompt
+    assert "manual" in prompt
     # Typography + color guidance — the agent must know about the three
     # font families and the semantic shadcn palette, otherwise widgets
     # come out monochrome and don't theme across light/dark.
@@ -57,6 +69,15 @@ async def test_learn_generate_mini_app_returns_skill_prompt() -> None:
     assert "bg-card" in prompt
     assert "text-muted-foreground" in prompt
     assert "oklch" in prompt
+    # Color rules that keep widgets readable + themed: every colored bg
+    # pairs with its foreground, primary is reserved for the one main
+    # action, secondary is the default themed surface, and chart-N is the
+    # categorical ramp. If these regress, widgets go monochrome or ship
+    # unreadable text on colored backgrounds.
+    assert "text-primary-foreground" in prompt
+    assert "text-secondary-foreground" in prompt
+    assert "chart-1" in prompt
+    assert "visual explainers" in prompt
     # Phase A demotion: the prompt no longer compares to HTML widget —
     # mini-app is the answer, not "the better of two options". Keeps
     # us from accidentally re-introducing the decision tree.

@@ -407,12 +407,14 @@
   --wiki-link:             oklch(0.40 0.02 260);
   --wiki-link-subtle:      oklch(0.90 0.01 260);
 
-  /* charts — grayscale ramp */
-  --chart-1: oklch(0.30 0.004 260);
-  --chart-2: oklch(0.45 0.004 260);
-  --chart-3: oklch(0.58 0.004 260);
-  --chart-4: oklch(0.70 0.004 260);
-  --chart-5: oklch(0.82 0.004 260);
+  /* charts — colorful categorical ramp. The noir UI stays monochrome;
+     only data carries color. Anchored to noir's slate hue (255); red is
+     reserved for --destructive, so chart-4 is a rose. */
+  --chart-1: oklch(0.55 0.14 255);   /* indigo-blue — echoes noir's slate */
+  --chart-2: oklch(0.66 0.14 65);    /* amber */
+  --chart-3: oklch(0.58 0.11 165);   /* teal-green */
+  --chart-4: oklch(0.55 0.16 350);   /* rose */
+  --chart-5: oklch(0.56 0.15 308);   /* violet */
 
   /* code-block bg — matches vitesse-light */
   --code-block-bg: #ffffff;
@@ -460,11 +462,12 @@
   --wiki-link:             oklch(0.80 0.02 260);
   --wiki-link-subtle:      oklch(0.33 0.01 260);
 
-  --chart-1: oklch(0.85 0.004 260);
-  --chart-2: oklch(0.72 0.004 260);
-  --chart-3: oklch(0.60 0.004 260);
-  --chart-4: oklch(0.48 0.004 260);
-  --chart-5: oklch(0.38 0.004 260);
+  /* charts — colorful categorical ramp (lighter for the dark card). */
+  --chart-1: oklch(0.72 0.13 255);   /* indigo-blue */
+  --chart-2: oklch(0.80 0.13 70);    /* amber */
+  --chart-3: oklch(0.74 0.10 165);   /* teal-green */
+  --chart-4: oklch(0.73 0.14 350);   /* rose */
+  --chart-5: oklch(0.74 0.14 308);   /* violet */
 
   --code-block-bg: #121212;            /* vitesse-dark */
 }
