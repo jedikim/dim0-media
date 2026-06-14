@@ -1,3 +1,13 @@
+## v0.3.42 (2026-06-14)
+
+### Feat
+
+- decorative textures for empty board, canvas, and auth (#125)
+
+### Fix
+
+- **collab**: persist note label through apply_ops (#124)
+
 ## v0.3.41 (2026-06-13)
 
 ## v0.3.40 (2026-06-13)
