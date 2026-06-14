@@ -744,6 +744,95 @@ async def test_node_update_lifts_phosphor_icon_data_with_color():
     }
 
 
+async def test_node_update_lifts_label_to_patch_dict():
+    """A `node.update` carrying `data.label` lifts to the merged patch.
+
+    Title renames done via the local-store path (sheet-panel.persistTitle
+    and NodeTitleCaption.commitTitle) write to `data.label`. Without
+    this lift the wire op reaches the server but the title never lands
+    in the DB — refresh reverts the rename.
+    """
+    store = _RecordingGraphStore()
+    op = {
+        "type": "node.update",
+        "id": "n1",
+        "patch": {"data": {"label": {"markdown": "Daily standup"}}},
+        "prev": {},
+    }
+
+    await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    assert store.patch_calls[0]["data"]["label"] == {"markdown": "Daily standup"}
+
+
+async def test_node_update_label_cleared_with_explicit_null():
+    """An explicit `data.label: null` clears the title via deep-merge."""
+    store = _RecordingGraphStore()
+    op = {
+        "type": "node.update",
+        "id": "n1",
+        "patch": {"data": {"label": None}},
+        "prev": {},
+    }
+
+    await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    assert store.patch_calls[0]["data"]["label"] is None
+
+
+async def test_node_update_label_ignored_when_markdown_missing():
+    """A malformed `data.label` (no markdown string) is silently skipped.
+
+    Defensive: a malformed peer could ship `data.label: {}` and we'd
+    rather keep the existing title than wipe it with a bad payload.
+    The op carries an unrelated field (`x`) so the patch still fires
+    and we can assert the absence of `label` in the resulting dict.
+    """
+    store = _RecordingGraphStore()
+    op = {
+        "type": "node.update",
+        "id": "n1",
+        "patch": {"x": 100, "data": {"label": {"foo": "bar"}}},
+        "prev": {},
+    }
+
+    await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    assert "label" not in store.patch_calls[0]["data"]
+
+
+async def test_node_add_persists_label_from_data():
+    """A `node.add` op with `data.label` keeps the title on the new Note.
+
+    Mirror of the icon-name lift on the add path: without this, a newly
+    created sheet's title isn't surfaced to the server and reload shows
+    "Untitled".
+    """
+    store = _RecordingGraphStore()
+    op = {
+        "type": "node.add",
+        "node": {
+            "id": "n1",
+            "x": 0, "y": 0, "w": 320, "h": 200, "z": 0,
+            "angle": 0,
+            "type": "sheet",
+            "data": {
+                "noteType": "note",
+                "styleType": "sheet",
+                "version": 1,
+                "label": {"markdown": "Welcome"},
+            },
+        },
+    }
+
+    results = await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    assert results[0].applied is True
+    [note] = store.add_notes_calls[0]
+    assert note.label is not None
+    assert note.label.markdown == "Welcome"
+
+
 async def test_node_update_phosphor_icon_with_css_var_color():
     """The CSS-var color form (`var(--color-foreground)`) round-trips as-is.
 

@@ -338,6 +338,21 @@ def _node_patch_to_note_data(patch: dict[str, Any]) -> dict[str, Any]:  # noqa: 
             data["parent_id"] = wire_data["parentId"]
         if "graphUid" in wire_data:
             data["graph_uid"] = wire_data["graphUid"]
+        # `data.label = {markdown: "..."}` carries title renames done via
+        # the local-store path (sheet-panel `persistTitle` and the canvas
+        # `NodeTitleCaption` both write `data.label`). Without this lift
+        # the wire op reaches the server but `patch_notes`'s deep-merge
+        # never sees the field — DB title stays at the old value and
+        # refresh reverts the rename. Explicit `None` clears the title
+        # so a "clear name" op works symmetrically.
+        if "label" in wire_data:
+            label_value = wire_data["label"]
+            if isinstance(label_value, dict):
+                markdown = label_value.get("markdown")
+                if isinstance(markdown, str):
+                    data["label"] = {"markdown": markdown}
+            elif label_value is None:
+                data["label"] = None
 
     return data
 
@@ -395,6 +410,15 @@ def _wire_node_to_note(node: dict[str, Any], *, board_id: str) -> Note | None:  
     }
     if "content" in node:
         note_dict["content"] = {"markdown": str(node["content"] or "")}
+
+    # `data.label` carries the title for newly-created notes. Same lift
+    # as `_node_patch_to_note_data` (which handles renames); without it
+    # an add op never persists the title and refresh shows "Untitled".
+    label_value = data_field.get("label")
+    if isinstance(label_value, dict):
+        markdown = label_value.get("markdown")
+        if isinstance(markdown, str):
+            note_dict["label"] = {"markdown": markdown}
 
     # Prefer `data.styleType` (the Dim0 enum value the client embeds for
     # round-trip fidelity). Fall back to translating the wire `type`
