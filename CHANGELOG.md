@@ -1,3 +1,9 @@
+## v0.3.44 (2026-06-14)
+
+### Fix
+
+- **board**: stop space-pan from re-firing focused buttons (#127)
+
 ## v0.3.43 (2026-06-14)
 
 ### Feat
