@@ -27,6 +27,21 @@
 ![Dim0 app screenshot](docs/images/main-screen.png)
 *A single board: notes, a mind map, mini-apps, documents, and the agent - all in the same workspace.*
 
+## Features
+
+- ♾️ **Infinite canvas** — thousands of nodes and nested boards, smooth at scale
+- 🎨 **A real whiteboard underneath** — hand-drawn and geometric shapes, arrows, images and media, and a huge icon library (200,000+ via Iconify)
+- 🤖 **Board-aware agent** — reads your canvas and selected nodes, takes multi-step tool actions, and writes results back as editable nodes
+- 🧩 **Mini-apps** — describe a tool, get a real interactive React app on the board: open it, edit it, export it
+- 📝 **Rich notes** — Notion-style rich text, math, code, and sub-pages, edited in place
+- 💻 **Code & documents** — run code in sandboxes; drop in files that the agent can search (RAG)
+- 🔌 **Bring your own model** — OpenAI, Anthropic, Gemini, Mistral, DeepSeek, Qwen, and more — switch anytime
+- 👥 **Real-time multiplayer** — live cursors, shared edits, a shared agent; conflict-free sync, solo or fifty people deep
+- 🎬 **Present from the canvas** — drop frames on the board and run them as a slideshow, no export to a separate slides tool
+- 🔓 **Open-source & private** — MIT, self-hostable, your data stays yours (no training, no telemetry)
+
+See it in action:
+
 https://github.com/user-attachments/assets/cdc7d3d4-eb59-4d7d-a9ff-6f0206ba82df
 
 ## Why Dim0?
@@ -38,6 +53,7 @@ You already have a chat assistant, a whiteboard, and a doc tool. Dim0 is what yo
 | Infinite spatial canvas | ✅ | ❌ | ❌ | ✅ |
 | Agent reads the workspace & writes back | ✅ | ⚠️ chat only | ⚠️ doc only | ❌ |
 | Mini-apps: real, editable, persistent React apps | ✅ | ⚠️ trapped in thread | ❌ | ❌ |
+| Rich notes (math, code, sub-pages) on the canvas | ✅ | ❌ | ⚠️ docs, not canvas | ❌ |
 | Real-time multiplayer | ✅ | ❌ | ✅ | ✅ |
 | Bring-your-own model (Claude, GPT, Gemini, …) | ✅ | ❌ | ❌ | ❌ |
 | Open-source & self-hostable | ✅ | ❌ | ❌ | ⚠️ partial |
@@ -74,15 +90,6 @@ Stop it with `make down-run` (add `make kill-run` to wipe volumes).
 Most AI tools start with a chat box and bolt the rest of the product on around it. Dim0 goes the other way - the board is the workspace, and the agent is one of the things living on it.
 
 The board holds notes, code sandboxes, mini-apps, documents, nested boards, and presentation frames, all sitting next to each other - and your whole team can be on it at once. The agent can see what's there, take multiple steps with tools, and drop its results back onto the same canvas.
-
-Things it can do:
-
-- Read the current board and any selected nodes
-- Search the web and fetch pages
-- Run code in a sandbox
-- Create and edit notes
-- Generate mini-apps - real, interactive React apps, right on the board
-- Save and recall semantic memory
 
 ## Node types
 
