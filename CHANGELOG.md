@@ -1,3 +1,9 @@
+## v0.3.46 (2026-06-15)
+
+### Fix
+
+- **webui**: disable macos trackpad swipe-back via overscroll-behavior (#129)
+
 ## v0.3.45 (2026-06-14)
 
 ## v0.3.44 (2026-06-14)
