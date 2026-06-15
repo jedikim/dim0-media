@@ -1037,6 +1037,15 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html,
+  body {
+    /* Disable macOS trackpad swipe-back/forward and pinch-page-zoom
+       app-wide. `overscroll-behavior` only takes effect on scroll
+       containers, so it must live on the document root — setting it
+       on the canvas wrapper alone is ignored by Chrome for the
+       history-navigation decision. */
+    overscroll-behavior: none;
+  }
   body {
     @apply bg-background text-foreground;
   }
