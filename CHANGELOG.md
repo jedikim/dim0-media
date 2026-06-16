@@ -1,3 +1,9 @@
+## v0.3.49 (2026-06-16)
+
+### Feat
+
+- **prompts**: proactive plan agent + node emphasis; switch base plan model (#132)
+
 ## v0.3.48 (2026-06-16)
 
 ### Feat
