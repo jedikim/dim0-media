@@ -43,6 +43,8 @@ import { hydrateBoardStore } from "../persist/snapshot-load"
 import { ShareButton } from "@/features/sharing/share-button"
 import { useBoardAppStore } from "../store/board-app-store"
 import { createBoardStore } from "../store/create-board-store"
+import { adaptEdgeColors, applyColorsToEdgeStyle } from "../theme/color-adapter"
+import { getBoardThemeMode } from "../theme/theme-mode-ref"
 import { useBoardTheme } from "../theme/use-board-theme"
 import { useThemeColorProjection } from "../theme/use-theme-color-projection"
 import { useBoardKeyboard } from "./use-board-keyboard"
@@ -52,7 +54,7 @@ import { useHarnessDropFiles } from "./use-drop-files"
 import { useHydrateIconNodes } from "./use-hydrate-icon-nodes"
 import { usePresentationMode } from "./use-presentation-mode"
 import { useBlockFolderCopy } from "./use-block-folder-copy"
-import { useStampNewEdges } from "./use-stamp-new-edges"
+import { resolveStoredEdgeColors, useStampNewEdges } from "./use-stamp-new-edges"
 import { useStampNewNodes } from "./use-stamp-new-nodes"
 import { useStyleMemory } from "./use-style-memory"
 import { CUSTOM_NODE_TYPES } from "./custom-node-types"
@@ -134,7 +136,7 @@ export function HarnessCanvas() {
   useViewportPersistence(store, boardId, rootId, ready)
   useCenterFromUrl(store, wrapRef, ready)
   const styleMemory = useStyleMemory(store)
-  useStampNewEdges(store, boardId, rootId, styleMemory.getEdgeStoredColors)
+  useStampNewEdges(store, boardId, rootId)
   useStampNewNodes(store, boardId, rootId)
   useBlockFolderCopy(store)
   useHarnessApplyMindMap(store, boardId, rootId)
@@ -158,9 +160,30 @@ export function HarnessCanvas() {
   // later restyle. The lib reads `arrowDefaults` lazily at edge-draw time
   // (defaultsRef) and keys no effect off it, so a fresh object per render
   // is cheap and is what lets sticky edge styles actually take effect.
+  // Factories run lazily at edge-draw time (canvas-harness 0.1.24+), so
+  // a fresh arrow-drawn edge enters the store already stamped with
+  // scope, version, stored colors, and theme-projected display style.
+  // That lets useStampNewEdges' init branch go away — Cmd+Z on a fresh
+  // edge now reverts the create in one press.
   const arrowDefaults: ArrowToolDefaults = {
     pathStyle: styleMemory.getEdgePathStyle(),
-    style: styleMemory.getEdgeStyle(),
+    style: () => {
+      const base = styleMemory.getEdgeStyle() ?? {}
+      const stored = resolveStoredEdgeColors(styleMemory.getEdgeStoredColors())
+      const mode = getBoardThemeMode()
+      const display = mode === "dark" ? adaptEdgeColors(stored, "dark") : stored
+      return applyColorsToEdgeStyle(base, display)
+    },
+    data: () => {
+      if (!boardId) return undefined
+      return {
+        version: 1,
+        createdAt: new Date().toISOString(),
+        _storedColors: resolveStoredEdgeColors(styleMemory.getEdgeStoredColors()),
+        graphUid: boardId,
+        parentId: rootId ?? undefined,
+      }
+    },
   }
   const { onDragOver, onDrop } = useHarnessDropFiles(wrapRef, store, boardId, rootId, canEdit)
   const navigate = useNavigate()

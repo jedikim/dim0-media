@@ -1,6 +1,8 @@
-// Tests for the edge-creation stamp, focused on sticky-color inheritance:
-// a freshly-drawn edge must adopt the user's last-picked colors (canonical),
-// projected for the current theme, while paste/scope handling stays intact.
+// Tests for the edge-stamp helpers + paste subscriber. Sticky-color
+// inheritance on a fresh arrow-drawn edge is now produced by the
+// arrowDefaults factory wired in `harness-canvas` (canvas-harness
+// 0.1.24+), so the unit-level behavior worth pinning here is the
+// resolver helper and the subscriber's paste-preservation path.
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -10,31 +12,40 @@ import {
   type CanvasStore,
   type EdgeId,
 } from "@canvas-harness/core"
-import { useStampNewEdges } from "./use-stamp-new-edges"
-import { adaptEdgeColors, type StoredEdgeColors } from "../theme/color-adapter"
+import {
+  CANONICAL_EDGE_COLORS,
+  resolveStoredEdgeColors,
+  useStampNewEdges,
+} from "./use-stamp-new-edges"
+import { type StoredEdgeColors } from "../theme/color-adapter"
 import { setBoardThemeMode } from "../theme/theme-mode-ref"
 
 
 const BOARD_ID = "board-1"
-const CANONICAL = { strokeColor: "#292524", textColor: "#000000" }
 
 
-/** Add an edge the way the lib's arrow tool does: a `style`, but no `data`. */
-const drawEdge = (store: CanvasStore, style?: Record<string, unknown>): EdgeId => {
-  const id = asEdgeId(store.generateId())
-  store.addEdge({
-    id,
-    source: { worldPoint: { x: 0, y: 0 } },
-    target: { worldPoint: { x: 100, y: 0 } },
-    pathStyle: "bezier",
-    groups: [],
-    ...(style ? { style } : {}),
+describe("resolveStoredEdgeColors", () => {
+  it("returns the remembered colors verbatim when both fields are set", () => {
+    const remembered = { strokeColor: "#ef4444", textColor: "#111111" }
+    expect(resolveStoredEdgeColors(remembered)).toEqual(remembered)
   })
-  return id
-}
 
 
-describe("useStampNewEdges — sticky color inheritance", () => {
+  it("falls back to canonical defaults when nothing is remembered", () => {
+    expect(resolveStoredEdgeColors(undefined)).toEqual(CANONICAL_EDGE_COLORS)
+  })
+
+
+  it("fills only the unpicked field with the canonical default", () => {
+    expect(resolveStoredEdgeColors({ strokeColor: "#00ff00" })).toEqual({
+      strokeColor: "#00ff00",
+      textColor: CANONICAL_EDGE_COLORS.textColor,
+    })
+  })
+})
+
+
+describe("useStampNewEdges — paste preservation", () => {
   let container: HTMLDivElement
   let root: Root
 
@@ -55,13 +66,9 @@ describe("useStampNewEdges — sticky color inheritance", () => {
   })
 
 
-  /** Mount the stamp with a fixed remembered-color getter. */
-  const mountStamp = (
-    store: CanvasStore,
-    remembered: StoredEdgeColors | undefined,
-  ): void => {
+  const mountStamp = (store: CanvasStore): void => {
     const Probe = (): null => {
-      useStampNewEdges(store, BOARD_ID, null, () => remembered)
+      useStampNewEdges(store, BOARD_ID, null)
       return null
     }
     act(() => {
@@ -70,86 +77,11 @@ describe("useStampNewEdges — sticky color inheritance", () => {
   }
 
 
-  it("stamps a freshly-drawn edge with the remembered canonical colors (light mode)", () => {
+  it("preserves a pasted edge's _storedColors when scope + theme already match", () => {
     const store = createCanvasStore()
-    const remembered = { strokeColor: "#ef4444", textColor: "#111111" }
-    mountStamp(store, remembered)
+    mountStamp(store)
 
-    let edgeId: EdgeId | undefined
-    act(() => {
-      edgeId = drawEdge(store)
-    })
-    const edge = store.getEdge(edgeId!)
-
-    // Canonical source-of-truth captured...
-    expect((edge?.data as { _storedColors?: StoredEdgeColors })?._storedColors)
-      .toEqual(remembered)
-    // ...and painted as display (light = identity).
-    expect(edge?.style?.strokeColor).toBe("#ef4444")
-    expect(edge?.style?.textColor).toBe("#111111")
-  })
-
-
-  it("projects the remembered colors to dark-mode display while keeping canonical truth", () => {
-    setBoardThemeMode("dark")
-    const store = createCanvasStore()
-    const remembered = { strokeColor: "#ef4444", textColor: "#111111" }
-    mountStamp(store, remembered)
-
-    let edgeId: EdgeId | undefined
-    act(() => {
-      edgeId = drawEdge(store)
-    })
-    const edge = store.getEdge(edgeId!)
-    const expectedDisplay = adaptEdgeColors(remembered, "dark")
-
-    // Stored truth stays canonical (light) — this is what hits the DB / collab.
-    expect((edge?.data as { _storedColors?: StoredEdgeColors })?._storedColors)
-      .toEqual(remembered)
-    // Painted style is the dark-adapted projection.
-    expect(edge?.style?.strokeColor).toBe(expectedDisplay.strokeColor)
-    expect(edge?.style?.textColor).toBe(expectedDisplay.textColor)
-  })
-
-
-  it("falls back to canonical defaults when nothing is remembered", () => {
-    const store = createCanvasStore()
-    mountStamp(store, undefined)
-
-    let edgeId: EdgeId | undefined
-    act(() => {
-      edgeId = drawEdge(store)
-    })
-    const edge = store.getEdge(edgeId!)
-
-    expect((edge?.data as { _storedColors?: StoredEdgeColors })?._storedColors)
-      .toEqual(CANONICAL)
-  })
-
-
-  it("merges canonical for the field the user never picked", () => {
-    const store = createCanvasStore()
-    // Only a stroke color was ever picked; label color should stay canonical.
-    mountStamp(store, { strokeColor: "#00ff00" })
-
-    let edgeId: EdgeId | undefined
-    act(() => {
-      edgeId = drawEdge(store)
-    })
-    const edge = store.getEdge(edgeId!)
-
-    expect((edge?.data as { _storedColors?: StoredEdgeColors })?._storedColors)
-      .toEqual({ strokeColor: "#00ff00", textColor: CANONICAL.textColor })
-  })
-
-
-  it("does not override an edge that already carries its own _storedColors (paste)", () => {
-    const store = createCanvasStore()
-    const remembered = { strokeColor: "#ef4444", textColor: "#111111" }
-    mountStamp(store, remembered)
-
-    // A pasted edge: already initialized + scoped + carrying source colors.
-    const pasted = { strokeColor: "#abcdef", textColor: "#fedcba" }
+    const pasted: StoredEdgeColors = { strokeColor: "#abcdef", textColor: "#fedcba" }
     let edgeId: EdgeId | undefined
     act(() => {
       edgeId = asEdgeId(store.generateId())
@@ -170,7 +102,6 @@ describe("useStampNewEdges — sticky color inheritance", () => {
     })
     const edge = store.getEdge(edgeId!)
 
-    // Source colors preserved — sticky memory must not clobber a paste.
     expect((edge?.data as { _storedColors?: StoredEdgeColors })?._storedColors)
       .toEqual(pasted)
   })
