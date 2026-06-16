@@ -1,3 +1,9 @@
+## v0.3.47 (2026-06-16)
+
+### Fix
+
+- **webui**: stamp arrow-drawn edges at create-time to remove double-undo (#130)
+
 ## v0.3.46 (2026-06-15)
 
 ### Fix
