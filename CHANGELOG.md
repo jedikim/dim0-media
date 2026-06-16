@@ -1,3 +1,9 @@
+## v0.3.48 (2026-06-16)
+
+### Feat
+
+- content-fit board visuals, mindmap hubs, border edges, and higher agent turn ceiling (#131)
+
 ## v0.3.47 (2026-06-16)
 
 ### Fix
