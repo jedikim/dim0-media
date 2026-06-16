@@ -9,33 +9,32 @@ from topix.datatypes.note.style import FontFamily, NodeType, StrokeStyle, Style,
 from topix.datatypes.property import PositionProperty, SizeProperty
 from topix.datatypes.resource import RichText
 from topix.store.graph import GraphStore
+from topix.utils.colors import TAILWIND_200_ADAPTED
+from topix.utils.graph.text_measure import estimate_node_size
 
 DEFAULT_NOTE_GAP = 80
 DEFAULT_CHILD_OFFSET_X = 40
 DEFAULT_CHILD_OFFSET_Y = 80
 SHEET_MIN_WIDTH = 200
 SHEET_MIN_HEIGHT = 120
-DEFAULT_NOTE_COLORS_HEX = [
-    "#d2bfb4",
-    "#f1bd85",
-    "#eed25d",
-    "#f2b2cb",
-    "#95e4a1",
-    "#71deb2",
-    "#f1b8ec",
-    "#f5afb1",
-    "#a4def0",
-]
 
 
 def build_default_note_style(note_type: NodeType) -> Style:
-    """Return the backend default style for a given note type."""
+    """Return the backend default style for a given note type.
+
+    Mirrors webui `createDefaultStyle`: built-in shapes are sharp-cornered
+    (roundness 0) and filled with a random paper-adapted Tailwind-200 swatch —
+    the same palette the canvas renders (see :mod:`topix.utils.colors`). Custom
+    nodes (sheet / code-sandbox / widget / slide) keep their bespoke styling.
+    """
     style = Style(type=note_type)
-    style.background_color = random.choice(DEFAULT_NOTE_COLORS_HEX)
+    style.background_color = random.choice(TAILWIND_200_ADAPTED)
+    # Built-in shapes default to sharp corners; the Style class default (3.0)
+    # is for legacy rows. Custom nodes override below.
+    style.roundness = 0
 
     if note_type == NodeType.SHEET:
         style.roughness = 0
-        style.roundness = 0
         style.text_align = TextAlign.LEFT
     elif note_type == NodeType.TEXT:
         style.background_color = "#00000000"
@@ -44,6 +43,7 @@ def build_default_note_style(note_type: NodeType) -> Style:
         style.background_color = "#00000000"
         style.stroke_style = StrokeStyle.DASHED
         style.font_family = FontFamily.SANS_SERIF
+        style.roundness = 2
     elif note_type == NodeType.CODE_SANDBOX:
         style.background_color = "#faf4ed"
         style.text_color = "#575279"
@@ -160,6 +160,13 @@ async def build_note(
         content=RichText(markdown=content),
     )
     note.properties.node_position = PositionProperty(position=position)
+    # Fit the box to the rendered markdown (shape-aware) so agent-created notes
+    # aren't stuck at the stub default: shapes/text labels shrink toward their
+    # content width, document types keep their reading width and fit height.
+    # Empty content / non-content-sized types fall back to the default size.
+    fitted = estimate_node_size(note_type, width, content or label, note.style.font_size)
+    if fitted is not None:
+        width, height = fitted
     note.properties.node_size = SizeProperty(
         size=SizeProperty.Size(width=width, height=height)
     )

@@ -24,9 +24,11 @@ from typing import TYPE_CHECKING
 from topix.agents.notes.service import DEFAULT_NOTE_GAP
 from topix.datatypes.note.link import Link
 from topix.datatypes.note.note import Note
+from topix.datatypes.note.style import NodeType
 from topix.datatypes.property import PositionProperty
 from topix.store.graph import GraphStore
 from topix.utils.graph.layout import LayoutDirection, layout_directed
+from topix.utils.graph.text_measure import estimate_node_height
 
 if TYPE_CHECKING:
     from topix.collab.agent_bridge import AgentBoardBridge
@@ -45,6 +47,41 @@ RANK_PAD = 150.0
 TILE_GAP_X = 80.0
 TILE_GAP_Y = 120.0
 MAX_ROW_WIDTH = 3500.0
+
+# Edge endpoint anchoring: pull the attach point this many px inside the border
+# so it sits just inside the shape (clean arrowhead, no sub-pixel gap).
+EDGE_ANCHOR_INSET = 1.5
+
+# Shapes whose edges stay centre-anchored — the renderer clips a center→center
+# line to a clean radial point on the curve/tip. A fixed side-midpoint would
+# bunch every spoke at one point (e.g. all branches leaving a hub's rightmost
+# pixel). Rectangles instead anchor at the border midpoint facing the peer.
+_CENTER_ANCHOR_TYPES = {
+    NodeType.ELLIPSE,
+    NodeType.LAYERED_CIRCLE,
+    NodeType.DIAMOND,
+    NodeType.LAYERED_DIAMOND,
+    NodeType.SOFT_DIAMOND,
+}
+
+
+def _edge_anchor_offset(
+    node_type: NodeType, width: float, height: float, dx: float, dy: float,
+) -> tuple[float, float]:
+    """Node-local edge anchor (relative to top-left), facing the peer node.
+
+    `(dx, dy)` points from this node's center toward the other endpoint's
+    center. Round/diamond shapes anchor at the center (the renderer clips to a
+    clean radial point); rectangles anchor at the midpoint of the border facing
+    the peer, inset slightly so the point sits just inside the border. The
+    dominant axis picks the side: horizontal → left/right, vertical → top/bottom.
+    """
+    if node_type in _CENTER_ANCHOR_TYPES or width <= 0 or height <= 0:
+        return width / 2.0, height / 2.0
+    inset = min(EDGE_ANCHOR_INSET, width / 2.0, height / 2.0)
+    if abs(dx) >= abs(dy):
+        return (width - inset if dx >= 0 else inset), height / 2.0
+    return width / 2.0, (height - inset if dy >= 0 else inset)
 
 
 def _classify_tree(
@@ -176,11 +213,25 @@ def _connected_components(
 
 
 def _size_of(note: Note) -> tuple[float, float]:
-    """Return the note's persisted (width, height), defaulting to (0, 0) if unset."""
+    """Return the note's (width, height) for layout, defaulting to (0, 0) if unset.
+
+    For content-sized node types the persisted height is only a stub (text notes
+    default to 20px), so we grow it to the height the markdown will actually
+    render at — this is what keeps Sugiyama's sibling spacing from collapsing.
+    Width is kept as-is and height never shrinks below the persisted value.
+    """
     size = note.properties.node_size.size
     if size is None:
         return 0.0, 0.0
-    return size.width, size.height
+    width, height = size.width, size.height
+    if width > 0:
+        text = note.content.markdown if note.content else None
+        if not text and note.label:
+            text = note.label.markdown
+        if text:
+            estimated = estimate_node_height(note.style.type, width, text, note.style.font_size)
+            height = max(height, estimated)
+    return width, height
 
 
 def _real_position(note: Note) -> tuple[float, float]:
@@ -512,4 +563,72 @@ async def rearrange_created_notes(  # noqa: C901
             updated = await graph_store.patch_note(nid, patch)
         if updated is not None:
             moved.append(nid)
+
+    await _anchor_link_endpoints(
+        graph_store=graph_store,
+        links=relevant_links,
+        final_positions=final_positions,
+        anchors_by_id=anchors_by_id,
+        notes_by_id={**movable_by_id, **anchors_by_id},
+        sizes=sizes,
+    )
     return moved
+
+
+async def _anchor_link_endpoints(
+    graph_store: GraphStore,
+    links: list[Link],
+    final_positions: dict[str, tuple[float, float]],
+    anchors_by_id: dict[str, Note],
+    notes_by_id: dict[str, Note],
+    sizes: dict[str, tuple[float, float]],
+) -> None:
+    """Persist border-to-border edge anchors for the laid-out links.
+
+    For each link, set `start_point` / `end_point` to a node-local offset
+    (`is_local_offset=True`) on the border facing the peer node, so edges run
+    border-to-border instead of center-to-center. Endpoints whose node was not
+    laid out this turn are skipped. Persisted (not broadcast): the initiating
+    client re-fetches canonical link state, and live peers re-anchor on reload.
+    """
+    def center(nid: str) -> tuple[float, float] | None:
+        if nid in final_positions:
+            x, y = final_positions[nid]
+        elif nid in anchors_by_id:
+            x, y = _real_position(anchors_by_id[nid])
+        else:
+            return None
+        w, h = sizes.get(nid, (0.0, 0.0))
+        return x + w / 2.0, y + h / 2.0
+
+    updates: list[tuple[str, dict]] = []
+    for link in links:
+        src_c = center(link.source)
+        tgt_c = center(link.target)
+        src_note = notes_by_id.get(link.source)
+        tgt_note = notes_by_id.get(link.target)
+        if src_c is None or tgt_c is None or src_note is None or tgt_note is None:
+            continue
+        sw, sh = sizes.get(link.source, (0.0, 0.0))
+        tw, th = sizes.get(link.target, (0.0, 0.0))
+        dx, dy = tgt_c[0] - src_c[0], tgt_c[1] - src_c[1]
+        sox, soy = _edge_anchor_offset(src_note.style.type, sw, sh, dx, dy)
+        tox, toy = _edge_anchor_offset(tgt_note.style.type, tw, th, -dx, -dy)
+        updates.append((
+            link.id,
+            {
+                "properties": {
+                    "start_point": PositionProperty(
+                        position=PositionProperty.Position(x=sox, y=soy),
+                        is_local_offset=True,
+                    ).model_dump(),
+                    "end_point": PositionProperty(
+                        position=PositionProperty.Position(x=tox, y=toy),
+                        is_local_offset=True,
+                    ).model_dump(),
+                }
+            },
+        ))
+
+    if updates:
+        await graph_store.update_links(updates)

@@ -52,8 +52,8 @@ class DummyGraphStore:
 
 
 @pytest.mark.asyncio
-async def test_build_note_uses_frontend_aligned_defaults() -> None:
-    """New note helpers should mirror the frontend size defaults."""
+async def test_build_note_sheet_keeps_reading_width_and_fits_height() -> None:
+    """Sheets keep their fixed reading width; height fits the content."""
     graph_store = DummyGraphStore()
 
     note = await build_note(
@@ -67,8 +67,11 @@ async def test_build_note_uses_frontend_aligned_defaults() -> None:
 
     assert note.graph_uid == "graph-1"
     assert note.style.type == NodeType.SHEET
+    # Sheet is a fixed-width (document) type: width stays at the reading default.
     assert note.properties.node_size.size.width == 560
-    assert note.properties.node_size.size.height == 320
+    # Height now fits the content, so a one-line sheet is far shorter than the
+    # old fixed 320 default.
+    assert 0 < note.properties.node_size.size.height < 320
     assert note.properties.node_position.position.x == 0
     assert note.properties.node_position.position.y == 0
 
@@ -93,8 +96,8 @@ async def test_build_widget_note_uses_widget_defaults() -> None:
 
 
 @pytest.mark.asyncio
-async def test_build_inscribed_shapes_use_larger_square_defaults() -> None:
-    """Ellipse and diamond families should start from roomier square defaults."""
+async def test_build_inscribed_shapes_stay_square() -> None:
+    """Ellipse and diamond families fit content but keep a square-ish aspect."""
     graph_store = DummyGraphStore()
 
     ellipse_note = await build_note(
@@ -114,10 +117,15 @@ async def test_build_inscribed_shapes_use_larger_square_defaults() -> None:
         parent_id=None,
     )
 
-    assert ellipse_note.properties.node_size.size.width == 320
-    assert ellipse_note.properties.node_size.size.height == 320
-    assert diamond_note.properties.node_size.size.width == 340
-    assert diamond_note.properties.node_size.size.height == 340
+    ellipse_size = ellipse_note.properties.node_size.size
+    diamond_size = diamond_note.properties.node_size.size
+    # Content-fit shrinks them, but the min-aspect floor keeps height >= width
+    # so a short label doesn't collapse into a sliver.
+    assert ellipse_size.height >= ellipse_size.width
+    assert diamond_size.height >= diamond_size.width
+    # And never grow past the type's default footprint.
+    assert ellipse_size.width <= 320
+    assert diamond_size.width <= 340
 
 
 @pytest.mark.asyncio
@@ -142,7 +150,8 @@ async def test_write_note_tool_creates_note_in_root_scope_by_default() -> None:
     assert created_note.parent_id == "folder-1"
     assert created_note.content is not None
     assert created_note.content.markdown == "New note content"
-    assert created_note.properties.node_size.size.width == get_default_note_size(NodeType.RECTANGLE)[0]
+    # Width is content-fit, never wider than the type's default footprint.
+    assert 0 < created_note.properties.node_size.size.width <= get_default_note_size(NodeType.RECTANGLE)[0]
 
 
 @pytest.mark.asyncio

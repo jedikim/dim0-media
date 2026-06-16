@@ -103,11 +103,14 @@ async def test_learn_generate_diagram_returns_skill_prompt() -> None:
     # Brevity rule.
     assert "paragraph" in prompt.lower()
     assert "label" in prompt.lower()
-    # Shape vocabulary — narrow on purpose (no capsule / tag / thought-cloud / layered-*).
+    # Shape vocabulary — narrow on purpose (no capsule / tag / thought-cloud).
     assert "rectangle" in prompt
     assert "ellipse" in prompt
     assert "diamond" in prompt
-    # Stay-with-rectangles rule for pure taxonomies — drift would
+    # Mindmap/taxonomy hub: the root is a layered-circle, branches rectangles.
+    # Drift here would let the agent flatten the center back into a rectangle.
+    assert "layered-circle" in prompt
+    # Hub-plus-rectangles rule for pure taxonomies — drift would
     # let the agent over-decorate hierarchies.
     assert "taxonomy" in prompt.lower() or "hierarchy" in prompt.lower()
 

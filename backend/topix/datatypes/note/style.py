@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from topix.utils.colors import BLUE_200
+
 
 class NodeType(StrEnum):
     """Enumeration for node types."""
@@ -99,16 +101,17 @@ class Style(BaseModel):
 
     """
 
-    # Defaults aligned with frontend createDefaultStyle() for rectangle nodes
+    # Defaults aligned with frontend createDefaultStyle() for rectangle nodes:
+    # sharp corners (roundness 0) and the paper-adapted blue-200 fill.
     type: NodeType = NodeType.RECTANGLE
     angle: float = 0.0
     stroke_color: str = "#00000000"
     stroke_width: float = 2
     stroke_style: StrokeStyle = StrokeStyle.SOLID
-    background_color: str = "#dbeafe"
+    background_color: str = BLUE_200
     fill_style: FillStyle = FillStyle.SOLID
     roughness: float = 0.5
-    roundness: float = 3.0
+    roundness: float = 0.0
     opacity: float = 100
     group_ids: list[str] = []
     font_size: FontSize = FontSize.M

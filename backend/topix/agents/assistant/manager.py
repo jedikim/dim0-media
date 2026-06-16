@@ -37,6 +37,13 @@ logger = logging.getLogger(__name__)
 AUTO_MODEL_BASE_PLAN = "openrouter/z-ai/glm-4.7:nitro"
 AUTO_MODEL_COMPLEX_PLAN = ModelEnum.OpenAI.GPT_5_4
 
+# Hard ceiling on plan-agent turns (one turn = one LLM invocation, which may
+# fire several parallel tool calls). This is a runaway-loop backstop, not a
+# working target: normal answers finish in a handful of turns. Sized generously
+# so research-heavy turns (memory + several searches + writes + links + a
+# re-read) complete rather than getting cut off mid-build.
+ASSISTANT_MAX_TURNS = 30
+
 
 class AssistantManager:
     """Orchestrates the full flow: query rewrite, planning, searching ..."""
@@ -265,7 +272,7 @@ class AssistantManager:
         query: str,
         session: AssistantSession | None = None,
         message_id: str | None = None,
-        max_turns: int = 5,
+        max_turns: int = ASSISTANT_MAX_TURNS,
         message_context: str | None = None
     ) -> str:
         """Run the assistant agent with the provided context and query."""
@@ -314,7 +321,7 @@ class AssistantManager:
         query: str,
         session: AssistantSession | None = None,
         message_id: str | None = None,
-        max_turns: int = 8,
+        max_turns: int = ASSISTANT_MAX_TURNS,
         message_context: str | None = None
     ) -> AsyncGenerator[AgentStreamMessage | ToolCall, str]:
         """Run the assistant agent with the provided context and query.

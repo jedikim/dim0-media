@@ -7,12 +7,15 @@ from dataclasses import dataclass, field
 import pytest
 
 from topix.agents.notes.layout import (
+    EDGE_ANCHOR_INSET,
     TILE_GAP_X,
     _connected_components,
+    _edge_anchor_offset,
     rearrange_created_notes,
 )
 from topix.datatypes.note.link import Link
 from topix.datatypes.note.note import Note
+from topix.datatypes.note.style import NodeType
 from topix.datatypes.property import PositionProperty, SizeProperty
 
 
@@ -47,9 +50,13 @@ class _FakeGraphStore:
     notes: dict[str, Note] = field(default_factory=dict)
     links: list[Link] = field(default_factory=list)
     patches: list[tuple[str, dict]] = field(default_factory=list)
+    link_updates: list[tuple[str, dict]] = field(default_factory=list)
 
     async def get_nodes(self, note_ids: list[str]) -> list[Note]:
         return [self.notes[nid] for nid in note_ids if nid in self.notes]
+
+    async def update_links(self, updates: list[tuple[str, dict]]) -> None:
+        self.link_updates.extend(updates)
 
     async def get_links(self, link_ids: list[str]) -> list[Link]:
         requested = set(link_ids)
@@ -510,3 +517,100 @@ async def test_rearrange_does_not_move_anchor_node() -> None:
     # Anchor's persisted position stays put.
     assert old_anchor.properties.node_position.position.x == 2000.0
     assert old_anchor.properties.node_position.position.y == 1000.0
+
+
+# -----------------------------
+# Edge endpoint anchoring
+# -----------------------------
+
+def test_edge_anchor_rectangle_picks_facing_border_midpoint() -> None:
+    """A rectangle anchors at the midpoint of the border facing the peer."""
+    w, h = 300.0, 100.0
+    inset = EDGE_ANCHOR_INSET
+    # Peer to the right → right-border midpoint.
+    assert _edge_anchor_offset(NodeType.RECTANGLE, w, h, 500.0, 10.0) == (w - inset, h / 2)
+    # Peer to the left → left-border midpoint.
+    assert _edge_anchor_offset(NodeType.RECTANGLE, w, h, -500.0, 10.0) == (inset, h / 2)
+    # Peer below (vertical dominates) → bottom-border midpoint.
+    assert _edge_anchor_offset(NodeType.RECTANGLE, w, h, 10.0, 500.0) == (w / 2, h - inset)
+    # Peer above → top-border midpoint.
+    assert _edge_anchor_offset(NodeType.RECTANGLE, w, h, 10.0, -500.0) == (w / 2, inset)
+
+
+def test_edge_anchor_round_and_diamond_stay_centered() -> None:
+    """Circles/diamonds keep the center anchor (renderer clips to a radial point)."""
+    w, h = 200.0, 200.0
+    for node_type in (NodeType.LAYERED_CIRCLE, NodeType.ELLIPSE, NodeType.DIAMOND,
+                      NodeType.SOFT_DIAMOND, NodeType.LAYERED_DIAMOND):
+        assert _edge_anchor_offset(node_type, w, h, 500.0, 0.0) == (w / 2, h / 2)
+
+
+def test_edge_anchor_inset_clamps_for_tiny_nodes() -> None:
+    """The inset never exceeds half the node, so it can't invert a tiny box."""
+    assert _edge_anchor_offset(NodeType.RECTANGLE, 2.0, 100.0, 5.0, 0.0) == (1.0, 50.0)
+
+
+@pytest.mark.asyncio
+async def test_rearrange_anchors_link_endpoints_to_borders() -> None:
+    """A parent→child link is persisted with border-to-border local offsets."""
+    parent = _make_note("p", x=0.0, y=0.0)
+    child = _make_note("c", x=0.0, y=400.0)
+    link = Link(id="l1", source="p", target="c", graph_uid="graph-1")
+    store = _FakeGraphStore(
+        notes={"p": parent, "c": child},
+        links=[link],
+    )
+
+    await rearrange_created_notes(
+        graph_store=store,
+        graph_uid="graph-1",
+        created_ids=["p", "c"],
+        created_link_ids=["l1"],
+    )
+
+    assert len(store.link_updates) == 1
+    _, data = store.link_updates[0]
+    start = data["properties"]["start_point"]
+    end = data["properties"]["end_point"]
+    # Both endpoints are node-local offsets.
+    assert start["is_local_offset"] is True
+    assert end["is_local_offset"] is True
+    # LR layout puts the child to the right: source exits its right border,
+    # target enters its left border (both at vertical mid-height = 50).
+    assert start["position"] == {"x": 300.0 - EDGE_ANCHOR_INSET, "y": 50.0}
+    assert end["position"] == {"x": EDGE_ANCHOR_INSET, "y": 50.0}
+
+
+@pytest.mark.asyncio
+async def test_rearrange_keeps_hub_centered_and_anchors_rect_children() -> None:
+    """A layered-circle hub stays center-anchored; rectangle children border-anchor."""
+    hub = _make_note("hub", x=0.0, y=0.0, width=200.0, height=200.0)
+    hub.style.type = NodeType.LAYERED_CIRCLE
+    a = _make_note("a", x=0.0, y=0.0)
+    b = _make_note("b", x=0.0, y=0.0)
+    links = [
+        Link(id="la", source="hub", target="a", graph_uid="graph-1"),
+        Link(id="lb", source="hub", target="b", graph_uid="graph-1"),
+    ]
+    store = _FakeGraphStore(
+        notes={"hub": hub, "a": a, "b": b},
+        links=links,
+    )
+
+    await rearrange_created_notes(
+        graph_store=store,
+        graph_uid="graph-1",
+        created_ids=["hub", "a", "b"],
+        created_link_ids=["la", "lb"],
+    )
+
+    updates = dict(store.link_updates)
+    assert set(updates) == {"la", "lb"}
+    for lid in ("la", "lb"):
+        start = updates[lid]["properties"]["start_point"]["position"]
+        end = updates[lid]["properties"]["end_point"]["position"]
+        # Hub (source) is a layered-circle → center anchor (200/2).
+        assert start == {"x": 100.0, "y": 100.0}
+        # Child (rect 300x100) enters on a vertical border at mid-height.
+        assert end["y"] == 50.0
+        assert end["x"] in (EDGE_ANCHOR_INSET, 300.0 - EDGE_ANCHOR_INSET)

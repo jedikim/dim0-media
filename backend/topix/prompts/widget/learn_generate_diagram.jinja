@@ -17,32 +17,33 @@ If you find yourself writing more than ~20 words in `content`, stop and split it
 
 ---
 
-## Mix three shapes when the diagram is a flow or schema
+## Use shapes to carry meaning
 
-For pure taxonomies (parent → child → grandchild hierarchies — "kingdoms of life", "parts of an atom"), use `rectangle` everywhere. The tree shape carries the meaning; shape variety would only add noise.
-
-For **flows** (a sequence with branches/decisions — sign-up flow, request lifecycle) and **schemas** (different kinds of things linked together — entity relationships, system architecture), reach for the right shape so the reader sees structure at a glance:
+Shapes are semantic, not decoration. The whole vocabulary:
 
 | Shape | When the node represents |
 |---|---|
-| `rectangle` | Generic concept, fact, branch (default — when in doubt, this) |
+| `rectangle` | Generic concept, fact, branch, or step (default — when in doubt, this) |
+| `layered-circle` | The hub of a mindmap / taxonomy — the single root the tree radiates from |
 | `ellipse` | Terminal point in a flow — a start, an end, a final outcome |
-| `diamond` / `soft-diamond` | A decision or fork — any branching point in the flow |
+| `diamond` / `soft-diamond` | A decision or fork — any branching point in a flow |
 
 That's the entire vocabulary for now. Other shapes exist but are not part of this skill — don't reach for them.
 
-**Aim for ~3 shapes per flow, not 8.** Use the minimum variety needed to make the structure legible.
+For pure taxonomies / mindmaps (parent → child → grandchild — "kingdoms of life", "parts of an atom"), make the **root a `layered-circle`** and every child and grandchild a `rectangle`. The circle anchors the eye on the center; the tree shape carries the rest — don't vary the branch shapes further.
+
+For **flows** (a sequence with branches/decisions — sign-up flow, request lifecycle) and **schemas** (different kinds of things linked together — entity relationships, system architecture), reach for `ellipse` and `diamond` so the reader sees structure at a glance. **Aim for ~3 shapes per flow, not 8** — the minimum variety needed to be legible.
 
 ---
 
 ## Worked examples
 
-### Pure taxonomy — rectangles only
+### Pure taxonomy — layered-circle hub, rectangle branches
 
 > "Explain the kingdoms of life."
 
 ```
-write_note label="Living things"   type="rectangle"  content="The six kingdoms across three domains."
+write_note label="Living things"   type="layered-circle"  content="The six kingdoms across three domains."
 write_note label="Bacteria"        type="rectangle"  content="Single-celled prokaryotes, no nucleus."
 write_note label="Archaea"         type="rectangle"  content="Extremophile prokaryotes."
 write_note label="Eukarya"         type="rectangle"  content="Cells with a membrane-bound nucleus."
@@ -84,7 +85,7 @@ Three shapes, each one carries meaning: ellipse for entry/exit points, rectangle
 Walk through these before issuing the `write_note`s:
 
 1. Every node's `content` is a short phrase or one short sentence — no paragraphs.
-2. For a taxonomy: all rectangles; hierarchy is the message.
+2. For a taxonomy / mindmap: the root is a `layered-circle`, every other node is a `rectangle`; hierarchy is the message.
 3. For a flow or schema: at least one ellipse (terminal) AND at least one diamond (decision), used where they actually fit. If you don't have those, you're probably building a taxonomy after all — drop the variety.
 4. Total notes between 5 and 15. Never exceed 25.
 
