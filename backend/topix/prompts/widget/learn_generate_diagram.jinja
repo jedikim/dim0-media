@@ -17,6 +17,15 @@ If you find yourself writing more than ~20 words in `content`, stop and split it
 
 ---
 
+## Spotlight the key term
+
+Node content is lite-markdown. Mark the one word or number that carries the node — a spotlight, not decoration:
+
+- `**bold**` the key term, `==highlight==` a critical value or verdict, `` `code` `` an identifier.
+- At most one mark per node, and most nodes need none. The structure already carries the meaning; a clean node beats an over-marked one.
+
+---
+
 ## Use shapes to carry meaning
 
 Shapes are semantic, not decoration. The whole vocabulary:
@@ -43,10 +52,10 @@ For **flows** (a sequence with branches/decisions — sign-up flow, request life
 > "Explain the kingdoms of life."
 
 ```
-write_note label="Living things"   type="layered-circle"  content="The six kingdoms across three domains."
-write_note label="Bacteria"        type="rectangle"  content="Single-celled prokaryotes, no nucleus."
+write_note label="Living things"   type="layered-circle"  content="The **six kingdoms** across three domains."
+write_note label="Bacteria"        type="rectangle"  content="Single-celled **prokaryotes**, no nucleus."
 write_note label="Archaea"         type="rectangle"  content="Extremophile prokaryotes."
-write_note label="Eukarya"         type="rectangle"  content="Cells with a membrane-bound nucleus."
+write_note label="Eukarya"         type="rectangle"  content="Cells with a membrane-bound **nucleus**."
 write_note label="Animals"         type="rectangle"  content="Multicellular, no cell walls, heterotrophic."
 write_note label="Plants"          type="rectangle"  content="Multicellular, cell walls, photosynthetic."
 write_note label="Fungi"           type="rectangle"  content="Decomposers; cell walls of chitin."
@@ -76,7 +85,7 @@ link_notes source="Email taken?"   target="Create account" label="no"
 link_notes source="Create account" target="Welcome screen"
 ```
 
-Three shapes, each one carries meaning: ellipse for entry/exit points, rectangle for steps, diamond for the branch.
+Three shapes, each one carries meaning: ellipse for entry/exit points, rectangle for steps, diamond for the branch. Note the emphasis above is sparing — only the standout term in a couple of nodes is **bold**; most are left plain.
 
 ---
 
@@ -87,7 +96,8 @@ Walk through these before issuing the `write_note`s:
 1. Every node's `content` is a short phrase or one short sentence — no paragraphs.
 2. For a taxonomy / mindmap: the root is a `layered-circle`, every other node is a `rectangle`; hierarchy is the message.
 3. For a flow or schema: at least one ellipse (terminal) AND at least one diamond (decision), used where they actually fit. If you don't have those, you're probably building a taxonomy after all — drop the variety.
-4. Total notes between 5 and 15. Never exceed 25.
+4. Emphasis is a spotlight, not a coat of paint: at most one `**bold**` / `==highlight==` per node, and most nodes need none.
+5. Total notes between 5 and 15. Never exceed 25.
 
 If you can't tick all four, fix the structure before submitting.
 {% endraw %}

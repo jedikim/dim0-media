@@ -1,19 +1,8 @@
 import { useEffect, useRef } from "react"
 import type { CameraState, CanvasStore, NodeId, Renderer } from "@canvas-harness/core"
+import { isTypingTarget } from "@/lib/dom/is-typing-target"
 import { useBoardAppStore } from "../store/board-app-store"
 import { fitCameraToNode } from "./use-fit-camera-to-node"
-
-
-/**
- * Tells whether a keyboard event came from a focused editor. We let
- * those handle their own arrow keys / escape.
- */
-const isTypingTarget = (target: EventTarget | null): boolean => {
-  if (!(target instanceof HTMLElement)) return false
-  if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return true
-  if (target.isContentEditable) return true
-  return false
-}
 
 
 /**

@@ -229,9 +229,11 @@ _SHAPE_FACTORS: dict[NodeType, tuple[float, float]] = {
 
 # Node types whose layout height is derived from rendered content instead of the
 # stub default. Built-in shapes auto-fit to text on the canvas; among the custom
-# / preview nodes only sheet and code-sandbox are treated as content-sized.
-# Everything else (folder, image, icon, slide, widget, mini-app) keeps its fixed
-# default size.
+# / preview nodes only code-sandbox is treated as content-sized. SHEET is
+# deliberately excluded: it is a long-form rich-text document (Notion-like), so
+# fitting its height would spawn a giant card — it keeps its default size and
+# scrolls instead. Everything else (folder, image, icon, slide, widget, mini-app,
+# sheet) keeps its fixed default size.
 CONTENT_SIZED_TYPES: frozenset[NodeType] = frozenset(
     {
         NodeType.RECTANGLE,
@@ -245,7 +247,6 @@ CONTENT_SIZED_TYPES: frozenset[NodeType] = frozenset(
         NodeType.CAPSULE,
         NodeType.TAG,
         NodeType.THOUGHT_CLOUD,
-        NodeType.SHEET,
         NodeType.CODE_SANDBOX,
     }
 )
@@ -274,7 +275,8 @@ def estimate_node_height(
 
 
 # Document-style types keep a fixed reading width; only their height fits.
-_FIXED_WIDTH_TYPES: frozenset[NodeType] = frozenset({NodeType.SHEET, NodeType.CODE_SANDBOX})
+# (Sheet is excluded from content sizing entirely — see CONTENT_SIZED_TYPES.)
+_FIXED_WIDTH_TYPES: frozenset[NodeType] = frozenset({NodeType.CODE_SANDBOX})
 
 # Minimum height as a fraction of width, so geometric shapes don't collapse to
 # slivers once width also shrinks. Square shapes (diamond/ellipse) stay ~square;

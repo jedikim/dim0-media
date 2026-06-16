@@ -10,15 +10,14 @@ import type {
 import { useCanvasStore, useEdges, useNodes, useSelection } from "@canvas-harness/react"
 import { useTheme } from "@/components/theme-provider"
 import type { LinkEdgeData } from "../../convert/link-to-edge"
-import type { NoteNodeData } from "../../convert/note-to-node"
 import {
   adaptEdgeColors,
-  adaptNodeColors,
   applyColorsToEdgeStyle,
   applyColorsToStyle,
   type StoredColors,
   type StoredEdgeColors,
 } from "../../theme/color-adapter"
+import { computeNodeColorUpdate, storedNodeColorsOf } from "../../theme/apply-node-colors"
 import { StylePanel, type StylePanelStyle } from "./panel"
 
 
@@ -29,19 +28,6 @@ type NodeColorField = (typeof NODE_COLOR_FIELDS)[number]
 
 const EDGE_COLOR_FIELDS = ["strokeColor", "textColor"] as const
 type EdgeColorField = (typeof EDGE_COLOR_FIELDS)[number]
-
-
-/** Lift stored node colors off a Node, falling back to `node.style` for legacy nodes. */
-const storedNodeColorsOf = (n: Node): StoredColors => {
-  const data = n.data as Partial<NoteNodeData> | undefined
-  return (
-    data?._storedColors ?? {
-      backgroundColor: n.style?.backgroundColor,
-      strokeColor: n.style?.strokeColor,
-      textColor: n.style?.textColor,
-    }
-  )
-}
 
 
 /** Lift stored edge colors off an Edge, falling back to `edge.style`. */
@@ -126,23 +112,16 @@ export function StyleSidebar() {
       const hasColor = Object.keys(colorPatch).length > 0
       const hasRest = Object.keys(rest).length > 0
 
+      const mode = resolvedTheme === "dark" ? "dark" : "light"
       store.batch(() => {
         for (const n of selectedNodes) {
-          const prevStored = storedNodeColorsOf(n)
-          const nextStored: StoredColors = hasColor
-            ? { ...prevStored, ...colorPatch }
-            : prevStored
-          const displayColors =
-            resolvedTheme === "dark" ? adaptNodeColors(nextStored, "dark") : nextStored
           const baseStyle = hasRest ? { ...n.style, ...rest } : n.style ?? {}
-          const nextStyle = hasColor
-            ? applyColorsToStyle(baseStyle, displayColors)
-            : baseStyle
-          const nextData: NoteNodeData = {
-            ...((n.data ?? {}) as NoteNodeData),
-            _storedColors: nextStored,
+          if (hasColor) {
+            const { style, data } = computeNodeColorUpdate(n, colorPatch, mode, baseStyle)
+            store.updateNode(n.id, { style, data })
+          } else {
+            store.updateNode(n.id, { style: baseStyle })
           }
-          store.updateNode(n.id, { style: nextStyle, data: nextData })
         }
       })
     },

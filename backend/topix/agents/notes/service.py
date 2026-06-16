@@ -73,8 +73,11 @@ def get_default_note_size(note_type: NodeType) -> tuple[int, int]:  # noqa: C901
     created ones.
     """
     if note_type == NodeType.SHEET:
-        # Prose-friendly reading width (~65-70 chars/line at 14px text).
-        return 560, 320
+        # Square "sticky note" default — a sheet is a long-form rich-text doc
+        # that scrolls, so a square jot surface reads better than a wide card.
+        # Sheets are exempt from content sizing, so this is the size they keep.
+        # Keep in sync with DEFAULT_SHEET_* in webui note.ts.
+        return 440, 440
     if note_type == NodeType.TEXT:
         return 300, 20
     if note_type == NodeType.SLIDE:

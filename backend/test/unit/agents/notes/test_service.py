@@ -130,11 +130,12 @@ async def test_build_note_diamond_stays_squareish():
     assert size.height >= size.width  # min-aspect floor (square)
 
 
-async def test_build_note_sheet_keeps_reading_width():
-    """Sheets keep their fixed reading width; only height fits content."""
-    default_w, _ = get_default_note_size(NodeType.SHEET)
+async def test_build_note_sheet_keeps_default_size():
+    """Sheets are long-form docs: kept at the full default size, never content-fit."""
+    default_w, default_h = get_default_note_size(NodeType.SHEET)
     note = await _build("a short heading", NodeType.SHEET)
     assert note.properties.node_size.size.width == default_w
+    assert note.properties.node_size.size.height == default_h
 
 
 async def test_build_note_empty_content_keeps_default_size():

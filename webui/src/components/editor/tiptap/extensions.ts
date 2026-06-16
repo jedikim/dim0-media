@@ -4,14 +4,13 @@ import CharacterCount from "@tiptap/extension-character-count"
 import TaskList from "@tiptap/extension-task-list"
 import TaskItem from "@tiptap/extension-task-item"
 import Link from "@tiptap/extension-link"
-import Underline from "@tiptap/extension-underline"
 import Typography from "@tiptap/extension-typography"
 import { Markdown } from "tiptap-markdown"
 import { Extension } from "@tiptap/core"
 import { Blockquote } from "@tiptap/extension-blockquote"
 import Suggestion from "@tiptap/suggestion"
 import { keymap } from "@tiptap/pm/keymap"
-import { PluginKey } from "@tiptap/pm/state"
+import { Plugin, PluginKey } from "@tiptap/pm/state"
 import { sinkListItem, liftListItem } from "@tiptap/pm/schema-list"
 import type { EditorState } from "@tiptap/pm/state"
 import type { Node as PMNode } from "@tiptap/pm/model"
@@ -166,6 +165,37 @@ const TabHandler = Extension.create({
   },
 })
 
+/**
+ * Keep clipboard shortcuts inside the editor. canvas-harness wires a
+ * window-level Cmd/Ctrl+C/X/V listener that only skips <input>/<textarea>
+ * (not contenteditable), so without this it hijacks copy/cut/paste while
+ * you're typing in a TipTap surface. Stop the keydown from reaching that
+ * window listener — but don't preventDefault, so the browser's native
+ * clipboard and ProseMirror's own copy/paste handling still run.
+ */
+const ClipboardGuard = Extension.create({
+  name: "clipboardGuard",
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          handleDOMEvents: {
+            keydown: (_view, event) => {
+              if (!(event.metaKey || event.ctrlKey)) return false
+              const key = event.key.toLowerCase()
+              if (key === "c" || key === "x" || key === "v") {
+                event.stopPropagation()
+              }
+              return false
+            },
+          },
+        },
+      }),
+    ]
+  },
+})
+
+
 export interface GetExtensionsOptions {
   placeholder?: string
   pageProvider?: PageProvider | null
@@ -216,7 +246,6 @@ export function getExtensions(options: GetExtensionsOptions = {}) {
       openOnClick: false,
       HTMLAttributes: { class: "editor-link" },
     }),
-    Underline,
     Typography,
     Markdown.configure({
       html: false,
@@ -224,6 +253,7 @@ export function getExtensions(options: GetExtensionsOptions = {}) {
       transformPastedText: true,
     }),
     SlashCommand,
+    ClipboardGuard,
     TabHandler, // must be last — highest priority in TipTap's keymap chain
   ]
 }

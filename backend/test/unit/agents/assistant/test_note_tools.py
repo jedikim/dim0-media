@@ -52,8 +52,8 @@ class DummyGraphStore:
 
 
 @pytest.mark.asyncio
-async def test_build_note_sheet_keeps_reading_width_and_fits_height() -> None:
-    """Sheets keep their fixed reading width; height fits the content."""
+async def test_build_note_sheet_keeps_default_size() -> None:
+    """Sheets are long-form rich-text docs: kept at the full default size, not content-fit."""
     graph_store = DummyGraphStore()
 
     note = await build_note(
@@ -67,11 +67,11 @@ async def test_build_note_sheet_keeps_reading_width_and_fits_height() -> None:
 
     assert note.graph_uid == "graph-1"
     assert note.style.type == NodeType.SHEET
-    # Sheet is a fixed-width (document) type: width stays at the reading default.
-    assert note.properties.node_size.size.width == 560
-    # Height now fits the content, so a one-line sheet is far shorter than the
-    # old fixed 320 default.
-    assert 0 < note.properties.node_size.size.height < 320
+    # Sheet is exempt from content sizing — it keeps its full default footprint
+    # (a long doc shouldn't auto-grow into a giant card; it scrolls instead).
+    default_w, default_h = get_default_note_size(NodeType.SHEET)
+    assert note.properties.node_size.size.width == default_w
+    assert note.properties.node_size.size.height == default_h
     assert note.properties.node_position.position.x == 0
     assert note.properties.node_position.position.y == 0
 
@@ -201,8 +201,8 @@ async def test_write_note_tool_rewrites_existing_note_and_seeds_size_when_too_sm
                     "id": ANY,
                     "type": "size",
                     "size": {
-                        "width": 560.0,
-                        "height": 320.0,
+                        "width": 440.0,
+                        "height": 440.0,
                     },
                 },
             },

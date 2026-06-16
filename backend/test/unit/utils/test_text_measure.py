@@ -84,16 +84,16 @@ def test_font_size_accepts_string_alias():
 
 
 def test_excluded_types_return_zero():
-    """Preview / non-text node types are not content-sized."""
+    """Preview/doc node types are not content-sized (incl. sheet — kept at default)."""
     for node_type in (NodeType.SLIDE, NodeType.WIDGET, NodeType.MINI_APP, NodeType.FOLDER,
-                       NodeType.IMAGE, NodeType.ICON):
+                       NodeType.IMAGE, NodeType.ICON, NodeType.SHEET):
         assert node_type not in CONTENT_SIZED_TYPES
         assert estimate_node_height(node_type, 400, _LONG_LINE) == 0.0
 
 
 def test_included_types_are_positive():
     """Content-sized types produce a positive height for non-empty content."""
-    for node_type in (NodeType.RECTANGLE, NodeType.TEXT, NodeType.SHEET,
+    for node_type in (NodeType.RECTANGLE, NodeType.TEXT,
                       NodeType.CODE_SANDBOX, NodeType.DIAMOND, NodeType.ELLIPSE):
         assert estimate_node_height(node_type, 400, _LONG_LINE) > 0.0
 

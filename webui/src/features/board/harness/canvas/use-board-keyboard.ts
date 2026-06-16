@@ -1,19 +1,7 @@
 import { useEffect } from "react"
 import type { CanvasStore } from "@canvas-harness/core"
+import { isTypingTarget } from "@/lib/dom/is-typing-target"
 import { useBoardAppStore } from "../store/board-app-store"
-
-
-/**
- * Tells whether a keyboard event originated from a focused text-entry
- * surface. We don't steal undo/redo or tool shortcuts from those — the
- * user is typing.
- */
-const isTypingTarget = (target: EventTarget | null): boolean => {
-  if (!(target instanceof HTMLElement)) return false
-  if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return true
-  if (target.isContentEditable) return true
-  return false
-}
 
 
 /**

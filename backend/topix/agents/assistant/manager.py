@@ -34,7 +34,7 @@ from topix.utils.common import gen_uid
 
 logger = logging.getLogger(__name__)
 
-AUTO_MODEL_BASE_PLAN = "openrouter/z-ai/glm-4.7:nitro"
+AUTO_MODEL_BASE_PLAN = "openrouter/deepseek/deepseek-v4-flash:nitro"
 AUTO_MODEL_COMPLEX_PLAN = ModelEnum.OpenAI.GPT_5_4
 
 # Hard ceiling on plan-agent turns (one turn = one LLM invocation, which may
