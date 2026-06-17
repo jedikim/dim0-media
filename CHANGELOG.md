@@ -1,3 +1,11 @@
+## v0.3.50 (2026-06-17)
+
+### Fix
+
+- **webui**: correct theme palette illogics in index.css (#136)
+- **editor**: tiptap polish — underline round-trip, autolink, link dedup, toolbar chrome (#134)
+- **board**: gate iframe pointer-events on selection so canvas gestures survive (#133)
+
 ## v0.3.49 (2026-06-16)
 
 ### Feat
