@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef } from "react"
 
 import { CursorClickIcon } from "@phosphor-icons/react"
 import { type NodeId } from "@canvas-harness/core"
-import { useCanvasStore, useNode } from "@canvas-harness/react"
+import { useCanvasStore, useNode, useSelection } from "@canvas-harness/react"
 
 import { MiniAppMount } from "@/features/mini-app"
 import { cn } from "@/lib/utils"
@@ -56,6 +56,14 @@ export function MiniAppView({ id }: MiniAppViewProps) {
   const canEdit = useBoardAppStore((s) => s.canEdit)
   const wrapRef = useRef<HTMLDivElement>(null)
   const isInView = useIsInView(wrapRef, "200px")
+  // Gate iframe interaction on selection so canvas pan/zoom gestures
+  // pass cleanly through unselected mini-apps. Without this, the
+  // iframe's `pointer-events-auto` captures the pointer the moment
+  // the user's drag crosses into the card → canvas-harness loses
+  // gesture tracking → pan dies mid-swipe. Same pattern sheet uses for
+  // its inline editor (gated on `editing` instead of selection).
+  const selection = useSelection()
+  const isSelected = selection.includes(id)
 
   // rAF-throttled grow-only resize. The widget posts `mini-app:resize`
   // through MiniAppMount on every content-size change; we batch those
@@ -116,7 +124,10 @@ export function MiniAppView({ id }: MiniAppViewProps) {
             <MiniAppMount
               noteId={id as unknown as string}
               source={source}
-              className="pointer-events-auto h-full w-full bg-transparent"
+              className={cn(
+                "h-full w-full bg-transparent",
+                isSelected ? "pointer-events-auto" : "pointer-events-none",
+              )}
               onContentHeightChange={onContentHeightChange}
             />
           ) : (

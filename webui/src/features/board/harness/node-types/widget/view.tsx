@@ -1,7 +1,7 @@
 import { useRef } from "react"
 import { LayoutIcon } from "@phosphor-icons/react"
 import { type NodeId } from "@canvas-harness/core"
-import { useCanvasStore, useNode } from "@canvas-harness/react"
+import { useCanvasStore, useNode, useSelection } from "@canvas-harness/react"
 import { cn } from "@/lib/utils"
 import { WidgetIframe } from "@/features/board/components/flow/widget-iframe"
 import type { NoteNodeData } from "../../convert/note-to-node"
@@ -33,6 +33,13 @@ export function WidgetView({ id }: WidgetViewProps) {
   const canEdit = useBoardAppStore((s) => s.canEdit)
   const wrapRef = useRef<HTMLDivElement>(null)
   const isInView = useIsInView(wrapRef, "200px")
+  // Gate iframe interaction on selection so canvas pan/zoom gestures
+  // pass through unselected widgets cleanly — without this the
+  // iframe's `pointer-events-auto` captures the pointer mid-drag and
+  // the canvas gesture dies. See mini-app/view.tsx for the same
+  // pattern.
+  const selection = useSelection()
+  const isSelected = selection.includes(id)
   if (!node) return null
 
   const data = (node.data ?? {}) as Partial<NoteNodeData>
@@ -54,7 +61,10 @@ export function WidgetView({ id }: WidgetViewProps) {
             <WidgetIframe
               html={html}
               title="Widget"
-              className="pointer-events-auto h-full w-full bg-transparent"
+              className={cn(
+                "h-full w-full bg-transparent",
+                isSelected ? "pointer-events-auto" : "pointer-events-none",
+              )}
             />
           ) : (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 px-4 text-center text-sm text-muted-foreground">
