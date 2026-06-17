@@ -17,11 +17,11 @@
 </p>
 
 <p align="center">
-  Most AI tools start with a chat box and bolt everything else on around it. Dim0 inverts that: the <strong>board is the workspace</strong>, and the agent is one of the things living on it. It reads what's on your canvas, takes real steps with tools, and writes results back as editable nodes — notes, mind maps, and <strong>mini-apps</strong> (real, interactive React apps, not chat-trapped artifacts). Everything is <strong>real-time multiplayer</strong> and <strong>open-source</strong>: self-host it, own your data, switch models whenever the landscape shifts.
+  Most AI tools start with a chat box and bolt everything else on around it. Dim0 inverts that: the <strong>board is the workspace</strong>, and the agent is one of the things living on it. It reads what's on your canvas, takes real steps with tools, and writes results back as editable nodes: notes, mind maps, and <strong>mini-apps</strong> (real, interactive React apps, not chat-trapped artifacts). Everything is <strong>real-time multiplayer</strong> and <strong>open-source</strong>: self-host it, own your data, switch models whenever the landscape shifts.
 </p>
 
 <p align="center">
-  ⭐ Star if Dim0 is useful to you — it genuinely helps others find the project.
+  ⭐ Star if Dim0 is useful to you. It genuinely helps others find the project.
 </p>
 
 ![Dim0 app screenshot](docs/images/main-screen.png)
@@ -29,16 +29,16 @@
 
 ## Features
 
-- ♾️ **Infinite canvas** — thousands of nodes and nested boards, smooth at scale
-- 🎨 **A real whiteboard underneath** — hand-drawn and geometric shapes, arrows, images and media, and a huge icon library (200,000+ via Iconify)
-- 🤖 **Board-aware agent** — reads your canvas and selected nodes, takes multi-step tool actions, and writes results back as editable nodes
-- 🧩 **Mini-apps** — describe a tool, get a real interactive React app on the board: open it, edit it, export it
-- 📝 **Rich notes** — Notion-style rich text, math, code, and sub-pages, edited in place
-- 💻 **Code & documents** — run code in sandboxes; drop in files that the agent can search (RAG)
-- 🔌 **Bring your own model** — OpenAI, Anthropic, Gemini, Mistral, DeepSeek, Qwen, and more — switch anytime
-- 👥 **Real-time multiplayer** — live cursors, shared edits, a shared agent; conflict-free sync, solo or fifty people deep
-- 🎬 **Present from the canvas** — drop frames on the board and run them as a slideshow, no export to a separate slides tool
-- 🔓 **Open-source & private** — MIT, self-hostable, your data stays yours (no training, no telemetry)
+- ♾️ **Infinite canvas**: thousands of nodes and nested boards, smooth at scale
+- 🎨 **A real whiteboard underneath**: hand-drawn and geometric shapes, arrows, images and media, and a huge icon library (200,000+ via Iconify)
+- 🤖 **Board-aware agent**: reads your canvas and selected nodes, takes multi-step tool actions, and writes results back as editable nodes
+- 🧩 **Mini-apps**: describe a tool, get a real interactive React app on the board: open it, edit it, export it
+- 📝 **Rich notes**: Notion-style rich text, math, code, and sub-pages, edited in place
+- 💻 **Code & documents**: run code in sandboxes; drop in files that the agent can search (RAG)
+- 🔌 **Bring your own model**: OpenAI, Anthropic, Gemini, Mistral, DeepSeek, Qwen, and more, switch anytime
+- 👥 **Real-time multiplayer**: live cursors, shared edits, a shared agent; conflict-free sync, solo or fifty people deep
+- 🎬 **Present from the canvas**: drop frames on the board and run them as a slideshow, no export to a separate slides tool
+- 🔓 **Open-source & private**: MIT, self-hostable, your data stays yours (no training, no telemetry)
 
 See it in action:
 
@@ -46,7 +46,7 @@ https://github.com/user-attachments/assets/cdc7d3d4-eb59-4d7d-a9ff-6f0206ba82df
 
 ## Why Dim0?
 
-You already have a chat assistant, a whiteboard, and a doc tool. Dim0 is what you get when they're the *same* surface — and the AI can actually touch it.
+You already have a chat assistant, a whiteboard, and a doc tool. Dim0 is what you get when they're the *same* surface, and the AI can actually touch it.
 
 | | **Dim0** | ChatGPT / Claude artifacts | Notion + AI | Miro / tldraw / Excalidraw |
 | --- | :---: | :---: | :---: | :---: |
@@ -59,11 +59,11 @@ You already have a chat assistant, a whiteboard, and a doc tool. Dim0 is what yo
 | Open-source & self-hostable | ✅ | ❌ | ❌ | ⚠️ partial |
 | Your data stays yours (no training, no telemetry) | ✅ | ❌ | ❌ | ⚠️ |
 
-**The short version:** mini-apps and agent output *live on the board* next to your notes and data — editable, persistent, and shared with your team in real time — instead of being buried in a chat thread you'll never find again.
+**The short version:** mini-apps and agent output *live on the board* next to your notes and data (editable, persistent, and shared with your team in real time), instead of being buried in a chat thread you'll never find again.
 
 ## Quickstart (under a minute)
 
-Run the published images — Docker is the only prerequisite.
+Run the published images. Docker is the only prerequisite.
 
 ```bash
 git clone https://github.com/vcmf/dim0.git && cd dim0
@@ -119,7 +119,7 @@ https://github.com/user-attachments/assets/ad5de9f4-6f44-43a2-b59a-5279232d7f60
 
 ## Canvas engine
 
-The board is built on [canvas-harness](https://github.com/winlp4ever/canvas-harness), a canvas-rendered node-graph library we maintain separately. Boards can hold thousands of nodes and still pan, zoom, and edit smoothly — comparable to tldraw and Excalidraw, and on par with hosted tools like Miro or FigJam.
+The board is built on [canvas-harness](https://github.com/winlp4ever/canvas-harness), a canvas-rendered node-graph library we maintain separately. Boards can hold thousands of nodes and still pan, zoom, and edit smoothly, comparable to tldraw and Excalidraw, and on par with hosted tools like Miro or FigJam.
 
 ## Collaboration
 
@@ -332,7 +332,7 @@ GitHub Actions handle the version check, releases, and Docker publishing.
 - Port already in use? Change `API_PORT` or `APP_PORT`.
 - Env change not picked up? Restart backend and frontend after editing `.env`.
 - Want to see the resolved Compose config? `make config`.
-- Backend tests failing with odd import errors (e.g. `cannot import name 'Docstring' from 'griffe'`)? The local `backend/.venv` is stale or half-installed — a plain `uv sync` won't repair a partially-deleted package. Rebuild it: `rm -rf backend/.venv && uv sync --extra dev`.
+- Backend tests failing with odd import errors (e.g. `cannot import name 'Docstring' from 'griffe'`)? The local `backend/.venv` is stale or half-installed, and a plain `uv sync` won't repair a partially-deleted package. Rebuild it: `rm -rf backend/.venv && uv sync --extra dev`.
 
 ## License
 
