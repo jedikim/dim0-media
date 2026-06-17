@@ -15,6 +15,7 @@ import { sinkListItem, liftListItem } from "@tiptap/pm/schema-list"
 import type { EditorState } from "@tiptap/pm/state"
 import type { Node as PMNode } from "@tiptap/pm/model"
 import { HighlightMarkdown } from "./highlight/highlight-extension"
+import { UnderlineMarkdown } from "./underline/underline-extension"
 import { DetailsMarkdown, DetailsSummaryMarkdown, DetailsContentMarkdown } from "./toggle/toggle-extensions"
 import { TableKit } from "@tiptap/extension-table"
 import { ShikiCodeBlock } from "./code-block/code-block-extension"
@@ -215,6 +216,8 @@ export function getExtensions(options: GetExtensionsOptions = {}) {
       // Phase 1: undo/redo enabled. When adding Yjs: set undoRedo: false and add @tiptap/extension-collaboration
       codeBlock: false, // replaced by ShikiCodeBlock
       blockquote: false, // replaced by BlockquoteNoShortcut so `> ` triggers toggle
+      underline: false, // replaced by UnderlineMarkdown so Ctrl+U survives markdown round-trip
+      link: false, // replaced by our explicit Link.configure(...) below — fixes a "Duplicate extension names: ['link']" warning
     }),
     BlockquoteNoShortcut,
     ShikiCodeBlock,
@@ -233,6 +236,7 @@ export function getExtensions(options: GetExtensionsOptions = {}) {
     PageMention,
     Subpage,
     HighlightMarkdown.configure({ multicolor: true }),
+    UnderlineMarkdown,
     DetailsMarkdown,
     DetailsSummaryMarkdown,
     DetailsContentMarkdown,
@@ -245,6 +249,16 @@ export function getExtensions(options: GetExtensionsOptions = {}) {
     Link.configure({
       openOnClick: false,
       HTMLAttributes: { class: "editor-link" },
+      // Auto-link bare domains too — by default the Link extension's
+      // `shouldAutoLink` requires a protocol prefix (`https://example.com`
+      // autolinks, `example.com` doesn't). Users expect a typed
+      // `wordpress.com ` to become a link without the scheme; linkifyjs's
+      // tokenizer already screens out non-URL-looking strings (it checks
+      // against the IANA TLD list under the hood), so widening to "trust
+      // linkify's detection" produces the natural behavior. Bare matches
+      // get the `https://` scheme via `defaultProtocol`.
+      shouldAutoLink: () => true,
+      defaultProtocol: "https",
     }),
     Typography,
     Markdown.configure({

@@ -231,7 +231,7 @@ export function SheetView({ id }: SheetViewProps) {
         ) : null}
 
         {editing && toolbarEditor ? (
-          <SheetEditorToolbar editor={toolbarEditor} surfaceColor={honoredBg} />
+          <SheetEditorToolbar editor={toolbarEditor} />
         ) : null}
       </div>
 

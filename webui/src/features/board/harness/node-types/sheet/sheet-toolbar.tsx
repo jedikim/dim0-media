@@ -45,16 +45,13 @@ function MarkButton({
  * its own bubble menu. Mount as the card's bottom flex child so it always sits
  * flush at the bottom edge while the prose scrolls above it.
  *
- * `surfaceColor` matches the bar's fill to the card so text reads cleanly
- * behind it. The row scrolls horizontally (no wrap, hidden scrollbar) so it
+ * The row scrolls horizontally (no wrap, hidden scrollbar) so it
  * truncates gracefully when the note is resized narrow.
  */
 export function SheetEditorToolbar({
   editor,
-  surfaceColor,
 }: {
   editor: Editor
-  surfaceColor?: string | null
 }) {
   const active = useEditorState({
     editor,
@@ -74,11 +71,9 @@ export function SheetEditorToolbar({
       // applies to nothing) and tripping the blur-to-exit handler.
       onMouseDown={(e) => e.preventDefault()}
       className={cn(
-        "flex shrink-0 items-center gap-0.5 overflow-x-auto border-t border-border px-3 py-1",
+        "flex shrink-0 items-center gap-0.5 overflow-x-auto border-t border-foreground/20 px-3 py-1 bg-sidebar",
         "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-        surfaceColor ? null : "bg-card",
       )}
-      style={surfaceColor ? { backgroundColor: surfaceColor } : undefined}
     >
       <MarkButton tooltip="Bold" active={active.bold} onClick={() => editor.chain().focus().toggleBold().run()}>
         <TextB size={14} weight="bold" />
