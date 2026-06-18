@@ -85,7 +85,12 @@ def get_default_note_size(note_type: NodeType) -> tuple[int, int]:  # noqa: C901
     if note_type == NodeType.FOLDER:
         return 150, 150
     if note_type == NodeType.CODE_SANDBOX:
-        return 320, 320
+        # Code-friendly rectangle — ~75 chars/line at typical monospace,
+        # close to the 80-char convention. Like sheet, code-sandbox is a
+        # scrolling fixed-surface node (overflow handles long content), so
+        # it's exempt from content-fit sizing in CONTENT_SIZED_TYPES.
+        # Keep in sync with DEFAULT_CODE_SANDBOX_* in webui note.ts.
+        return 560, 360
     if note_type == NodeType.WIDGET:
         return 800, 500
     if note_type == NodeType.MINI_APP:

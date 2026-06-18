@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react"
+import { useTheme } from "@/components/theme-provider"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { resolveIconDisplayColor } from "./icon-color-resolver"
 import {
   filterPickerCategories,
   ICON_COLOR_PRESETS,
@@ -49,6 +51,8 @@ const DEFAULT_COLOR = ICON_COLOR_PRESETS[0].value
 export const IconPicker = ({ value, onChange, onRemove, className }: IconPickerProps) => {
   const [query, setQuery] = useState("")
   const [activeColor, setActiveColor] = useState<string | null>(value?.color ?? DEFAULT_COLOR)
+  const { resolvedTheme } = useTheme()
+  const isDark = resolvedTheme === "dark"
 
   const selectedName = value?.name ?? null
 
@@ -99,6 +103,7 @@ export const IconPicker = ({ value, onChange, onRemove, className }: IconPickerP
                 category={category}
                 selectedName={selectedName}
                 activeColor={activeColor}
+                isDark={isDark}
                 onSelect={handleIconClick}
               />
             ),
@@ -113,6 +118,7 @@ export const IconPicker = ({ value, onChange, onRemove, className }: IconPickerP
       <ColorStrip
         activeColor={activeColor}
         canRemove={selectedName !== null && onRemove !== undefined}
+        isDark={isDark}
         onColorClick={handleColorClick}
         onRemove={onRemove ?? (() => {})}
       />
@@ -125,11 +131,12 @@ type CategorySectionProps = {
   category: PickerCategory
   selectedName: string | null
   activeColor: string | null
+  isDark: boolean
   onSelect: (name: string) => void
 }
 
 
-const CategorySection = ({ category, selectedName, activeColor, onSelect }: CategorySectionProps) => {
+const CategorySection = ({ category, selectedName, activeColor, isDark, onSelect }: CategorySectionProps) => {
   return (
     <section className="mb-3 last:mb-0">
       <h3 className="mb-1 px-1 text-xs font-medium text-muted-foreground">
@@ -142,6 +149,7 @@ const CategorySection = ({ category, selectedName, activeColor, onSelect }: Cate
             icon={icon}
             isSelected={selectedName === icon.name}
             color={activeColor}
+            isDark={isDark}
             onSelect={onSelect}
           />
         ))}
@@ -155,12 +163,18 @@ type IconCellProps = {
   icon: PickerIconEntry
   isSelected: boolean
   color: string | null
+  isDark: boolean
   onSelect: (name: string) => void
 }
 
 
-const IconCell = ({ icon, isSelected, color, onSelect }: IconCellProps) => {
+const IconCell = ({ icon, isSelected, color, isDark, onSelect }: IconCellProps) => {
   const Glyph = icon.component
+  // Resolve through the same helper IconPropertyView uses so the picker
+  // grid previews match the icon's final on-canvas appearance in dark
+  // mode — without this the grid stayed in light-mode hex while the
+  // saved icon rendered dark-adapted.
+  const displayColor = resolveIconDisplayColor(color, isDark)
 
   return (
     <button
@@ -168,7 +182,7 @@ const IconCell = ({ icon, isSelected, color, onSelect }: IconCellProps) => {
       title={icon.name}
       aria-label={icon.name}
       onClick={() => onSelect(icon.name)}
-      style={{ color: color ?? undefined }}
+      style={{ color: displayColor }}
       className={cn(
         "flex aspect-square items-center justify-center rounded-md transition-colors hover:bg-accent",
         !color && "text-foreground",
@@ -184,12 +198,13 @@ const IconCell = ({ icon, isSelected, color, onSelect }: IconCellProps) => {
 type ColorStripProps = {
   activeColor: string | null
   canRemove: boolean
+  isDark: boolean
   onColorClick: (color: string | null) => void
   onRemove: () => void
 }
 
 
-const ColorStrip = ({ activeColor, canRemove, onColorClick, onRemove }: ColorStripProps) => {
+const ColorStrip = ({ activeColor, canRemove, isDark, onColorClick, onRemove }: ColorStripProps) => {
   return (
     <div className="flex items-center gap-1 border-t p-2">
       <div className="flex flex-1 items-center gap-1">
@@ -198,6 +213,7 @@ const ColorStrip = ({ activeColor, canRemove, onColorClick, onRemove }: ColorStr
             key={preset.id}
             preset={preset}
             isActive={preset.value === activeColor}
+            isDark={isDark}
             onClick={() => onColorClick(preset.value)}
           />
         ))}
@@ -219,11 +235,17 @@ const ColorStrip = ({ activeColor, canRemove, onColorClick, onRemove }: ColorStr
 type ColorChipProps = {
   preset: ColorPreset
   isActive: boolean
+  isDark: boolean
   onClick: () => void
 }
 
 
-const ColorChip = ({ preset, isActive, onClick }: ColorChipProps) => {
+const ColorChip = ({ preset, isActive, isDark, onClick }: ColorChipProps) => {
+  // Same resolver as the grid + the on-canvas IconPropertyView so the
+  // chip swatch matches what the icon will actually look like once
+  // committed. CSS-var presets (e.g. "Default") pass through unchanged.
+  const displayColor = resolveIconDisplayColor(preset.value, isDark)
+
   return (
     <button
       type="button"
@@ -231,7 +253,7 @@ const ColorChip = ({ preset, isActive, onClick }: ColorChipProps) => {
       aria-label={preset.label}
       aria-pressed={isActive}
       onClick={onClick}
-      style={{ backgroundColor: preset.value ?? undefined }}
+      style={{ backgroundColor: preset.value ? displayColor : undefined }}
       className={cn(
         "h-5 w-5 rounded-full border border-border transition-transform hover:scale-110",
         !preset.value && "bg-foreground",

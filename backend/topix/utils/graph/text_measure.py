@@ -228,12 +228,13 @@ _SHAPE_FACTORS: dict[NodeType, tuple[float, float]] = {
 }
 
 # Node types whose layout height is derived from rendered content instead of the
-# stub default. Built-in shapes auto-fit to text on the canvas; among the custom
-# / preview nodes only code-sandbox is treated as content-sized. SHEET is
-# deliberately excluded: it is a long-form rich-text document (Notion-like), so
-# fitting its height would spawn a giant card — it keeps its default size and
-# scrolls instead. Everything else (folder, image, icon, slide, widget, mini-app,
-# sheet) keeps its fixed default size.
+# stub default. Only built-in shapes are content-sized — they're text-on-canvas
+# primitives that should hug their label. Document-style custom nodes (SHEET,
+# CODE_SANDBOX) are deliberately excluded: they're long-form scrolling surfaces
+# (Notion-like prose; arbitrary code), so fitting their height would spawn giant
+# cards. They keep their fixed default size and the inner content scrolls.
+# Everything else (folder, image, icon, slide, widget, mini-app, sheet,
+# code-sandbox) keeps its fixed default size.
 CONTENT_SIZED_TYPES: frozenset[NodeType] = frozenset(
     {
         NodeType.RECTANGLE,
@@ -247,7 +248,6 @@ CONTENT_SIZED_TYPES: frozenset[NodeType] = frozenset(
         NodeType.CAPSULE,
         NodeType.TAG,
         NodeType.THOUGHT_CLOUD,
-        NodeType.CODE_SANDBOX,
     }
 )
 

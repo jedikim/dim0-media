@@ -97,8 +97,13 @@ export const DEFAULT_SLIDE_HEIGHT = 540
 
 export const DEFAULT_FOLDER_WIDTH = 150
 export const DEFAULT_FOLDER_HEIGHT = 150
-export const DEFAULT_CODE_SANDBOX_WIDTH = 320
-export const DEFAULT_CODE_SANDBOX_HEIGHT = 320
+// Code-sandbox: rectangle sized for code line-length (~75 chars/line at
+// typical monospace, close to the 80-char convention). Like sheet, it's a
+// scrolling fixed-surface node — exempt from content-fit sizing, so this
+// is the size it keeps. Keep in sync with get_default_note_size in
+// backend/topix/agents/notes/service.py.
+export const DEFAULT_CODE_SANDBOX_WIDTH = 560
+export const DEFAULT_CODE_SANDBOX_HEIGHT = 360
 export const DEFAULT_WIDGET_WIDTH = 800
 export const DEFAULT_WIDGET_HEIGHT = 500
 // Mini-apps trend toward interactive dashboards (charts + controls, lists

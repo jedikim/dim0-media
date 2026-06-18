@@ -77,6 +77,32 @@ async def test_build_note_sheet_keeps_default_size() -> None:
 
 
 @pytest.mark.asyncio
+async def test_build_note_code_sandbox_keeps_default_size() -> None:
+    """Code sandboxes are scrolling surfaces: kept at the full default size, not content-fit.
+
+    Same rationale as sheets — code can be arbitrarily long (whole programs),
+    so fitting the box to content would create giant cards. The default 560x360
+    rectangle is sized for ~75 chars/line at typical monospace, close to the
+    80-char code convention. Long snippets scroll inside the box.
+    """
+    graph_store = DummyGraphStore()
+
+    note = await build_note(
+        graph_store=graph_store,
+        graph_uid="graph-1",
+        content="print('hello, world')\n",
+        label="Snippet",
+        note_type=NodeType.CODE_SANDBOX,
+        parent_id=None,
+    )
+
+    assert note.style.type == NodeType.CODE_SANDBOX
+    default_w, default_h = get_default_note_size(NodeType.CODE_SANDBOX)
+    assert note.properties.node_size.size.width == default_w
+    assert note.properties.node_size.size.height == default_h
+
+
+@pytest.mark.asyncio
 async def test_build_widget_note_uses_widget_defaults() -> None:
     """Widget notes should use dedicated widget defaults."""
     graph_store = DummyGraphStore()
