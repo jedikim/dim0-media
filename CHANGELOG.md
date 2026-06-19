@@ -1,3 +1,9 @@
+## v0.3.52 (2026-06-19)
+
+### Fix
+
+- **board**: icon glyph color tracks theme via textColor → iconColor mirror (#139)
+
 ## v0.3.51 (2026-06-18)
 
 ## v0.3.50 (2026-06-17)
