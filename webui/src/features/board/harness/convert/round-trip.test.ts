@@ -527,4 +527,45 @@ describe("dark-mode color projection", () => {
     expect(back.style.strokeColor).toBe("#a78bfa")
     expect(back.style.textColor).toBe("#f59e0b")
   })
+
+
+  it("mirrors textColor → iconColor so SVG glyphs follow the text-color semantic", () => {
+    // Tailwind convention: `text-foreground` on an <svg> propagates to
+    // currentColor, which colors the glyph. canvas-harness's paintIconNode
+    // reads style.iconColor to substitute currentColor before rasterizing.
+    // applyColorsToStyle mirrors textColor → iconColor so the icon's glyph
+    // color tracks the text/foreground color across every code path
+    // (initial convert, theme flip, color picker, incoming collab op) for
+    // free — same projection function is called from each.
+    setBoardThemeMode("light")
+    const note = createDefaultNote({ boardId: BOARD_ID, nodeType: "icon" })
+    note.style.textColor = "#3b82f6"
+
+    const lightNode = noteToNode(note)
+    expect(lightNode.style?.iconColor).toBe("#3b82f6")
+    expect(lightNode.style?.textColor).toBe("#3b82f6")
+
+    // Dark mode: textColor projects via darkModeDisplayHex; iconColor
+    // tracks the projected value, not the stored one. No separate
+    // adaptation logic — same hex transform, same result.
+    setBoardThemeMode("dark")
+    const darkNode = noteToNode(note)
+    expect(darkNode.style?.iconColor).toBeTruthy()
+    expect(darkNode.style?.iconColor).toBe(darkNode.style?.textColor)
+  })
+
+
+  it("default black textColor inverts to white-ish in dark mode for icon glyphs", () => {
+    // The original "icon doesn't adapt to theme on the canvas" bug: no
+    // user color picked → textColor is the default BLACK_HEX → in dark
+    // mode darkModeDisplayHex("#000000") returns "#ffffff", and that
+    // value flows to iconColor via the mirror. So default icons render
+    // black-on-light and white-on-dark automatically.
+    const note = createDefaultNote({ boardId: BOARD_ID, nodeType: "icon" })
+    expect(note.style.textColor).toBe("#000000")
+
+    setBoardThemeMode("dark")
+    const darkNode = noteToNode(note)
+    expect(darkNode.style?.iconColor).toBe("#ffffff")
+  })
 })

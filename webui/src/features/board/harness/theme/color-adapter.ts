@@ -95,6 +95,17 @@ export const pickStoredEdgeColors = (style: CanvasEdgeStyle): StoredEdgeColors =
  * Merge a `StoredColors` projection back onto a Style. Fields that
  * survived projection as `undefined` clear the field on the result so
  * the lib's fallback path (theme → default) takes over.
+ *
+ * `iconColor` mirrors `textColor` on purpose. canvas-harness's
+ * `paintIconNode` substitutes every `currentColor` in the SVG markup
+ * with `style.iconColor` before rasterizing — and the Tailwind
+ * convention for icons (`<svg class="text-foreground">…</svg>`) is
+ * that the icon's color follows the text/foreground color. By
+ * mirroring textColor here we get the right behavior across every
+ * call path (initial convert, theme flip, color picker, incoming
+ * collab op) for free: anywhere this function runs, the icon glyph
+ * tracks the same color the icon's "text" would. Harmless on
+ * non-icon nodes — their paint functions ignore `iconColor`.
  */
 export const applyColorsToStyle = (
   style: CanvasStyle,
@@ -104,6 +115,7 @@ export const applyColorsToStyle = (
   backgroundColor: colors.backgroundColor,
   strokeColor: colors.strokeColor,
   textColor: colors.textColor,
+  iconColor: colors.textColor,
 })
 
 

@@ -11,6 +11,15 @@ const ICON_NODE_SIZE = 220
 export type AddIconOptions = {
   /** World-space coordinate the icon should be centered on. */
   position?: { x: number; y: number }
+  /**
+   * Optional glyph color the user picked in the dialog. Stored on
+   * `note.style.textColor` since SVG icons follow text-color semantics
+   * (Tailwind's `text-foreground` → CSS `color` → SVG `currentColor`).
+   * The convert path then mirrors textColor → iconColor for the
+   * canvas-harness paint step. Theme-adaptation is automatic via the
+   * existing color projection pipeline.
+   */
+  color?: string | null
 }
 
 
@@ -59,6 +68,13 @@ export const useHarnessAddIcon = (
       note.properties.iconData = {
         type: "icon",
         icon: { type: "icon", icon: iconName },
+      }
+      // textColor drives the icon glyph color via the convert path's
+      // textColor → iconColor mirror. Picker hasn't wired this yet, so
+      // it stays at the default (black, theme-adapts to white in dark
+      // mode through the existing dark-variants map).
+      if (options.color) {
+        note.style.textColor = options.color
       }
       note.properties.nodeSize = {
         type: "size",

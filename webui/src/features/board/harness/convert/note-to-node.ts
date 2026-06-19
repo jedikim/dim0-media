@@ -119,13 +119,16 @@ export const noteToNode = (note: Note | Document): Node => {
   }
 
   // Stash the original colors then project for the current theme mode.
-  // Light mode: project is identity (style === stored). Dark mode:
+  // Light mode: project is identity (display === stored). Dark mode:
   // style holds adapted variants while `_storedColors` keeps the truth.
+  // Both branches funnel through `applyColorsToStyle` so derived fields
+  // (`iconColor` mirroring `textColor`) get set in either mode — without
+  // this funnel, light-mode icons would skip the mirror and render with
+  // an undefined glyph color.
   const storedColors = pickStoredColors(baseStyle)
   const mode = getBoardThemeMode()
-  const style = mode === "light"
-    ? baseStyle
-    : applyColorsToStyle(baseStyle, adaptNodeColors(storedColors, mode))
+  const displayColors = mode === "dark" ? adaptNodeColors(storedColors, "dark") : storedColors
+  const style = applyColorsToStyle(baseStyle, displayColors)
   data._storedColors = storedColors
 
   // Canvas-harness's image renderer reads `node.data.src` (see

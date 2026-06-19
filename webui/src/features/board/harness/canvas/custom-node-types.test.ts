@@ -1,12 +1,17 @@
-// Guards that every Dim0 custom node type is treated as "custom" by BOTH
-// consumer paths: the double-click handler (no inline beginEdit) and the
-// sticky style memory (no style bleed). Regression cover for mini-app,
-// which was added to node-types but missed in both sets.
+// Guards that every node type with "no inline text-editor on dbl-click"
+// behavior is treated as "custom" by BOTH consumer paths: the
+// double-click handler (no inline beginEdit) and the sticky style memory
+// (no style bleed). Two flavors live in this set:
+//   - Dim0's custom node defs (sheet, widget, etc.) — their editing
+//     surface is elsewhere (expand dialog, side panel, folder nav).
+//   - canvas-harness built-ins with no text concept (icon, image) — the
+//     inline editor would open an invisible text caret on top of the
+//     glyph and any typed text would land as junk `node.content`.
 //
-// We assert against a local list rather than importing `boardNodeTypes`
-// directly — that registry pulls in every iframe-backed node view and adds
-// ~12s of import cost to the suite. Keep this list in sync with
-// `node-types/index.ts → boardNodeTypes`.
+// The Dim0-custom subset should match `node-types/index.ts → boardNodeTypes`.
+// We assert against a local list rather than importing the registry —
+// that pulls in every iframe-backed node view and adds ~12s of import
+// cost to the suite.
 import { describe, expect, it } from "vitest"
 import { CUSTOM_NODE_TYPES } from "./custom-node-types"
 import { isStylableNodeType } from "./use-style-memory"
@@ -19,6 +24,9 @@ const EXPECTED_CUSTOM_TYPES = [
   "mini-app",
   "code-sandbox",
   "sheet",
+  // No text concept — dbl-click must not open the lib's inline editor.
+  "icon",
+  "image",
 ].sort()
 
 
