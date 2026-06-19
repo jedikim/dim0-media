@@ -1,4 +1,5 @@
 import { createHighlighter, type Highlighter, type BundledTheme } from "shiki"
+import "./shiki.css"
 
 
 export const LANGUAGE_OPTIONS = [

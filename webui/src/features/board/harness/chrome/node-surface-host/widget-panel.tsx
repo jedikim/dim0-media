@@ -2,7 +2,6 @@ import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { CancelPlainIcon, DownloadIcon, LayoutIcon } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useTheme } from "@/components/theme-provider"
 import { useCanvasStore, useNode } from "@canvas-harness/react"
 import type { NodeId } from "@canvas-harness/core"
 import { CodeArea } from "@/features/board/components/flow/code-area"
@@ -34,9 +33,6 @@ export const WidgetPanel = memo(function WidgetPanel({
   const store = useCanvasStore()
   const node = useNode(nodeId as NodeId)
   const data = (node?.data ?? {}) as Partial<NoteNodeData>
-
-  const { resolvedTheme } = useTheme()
-  const isDark = resolvedTheme === "dark"
 
   const [activeTab, setActiveTab] = useState("rendered")
   const [htmlDraft, setHtmlDraft] = useState(node?.content ?? "")
@@ -220,8 +216,6 @@ export const WidgetPanel = memo(function WidgetPanel({
           <div className={activeTab === "code" ? "flex h-full flex-col bg-background" : "hidden h-full"}>
             <CodeArea
               value={htmlDraft}
-              isDark={isDark}
-              textColor="var(--foreground)"
               onChange={setHtmlDraft}
               language="html"
               placeholder={`<section style="padding:24px;">

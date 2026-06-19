@@ -1,20 +1,23 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { CancelPlainIcon, ConsoleIcon, LoaderIcon, PlayIcon } from "@/components/icons"
 import { Button } from "@/components/ui/button"
-import { useTheme } from "@/components/theme-provider"
 import { useCanvasStore, useNode } from "@canvas-harness/react"
 import type { NodeId } from "@canvas-harness/core"
 import { CodeArea } from "@/features/board/components/flow/code-area"
-import {
-  EMPTY_CODE_EXECUTION_RESULT,
-  ROSE_PINE_DARK,
-  ROSE_PINE_LIGHT,
-} from "@/features/board/components/flow/code-sandbox-utils"
+import { cn } from "@/lib/utils"
 import type { CodeExecutionResult } from "@/features/board/api/execute-code-note"
 import { executeCodeNote } from "@/features/board/api/execute-code-note"
 import { updateNote } from "@/features/board/api/update-note"
 import type { NoteNodeData } from "../../convert/note-to-node"
 import { useBoardAppStore } from "../../store/board-app-store"
+
+
+const EMPTY_CODE_EXECUTION_RESULT: CodeExecutionResult = {
+  status: "success",
+  stdout: "",
+  stderr: "",
+  durationMs: 0,
+}
 
 
 export type CodeSandboxPanelProps = {
@@ -41,10 +44,6 @@ export const CodeSandboxPanel = memo(function CodeSandboxPanel({
   const node = useNode(nodeId as NodeId)
   const data = (node?.data ?? {}) as Partial<NoteNodeData>
   const boardId = useBoardAppStore((s) => s.boardId)
-
-  const { resolvedTheme } = useTheme()
-  const isDark = resolvedTheme === "dark"
-  const palette = isDark ? ROSE_PINE_DARK : ROSE_PINE_LIGHT
 
   const [codeDraft, setCodeDraft] = useState(node?.content ?? "")
   const [isExecuting, setIsExecuting] = useState(false)
@@ -162,10 +161,7 @@ export const CodeSandboxPanel = memo(function CodeSandboxPanel({
 
   return (
     <div className={PANEL_CLASS} onClick={(e) => e.stopPropagation()}>
-      <div
-        className="flex items-center justify-between border-b border-border/70 px-4 py-3"
-        style={{ backgroundColor: palette.panel, color: palette.text }}
-      >
+      <div className="flex items-center justify-between border-b border-border/70 bg-card px-4 py-3 text-foreground">
         <div className="flex min-w-0 flex-1 items-center gap-2 pr-2">
           <ConsoleIcon className="size-4 shrink-0" strokeWidth={2} />
           <div className="min-w-0 flex-1">
@@ -185,28 +181,26 @@ export const CodeSandboxPanel = memo(function CodeSandboxPanel({
                     stopTitleEdit(false)
                   }
                 }}
-                className="w-full border-0 border-b border-current/30 bg-transparent px-0 py-0.5 text-sm font-semibold focus:border-secondary-foreground focus:outline-none"
-                style={{ color: palette.text }}
+                className="w-full border-0 border-b border-current/30 bg-transparent px-0 py-0.5 text-sm font-semibold text-foreground focus:border-secondary-foreground focus:outline-none"
                 placeholder="Untitled sandbox"
               />
             ) : (
               <button
                 type="button"
                 onClick={() => setTitleEditing(true)}
-                className="block max-w-full truncate text-left text-sm font-semibold hover:underline"
-                style={{ color: palette.text }}
+                className="block max-w-full truncate text-left text-sm font-semibold text-foreground hover:underline"
                 title={displayTitle}
               >
                 {displayTitle}
               </button>
             )}
           </div>
-          <span className="text-xs font-medium" style={{ color: palette.muted }}>
+          <span className="text-xs font-medium text-muted-foreground">
             Python
           </span>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs" style={{ color: palette.muted }}>
+          <span className="text-xs text-muted-foreground">
             Max runtime 60s
           </span>
           <Button
@@ -229,7 +223,7 @@ export const CodeSandboxPanel = memo(function CodeSandboxPanel({
             onClick={onClose}
             title="Close"
             aria-label="Close"
-            style={{ color: palette.text }}
+            className="text-foreground"
           >
             <CancelPlainIcon className="size-4" />
           </Button>
@@ -237,42 +231,36 @@ export const CodeSandboxPanel = memo(function CodeSandboxPanel({
       </div>
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[1.3fr_0.9fr]">
-        <div className="min-h-0" style={{ backgroundColor: palette.bg }}>
+        <div className="min-h-0 border-r border-border/70 bg-card">
           <CodeArea
             value={codeDraft}
-            isDark={isDark}
-            textColor={palette.text}
             onChange={setCodeDraft}
           />
         </div>
 
-        <div
-          className="grid min-h-0 grid-rows-[auto_1fr_1fr]"
-          style={{ backgroundColor: palette.panel }}
-        >
-          <div className="px-4 py-3 text-xs font-medium" style={{ color: palette.muted }}>
+        <div className="grid min-h-0 grid-rows-[auto_1fr_1fr] bg-card">
+          <div className="px-4 py-3 text-xs font-medium text-muted-foreground">
             {lastRunLabel}
           </div>
 
           <div className="min-h-0 border-t border-border/70">
-            <div className="px-4 py-2 text-xs font-semibold" style={{ color: palette.accent }}>
+            <div className="px-4 py-2 text-xs font-semibold text-primary">
               stdout
             </div>
-            <pre
-              className="scrollbar-thin h-full overflow-auto overflow-x-auto whitespace-pre-wrap break-all px-4 pb-4 font-mono text-xs leading-5"
-              style={{ color: palette.text }}
-            >
+            <pre className="scrollbar-thin h-full overflow-auto overflow-x-auto whitespace-pre-wrap break-all px-4 pb-4 font-mono text-xs leading-5 text-foreground">
               {result.stdout || "No stdout"}
             </pre>
           </div>
 
           <div className="min-h-0 border-t border-border/70">
-            <div className="px-4 py-2 text-xs font-semibold" style={{ color: palette.danger }}>
+            <div className="px-4 py-2 text-xs font-semibold text-destructive">
               stderr
             </div>
             <pre
-              className="scrollbar-thin h-full overflow-auto overflow-x-auto whitespace-pre-wrap break-all px-4 pb-4 font-mono text-xs leading-5"
-              style={{ color: result.stderr ? palette.danger : palette.muted }}
+              className={cn(
+                "scrollbar-thin h-full overflow-auto overflow-x-auto whitespace-pre-wrap break-all px-4 pb-4 font-mono text-xs leading-5",
+                result.stderr ? "text-destructive" : "text-muted-foreground",
+              )}
             >
               {result.stderr || "No stderr"}
             </pre>

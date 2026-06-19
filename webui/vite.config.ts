@@ -186,7 +186,6 @@ export default defineConfig({
             if (id.includes("@codemirror")) return "codemirror"
             if (id.includes("/node_modules/motion/") || id.includes("framer-motion")) return "motion"
             if (id.includes("recharts")) return "recharts"
-            if (id.includes("highlight.js")) return "highlightjs"
             if (id.includes("/node_modules/@tiptap/") || id.includes("/node_modules/tiptap-markdown/")) return "tiptap"
             if (
               id.includes("/node_modules/prosemirror-") ||

@@ -53,6 +53,10 @@ export const usePresentationMode = (
     // without it before we move the camera. Avoids a one-frame flash
     // of the frame border / label at the new zoom.
     rendererRef.current?.setHideFrames(true)
+    // Clear selection so the selection overlay (box + handles) doesn't
+    // keep painting over the slide — setHideFrames only drops frame
+    // chrome, not selection chrome.
+    store.setSelection([])
     const raf = window.requestAnimationFrame(() => {
       fitCameraToNode(store, wrapRef.current, target)
     })

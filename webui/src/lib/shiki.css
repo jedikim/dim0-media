@@ -1,0 +1,27 @@
+/* Shiki dual-theme: emits both light + dark inline styles per token with
+   `defaultColor: false`. The `[data-mode="dark"]` attribute (set by the
+   theme provider on <html>) swaps which variable wins. Loaded as a side
+   effect of importing `@/lib/shiki` so any consumer (Tiptap, code-sandbox,
+   future markdown renderers) gets the rules without coupling to Tiptap. */
+
+.shiki,
+.shiki span {
+  color: var(--shiki-light) !important;
+  font-style: var(--shiki-light-font-style) !important;
+  font-weight: var(--shiki-light-font-weight) !important;
+}
+
+[data-mode="dark"] .shiki,
+[data-mode="dark"] .shiki span {
+  color: var(--shiki-dark) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+}
+
+/* Code-block background follows the app's card token so code surfaces
+   match the surrounding chrome across every Shiki callsite (Tiptap,
+   code-sandbox, Streamdown). Token colors still come from the active
+   Shiki theme pair. */
+.shiki {
+  background-color: var(--card) !important;
+}

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react"
 import { NodeViewWrapper, NodeViewContent } from "@tiptap/react"
 import type { NodeViewProps } from "@tiptap/react"
 import { CopySimple, Check, CaretDown } from "@phosphor-icons/react"
-import { highlightCodeSync, ensureLanguage, LANGUAGE_OPTIONS } from "./shiki"
+import { highlightCodeSync, ensureLanguage, LANGUAGE_OPTIONS } from "@/lib/shiki"
 import { useTheme } from "@/components/theme-provider"
 
 

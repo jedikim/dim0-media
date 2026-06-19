@@ -83,7 +83,6 @@
     "d3-hierarchy": "^3.1.2",
     "dotenv-cli": "^11.0.0",
     "hast-util-sanitize": "^5.0.2",
-    "highlight.js": "^11.11.1",
     "html-to-image": "^1.11.11",
     "katex": "^0.16.22",
     "motion": "^12.23.22",

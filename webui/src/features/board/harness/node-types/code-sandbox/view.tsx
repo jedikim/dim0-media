@@ -1,14 +1,9 @@
-import { useMemo, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import { type NodeId } from "@canvas-harness/core"
 import { useCanvasStore, useNode } from "@canvas-harness/react"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/components/theme-provider"
-import {
-  highlightPython,
-  ROSE_PINE_DARK,
-  ROSE_PINE_LIGHT,
-} from "@/features/board/components/flow/code-sandbox-utils"
-import "@/features/board/components/flow/code-sandbox-node.css"
+import { ensureLanguage, highlightCodeSync } from "@/lib/shiki"
 import type { NoteNodeData } from "../../convert/note-to-node"
 import {
   NodeTitleCaption,
@@ -23,11 +18,15 @@ export type CodeSandboxViewProps = {
 }
 
 
+const PLACEHOLDER = "# Write Python here"
+
+
 /**
- * Code-sandbox inline view — rose-pine themed Python preview. Entire
- * body is the click target (matches prod). Pan/zoom suspension is
- * handled by the canvas placeholder; this component only mounts at
- * idle so the rose-pine background never flashes during motion.
+ * Code-sandbox inline preview. The full body is the click target;
+ * syntax highlighting tracks the active theme pair from `useTheme()`
+ * so the preview swaps palette together with the rest of the app.
+ * Falls back to plain text on the first paint while Shiki finishes
+ * loading the python grammar + theme JSON.
  */
 export function CodeSandboxView({ id }: CodeSandboxViewProps) {
   const node = useNode(id)
@@ -36,15 +35,26 @@ export function CodeSandboxView({ id }: CodeSandboxViewProps) {
   const canEdit = useBoardAppStore((s) => s.canEdit)
   const bodyRef = useRef<HTMLButtonElement>(null)
   useStopCanvasGesture(bodyRef)
-  const { resolvedTheme } = useTheme()
-  const isDark = resolvedTheme === "dark"
-  const palette = isDark ? ROSE_PINE_DARK : ROSE_PINE_LIGHT
+  const { shikiThemes } = useTheme()
 
   const code = node?.content ?? ""
-  const previewHtml = useMemo(
-    () => highlightPython(code || "# Write Python here"),
-    [code],
-  )
+  const display = code || PLACEHOLDER
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+
+  useEffect(() => {
+    const html = highlightCodeSync(display, "python", shikiThemes)
+    if (html != null) {
+      setPreviewHtml(html)
+      return
+    }
+    setPreviewHtml(null)
+    let cancelled = false
+    ensureLanguage("python", shikiThemes, () => {
+      if (cancelled) return
+      setPreviewHtml(highlightCodeSync(display, "python", shikiThemes))
+    })
+    return () => { cancelled = true }
+  }, [display, shikiThemes])
 
   if (!node) return null
 
@@ -63,24 +73,28 @@ export function CodeSandboxView({ id }: CodeSandboxViewProps) {
         }}
         onDoubleClick={(e) => e.stopPropagation()}
         className={cn(
-          "absolute inset-0 overflow-hidden rounded-2xl text-left shadow-sm",
+          "absolute inset-0 overflow-hidden rounded-2xl text-left shadow-sm bg-card text-foreground",
           "pointer-events-auto",
           canEdit ? "cursor-pointer" : "cursor-default",
         )}
         title={canEdit ? "Open Python sandbox" : "Python sandbox preview"}
       >
-        <div
-          className={cn(
-            "code-sandbox-theme relative h-full w-full overflow-auto scrollbar-thin px-3 pb-3 pt-10",
-            isDark ? "code-sandbox-theme-dark" : "code-sandbox-theme-light",
-          )}
-          style={{ backgroundColor: palette.bg, color: palette.text }}
-        >
-          <pre
-            className="hljs min-h-full whitespace-pre-wrap break-words bg-transparent p-0 font-mono text-base leading-5"
+        {previewHtml != null ? (
+          <div
+            className={cn(
+              "relative h-full w-full overflow-auto scrollbar-thin px-3 pb-3 pt-10",
+              // Shiki paints its own <pre> bg; flatten chrome so the inline
+              // preview reads as one continuous code surface.
+              "[&>pre]:m-0 [&>pre]:p-0 [&>pre]:font-mono [&>pre]:text-base [&>pre]:leading-5",
+              "[&>pre]:whitespace-pre-wrap [&>pre]:break-words [&>pre]:min-h-full",
+            )}
             dangerouslySetInnerHTML={{ __html: previewHtml }}
           />
-        </div>
+        ) : (
+          <pre className="relative h-full w-full overflow-auto scrollbar-thin px-3 pb-3 pt-10 m-0 font-mono text-base leading-5 whitespace-pre-wrap break-words">
+            {display}
+          </pre>
+        )}
       </button>
 
       <NodeTrafficLights

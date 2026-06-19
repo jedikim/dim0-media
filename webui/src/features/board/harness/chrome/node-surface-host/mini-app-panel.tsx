@@ -10,7 +10,6 @@ import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { CancelPlainIcon, DownloadIcon, LayoutIcon } from "@/components/icons"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useTheme } from "@/components/theme-provider"
 import { useCanvasStore, useNode } from "@canvas-harness/react"
 import type { NodeId } from "@canvas-harness/core"
 
@@ -37,9 +36,6 @@ export const MiniAppPanel = memo(function MiniAppPanel({
   const store = useCanvasStore()
   const node = useNode(nodeId as NodeId)
   const data = (node?.data ?? {}) as Partial<NoteNodeData>
-
-  const { resolvedTheme } = useTheme()
-  const isDark = resolvedTheme === "dark"
 
   const [activeTab, setActiveTab] = useState("rendered")
   const [sourceDraft, setSourceDraft] = useState(node?.content ?? "")
@@ -222,8 +218,6 @@ export const MiniAppPanel = memo(function MiniAppPanel({
           <div className={activeTab === "code" ? "flex h-full flex-col bg-background" : "hidden h-full"}>
             <CodeArea
               value={sourceDraft}
-              isDark={isDark}
-              textColor="var(--foreground)"
               onChange={setSourceDraft}
               language="typescript"
               placeholder={`function Widget() {
