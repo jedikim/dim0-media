@@ -50,6 +50,10 @@ const EXCLUDED_TYPES: ReadonlySet<string> = new Set([
   // would inherit the rectangle's stroke / fill — visually surprising.
   "icon",
   "image",
+  // Frames are slide containers (presentation mode). Their chrome is a
+  // fixed visual identity — they should never sponge styles from
+  // neighboring shapes nor donate styles back.
+  "frame",
 ])
 
 

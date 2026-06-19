@@ -27,6 +27,7 @@ const EXPECTED_CUSTOM_TYPES = [
   // No text concept — dbl-click must not open the lib's inline editor.
   "icon",
   "image",
+  "frame",
 ].sort()
 
 
