@@ -16,16 +16,18 @@ import type {
 } from "./graph-types"
 
 
-// Visual constants. Picked to match the reference Dijkstra HTML widget
-// the agent originally produced — matches the "feel" so existing widgets
-// don't have to be re-tuned when switching renderers.
-const NODE_RADIUS = 23
+// Visual constants. Dot-with-caption aesthetic: nodes render as small
+// filled circles with a neutral border ring, label and sublabel sit
+// stacked below the dot. Color identity lives on the fill (chart-token
+// for auto-laid graphs, --card for manual), so the ring stays neutral
+// across every node and edges read as low-contrast threads.
+const NODE_RADIUS = 12
 const NODE_STROKE_WIDTH = 2
-const NODE_LABEL_FONT_SIZE = 16
+const NODE_LABEL_FONT_SIZE = 12
 const NODE_LABEL_FONT_WEIGHT = 600
-const NODE_LABEL_DY = 5                    // text baseline offset to vertically center inside circle
+const NODE_LABEL_DY = NODE_RADIUS + 14     // label baseline sits just below the circle
 const SUBLABEL_FONT_SIZE = 11
-const SUBLABEL_DY = NODE_RADIUS + 15       // distance below circle center
+const SUBLABEL_DY = NODE_RADIUS + 28       // sublabel stacks below the label
 const EDGE_STROKE_WIDTH = 3
 const EDGE_LABEL_FONT_SIZE = 11
 const EDGE_LABEL_CHIP_WIDTH = 22

@@ -105,6 +105,14 @@ export function HarnessCanvas() {
   // `setHideFrames` on this so slide chrome (border + label) drops out
   // and only the contents show.
   const rendererRef = useRef<Renderer | null>(null)
+  // Stable so `<Canvas>` doesn't tear down + recreate its renderer on
+  // every re-render. A fresh renderer always starts with frames shown,
+  // so re-apply the present-mode hide here — otherwise a re-render
+  // mid-presentation (e.g. chrome hiding) would resurrect the frames.
+  const handleRenderer = useCallback((r: Renderer) => {
+    rendererRef.current = r
+    if (useBoardAppStore.getState().presentationMode) r.setHideFrames(true)
+  }, [])
   const queryClient = useQueryClient()
 
   // Bridge for the agent's post-stream apply block (lives outside this
@@ -308,9 +316,7 @@ export function HarnessCanvas() {
             onCreateDrag={handleCreateDrag}
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
-            onRenderer={(r) => {
-              rendererRef.current = r
-            }}
+            onRenderer={handleRenderer}
           />
           <CanvasContextMenu wrapRef={wrapRef} store={store} rendererRef={rendererRef} />
         </div>

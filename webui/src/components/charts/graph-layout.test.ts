@@ -66,7 +66,9 @@ describe("layoutGraph — color resolution and defaults", () => {
       edges: [],
     })
     expect(g.nodes[0].color).toBe("var(--card)")
-    expect(g.nodes[0].border).toBe("var(--border)")
+    expect(g.nodes[0].border).toBe(
+      "color-mix(in srgb, var(--foreground) 50%, transparent)",
+    )
     expect(g.nodes[0].textColor).toBe("var(--foreground)")
   })
 
@@ -111,7 +113,10 @@ describe("layoutGraph — color resolution and defaults", () => {
         { a: "A", b: "B", color: "chart-3" },
       ],
     })
-    expect(g.edges[0].color).toBe("var(--border)")
+    // Edge default is a 50%-opacity foreground stroke (low-contrast thread).
+    expect(g.edges[0].color).toBe(
+      "color-mix(in srgb, var(--foreground) 50%, transparent)",
+    )
     expect(g.edges[1].color).toBe("var(--chart-3)")
   })
 })
@@ -346,12 +351,18 @@ describe("layoutGraph — auto color ramp", () => {
       nodes: [{ id: "A" }, { id: "B" }, { id: "C" }],
       edges: [{ a: "A", b: "B" }],
     })
-    expect(g.nodes[0].border).toBe("var(--chart-1)")
-    expect(g.nodes[1].border).toBe("var(--chart-2)")
-    expect(g.nodes[2].border).toBe("var(--chart-3)")
-    // Fill is a soft tint of the same token, not the neutral card default.
-    expect(g.nodes[0].color).toContain("--chart-1")
-    expect(g.nodes[0].color).toContain("color-mix")
+    // Color identity lives on the fill — solid chart token per node.
+    expect(g.nodes[0].color).toBe("var(--chart-1)")
+    expect(g.nodes[1].color).toBe("var(--chart-2)")
+    expect(g.nodes[2].color).toBe("var(--chart-3)")
+    // Border stays neutral on every node so the colored dot is the only
+    // cluster cue. Now a 50%-opacity foreground stroke for visibility.
+    expect(g.nodes[0].border).toBe(
+      "color-mix(in srgb, var(--foreground) 50%, transparent)",
+    )
+    expect(g.nodes[1].border).toBe(
+      "color-mix(in srgb, var(--foreground) 50%, transparent)",
+    )
   })
 
 
@@ -374,8 +385,8 @@ describe("layoutGraph — auto color ramp", () => {
         { a: "r", b: "e" },
       ],
     })
-    // 6th node (index 5) wraps back to chart-1.
-    expect(g.nodes[5].border).toBe("var(--chart-1)")
+    // 6th node (index 5) wraps back to chart-1 on the fill.
+    expect(g.nodes[5].color).toBe("var(--chart-1)")
   })
 
 
@@ -388,7 +399,9 @@ describe("layoutGraph — auto color ramp", () => {
       edges: [],
     })
     expect(g.nodes[0].color).toBe("var(--card)")
-    expect(g.nodes[0].border).toBe("var(--border)")
+    expect(g.nodes[0].border).toBe(
+      "color-mix(in srgb, var(--foreground) 50%, transparent)",
+    )
   })
 
 
@@ -400,9 +413,14 @@ describe("layoutGraph — auto color ramp", () => {
     })
     // A keeps its explicit color and the neutral default border.
     expect(g.nodes[0].color).toBe("var(--primary)")
-    expect(g.nodes[0].border).toBe("var(--border)")
-    // B is still ramped.
-    expect(g.nodes[1].border).toBe("var(--chart-2)")
+    expect(g.nodes[0].border).toBe(
+      "color-mix(in srgb, var(--foreground) 50%, transparent)",
+    )
+    // B is still ramped on the fill; border stays neutral on every node.
+    expect(g.nodes[1].color).toBe("var(--chart-2)")
+    expect(g.nodes[1].border).toBe(
+      "color-mix(in srgb, var(--foreground) 50%, transparent)",
+    )
   })
 })
 

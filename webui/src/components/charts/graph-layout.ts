@@ -23,21 +23,20 @@ import type {
 // Default token names used when the agent doesn't supply a color. Pulled
 // from shadcn / index.css so they auto-adapt to light/dark mode.
 const DEFAULT_NODE_FILL = "card"
-const DEFAULT_NODE_BORDER = "border"
 const DEFAULT_NODE_TEXT = "foreground"
-const DEFAULT_EDGE_COLOR = "border"
+
+// 50%-opacity foreground stroke, shared by the node border ring and the
+// default edge color. Keeping one source for both so the dot ring and
+// connecting edges always read with matching weight; --border was too
+// washed-out for either role.
+const STROKE_FG_50 = "color-mix(in srgb, var(--foreground) 50%, transparent)"
+const DEFAULT_NODE_BORDER = STROKE_FG_50
+const DEFAULT_EDGE_COLOR = STROKE_FG_50
 
 
 // Padding (in viewBox units) added around node extent when auto-computing
 // the viewBox. Matches the visual feel of hand-laid examples like Dijkstra.
 const AUTO_VIEWBOX_PADDING = 30
-
-
-// How much of the chart color is mixed into the card surface for an
-// auto-colored node fill. Low enough that the label (foreground) stays
-// readable in both light and dark mode; the full chart color goes on the
-// border, which carries the visible hue.
-const AUTO_FILL_MIX_PCT = 18
 
 
 type Point = { x: number; y: number }
@@ -120,11 +119,12 @@ function positionNode(
   index: number,
   autoColor: boolean,
 ): PositionedNode {
-  // A fully unstyled node under an auto layout gets the chart ramp: a soft
-  // tinted fill plus a full-strength chart border. Any explicit color or
-  // border opts the node out, so agent-decorated nodes are never overridden.
+  // A fully unstyled node under an auto layout gets the chart ramp on its
+  // fill — the visible cluster cue. Border stays neutral (--border) so a
+  // thin halo separates the dot from incoming edges without competing
+  // with the fill for color identity. Any explicit color or border opts
+  // the node out so agent-decorated nodes are never overridden.
   const ramp = autoColor && n.color == null && n.border == null
-  const token = `chart-${(index % 5) + 1}`
   return {
     id: n.id,
     x: pos.x,
@@ -132,11 +132,9 @@ function positionNode(
     label: n.label ?? n.id,
     sublabel: n.sublabel ?? null,
     color: ramp
-      ? `color-mix(in oklch, var(--${token}) ${AUTO_FILL_MIX_PCT}%, var(--card))`
-      : resolveColor(n.color ?? DEFAULT_NODE_FILL),
-    border: ramp
       ? defaultPaletteColor(index)
-      : resolveColor(n.border ?? DEFAULT_NODE_BORDER),
+      : resolveColor(n.color ?? DEFAULT_NODE_FILL),
+    border: resolveColor(n.border ?? DEFAULT_NODE_BORDER),
     textColor: resolveColor(n.textColor ?? DEFAULT_NODE_TEXT),
   }
 }

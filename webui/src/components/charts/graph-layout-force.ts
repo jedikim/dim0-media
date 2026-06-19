@@ -20,12 +20,15 @@ import {
 import type { SimulationLinkDatum, SimulationNodeDatum } from "d3-force"
 
 
-// Tuned against NODE_RADIUS (23) so spacing reads at the same scale as the
-// hand-laid manual examples: links settle ~90u apart, charge keeps clusters
-// from collapsing, collide guarantees circles never overlap.
-const LINK_DISTANCE = 90
+// Sized for the dot-with-caption chrome (NODE_RADIUS 12, sublabel sitting
+// R+28 below center). LINK_DISTANCE leaves the edge-label chip (22×18) at
+// the midpoint with clear space to either dot. COLLIDE_RADIUS guarantees
+// no two nodes sit close enough for one's caption to collide with the
+// other's circle. CHARGE_STRENGTH keeps dense clusters from collapsing
+// without spreading sparse graphs to the corners.
+const LINK_DISTANCE = 140
 const CHARGE_STRENGTH = -320
-const COLLIDE_RADIUS = 34
+const COLLIDE_RADIUS = 40
 const TICKS = 300
 
 
