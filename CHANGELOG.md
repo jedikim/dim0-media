@@ -1,3 +1,13 @@
+## v0.3.53 (2026-06-19)
+
+### Feat
+
+- **board**: code-sandbox follows app theme via shared shiki (#140)
+
+### Fix
+
+- **board**: exclude frames from dbl-click text editor + style memory (#142)
+
 ## v0.3.52 (2026-06-19)
 
 ### Fix
