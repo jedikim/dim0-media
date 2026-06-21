@@ -1,3 +1,10 @@
+## v0.3.54 (2026-06-21)
+
+### Fix
+
+- **sheet**: code block bg follows --card instead of theme-locked var (#144)
+- **embed**: truncate oversized inputs to the embedding token limit (#143)
+
 ## v0.3.53 (2026-06-19)
 
 ### Feat
