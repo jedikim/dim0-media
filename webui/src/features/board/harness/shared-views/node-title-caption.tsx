@@ -6,7 +6,7 @@ import { useCanvasStore } from "@canvas-harness/react"
 import { applyTitleUpdateToBoardContents } from "@/features/board/api/apply-title-update-to-board-contents"
 import type { BoardContentItem } from "@/features/board/api/list-board-contents"
 import { useBoardAppStore } from "../store/board-app-store"
-import { useStopCanvasGesture } from "./use-stop-canvas-gesture"
+import { useStopCanvasDblClick, useStopCanvasGesture } from "./use-stop-canvas-gesture"
 
 
 type NodeTitleCaptionProps = {
@@ -37,9 +37,11 @@ const BUTTON_BASE_CLS =
  * Layout owned by the caller through className / textClassName so the
  * caption can sit below the node card, beside an icon, etc.
  *
- * Stops pointer events on input + button so the canvas drag/select
- * doesn't fire when the user clicks the title. Display mode wraps to
- * `maxLines` with ellipsis; edit mode is always a single-line input.
+ * A native-phase stop on the outer wrapper keeps clicks on the title
+ * from reaching canvas-harness's pointerdown + dblclick listeners,
+ * which would otherwise drag-select the board or spawn a phantom text
+ * node (see use-stop-canvas-gesture.ts for the why). Display mode wraps
+ * to `maxLines` with ellipsis; edit mode is always a single-line input.
  */
 export const NodeTitleCaption = memo(function NodeTitleCaption({
   nodeId,
@@ -59,14 +61,27 @@ export const NodeTitleCaption = memo(function NodeTitleCaption({
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(label ?? "")
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const buttonRef = useRef<HTMLButtonElement | null>(null)
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
 
-  // Canvas-harness's gesture captures the pointer on body-hit and on
-  // empty-world clicks via a native listener on the wrap div. React's
-  // onClick fires too late to stop it, so any click on the caption is
-  // swallowed without a native-phase guard. See use-stop-canvas-gesture.
-  useStopCanvasGesture(buttonRef)
-  useStopCanvasGesture(inputRef)
+  // Canvas-harness installs native pointerdown + dblclick listeners on
+  // its wrap div. React's synthetic handlers fire too late to stop those
+  // — without a native-phase stop, dbl-clicks on the title (positioned
+  // outside the node's hit-test rect) fall through to canvas-harness's
+  // "empty space" branch and spawn a phantom text node.
+  //
+  // Both stops sit on a STABLE parent (the wrapper div): `editing` flips
+  // between the button and the input, so a ref on either would only
+  // catch one of them — useEffect deps don't track ref.current
+  // mutations. The wrapper is mounted for the component's lifetime, so
+  // events from either child bubble through it reliably.
+  //
+  // The dblclick stop is safe here specifically because neither the
+  // button nor the input has a meaningful React onDoubleClick — only
+  // stopPropagation. Sheet/code-sandbox bodies, by contrast, depend on
+  // React onDoubleClick (enterEdit, open-panel) reaching the React root,
+  // so they only get the pointerdown stop.
+  useStopCanvasGesture(wrapperRef)
+  useStopCanvasDblClick(wrapperRef)
 
   const storedTitle = label?.trim() ?? ""
   const displayTitle = storedTitle || placeholder
@@ -139,7 +154,7 @@ export const NodeTitleCaption = memo(function NodeTitleCaption({
       : undefined
 
   return (
-    <div className={className}>
+    <div ref={wrapperRef} className={className}>
       {editing ? (
         <input
           ref={inputRef}
@@ -166,7 +181,6 @@ export const NodeTitleCaption = memo(function NodeTitleCaption({
         />
       ) : (
         <button
-          ref={buttonRef}
           type="button"
           onClick={(event) => {
             event.stopPropagation()

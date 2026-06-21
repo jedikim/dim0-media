@@ -24,3 +24,30 @@ export const useStopCanvasGesture = (
     return () => el.removeEventListener("pointerdown", stop)
   }, [ref])
 }
+
+
+/**
+ * Stop native `dblclick` from bubbling past this element. Use sparingly:
+ * React 17+ delegates events at the root, so a native stopPropagation
+ * here ALSO blocks React's synthetic `onDoubleClick` handlers on any
+ * descendant. Safe only when no descendant has a meaningful React
+ * onDoubleClick that needs to fire.
+ *
+ * The dim0 case: the title caption sits outside a custom node's canvas
+ * hit-test rect, so when the user dbl-clicks it the native event would
+ * otherwise reach canvas-harness's empty-space branch and spawn a
+ * phantom text node. The button/input inside the caption have only
+ * `stopPropagation` in their React onDoubleClick, so stopping at the
+ * caption's wrapper is harmless.
+ */
+export const useStopCanvasDblClick = (
+  ref: RefObject<HTMLElement | null>,
+): void => {
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const stop = (e: MouseEvent): void => e.stopPropagation()
+    el.addEventListener("dblclick", stop)
+    return () => el.removeEventListener("dblclick", stop)
+  }, [ref])
+}
