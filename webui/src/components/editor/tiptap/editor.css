@@ -257,15 +257,15 @@
   color: var(--foreground);
 }
 
-/* Stacked grid: Shiki layer behind, editable layer in front.
-   Background pulls from --code-block-bg (set per app theme in index.css) so
-   the wrapper matches whichever Shiki theme the active app theme maps to.
-   Important for trailing empty lines Shiki trims and the ~80ms window before
-   Shiki finishes its first highlight. */
+/* Stacked grid: Shiki layer behind, editable layer in front. Wrapper bg
+   matches --card so the parent surface aligns with .shiki's own background
+   (pinned to --card in shiki.css). Without this, trailing empty lines Shiki
+   trims — plus the brief window before first highlight — leak a different
+   color through the parent. */
 .code-block-body {
   display: grid;
   overflow-x: auto;
-  background: var(--code-block-bg);
+  background: var(--card);
 }
 
 .code-block-shiki-layer,
