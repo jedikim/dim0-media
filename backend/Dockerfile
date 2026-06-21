@@ -24,6 +24,16 @@ COPY build/schema.sql /app/build/schema.sql
 RUN uv sync --frozen --no-dev
 ENV PATH="/app/.venv/bin:${PATH}"
 
+# Pre-fetch the tiktoken BPE vocab at build time so the embedder never needs
+# network at runtime. On first use tiktoken downloads cl100k_base from a
+# Microsoft blob URL; in egress-restricted prod that fails even though
+# api.openai.com is reachable, and the lazy load means it surfaces on the first
+# embed rather than at boot. Baking the cache into the image (read back via the
+# same env var at runtime) makes the embedder fully offline and removes the
+# ~1.5s first-call download.
+ENV TIKTOKEN_CACHE_DIR=/app/.tiktoken_cache
+RUN python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"
+
 # Install the mini-app compiler's npm deps (sucrase). The script + its
 # package-lock.json are already in /app/scripts/mini-app-compiler/ via
 # the COPY above; this just fetches node_modules from the lockfile.
