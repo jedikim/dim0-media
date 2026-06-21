@@ -1,3 +1,9 @@
+## v0.3.55 (2026-06-21)
+
+### Fix
+
+- **board**: stop phantom text node when dbl-clicking custom node title (#146)
+
 ## v0.3.54 (2026-06-21)
 
 ### Fix
