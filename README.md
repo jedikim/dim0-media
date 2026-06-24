@@ -17,7 +17,8 @@
 </p>
 
 <p align="center">
-  Most AI tools start with a chat box and bolt everything else on around it. Dim0 inverts that: the <strong>board is the workspace</strong>, and the agent is one of the things living on it. It reads what's on your canvas, takes real steps with tools, and writes results back as editable nodes: notes, mind maps, and <strong>mini-apps</strong> (real, interactive React apps, not chat-trapped artifacts). Everything is <strong>real-time multiplayer</strong> and <strong>open-source</strong>: self-host it, own your data, switch models whenever the landscape shifts.
+  <strong>Your canvas thinks back.</strong><br />
+  Notes, mini-apps, and an AI agent on one infinite, real-time board. The agent reads what's on the canvas and writes its results right back onto it.
 </p>
 
 <p align="center">
@@ -172,45 +173,16 @@ Light, dark, and a set of paper-and-ink variants. The canvas adapts; so do notes
 
 ### Environment
 
-Copy `.env.sample` to `.env` and fill in the keys.
+Copy `.env.sample` to `.env` and fill in the keys. The three required keys are covered in [Quickstart](#quickstart); the rest of `.env.sample` adds more providers and tools.
 
 ```bash
 cp .env.sample .env
 ```
 
-At minimum, set these three:
-
-- `OPENAI_API_KEY` - the agent's default model and embeddings
-- `OPENROUTER_API_KEY` - access to the other models (Claude, Gemini, Mistral, …)
-- `LINKUP_API_KEY` - web search and page fetch
-
-The rest of `.env.sample` covers additional providers and tools.
-
 A couple of things worth knowing:
 
 - Backend and frontend both read the root `.env`
 - Only variables prefixed with `VITE_` reach the frontend
-
-### Run published images
-
-```bash
-make pull
-make run
-```
-
-Then open `http://localhost:3000`.
-
-Stop it:
-
-```bash
-make down-run
-```
-
-Stop it and wipe volumes:
-
-```bash
-make kill-run
-```
 
 ### Run from source
 
@@ -333,6 +305,10 @@ GitHub Actions handle the version check, releases, and Docker publishing.
 - Env change not picked up? Restart backend and frontend after editing `.env`.
 - Want to see the resolved Compose config? `make config`.
 - Backend tests failing with odd import errors (e.g. `cannot import name 'Docstring' from 'griffe'`)? The local `backend/.venv` is stale or half-installed, and a plain `uv sync` won't repair a partially-deleted package. Rebuild it: `rm -rf backend/.venv && uv sync --extra dev`.
+
+## Contributing
+
+Issues and pull requests are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) to get started.
 
 ## License
 
