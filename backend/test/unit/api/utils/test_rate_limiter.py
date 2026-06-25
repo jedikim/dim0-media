@@ -80,16 +80,19 @@ class _FakeUserBillingStore:
         plan: str | None,
         cycle_start: datetime | None = None,
         cycle_end: datetime | None = None,
+        status: str = "active",
     ):
         self.plan = plan
         self.cycle_start = cycle_start
         self.cycle_end = cycle_end
+        self.status = status
 
     async def get_user_billing(self, user_uid: str):
         if self.plan is None:
             return None
         return SimpleNamespace(
             plan=self.plan,
+            status=self.status,
             current_period_start=self.cycle_start,
             current_period_end=self.cycle_end,
         )
@@ -100,6 +103,7 @@ def _build_request(
     plan: str | None,
     cycle_start: datetime | None = None,
     cycle_end: datetime | None = None,
+    status: str = "active",
 ):
     return SimpleNamespace(
         app=SimpleNamespace(
@@ -108,6 +112,7 @@ def _build_request(
                 plan=plan,
                 cycle_start=cycle_start,
                 cycle_end=cycle_end,
+                status=status,
             ),
         ),
         scope={"route": SimpleNamespace(path="/foo")},
@@ -174,6 +179,19 @@ async def test_rate_limiter_uses_plus_limits(monkeypatch):
     ]
     assert len(fake_store.cycle_calls) == 1
     assert fake_store.cycle_calls[0]["limit"] == MONTHLY_UTC_LIMITS["plus"]
+
+
+@pytest.mark.asyncio
+async def test_rate_limiter_gates_incomplete_plus_to_free_limits(monkeypatch):
+    """A plus plan with a never-paid `incomplete` status gets only free limits."""
+    monkeypatch.setenv(BILLING_ENABLED_ENV, "true")
+    fake_store = _FakeRedisStore()
+    request = _build_request(fake_store, plan="plus", status="incomplete")
+
+    await rate_limiter(request=request, user_id="user-123")
+
+    assert fake_store.fixed_calls[1]["limit"] == DAILY_UTC_LIMITS["free"]
+    assert fake_store.cycle_calls == []  # no billing cycle -> fixed monthly window
 
 
 @pytest.mark.asyncio

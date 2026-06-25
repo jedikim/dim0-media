@@ -4,7 +4,7 @@ import os
 
 from fastapi import Request
 
-from topix.datatypes.user_billing import BillingPlan
+from topix.datatypes.user_billing import BillingPlan, effective_plan
 from topix.store.user_billing import UserBillingStore
 
 BILLING_ENABLED_ENV = "VITE_BILLING_ENABLED"
@@ -34,4 +34,6 @@ async def resolve_plan_for_token(request: Request, user_uid: str) -> BillingPlan
     if billing is None:
         return "free"
 
-    return billing.plan
+    # Gate on status so a never-paid (`incomplete`) subscription never yields a
+    # paid plan claim in the access token.
+    return effective_plan(billing.plan, billing.status)

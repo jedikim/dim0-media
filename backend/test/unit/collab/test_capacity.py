@@ -23,9 +23,10 @@ def test_cap_for_plan_unknown_or_none_uses_free_default():
 
 
 class _Billing:
-    def __init__(self, plan):
+    def __init__(self, plan, status="active"):
         """Init."""
         self.plan = plan
+        self.status = status
 
 
 async def test_get_room_cap_uses_owners_plan_not_joiners():
@@ -45,6 +46,20 @@ async def test_get_room_cap_uses_owners_plan_not_joiners():
     assert cap == 20
     graph_store.get_owner_uid.assert_awaited_once_with("b1")
     billing_store.get_user_billing.assert_awaited_once_with("alice")
+
+
+async def test_get_room_cap_gates_incomplete_plus_to_free():
+    """A never-paid (`incomplete`) plus subscription only gets the free cap."""
+    graph_store = AsyncMock()
+    graph_store.get_owner_uid = AsyncMock(return_value="alice")
+    billing_store = AsyncMock()
+    billing_store.get_user_billing = AsyncMock(return_value=_Billing(plan="plus", status="incomplete"))
+
+    cap = await get_room_cap_for_board(
+        graph_store=graph_store, user_billing_store=billing_store, board_uid="b1",
+    )
+
+    assert cap == DEFAULT_CAP
 
 
 async def test_get_room_cap_defaults_to_free_when_billing_missing():

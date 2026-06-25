@@ -19,6 +19,7 @@ import logging
 
 from typing import Final
 
+from topix.datatypes.user_billing import effective_plan
 from topix.store.graph import GraphStore
 from topix.store.user_billing import UserBillingStore
 
@@ -57,5 +58,7 @@ async def get_room_cap_for_board(
         logger.warning("collab capacity: board %s has no owner; using default cap", board_uid)
         return DEFAULT_CAP
     billing = await user_billing_store.get_user_billing(owner_uid)
-    plan = billing.plan if billing else DEFAULT_PLAN
+    # Gate on status so a never-paid (`incomplete`) subscription does not grant
+    # the paid room capacity.
+    plan = effective_plan(billing.plan, billing.status) if billing else DEFAULT_PLAN
     return cap_for_plan(plan)

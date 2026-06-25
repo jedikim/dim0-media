@@ -14,7 +14,7 @@ from topix.api.utils.billing.stripe_config import get_stripe_config
 from topix.api.utils.billing.stripe_webhook import verify_stripe_signature
 from topix.api.utils.decorators import with_standard_response
 from topix.api.utils.security import get_current_user_uid
-from topix.datatypes.user_billing import BillingStatus
+from topix.datatypes.user_billing import ACCESS_GRANTING_STATUSES, BillingStatus, effective_plan
 from topix.store.user import UserStore
 from topix.store.user_billing import UserBillingStore
 
@@ -225,6 +225,108 @@ async def create_portal_session(
     }
 
 
+async def _handle_checkout_completed(data_object: dict, user_billing_store: UserBillingStore) -> dict:
+    """Persist billing state from a completed checkout session.
+
+    Only grants access once payment is settled — async payment methods complete
+    the session before funds clear (card checkouts are "paid").
+    """
+    user_uid = data_object.get("client_reference_id") or data_object.get("metadata", {}).get("user_uid")
+    if not user_uid:
+        return {"processed": False, "reason": "missing_user_uid"}
+    payment_status = data_object.get("payment_status")
+    if payment_status not in ("paid", "no_payment_required"):
+        return {"processed": False, "reason": "payment_not_settled"}
+    await user_billing_store.upsert_user_billing(
+        user_uid=user_uid,
+        data={
+            "plan": "plus",
+            "status": "active",
+            "stripe_customer_id": data_object.get("customer"),
+            "stripe_subscription_id": data_object.get("subscription"),
+        },
+    )
+    return {"processed": True, "event_type": "checkout.session.completed"}
+
+
+async def _resolve_webhook_user_uid(
+    data_object: dict,
+    stripe_subscription_id: str | None,
+    stripe_customer_id: str | None,
+    user_billing_store: UserBillingStore,
+) -> str | None:
+    """Resolve the local user from event metadata, then subscription/customer id."""
+    user_uid = data_object.get("metadata", {}).get("user_uid")
+    if not user_uid and stripe_subscription_id:
+        billing = await user_billing_store.get_user_billing_by_stripe_subscription_id(stripe_subscription_id)
+        user_uid = billing.user_uid if billing else None
+    if not user_uid and stripe_customer_id:
+        billing = await user_billing_store.get_user_billing_by_stripe_customer_id(stripe_customer_id)
+        user_uid = billing.user_uid if billing else None
+    return user_uid
+
+
+async def _handle_subscription_event(
+    event_type: str, data_object: dict, user_billing_store: UserBillingStore
+) -> dict:
+    """Persist billing state from a subscription lifecycle event.
+
+    Gates the plan on subscription status and ignores stale `incomplete` events
+    so out-of-order delivery cannot downgrade an already-active subscription.
+    """
+    stripe_customer_id = data_object.get("customer")
+    stripe_subscription_id = data_object.get("id")
+    status_value = _resolve_status(data_object.get("status", "incomplete"))
+    cancel_at = data_object.get("cancel_at")
+    cancel_at_period_end = bool(data_object.get("cancel_at_period_end", False))
+
+    item_period_start = None
+    item_period_end = None
+    items = (data_object.get("items") or {}).get("data") or []
+    if items:
+        first_item = items[0] or {}
+        item_period_start = first_item.get("current_period_start")
+        item_period_end = first_item.get("current_period_end")
+
+    user_uid = await _resolve_webhook_user_uid(
+        data_object, stripe_subscription_id, stripe_customer_id, user_billing_store
+    )
+    if not user_uid:
+        logger.warning("Stripe webhook %s ignored: no user mapping", event_type)
+        return {"processed": False, "reason": "no_user_mapping", "event_type": event_type}
+
+    # Guard against out-of-order delivery: `incomplete` is only ever a
+    # pre-activation state, so a late/duplicate incomplete event must never
+    # downgrade a subscription we already recorded as active. Stripe does not
+    # guarantee webhook ordering.
+    if status_value == "incomplete":
+        existing = await user_billing_store.get_user_billing(user_uid)
+        if (
+            existing
+            and existing.stripe_subscription_id == stripe_subscription_id
+            and existing.status in ACCESS_GRANTING_STATUSES
+        ):
+            logger.info("Ignoring stale incomplete event for active subscription %s", stripe_subscription_id)
+            return {"processed": False, "reason": "stale_incomplete", "event_type": event_type}
+
+    # A deleted subscription is always free; otherwise gate on status so a
+    # never-paid (`incomplete`) subscription stays free until payment succeeds.
+    plan = "free" if event_type.endswith(".deleted") else effective_plan("plus", status_value)
+    await user_billing_store.upsert_user_billing(
+        user_uid=user_uid,
+        data={
+            "plan": plan,
+            "status": status_value,
+            "stripe_customer_id": stripe_customer_id,
+            "stripe_subscription_id": stripe_subscription_id,
+            "current_period_start": _timestamp_to_datetime(data_object.get("current_period_start") or item_period_start),
+            "current_period_end": _timestamp_to_datetime(data_object.get("current_period_end") or item_period_end or cancel_at),
+            "cancel_at_period_end": cancel_at_period_end or cancel_at is not None,
+        },
+    )
+    return {"processed": True, "event_type": event_type}
+
+
 @router.post("/webhook")
 @with_standard_response
 async def handle_stripe_webhook(request: Request):
@@ -242,64 +344,13 @@ async def handle_stripe_webhook(request: Request):
     user_billing_store: UserBillingStore = request.app.user_billing_store
 
     if event_type == "checkout.session.completed":
-        user_uid = data_object.get("client_reference_id") or data_object.get("metadata", {}).get("user_uid")
-        if not user_uid:
-            return {"processed": False, "reason": "missing_user_uid"}
-        await user_billing_store.upsert_user_billing(
-            user_uid=user_uid,
-            data={
-                "plan": "plus",
-                "status": "active",
-                "stripe_customer_id": data_object.get("customer"),
-                "stripe_subscription_id": data_object.get("subscription"),
-            },
-        )
-        return {"processed": True, "event_type": event_type}
+        return await _handle_checkout_completed(data_object, user_billing_store)
 
     if event_type in {
         "customer.subscription.created",
         "customer.subscription.updated",
         "customer.subscription.deleted",
     }:
-        stripe_customer_id = data_object.get("customer")
-        stripe_subscription_id = data_object.get("id")
-        status_value = _resolve_status(data_object.get("status", "incomplete"))
-        cancel_at = data_object.get("cancel_at")
-        cancel_at_period_end = bool(data_object.get("cancel_at_period_end", False))
-
-        item_period_start = None
-        item_period_end = None
-        items = (data_object.get("items") or {}).get("data") or []
-        if items:
-            first_item = items[0] or {}
-            item_period_start = first_item.get("current_period_start")
-            item_period_end = first_item.get("current_period_end")
-
-        user_uid = data_object.get("metadata", {}).get("user_uid")
-        if not user_uid and stripe_subscription_id:
-            billing = await user_billing_store.get_user_billing_by_stripe_subscription_id(stripe_subscription_id)
-            user_uid = billing.user_uid if billing else None
-        if not user_uid and stripe_customer_id:
-            billing = await user_billing_store.get_user_billing_by_stripe_customer_id(stripe_customer_id)
-            user_uid = billing.user_uid if billing else None
-
-        if not user_uid:
-            logger.warning("Stripe webhook %s ignored: no user mapping", event_type)
-            return {"processed": False, "reason": "no_user_mapping", "event_type": event_type}
-
-        plan = "free" if status_value == "canceled" or event_type.endswith(".deleted") else "plus"
-        await user_billing_store.upsert_user_billing(
-            user_uid=user_uid,
-            data={
-                "plan": plan,
-                "status": status_value,
-                "stripe_customer_id": stripe_customer_id,
-                "stripe_subscription_id": stripe_subscription_id,
-                "current_period_start": _timestamp_to_datetime(data_object.get("current_period_start") or item_period_start),
-                "current_period_end": _timestamp_to_datetime(data_object.get("current_period_end") or item_period_end or cancel_at),
-                "cancel_at_period_end": cancel_at_period_end or cancel_at is not None,
-            },
-        )
-        return {"processed": True, "event_type": event_type}
+        return await _handle_subscription_event(event_type, data_object, user_billing_store)
 
     return {"processed": False, "event_type": event_type, "reason": "ignored_event"}

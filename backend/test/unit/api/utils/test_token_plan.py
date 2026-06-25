@@ -25,7 +25,7 @@ class _StubBillingStore:
         self.calls.append(user_uid)
         if self.plan is None:
             return None
-        return SimpleNamespace(plan=self.plan)
+        return SimpleNamespace(plan=self.plan, status="active")
 
 
 @pytest.mark.asyncio

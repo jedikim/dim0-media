@@ -132,11 +132,12 @@ class _FakeUserBillingStore:
     async def get_user_billing(self, user_uid: str):
         if self.plan is None:
             return None
-        # Lightweight stand-in for UserBilling — only `.plan` is read.
+        # Lightweight stand-in for UserBilling — `.plan` and `.status` are read.
         class _Billing:
             pass
         b = _Billing()
         b.plan = self.plan
+        b.status = "active"
         return b
 
 
