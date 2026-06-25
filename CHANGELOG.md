@@ -1,3 +1,9 @@
+## v0.3.57 (2026-06-25)
+
+### Fix
+
+- **billing**: gate paid plan on subscription status (#152)
+
 ## v0.3.56 (2026-06-25)
 
 ### Feat
