@@ -4,6 +4,7 @@ import { useCanvasStore, useNode } from "@canvas-harness/react"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/components/theme-provider"
 import { ensureLanguage, highlightCodeSync } from "@/lib/shiki"
+import { DEFAULT_CODE_LANGUAGE } from "@/features/board/api/execute-code-note"
 import type { NoteNodeData } from "../../convert/note-to-node"
 import {
   NodeTitleCaption,
@@ -18,15 +19,15 @@ export type CodeSandboxViewProps = {
 }
 
 
-const PLACEHOLDER = "# Write Python here"
+const PLACEHOLDER = "// Write code here"
 
 
 /**
- * Code-sandbox inline preview. The full body is the click target;
- * syntax highlighting tracks the active theme pair from `useTheme()`
- * so the preview swaps palette together with the rest of the app.
- * Falls back to plain text on the first paint while Shiki finishes
- * loading the python grammar + theme JSON.
+ * Code node inline preview. The full body is the click target; syntax
+ * highlighting uses the note's `programmingLanguage` and tracks the active
+ * theme pair from `useTheme()` so the preview swaps palette together with
+ * the rest of the app. Falls back to plain text on the first paint while
+ * Shiki finishes loading the grammar + theme JSON.
  */
 export function CodeSandboxView({ id }: CodeSandboxViewProps) {
   const node = useNode(id)
@@ -37,28 +38,30 @@ export function CodeSandboxView({ id }: CodeSandboxViewProps) {
   useStopCanvasGesture(bodyRef)
   const { shikiThemes } = useTheme()
 
+  const data = (node?.data ?? {}) as Partial<NoteNodeData>
+  const language = data.properties?.programmingLanguage?.text || DEFAULT_CODE_LANGUAGE
+
   const code = node?.content ?? ""
   const display = code || PLACEHOLDER
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
 
   useEffect(() => {
-    const html = highlightCodeSync(display, "python", shikiThemes)
+    const html = highlightCodeSync(display, language, shikiThemes)
     if (html != null) {
       setPreviewHtml(html)
       return
     }
     setPreviewHtml(null)
     let cancelled = false
-    ensureLanguage("python", shikiThemes, () => {
+    ensureLanguage(language, shikiThemes, () => {
       if (cancelled) return
-      setPreviewHtml(highlightCodeSync(display, "python", shikiThemes))
+      setPreviewHtml(highlightCodeSync(display, language, shikiThemes))
     })
     return () => { cancelled = true }
-  }, [display, shikiThemes])
+  }, [display, language, shikiThemes])
 
   if (!node) return null
 
-  const data = (node.data ?? {}) as Partial<NoteNodeData>
   const label = data.label?.markdown
 
   return (
@@ -77,7 +80,7 @@ export function CodeSandboxView({ id }: CodeSandboxViewProps) {
           "pointer-events-auto",
           canEdit ? "cursor-pointer" : "cursor-default",
         )}
-        title={canEdit ? "Open Python sandbox" : "Python sandbox preview"}
+        title={canEdit ? "Open code" : "Code preview"}
       >
         {previewHtml != null ? (
           <div
@@ -106,7 +109,7 @@ export function CodeSandboxView({ id }: CodeSandboxViewProps) {
         <NodeTitleCaption
           nodeId={id}
           label={label}
-          placeholder="Untitled sandbox"
+          placeholder="Untitled code"
           textClassName="text-center text-sm font-handwriting text-foreground"
         />
       </div>

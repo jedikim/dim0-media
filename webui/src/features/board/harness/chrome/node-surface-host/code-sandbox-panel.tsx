@@ -3,10 +3,22 @@ import { CancelPlainIcon, ConsoleIcon, LoaderIcon, PlayIcon } from "@/components
 import { Button } from "@/components/ui/button"
 import { useCanvasStore, useNode } from "@canvas-harness/react"
 import type { NodeId } from "@canvas-harness/core"
-import { CodeArea } from "@/features/board/components/flow/code-area"
+import { CodeArea, type CodeAreaLanguage } from "@/features/board/components/flow/code-area"
+import { LANGUAGE_OPTIONS } from "@/lib/shiki"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import type { CodeExecutionResult } from "@/features/board/api/execute-code-note"
-import { executeCodeNote } from "@/features/board/api/execute-code-note"
+import {
+  DEFAULT_CODE_LANGUAGE,
+  executeCodeNote,
+  isRunnable,
+} from "@/features/board/api/execute-code-note"
 import { updateNote } from "@/features/board/api/update-note"
 import type { NoteNodeData } from "../../convert/note-to-node"
 import { useBoardAppStore } from "../../store/board-app-store"
@@ -44,6 +56,9 @@ export const CodeSandboxPanel = memo(function CodeSandboxPanel({
   const node = useNode(nodeId as NodeId)
   const data = (node?.data ?? {}) as Partial<NoteNodeData>
   const boardId = useBoardAppStore((s) => s.boardId)
+
+  const language = data.properties?.programmingLanguage?.text || DEFAULT_CODE_LANGUAGE
+  const runnable = isRunnable(language)
 
   const [codeDraft, setCodeDraft] = useState(node?.content ?? "")
   const [isExecuting, setIsExecuting] = useState(false)
@@ -111,8 +126,32 @@ export const CodeSandboxPanel = memo(function CodeSandboxPanel({
     [commitTitle, titleDraft, data.label?.markdown],
   )
 
+  // Persist the chosen language onto the note (round-trips via
+  // data.properties.programmingLanguage). Drives whether the sandbox UI
+  // shows and which Shiki grammar highlights the editor.
+  const setLanguage = useCallback(
+    (next: string) => {
+      if (!node || next === language) return
+      const prevData = (node.data ?? {}) as Record<string, unknown>
+      const prevProps = (prevData.properties ?? {}) as Record<string, unknown>
+      store.updateNode(nodeId as NodeId, {
+        data: {
+          ...prevData,
+          properties: {
+            ...prevProps,
+            programmingLanguage: { type: "text", text: next },
+          },
+        },
+      })
+      // The previous run's stdout/stderr belongs to the old language; clear
+      // it so the output panel doesn't mislabel it as this language's result.
+      setResult(EMPTY_CODE_EXECUTION_RESULT)
+    },
+    [node, nodeId, store, language],
+  )
+
   const handleExecute = useCallback(async () => {
-    if (!boardId || isExecuting) return
+    if (!boardId || isExecuting || !runnable) return
 
     setIsExecuting(true)
     try {
@@ -123,7 +162,7 @@ export const CodeSandboxPanel = memo(function CodeSandboxPanel({
       await updateNote(boardId, nodeId, {
         content: { markdown: codeDraft },
         properties: {
-          programmingLanguage: { type: "text", text: "python" },
+          programmingLanguage: { type: "text", text: language },
         } as never,
       })
 
@@ -139,7 +178,7 @@ export const CodeSandboxPanel = memo(function CodeSandboxPanel({
     } finally {
       setIsExecuting(false)
     }
-  }, [boardId, codeDraft, isExecuting, nodeId, saveDraft])
+  }, [boardId, codeDraft, isExecuting, runnable, language, nodeId, saveDraft])
 
   const lastRunLabel = useMemo(
     () => (result.durationMs > 0 ? `Last run • ${result.durationMs} ms` : "Last run"),
@@ -157,7 +196,7 @@ export const CodeSandboxPanel = memo(function CodeSandboxPanel({
     )
   }
 
-  const displayTitle = data.label?.markdown?.trim() || "Untitled sandbox"
+  const displayTitle = data.label?.markdown?.trim() || "Untitled code"
 
   return (
     <div className={PANEL_CLASS} onClick={(e) => e.stopPropagation()}>
@@ -182,7 +221,7 @@ export const CodeSandboxPanel = memo(function CodeSandboxPanel({
                   }
                 }}
                 className="w-full border-0 border-b border-current/30 bg-transparent px-0 py-0.5 text-sm font-semibold text-foreground focus:border-secondary-foreground focus:outline-none"
-                placeholder="Untitled sandbox"
+                placeholder="Untitled code"
               />
             ) : (
               <button
@@ -195,28 +234,49 @@ export const CodeSandboxPanel = memo(function CodeSandboxPanel({
               </button>
             )}
           </div>
-          <span className="text-xs font-medium text-muted-foreground">
-            Python
-          </span>
+          <Select value={language} onValueChange={setLanguage}>
+            <SelectTrigger
+              size="sm"
+              className="h-7 w-[136px] shrink-0 text-xs"
+              aria-label="Language"
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              {LANGUAGE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">
-            Max runtime 60s
-          </span>
-          <Button
-            type="button"
-            size="sm"
-            onClick={handleExecute}
-            disabled={isExecuting || !boardId}
-            className="gap-2"
-          >
-            {isExecuting ? (
-              <LoaderIcon className="size-4 shrink-0 animate-spin" strokeWidth={2} />
-            ) : (
-              <PlayIcon className="size-4 shrink-0" strokeWidth={2} />
-            )}
-            {isExecuting ? "Running" : "Execute"}
-          </Button>
+          {runnable ? (
+            <>
+              <span className="text-xs text-muted-foreground">
+                Max runtime 60s
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleExecute}
+                disabled={isExecuting || !boardId}
+                className="gap-2"
+              >
+                {isExecuting ? (
+                  <LoaderIcon className="size-4 shrink-0 animate-spin" strokeWidth={2} />
+                ) : (
+                  <PlayIcon className="size-4 shrink-0" strokeWidth={2} />
+                )}
+                {isExecuting ? "Running" : "Execute"}
+              </Button>
+            </>
+          ) : (
+            <span className="text-xs text-muted-foreground">
+              Run not supported
+            </span>
+          )}
           <Button
             variant="ghost"
             size="icon-sm"
@@ -230,42 +290,56 @@ export const CodeSandboxPanel = memo(function CodeSandboxPanel({
         </div>
       </div>
 
-      <div className="grid min-h-0 flex-1 lg:grid-cols-[1.3fr_0.9fr]">
-        <div className="min-h-0 border-r border-border/70 bg-card">
+      <div
+        className={cn(
+          "grid min-h-0 flex-1",
+          runnable && "lg:grid-cols-[1.3fr_0.9fr]",
+        )}
+      >
+        <div
+          className={cn(
+            "min-h-0 bg-card",
+            runnable && "border-r border-border/70",
+          )}
+        >
           <CodeArea
             value={codeDraft}
             onChange={setCodeDraft}
+            language={language as CodeAreaLanguage}
+            placeholder="Write code here"
           />
         </div>
 
-        <div className="grid min-h-0 grid-rows-[auto_1fr_1fr] bg-card">
-          <div className="px-4 py-3 text-xs font-medium text-muted-foreground">
-            {lastRunLabel}
-          </div>
-
-          <div className="min-h-0 border-t border-border/70">
-            <div className="px-4 py-2 text-xs font-semibold text-primary">
-              stdout
+        {runnable && (
+          <div className="grid min-h-0 grid-rows-[auto_1fr_1fr] bg-card">
+            <div className="px-4 py-3 text-xs font-medium text-muted-foreground">
+              {lastRunLabel}
             </div>
-            <pre className="scrollbar-thin h-full overflow-auto overflow-x-auto whitespace-pre-wrap break-all px-4 pb-4 font-mono text-xs leading-5 text-foreground">
-              {result.stdout || "No stdout"}
-            </pre>
-          </div>
 
-          <div className="min-h-0 border-t border-border/70">
-            <div className="px-4 py-2 text-xs font-semibold text-destructive">
-              stderr
+            <div className="min-h-0 border-t border-border/70">
+              <div className="px-4 py-2 text-xs font-semibold text-primary">
+                stdout
+              </div>
+              <pre className="scrollbar-thin h-full overflow-auto overflow-x-auto whitespace-pre-wrap break-all px-4 pb-4 font-mono text-xs leading-5 text-foreground">
+                {result.stdout || "No stdout"}
+              </pre>
             </div>
-            <pre
-              className={cn(
-                "scrollbar-thin h-full overflow-auto overflow-x-auto whitespace-pre-wrap break-all px-4 pb-4 font-mono text-xs leading-5",
-                result.stderr ? "text-destructive" : "text-muted-foreground",
-              )}
-            >
-              {result.stderr || "No stderr"}
-            </pre>
+
+            <div className="min-h-0 border-t border-border/70">
+              <div className="px-4 py-2 text-xs font-semibold text-destructive">
+                stderr
+              </div>
+              <pre
+                className={cn(
+                  "scrollbar-thin h-full overflow-auto overflow-x-auto whitespace-pre-wrap break-all px-4 pb-4 font-mono text-xs leading-5",
+                  result.stderr ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {result.stderr || "No stderr"}
+              </pre>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   )

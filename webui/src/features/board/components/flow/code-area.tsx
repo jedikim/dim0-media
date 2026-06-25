@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef } from "react"
 import { useTheme } from "@/components/theme-provider"
-import { highlightCodeSync, ensureLanguage } from "@/lib/shiki"
+import { highlightCodeSync, ensureLanguage, type LangValue } from "@/lib/shiki"
 import { cn } from "@/lib/utils"
 
 
-export type CodeAreaLanguage = "python" | "html" | "javascript" | "typescript"
+// Any language Shiki knows about. `highlightCodeSync`/`ensureLanguage`
+// already guard unknown values back to plaintext, so this is a thin alias.
+export type CodeAreaLanguage = LangValue
 
 
 type CodeAreaProps = {
@@ -35,7 +37,7 @@ export function CodeArea({
   value,
   onChange,
   language = "python",
-  placeholder = "# Write Python here",
+  placeholder = "Write code here",
 }: CodeAreaProps) {
   const { shikiThemes } = useTheme()
   const highlightedLayerRef = useRef<HTMLDivElement | null>(null)

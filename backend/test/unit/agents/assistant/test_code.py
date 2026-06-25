@@ -59,10 +59,12 @@ class FakeSandboxManager:
         """Prepare the sandbox returned by create calls."""
         self.sandbox = FakeSandbox(response)
         self.create_calls = 0
+        self.create_languages: list[str] = []
 
-    async def create(self) -> FakeSandbox:
-        """Create and return the fake sandbox."""
+    async def create(self, language: str = "python") -> FakeSandbox:
+        """Create and return the fake sandbox, recording the requested language."""
         self.create_calls += 1
+        self.create_languages.append(language)
         return self.sandbox
 
     async def destroy(self, sandbox: FakeSandbox) -> None:
@@ -189,3 +191,149 @@ async def test_daytona_sandbox_manager_applies_short_lived_sandbox_defaults(monk
     assert params.ephemeral is True
     assert params.auto_delete_interval == 0
     assert client.timeouts == [code_module.SANDBOX_CREATE_TIMEOUT_SECONDS]
+
+
+@pytest.mark.asyncio
+async def test_create_sandbox_uses_requested_language(monkeypatch):
+    """The requested language should select the matching Daytona toolbox."""
+    client = RecordingDaytonaClient()
+    monkeypatch.setenv("DAYTONA_API_KEY", "configured")
+    monkeypatch.setenv("DAYTONA_API_URL", "https://example.test")
+    monkeypatch.setenv("DAYTONA_TARGET", "eu")
+    monkeypatch.setattr(code_module, "AsyncDaytona", lambda config: client)
+
+    manager = code_module.DaytonaSandboxManager()
+    await manager.create("javascript")
+
+    assert client.params[0].language == "javascript"
+
+
+@pytest.mark.asyncio
+async def test_execute_code_runs_in_requested_language(monkeypatch):
+    """A runnable language should reach the sandbox via create(language)."""
+    for env_var in code_module.REQUIRED_DAYTONA_ENV_VARS:
+        monkeypatch.setenv(env_var, "configured")
+
+    manager = FakeSandboxManager(FakeResponse(stdout="3\n", exit_code=0))
+    monkeypatch.setattr(code_module, "DaytonaSandboxManager", lambda: manager)
+
+    result = await code_module.execute_code("console.log(1 + 2)", "javascript")
+
+    assert result.status == "success"
+    assert result.stdout == "3\n"
+    assert manager.create_languages == ["javascript"]
+
+
+@pytest.mark.asyncio
+async def test_execute_code_rejects_non_runnable_language(monkeypatch):
+    """Languages without a Daytona toolbox should error before any sandbox."""
+    for env_var in code_module.REQUIRED_DAYTONA_ENV_VARS:
+        monkeypatch.setenv(env_var, "configured")
+
+    def _fail():
+        raise AssertionError("sandbox should not be created for non-runnable language")
+
+    monkeypatch.setattr(code_module, "DaytonaSandboxManager", _fail)
+
+    result = await code_module.execute_code("int main(){}", "c")
+
+    assert result.status == "error"
+    assert "not runnable" in result.stderr
+
+
+# === Runtime-family image resolution =====================================
+
+
+_IMAGE_ENV_VARS = (
+    "DAYTONA_SNAPSHOT",
+    "DAYTONA_IMAGE",
+    "DAYTONA_SNAPSHOT_PYTHON",
+    "DAYTONA_IMAGE_PYTHON",
+    "DAYTONA_SNAPSHOT_NODE",
+    "DAYTONA_IMAGE_NODE",
+)
+
+
+def _make_manager(monkeypatch) -> "code_module.DaytonaSandboxManager":
+    """Build a manager with a stubbed Daytona client and clean image env."""
+    monkeypatch.setenv("DAYTONA_API_KEY", "configured")
+    monkeypatch.setenv("DAYTONA_API_URL", "https://example.test")
+    monkeypatch.setenv("DAYTONA_TARGET", "eu")
+    for env_var in _IMAGE_ENV_VARS:
+        monkeypatch.delenv(env_var, raising=False)
+    monkeypatch.setattr(code_module, "AsyncDaytona", lambda config: object())
+    return code_module.DaytonaSandboxManager()
+
+
+def test_language_family_mapping():
+    """Javascript maps to the node family; python to python; unknown defaults."""
+    assert code_module._family_for("python") == "python"
+    assert code_module._family_for("javascript") == "node"
+    assert code_module._family_for("rust") == code_module.DEFAULT_FAMILY
+
+
+def test_node_default_image_is_node_base():
+    """The node family's default image is a plain node base (runs javascript)."""
+    dockerfile = code_module._default_family_image("node").dockerfile()
+    assert "node:20-slim" in dockerfile
+
+    python_dockerfile = code_module._default_family_image("python").dockerfile()
+    assert "node" not in python_dockerfile
+
+
+def test_resolve_source_prefers_family_snapshot_env(monkeypatch):
+    """A family-specific snapshot env wins for that family."""
+    manager = _make_manager(monkeypatch)
+    monkeypatch.setenv("DAYTONA_SNAPSHOT_NODE", "node-snap")
+
+    assert manager._resolve_source("node") == ("snapshot", "node-snap")
+
+
+def test_resolve_source_falls_back_to_family_image_env(monkeypatch):
+    """A family-specific image env is used when no snapshot env is set."""
+    manager = _make_manager(monkeypatch)
+    monkeypatch.setenv("DAYTONA_IMAGE_NODE", "registry/node-img:latest")
+
+    assert manager._resolve_source("node") == ("image", "registry/node-img:latest")
+
+
+def test_resolve_source_legacy_global_scoped_to_python(monkeypatch):
+    """Legacy global vars feed python only; node falls to its default image."""
+    _make_manager(monkeypatch)
+    monkeypatch.setenv("DAYTONA_SNAPSHOT", "legacy-snap")
+    # Construct after setting the legacy var (cached in __init__).
+    manager = code_module.DaytonaSandboxManager()
+
+    assert manager._resolve_source("python") == ("snapshot", "legacy-snap")
+
+    node_kind, node_source = manager._resolve_source("node")
+    assert node_kind == "image"
+    assert not isinstance(node_source, str)  # declarative Image, not the snapshot
+
+
+def test_resolve_source_defaults_to_declarative_image(monkeypatch):
+    """With nothing configured, each family resolves to its default image."""
+    manager = _make_manager(monkeypatch)
+
+    kind, source = manager._resolve_source("python")
+    assert kind == "image"
+    assert not isinstance(source, str)
+
+
+@pytest.mark.asyncio
+async def test_create_javascript_uses_node_family_image(monkeypatch):
+    """create('javascript') runs the js toolbox on a node-family image."""
+    client = RecordingDaytonaClient()
+    monkeypatch.setenv("DAYTONA_API_KEY", "configured")
+    monkeypatch.setenv("DAYTONA_API_URL", "https://example.test")
+    monkeypatch.setenv("DAYTONA_TARGET", "eu")
+    for env_var in _IMAGE_ENV_VARS:
+        monkeypatch.delenv(env_var, raising=False)
+    monkeypatch.setattr(code_module, "AsyncDaytona", lambda config: client)
+
+    manager = code_module.DaytonaSandboxManager()
+    await manager.create("javascript")
+
+    params = client.params[0]
+    assert params.language == "javascript"
+    assert "node:20-slim" in params.image.dockerfile()

@@ -36,6 +36,44 @@ REQUIRED_DAYTONA_ENV_VARS = (
     "DAYTONA_TARGET",
 )
 
+# Languages Daytona can actually execute via its built-in code toolboxes
+# (`process.code_run`). These values match Daytona's `CodeLanguage` enum
+# verbatim, so they pass straight through to sandbox creation. Any other
+# language is a display-only code note — the UI hides the run affordance
+# and this module never sees an execute request for it.
+RUNNABLE_LANGUAGES = frozenset({"python", "javascript"})
+DEFAULT_LANGUAGE = "python"
+
+# Each runnable language maps to a *runtime family* — the toolchain its
+# sandbox image must carry. Several languages can share one family (and so
+# one image), e.g. javascript and (later) typescript both run on Node. The
+# image is selected per family, not per language, so adding a language that
+# reuses an existing runtime is free.
+LANGUAGE_FAMILY: dict[str, str] = {
+    "python": "python",
+    "javascript": "node",
+}
+DEFAULT_FAMILY = "python"
+
+
+def _family_for(language: str) -> str:
+    """Return the runtime family (shared image) for a runnable language."""
+    return LANGUAGE_FAMILY.get(language, DEFAULT_FAMILY)
+
+
+def _default_family_image(family: str) -> Image:
+    """Build the declarative fallback image for a runtime family.
+
+    Daytona content-addresses and caches the built image, so it's built once
+    then reused. Only used when no ``DAYTONA_SNAPSHOT_<FAMILY>`` /
+    ``DAYTONA_IMAGE_<FAMILY>`` (or, for python, the legacy global vars) is
+    configured — production should point those at pre-warmed snapshots.
+    """
+    if family == "node":
+        # Node runs javascript out of the box — no extra install needed.
+        return Image.base("node:20-slim")
+    return Image.debian_slim("3.13")
+
 
 class DaytonaSandboxManager:
     """Create and tear down a Daytona sandbox for a single code execution."""
@@ -52,35 +90,64 @@ class DaytonaSandboxManager:
         self._image = os.getenv("DAYTONA_IMAGE")
         self._snapshot = os.getenv("DAYTONA_SNAPSHOT")
 
-    def _sandbox_kwargs(self) -> dict[str, object]:
-        """Return shared sandbox creation defaults for short-lived code runs."""
+    def _sandbox_kwargs(self, language: str) -> dict[str, object]:
+        """Return shared sandbox creation defaults for short-lived code runs.
+
+        ``language`` selects Daytona's code toolbox (the command used by
+        ``code_run``); the configured image/snapshot must carry the matching
+        runtime (e.g. Node for javascript/typescript).
+        """
         return {
-            "language": "python",
+            "language": language,
             "auto_stop_interval": SANDBOX_AUTO_STOP_INTERVAL_MINUTES,
             "network_block_all": True,
             "ephemeral": True,
         }
 
-    async def create(self) -> AsyncSandbox:
-        """Create a sandbox for the current execution."""
-        if self._snapshot:
-            params = CreateSandboxFromSnapshotParams(
-                snapshot=self._snapshot,
-                **self._sandbox_kwargs(),
-            )
-            return await self._client.create(params, timeout=SANDBOX_CREATE_TIMEOUT_SECONDS)
+    def _resolve_source(self, family: str) -> tuple[str, object]:
+        """Resolve the sandbox source for a runtime family.
 
-        if self._image:
-            params = CreateSandboxFromImageParams(
-                image=self._image,
-                **self._sandbox_kwargs(),
-            )
-            return await self._client.create(params, timeout=SANDBOX_CREATE_TIMEOUT_SECONDS)
+        Returns ``("snapshot", name)`` or ``("image", image)`` where image is
+        a registry name or a declarative ``Image``. Precedence:
+          1. ``DAYTONA_SNAPSHOT_<FAMILY>`` (pre-warmed snapshot)
+          2. ``DAYTONA_IMAGE_<FAMILY>`` (registry image name)
+          3. legacy global ``DAYTONA_SNAPSHOT`` / ``DAYTONA_IMAGE`` — scoped to
+             the python family only, since they predate per-language support
+             and only ever ran python (keeps existing deploys unchanged)
+          4. the declarative default image for the family
+        """
+        suffix = family.upper()
+        snapshot = os.getenv(f"DAYTONA_SNAPSHOT_{suffix}")
+        if snapshot:
+            return "snapshot", snapshot
 
-        params = CreateSandboxFromImageParams(
-            image=Image.debian_slim("3.13"),
-            **self._sandbox_kwargs(),
-        )
+        image = os.getenv(f"DAYTONA_IMAGE_{suffix}")
+        if image:
+            return "image", image
+
+        if family == DEFAULT_FAMILY:
+            if self._snapshot:
+                return "snapshot", self._snapshot
+            if self._image:
+                return "image", self._image
+
+        return "image", _default_family_image(family)
+
+    async def create(self, language: str = DEFAULT_LANGUAGE) -> AsyncSandbox:
+        """Create a sandbox configured for ``language``'s code toolbox.
+
+        The image is selected by the language's runtime family; the
+        ``language`` kwarg still selects Daytona's per-language toolbox.
+        """
+        family = _family_for(language)
+        kind, source = self._resolve_source(family)
+        kwargs = self._sandbox_kwargs(language)
+
+        if kind == "snapshot":
+            params = CreateSandboxFromSnapshotParams(snapshot=source, **kwargs)
+        else:
+            params = CreateSandboxFromImageParams(image=source, **kwargs)
+
         return await self._client.create(params, timeout=SANDBOX_CREATE_TIMEOUT_SECONDS)
 
     async def destroy(self, sandbox: AsyncSandbox) -> None:
@@ -88,7 +155,11 @@ class DaytonaSandboxManager:
         await sandbox.delete(timeout=CODE_RUN_TIMEOUT_SECONDS)
 
     async def run_code(self, sandbox: AsyncSandbox, code: str) -> tuple[str, str]:
-        """Execute Python code inside the sandbox and capture stdio."""
+        """Execute code inside the sandbox and capture stdio.
+
+        The language was fixed at create time via the sandbox's code toolbox,
+        so this just runs whatever the agent/user wrote against it.
+        """
         response = await sandbox.process.code_run(
             code,
             timeout=CODE_RUN_TIMEOUT_SECONDS,
@@ -119,9 +190,25 @@ def _get_missing_daytona_env_vars() -> list[str]:
     return [name for name in REQUIRED_DAYTONA_ENV_VARS if not os.getenv(name)]
 
 
-async def execute_python_code(code: str) -> CodeInterpreterOutput:
-    """Run Python code in an isolated Daytona sandbox and return execution results."""
+async def execute_code(
+    code: str,
+    language: str = DEFAULT_LANGUAGE,
+) -> CodeInterpreterOutput:
+    """Run code in an isolated Daytona sandbox and return execution results.
+
+    ``language`` must be one of ``RUNNABLE_LANGUAGES``; anything else is
+    rejected up front since Daytona has no toolbox to execute it.
+    """
     started_at = time.perf_counter()
+
+    if language not in RUNNABLE_LANGUAGES:
+        return CodeInterpreterOutput(
+            status="error",
+            stdout="",
+            stderr=f"Language '{language}' is not runnable.",
+            duration_ms=int((time.perf_counter() - started_at) * 1000),
+        )
+
     missing_env_vars = _get_missing_daytona_env_vars()
 
     if missing_env_vars:
@@ -142,7 +229,7 @@ async def execute_python_code(code: str) -> CodeInterpreterOutput:
 
     async with CODE_RUN_SEMAPHORE:
         try:
-            sandbox = await sandbox_manager.create()
+            sandbox = await sandbox_manager.create(language)
             stdout, stderr = await sandbox_manager.run_code(sandbox, code)
         except TimeoutError:
             stderr = (
@@ -166,6 +253,11 @@ async def execute_python_code(code: str) -> CodeInterpreterOutput:
         stderr=stderr,
         duration_ms=duration_ms,
     )
+
+
+async def execute_python_code(code: str) -> CodeInterpreterOutput:
+    """Run Python code in an isolated Daytona sandbox (agent-tool entrypoint)."""
+    return await execute_code(code, language="python")
 
 
 async def run_code(

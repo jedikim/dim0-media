@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from fastapi.params import Body, Path
 
-from topix.agents.assistant.code import execute_python_code
+from topix.agents.assistant.code import DEFAULT_LANGUAGE, RUNNABLE_LANGUAGES, execute_code
 from topix.agents.datatypes.context import Context
 from topix.agents.describe_board import DescribeBoard
 from topix.agents.run import AgentRunner
@@ -287,7 +287,7 @@ async def execute_note_code(
     user_id: Annotated[str, Depends(get_current_user_uid)],
     _: Annotated[None, Depends(verify_board_member)],
 ):
-    """Execute Python code stored in a code sandbox note."""
+    """Execute code stored in a code sandbox note, in its declared language."""
     store: GraphStore = request.app.graph_store
 
     notes = await store.get_nodes(node_ids=[note_id])
@@ -300,8 +300,15 @@ async def execute_note_code(
     if note.style.type != NodeType.CODE_SANDBOX:
         raise HTTPException(status_code=400, detail="Note is not a code sandbox")
 
+    language = note.properties.programming_language.text or DEFAULT_LANGUAGE
+    if language not in RUNNABLE_LANGUAGES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Language '{language}' is not runnable",
+        )
+
     code = note.content.markdown if note.content else ""
-    result = await execute_python_code(code)
+    result = await execute_code(code, language)
     return result.model_dump(exclude_none=True)
 
 
