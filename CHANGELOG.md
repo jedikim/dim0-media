@@ -1,3 +1,10 @@
+## v0.3.56 (2026-06-25)
+
+### Feat
+
+- **board**: make code node language-aware with runnable-gated sandbox (#151)
+- **models**: key-aware model catalog for minimal-key deploys (#149)
+
 ## v0.3.55 (2026-06-21)
 
 ### Fix
