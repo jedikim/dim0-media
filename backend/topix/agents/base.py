@@ -41,6 +41,7 @@ from topix.agents.datatypes.stream import (
 )
 from topix.agents.datatypes.tools import AgentToolName
 from topix.agents.tool_handler import ToolHandler
+from topix.config import catalog
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +57,12 @@ class BaseAgent(Agent[Context]):
     """Base class for agents. Inherit from Openai Agent."""
 
     def __post_init__(self):
-        """Automatically load Litellm Model if not openai's."""
+        """Resolve the model against available keys, then load LiteLLM if not OpenAI."""
         if isinstance(self.model, str):
+            # Normalize any id / legacy code to a concrete route for the current
+            # keys; fall back to the best available model, or raise a clear error
+            # when no provider key is configured at all.
+            self.model = catalog.normalize_code(self.model) or catalog.require_model_code()
             model_type = self.model.split("/")[0]
             if model_type != "openai":
                 self.model = LitellmModel(self.model)

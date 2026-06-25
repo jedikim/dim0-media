@@ -23,6 +23,7 @@ from topix.api.utils.decorators import with_standard_response
 from topix.api.utils.rate_limit.dependency import rate_limiter
 from topix.api.utils.resilient_streaming import with_streaming_resilient_ndjson
 from topix.api.utils.security import get_current_user_uid, verify_chat_user
+from topix.config import catalog
 from topix.datatypes.chat.chat import Chat
 from topix.store.chat import ChatStore
 from topix.store.graph import GraphStore
@@ -167,7 +168,7 @@ async def send_message(
 
     if body.use_deep_research:
         deepsearch_config = DeepResearchConfig.from_yaml()
-        deepsearch_model = body.model if body.model != "auto" else "openai/gpt-5.4-mini"
+        deepsearch_model = body.model if body.model != "auto" else catalog.require_model_code("lite")
         deepsearch_config.set_model(deepsearch_model)
 
         deepsearch = DeepResearch.from_config(deepsearch_config)

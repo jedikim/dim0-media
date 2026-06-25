@@ -43,7 +43,7 @@ class ImageDescriptionAgent(BaseAgent):
 
     def __init__(
         self,
-        model: str = ModelEnum.OpenAI.GPT_4O_MINI,
+        model: str = ModelEnum.OpenAI.GPT_5_4_MINI,
         instructions_template: str = "image/image_description.jinja",
         model_settings: ModelSettings | None = None,
     ):

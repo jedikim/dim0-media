@@ -2,7 +2,7 @@ import { create } from "zustand"
 import type { ToolName } from "../types/stream"
 import type { LlmModel } from "../types/llm"
 import type { WebSearchEngine } from "../types/web"
-import { defaultServices, type Services } from "../types/services"
+import { AUTO_LLM_OPTION, defaultServices, type Services } from "../types/services"
 
 const DEFAULT_LLM_MODEL: LlmModel = "auto"
 
@@ -88,7 +88,7 @@ export const useChatStore = create<ChatStore>((set) => ({
     const servicesWithAuto: Services = {
       ...services,
       llm: [
-        { name: "auto", available: true, provider: "dim0" },
+        AUTO_LLM_OPTION,
         ...services.llm.filter((service) => service.name !== "auto"),
       ],
     }

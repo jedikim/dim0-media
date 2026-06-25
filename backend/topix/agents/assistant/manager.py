@@ -10,7 +10,6 @@ from topix.agents.assistant.auto_model import classify_auto_model_complexity
 from topix.agents.assistant.plan import Plan
 from topix.agents.config import AssistantManagerConfig
 from topix.agents.datatypes.context import ReasoningContext
-from topix.agents.datatypes.model_enum import ModelEnum
 from topix.agents.datatypes.outputs import CreateNoteOutput, LinkNotesOutput, WriteNoteOutput
 from topix.agents.datatypes.reasoning_step import ReasoningStep
 from topix.agents.datatypes.stream import (
@@ -25,6 +24,7 @@ from topix.agents.run import AgentRunner
 from topix.agents.sessions import AssistantSession
 from topix.agents.utils.text import post_process_url_citations
 from topix.collab.agent_bridge import AgentBoardBridge
+from topix.config import catalog
 from topix.datatypes.chat.chat import Message
 from topix.datatypes.property import ReasoningProperty, TextProperty
 from topix.datatypes.resource import RichText
@@ -34,8 +34,15 @@ from topix.utils.common import gen_uid
 
 logger = logging.getLogger(__name__)
 
-AUTO_MODEL_BASE_PLAN = "openrouter/deepseek/deepseek-v4-flash:nitro"
-AUTO_MODEL_COMPLEX_PLAN = ModelEnum.OpenAI.GPT_5_4
+def _auto_base_model() -> str:
+    """Cheapest/fastest available model for the auto-mode base plan."""
+    return catalog.require_model_code("lite")
+
+
+def _auto_complex_model() -> str:
+    """Most capable available model for complex auto-mode requests."""
+    return catalog.require_model_code("pro")
+
 
 # Hard ceiling on plan-agent turns (one turn = one LLM invocation, which may
 # fire several parallel tool calls). This is a runaway-loop backstop, not a
@@ -80,7 +87,7 @@ class AssistantManager:
         """Create an instance of AssistantManager from configuration."""
         config_ = config.model_copy(deep=True)
         if auto_mode:
-            config_.plan.model = AUTO_MODEL_BASE_PLAN
+            config_.plan.model = _auto_base_model()
 
         plan_agent = Plan.from_config(
             content_store,
@@ -115,8 +122,8 @@ class AssistantManager:
         logger.info(f"Auto model classified complexity as {complexity}")
 
         if complexity == "complex":
-            return AUTO_MODEL_COMPLEX_PLAN
-        return AUTO_MODEL_BASE_PLAN
+            return _auto_complex_model()
+        return _auto_base_model()
 
     async def _compose_input(
         self,

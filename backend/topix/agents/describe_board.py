@@ -23,7 +23,7 @@ class DescribeBoard(BaseAgent):
 
     def __init__(
         self,
-        model: str = ModelEnum.OpenAI.GPT_4_1_NANO,
+        model: str = ModelEnum.OpenAI.GPT_5_4_NANO,
         instructions_template: str = "describe_board.jinja",
         model_settings: ModelSettings | None = None,
     ):

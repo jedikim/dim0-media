@@ -24,7 +24,7 @@ from qdrant_client.models import (
 
 from topix.config.config import Config, QdrantConfig
 from topix.datatypes.resource import Resource, dict_to_embeddable
-from topix.nlp.embed import DIMENSIONS, OpenAIEmbedder
+from topix.nlp.embed import OpenAIEmbedder
 from topix.store.qdrant.utils import (
     RetrieveOutput,
     convert_point,
@@ -92,15 +92,19 @@ class ContentStore:
 
     async def create_collection(
         self,
-        vector_size: int = DIMENSIONS,
+        vector_size: int | None = None,
         distance: Distance = Distance.COSINE,
         force_recreate: bool = False,
         quantized: bool = True,
     ) -> None:
         """Create a Qdrant collection with the specified parameters.
 
-        Supporting multiple vector storage
+        Vector size defaults to the active embedder's dimension so the collection
+        always matches the embeddings it will store.
         """
+        if vector_size is None:
+            vector_size = self.embedder.dimensions
+
         exists = await self.client.collection_exists(self.collection)
 
         if force_recreate and exists:
@@ -219,7 +223,7 @@ class ContentStore:
         # Fill in None embeddings with zero vectors
         for i, emb in enumerate(embeddings):
             if emb is None:
-                embeddings[i] = [[0.0] * DIMENSIONS]
+                embeddings[i] = [[0.0] * self.embedder.dimensions]
 
         return embeddings
 

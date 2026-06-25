@@ -1,7 +1,12 @@
-"""All services info."""
+"""All services info.
+
+LLM and embedding availability come from the model catalog (`models.yml` via
+`config.catalog`), which resolves canonical models to concrete provider routes
+based on which API keys are present. Search / navigate / code / image_generation
+stay declared in `services.yml` and are gated by the same provider availability.
+"""
 
 import logging
-import os
 
 from enum import StrEnum
 from pathlib import Path
@@ -11,9 +16,11 @@ import yaml
 
 from pydantic import BaseModel
 
+from topix.config import catalog
+from topix.config.catalog import Resolved
+
 logger = logging.getLogger(__name__)
 
-LLM_FILEPATH = Path(__file__).parent.parent / "llm_models.yml"
 SERVICES_FILEPATH = Path(__file__).parent.parent / "services.yml"
 
 
@@ -27,38 +34,12 @@ class ServiceEnum(StrEnum):
     IMAGE_GENERATION = "image_generation"
 
 
-class LLMTier(StrEnum):
-    """LLM Model tiers."""
-
-    PRO = "pro"
-    LITE = "lite"
-
-
 class BaseService(BaseModel):
     """Base Service info."""
 
     type: ServiceEnum
     name: str
     provider: str
-
-
-class LLMService(BaseService):
-    """LLM Service info."""
-
-    type: Literal[ServiceEnum.LLM] = ServiceEnum.LLM
-    model: str
-    tier: LLMTier
-    openrouter_model: str | None = None
-    use_openrouter: bool = False
-
-    @property
-    def code(self) -> str:
-        """Get the code representation of the LLM service."""
-        if not self.use_openrouter:
-            return f"{self.provider}/{self.model}"
-        else:
-            model_name = self.openrouter_model or f"{self.provider}/{self.model}"
-            return f"openrouter/{model_name}"
 
 
 class SearchService(BaseService):
@@ -89,7 +70,7 @@ class ServiceConfig(BaseModel):
     """Valid Services info."""
 
     providers: list[str]
-    llm: list[LLMService]
+    llm: list[Resolved]
     search: list[SearchService]
     navigate: list[NavigateService]
     code: list[CodeService]
@@ -97,40 +78,30 @@ class ServiceConfig(BaseModel):
 
     @classmethod
     def _sync(cls) -> dict:
-        """Sync the services config with environment variables."""
+        """Sync the services config with the currently configured API keys."""
         with open(SERVICES_FILEPATH) as f:
             cf = yaml.safe_load(f)
 
-        # Get valid providers:
-        providers: list[str] = []
-        for provider, env_var in cf["providers"].items():
-            # Check if the env var is set and is not empty
-            if os.getenv(env_var["env_var"]):
-                providers.append(provider)
+        # Provider availability + LLM models come from the model catalog.
+        providers = catalog.available_providers()
 
-        # Get valid services
         services = cf["services"]
 
-        dct = {}
-        dct["providers"] = providers
-        dct["llm"] = cls._get_llm_services(services[ServiceEnum.LLM], providers)
-        dct["search"] = [
-            SearchService.model_validate(service)
-            for service in services[ServiceEnum.SEARCH] if service["provider"] in providers
-        ]
-        dct["navigate"] = [
-            NavigateService.model_validate(service)
-            for service in services[ServiceEnum.NAVIGATE] if service["provider"] in providers
-        ]
-        dct["code"] = [
-            CodeService.model_validate(service)
-            for service in services[ServiceEnum.CODE] if service["provider"] in providers
-        ]
-        dct["image_generation"] = [
-            ImageGenerationService.model_validate(service)
-            for service in services[ServiceEnum.IMAGE_GENERATION] if service["provider"] in providers
-        ]
-        return dct
+        def gated(service_key: ServiceEnum, model_cls):
+            return [
+                model_cls.model_validate(service)
+                for service in services.get(service_key, [])
+                if service["provider"] in providers
+            ]
+
+        return {
+            "providers": providers,
+            "llm": catalog.available_llms(),
+            "search": gated(ServiceEnum.SEARCH, SearchService),
+            "navigate": gated(ServiceEnum.NAVIGATE, NavigateService),
+            "code": gated(ServiceEnum.CODE, CodeService),
+            "image_generation": gated(ServiceEnum.IMAGE_GENERATION, ImageGenerationService),
+        }
 
     def update(self):
         """Update the service config."""
@@ -142,44 +113,8 @@ class ServiceConfig(BaseModel):
 
     @classmethod
     def from_yaml(cls) -> "ServiceConfig":
-        """Create an instance of ServiceManager from a YAML file."""
-        synced_data = cls._sync()
-
-        return cls(**synced_data)
-
-    @classmethod
-    def _get_llm_services(
-        cls,
-        llm_services: list[str],
-        providers: list[str],
-    ) -> list[LLMService]:
-        """Get a list of valid LLM services from a given list of LLM names and providers.
-
-        Args:
-            llm_services (list[str]): A list of LLM names.
-            providers (list[str]): A list of valid providers.
-
-        Returns:
-            list[LLMService]: A list of valid LLM services.
-
-        """
-        with open(LLM_FILEPATH) as f:
-            cf: list[dict] = yaml.safe_load(f)
-
-        res = []
-        for llm_name in llm_services:
-            if llm_name in cf:
-                if cf[llm_name]["provider"] in providers:
-                    res.append(LLMService.model_validate({'name': llm_name, **cf[llm_name]}))
-                elif "openrouter" in providers:
-                    res.append(
-                        LLMService.model_validate(dict(
-                            name=llm_name,
-                            **cf[llm_name],
-                            use_openrouter=True,
-                        ))
-                    )
-        return res
+        """Create an instance of ServiceConfig from current config."""
+        return cls(**cls._sync())
 
 
 """

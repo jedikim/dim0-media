@@ -21,6 +21,7 @@ from qdrant_client.models import (
     VectorParams,
 )
 
+from topix.config import catalog
 from topix.config.config import Config
 from topix.nlp.embed import DIMENSIONS
 from topix.store.qdrant.utils import payload_dict_to_field_list
@@ -76,15 +77,20 @@ class QdrantStore:
 
     async def create_collection(
         self,
-        vector_size: int = DIMENSIONS,
+        vector_size: int | None = None,
         distance: Distance = Distance.COSINE,
         force_recreate: bool = False,
         quantized: bool = True
     ) -> None:
         """Create a Qdrant collection with the specified parameters.
 
-        Supporting multiple vector storage
+        Vector size defaults to the active embedding model's dimension (from the
+        catalog) so the collection matches whatever provider serves embeddings.
         """
+        if vector_size is None:
+            emb = catalog.available_embedding()
+            vector_size = (emb.dim if emb else None) or DIMENSIONS
+
         exists = await self.client.collection_exists(self.collection)
         if force_recreate and exists:
             await self.client.delete_collection(self.collection)

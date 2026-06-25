@@ -1,4 +1,4 @@
-import { Claude, DeepSeek, Exa, Gemini, Mistral, Moonshot, OpenAI, Perplexity, Qwen, Tavily, ZAI } from "@lobehub/icons"
+import { Claude, DeepSeek, Exa, Gemini, Minimax, Mistral, Moonshot, OpenAI, Perplexity, Qwen, Tavily, ZAI } from "@lobehub/icons"
 import {
   ArrowUpIcon,
   ArticleIcon,
@@ -200,6 +200,7 @@ export const MailIcon = createPhosphorIcon(EnvelopeIcon)
 export const MapPinIcon = createPhosphorIcon(MapPinGlyphIcon)
 export const MemorySearchIcon = createPhosphorIcon(CircuitryIcon)
 export const MistralBrandIcon = createReactIcon(Mistral.Color)
+export const MinimaxBrandIcon = createReactIcon(Minimax.Color)
 export const MinusIcon = createPhosphorIcon(MinusGlyphIcon)
 export const MonitorIcon = createPhosphorIcon(MonitorGlyphIcon)
 export const MoonIcon = createPhosphorIcon(MoonGlyphIcon)

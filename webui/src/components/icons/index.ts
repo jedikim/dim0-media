@@ -90,6 +90,7 @@ export {
   MapPinIcon,
   MemorySearchIcon,
   MistralBrandIcon,
+  MinimaxBrandIcon,
   MinusIcon,
   MonitorIcon,
   MoonIcon,

@@ -14,7 +14,7 @@ class SummifyAgent(BaseAgent):
 
     def __init__(
         self,
-        model: str = ModelEnum.OpenAI.GPT_5_1,
+        model: str = ModelEnum.OpenAI.GPT_5_4,
         instructions_template: str = "summify/summify.system.jinja",
         model_settings: ModelSettings | None = None,
     ):

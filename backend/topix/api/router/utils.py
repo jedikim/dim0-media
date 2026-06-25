@@ -70,9 +70,23 @@ async def search_images(
 @router.get("/services")
 @with_standard_response
 async def get_services() -> dict:
-    """Get available services."""
+    """Get available services.
+
+    `llm` is the catalog of reachable models (keyed by canonical id) with the
+    display metadata the frontend needs to render the picker; the id is what the
+    client sends back as the chosen model.
+    """
     return {
-        "llm": [llm.code for llm in service_config.llm],
+        "llm": [
+            {
+                "id": m.id,
+                "label": m.label,
+                "family": m.family,
+                "tier": m.tier,
+                "provider": m.provider,
+            }
+            for m in service_config.llm
+        ],
         "search": [search.name for search in service_config.search],
         "navigate": [navigate.name for navigate in service_config.navigate],
         "code": [code.name for code in service_config.code],

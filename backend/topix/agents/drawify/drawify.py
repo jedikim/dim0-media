@@ -19,7 +19,7 @@ class DrawifyAgent(BaseAgent):
 
     def __init__(
         self,
-        model: str = ModelEnum.OpenRouter.CLAUDE_OPUS_4_6,
+        model: str = ModelEnum.OpenRouter.CLAUDE_OPUS,
         instructions_template: str = "drawify/drawify.system.jinja",
         model_settings: ModelSettings | None = None,
     ):

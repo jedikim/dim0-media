@@ -11,6 +11,7 @@ from agents import ModelSettings
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from topix.agents.datatypes.web_search import WebSearchContextSize, WebSearchOption
+from topix.config import catalog
 from topix.config.services import service_config
 from topix.datatypes.recurrence import Recurrence
 
@@ -37,16 +38,18 @@ class BaseAgentConfig(BaseConfig):
     @field_validator("model")
     @classmethod
     def validate_model(cls, v: str) -> str:
-        """Check if the model is valid."""
-        valid_model_codes = [service.code for service in service_config.llm]
+        """Resolve a model id (or legacy call code) to a concrete, reachable call code."""
+        resolved = catalog.normalize_code(v)
+        if resolved is not None:
+            return resolved
 
-        if len(valid_model_codes) == 0:
-            raise ValueError("No LLM API available. Please add at least one LLM API by adding its api key to the config.")
-
-        if v in valid_model_codes:
-            return v
-        logger.info(f"Model '{v}' is not available, replaced with {valid_model_codes[0]}")
-        return valid_model_codes[0]
+        fallback = catalog.default_model_code()
+        if fallback is None:
+            raise ValueError(
+                "No LLM API available. Please add at least one LLM API by adding its api key to the config."
+            )
+        logger.info(f"Model '{v}' is not available, replaced with {fallback}")
+        return fallback
 
 
 class WebSearchConfig(BaseAgentConfig):

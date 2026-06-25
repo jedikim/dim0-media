@@ -3,18 +3,19 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
-import os
 import time
 
 from typing import Literal
 
-from openai import AsyncOpenAI
+import litellm
+
 from pydantic import BaseModel
 
+from topix.config import catalog
+
 AUTO_MODEL_TIMEOUT_SECONDS = 2
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
-OPENROUTER_AUTO_MODEL = "openai/gpt-oss-120b:nitro"
 
 logger = logging.getLogger(__name__)
 
@@ -156,36 +157,46 @@ def _build_classifier_input(messages: list[dict[str, str]]) -> str:
     return "\n\n".join(parts)
 
 
+def _parse_complexity(content: str | None) -> ComplexityLabel:
+    """Extract the complexity label from the classifier's JSON reply (medium on miss)."""
+    if not content:
+        return "medium"
+    try:
+        label = json.loads(content).get("complexity")
+    except (json.JSONDecodeError, AttributeError):
+        return "medium"
+    if label in ("simple", "medium", "complex"):
+        return label
+    return "medium"
+
+
 async def classify_auto_model_complexity(messages: list[dict[str, str]]) -> ComplexityLabel:
-    """Classify the request complexity, falling back to medium on any failure."""
+    """Classify the request complexity, falling back to medium on any failure.
+
+    Routes through LiteLLM using the best available "lite" model, so the
+    classifier works for any configured provider (OpenAI, OpenRouter, or a
+    native Anthropic/Gemini/Mistral/DeepSeek key), not just OpenAI-compatible ones.
+    """
     started_at = time.perf_counter()
-    api_key = os.getenv("OPENROUTER_API_KEY")
-    if not api_key:
-        elapsed_ms = (time.perf_counter() - started_at) * 1000
-        logger.info("Auto model classifier skipped (missing OPENROUTER_API_KEY) in %.1fms", elapsed_ms)
+    fast = catalog.default_resolved("lite") or catalog.default_resolved()
+    if fast is None:
+        logger.info("Auto model classifier skipped (no model available)")
         return "medium"
 
-    client = AsyncOpenAI(
-        api_key=api_key,
-        base_url=OPENROUTER_BASE_URL,
-    )
-
     async def _run() -> ComplexityLabel:
-        response = await client.beta.chat.completions.parse(
-            model=OPENROUTER_AUTO_MODEL,
+        response = await litellm.acompletion(
+            model=fast.call,
             messages=[
                 {"role": "system", "content": AUTO_MODEL_SYSTEM_PROMPT},
                 {"role": "user", "content": _build_classifier_input(messages)},
             ],
             response_format=AutoModelDecision,
             temperature=0,
-            max_completion_tokens=1000,
+            max_tokens=1000,
+            timeout=AUTO_MODEL_TIMEOUT_SECONDS,
+            drop_params=True,
         )
-
-        parsed = response.choices[0].message.parsed
-        if parsed is None:
-            return "medium"
-        return parsed.complexity
+        return _parse_complexity(response.choices[0].message.content)
 
     try:
         complexity = await asyncio.wait_for(_run(), timeout=AUTO_MODEL_TIMEOUT_SECONDS)

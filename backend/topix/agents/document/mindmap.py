@@ -12,7 +12,7 @@ class DocumentMindmapAgent(BaseAgent):
 
     def __init__(
         self,
-        model: str = ModelEnum.OpenAI.GPT_4_1_MINI,
+        model: str = ModelEnum.OpenAI.GPT_5_4_MINI,
         instructions_template: str = "document/document_mindmap.system.jinja",
         model_settings: ModelSettings | None = None,
     ):

@@ -1,15 +1,27 @@
 import { apiFetch } from "@/api"
 import { useQuery } from "@tanstack/react-query"
-import { defaultServices, type Services } from "../types/services"
+import { AUTO_LLM_OPTION, defaultServices, type Services } from "../types/services"
 import { useChatStore } from "../store/chat-store"
 import { useEffect } from "react"
+
+
+/**
+ * One reachable model as served by the backend catalog.
+ */
+export interface AvailableLlm {
+  id: string
+  label: string
+  family: string
+  tier?: string
+  provider?: string
+}
 
 
 /**
  * Response structure for listing available services.
  */
 export interface ListAvailableServicesResponse {
-  llm: string[]
+  llm: AvailableLlm[]
   search: string[]
   navigate: string[]
   code: string[]
@@ -30,10 +42,19 @@ const updateDefaultServices = ({
 }): Services => {
   // This function can be used to update the DefaultServices constant
   const services: Services = defaultServices()
-  services.llm = services.llm.map((service) => ({
-    ...service,
-    available: availableServices.llm.includes(service.name),
-  }))
+  // The backend returns exactly the reachable models; render them as-is, with
+  // the synthetic "auto" option always first.
+  services.llm = [
+    AUTO_LLM_OPTION,
+    ...availableServices.llm.map((model) => ({
+      name: model.id,
+      label: model.label,
+      family: model.family,
+      tier: model.tier,
+      provider: model.provider,
+      available: true,
+    })),
+  ]
   services.search = services.search.map((service) => ({
     ...service,
     available: availableServices.search.includes(service.name),

@@ -1,5 +1,5 @@
 plan:
-  model: openai/gpt-4.1
+  model: gpt-5.4
   instructions_template: plan.system.jinja
   model_settings:
     temperature: 0.01
@@ -7,7 +7,7 @@ plan:
 
   web_search:
     search_engine: linkup
-    model: openai/gpt-4.1-mini
+    model: gpt-5.4-mini
     instructions_template: web_search.jinja
     search_context_size: medium
     model_settings:
@@ -16,17 +16,17 @@ plan:
     streaming: false
 
   navigate:
-    model: openai/gpt-4.1-mini
+    model: gpt-5.4-mini
     instructions_template: navigate.system.jinja
 
   memory_search:
-    model: openai/gpt-4.1-mini
+    model: gpt-5.4-mini
     instructions_template: memory_search.jinja
     model_settings:
       temperature: 0.01
 
   code_interpreter:
-    model: openai/gpt-4.1-mini
+    model: gpt-5.4-mini
     instructions_template: code_interpreter.jinja
     model_settings:
       temperature: 0.01

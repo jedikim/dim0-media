@@ -1,62 +1,38 @@
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger } from "@/components/ui/select"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useChatStore } from "@/features/agent/store/chat-store"
 import {
-  LlmDescription,
-  LlmName,
-  type LlmModel,
-  LlmFamilyMap,
-  LlmFamilyIcon,
-  type LlmFamily,
+  familyIcon,
+  familyLabel,
 } from "@/features/agent/types/llm"
+import type { LlmOption } from "@/features/agent/types/services"
 import { LockIcon } from "@/components/icons"
 import { clsx } from "clsx"
 import { useShallow } from "zustand/shallow"
-
-/**
- * Optional: pretty labels for families
- */
-const LlmFamilyLabel: Record<LlmFamily, string> = {
-  dim0: "Dim0",
-  openai: "OpenAI",
-  google: "Google Gemini",
-  anthropic: "Anthropic Claude",
-  mistralai: "Mistral",
-  deepseek: "DeepSeek",
-  "z-ai": "Z.ai",
-  qwen: "Qwen",
-  moonshotai: "Moonshot",
-}
 
 type ModelChoiceMenuProps = {
   display?: "icon" | "row"
 }
 
 /**
- * ModelCard is a component that displays the name and description of a LLM model
- * in a hover card format. It is used within the ModelChoiceMenu to provide
- * additional information about each model.
+ * ModelCard renders a model's label, with an optional tier hint, and dims it
+ * when the model is unavailable.
  */
-const ModelCard: React.FC<{ model: LlmModel; available?: boolean }> = ({ model, available }) => {
+const ModelCard: React.FC<{ model: LlmOption }> = ({ model }) => {
   const clss = clsx(
     "flex-1 flex flex-row items-center gap-2 justify-between truncate",
-    available === false ? "text-muted-foreground cursor-not-allowed pointer-events-none" : "",
+    model.available === false ? "text-muted-foreground cursor-not-allowed pointer-events-none" : "",
   )
 
   return (
-    <HoverCard openDelay={200}>
-      <HoverCardTrigger className={clss}>
-        <span className="truncate">{LlmName[model]}</span>
-      </HoverCardTrigger>
-      <HoverCardContent
-        className="w-48 rounded-lg border border-border bg-popover text-popover-foreground shadow text-sm"
-        side="left"
-        sideOffset={15}
-      >
-        <div>{LlmDescription[model]}</div>
-      </HoverCardContent>
-    </HoverCard>
+    <div className={clss}>
+      <span className="truncate">{model.label}</span>
+      {model.tier && (
+        <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          {model.tier}
+        </span>
+      )}
+    </div>
   )
 }
 
@@ -73,22 +49,23 @@ export const ModelChoiceMenu = ({ display = "icon" }: ModelChoiceMenuProps) => {
   )
 
   const handleModelChange = (value: string) => {
-    setLlmModel(value as LlmModel)
+    setLlmModel(value)
   }
 
-  // Group models by family
-  const modelsByFamily: Partial<Record<LlmFamily, typeof availableModels>> = {}
+  // Group models by family (order preserved from the backend catalog)
+  const modelsByFamily: Record<string, typeof availableModels> = {}
   for (const model of availableModels) {
-    const family = LlmFamilyMap[model.name]
-    if (!family) continue
+    const family = model.family || "dim0"
     if (!modelsByFamily[family]) {
       modelsByFamily[family] = []
     }
-    modelsByFamily[family]!.push(model)
+    modelsByFamily[family].push(model)
   }
 
-  const currentFamily = LlmFamilyMap[llmModel]
-  const CurrentFamilyIcon = LlmFamilyIcon[currentFamily]
+  const currentModel = availableModels.find((model) => model.name === llmModel)
+  const currentFamily = currentModel?.family ?? "dim0"
+  const CurrentFamilyIcon = familyIcon(currentFamily)
+  const currentLabel = currentModel?.label ?? llmModel
   const isRow = display === "row"
   const triggerClassName = isRow
     ? "w-full rounded-md text-xs px-2 py-1.5 shadow-none hover:bg-accent [&>svg:not(.my-icon)]:hidden border border-transparent hover:border-border transition-colors justify-start gap-2 text-muted-foreground"
@@ -107,7 +84,7 @@ export const ModelChoiceMenu = ({ display = "icon" }: ModelChoiceMenuProps) => {
                   isRow ? (
                     <>
                       <CurrentFamilyIcon size={16} />
-                      <span className="text-xs truncate">Core LLM ({LlmName[llmModel]})</span>
+                      <span className="text-xs truncate">Core LLM ({currentLabel})</span>
                     </>
                   ) : (
                     <CurrentFamilyIcon size={16} />
@@ -128,19 +105,17 @@ export const ModelChoiceMenu = ({ display = "icon" }: ModelChoiceMenuProps) => {
             </SelectLabel>
           </SelectGroup>
 
-          {(
-            Object.keys(modelsByFamily) as LlmFamily[]
-          ).map((family) => {
+          {Object.keys(modelsByFamily).map((family) => {
             const familyModels = modelsByFamily[family]
             if (!familyModels || familyModels.length === 0) return null
 
-            const FamilyIcon = LlmFamilyIcon[family]
+            const FamilyIcon = familyIcon(family)
 
             return (
               <SelectGroup key={family} className="mt-1">
                 <SelectLabel className="flex flex-row items-center gap-2 text-xs font-medium">
                   <FamilyIcon size={16} />
-                  <span>{LlmFamilyLabel[family]}</span>
+                  <span>{familyLabel(family)}</span>
                 </SelectLabel>
 
                 {familyModels.map((model) => {
@@ -158,7 +133,7 @@ export const ModelChoiceMenu = ({ display = "icon" }: ModelChoiceMenuProps) => {
                       className={clName}
                       disabled={!model.available}
                     >
-                      <ModelCard model={model.name} available={model.available} />
+                      <ModelCard model={model} />
                       {!model.available && (
                         <LockIcon
                           className="size-4 absolute right-2 top-1/2 -translate-y-1/2"

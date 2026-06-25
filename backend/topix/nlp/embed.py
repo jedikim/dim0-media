@@ -5,7 +5,7 @@ import logging
 
 from openai import AsyncOpenAI
 
-from topix.config.config import Config
+from topix.config import catalog
 from topix.nlp.tokens import truncate_to_tokens
 from topix.utils.timeit import async_timeit
 
@@ -22,16 +22,41 @@ MAX_EMBED_TOKENS = 8000
 
 
 class OpenAIEmbedder:
-    """A class to handle OpenAI embeddings using the OpenAI API."""
+    """Embeds text via an OpenAI-compatible endpoint (OpenAI or OpenRouter).
 
-    def __init__(self, api_key: str | None = None):
-        """Initialize the OpenAIEmbedder."""
-        self._client = AsyncOpenAI(api_key=api_key)
+    The concrete provider, model string, and vector size are resolved from the
+    model catalog based on which API keys are present.
+    """
+
+    def __init__(
+        self,
+        client: AsyncOpenAI,
+        model: str = MODEL_NAME,
+        dimensions: int = DIMENSIONS,
+    ):
+        """Initialize the embedder with a provider client, model, and vector size."""
+        self._client = client
+        self.model = model
+        self.dimensions = dimensions
 
     @classmethod
     def from_config(cls):
-        """Create an instance of OpenAIEmbedder from configuration."""
-        return cls(api_key=Config.instance().run.apis.openai.api_key.get_secret_value())
+        """Create an embedder routed to the first available embedding provider."""
+        resolved = catalog.available_embedding()
+        if resolved is None:
+            raise RuntimeError(
+                "No embedding model available. Set OPENAI_API_KEY or OPENROUTER_API_KEY."
+            )
+
+        client = catalog.openai_compatible_client(resolved)
+        if client is None:
+            raise RuntimeError(f"Unsupported embedding provider: {resolved.provider}")
+
+        return cls(
+            client=client,
+            model=resolved.model,
+            dimensions=resolved.dim or DIMENSIONS,
+        )
 
     def _fit(self, text: str) -> str:
         """Clamp one text to the embedding model's per-input token limit.
@@ -64,9 +89,9 @@ class OpenAIEmbedder:
         texts = await asyncio.to_thread(self._fit_batch, texts) if needs_encode else self._fit_batch(texts)
         # Call the embeddings endpoint asynchronously
         response = await self._client.embeddings.create(
-            model=MODEL_NAME,
+            model=self.model,
             input=texts,
-            dimensions=DIMENSIONS
+            dimensions=self.dimensions
         )
         # The embeddings are in response.data, ordered same as input
         return [e.embedding for e in response.data]

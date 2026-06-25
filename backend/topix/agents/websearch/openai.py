@@ -21,7 +21,7 @@ class OpenAIWebSearch(BaseAgent):
 
     def __init__(
         self,
-        model: str = ModelEnum.OpenAI.GPT_5_MINI,
+        model: str = ModelEnum.OpenAI.GPT_5_4_MINI,
         instructions_template: str = "web_search.jinja",
         model_settings: ModelSettings | None = None,
         search_context_size: WebSearchContextSize = WebSearchContextSize.MEDIUM,

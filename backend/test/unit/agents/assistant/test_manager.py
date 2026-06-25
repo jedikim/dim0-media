@@ -6,9 +6,12 @@ from collections.abc import AsyncGenerator
 
 import pytest
 
-from topix.agents.assistant.manager import AUTO_MODEL_BASE_PLAN, AssistantManager
+from topix.agents.assistant.manager import (
+    AssistantManager,
+    _auto_base_model,
+    _auto_complex_model,
+)
 from topix.agents.datatypes.context import ReasoningContext
-from topix.agents.datatypes.model_enum import ModelEnum
 from topix.agents.datatypes.outputs import WebSearchOutput
 from topix.agents.datatypes.reasoning_step import ReasoningStep
 from topix.agents.datatypes.stream import (
@@ -41,7 +44,7 @@ class RecordingSession:
 class RecordingPlanAgent:
     """Minimal plan agent stub for manager routing tests."""
 
-    def __init__(self, model: str = AUTO_MODEL_BASE_PLAN):
+    def __init__(self, model: str = "openai/gpt-4.1"):
         """Store only the fields the manager needs to mutate."""
         self.model = model
 
@@ -199,31 +202,53 @@ async def test_run_streamed_flushes_reasoning_step_before_tool_call(monkeypatch:
     assert steps[2].message == "Inflation slowed."
 
 
+# Provider keys that catalog resolution reads from the environment. Auto-model
+# selection needs at least one reachable model, so the routing tests pin a known
+# key — otherwise they pass locally (real .env leaks in) but fail on CI (no keys).
+_PROVIDER_KEYS = (
+    "OPENAI_API_KEY",
+    "OPENROUTER_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GEMINI_API_KEY",
+    "MISTRAL_API_KEY",
+    "DEEPSEEK_API_KEY",
+)
+
+
+@pytest.fixture
+def openai_only(monkeypatch: pytest.MonkeyPatch) -> pytest.MonkeyPatch:
+    """Resolve the catalog against OpenAI alone, deterministic across CI and local."""
+    for key in _PROVIDER_KEYS:
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-test")
+    return monkeypatch
+
+
 @pytest.mark.asyncio
-async def test_select_plan_model_uses_full_model_for_complex(monkeypatch: pytest.MonkeyPatch):
-    """Auto mode should upgrade only complex requests to the larger model."""
+async def test_select_plan_model_uses_full_model_for_complex(openai_only: pytest.MonkeyPatch):
+    """Auto mode should upgrade complex requests to the best available pro model."""
     manager = AssistantManager(plan_agent=RecordingPlanAgent(), auto_mode=True)
 
     async def fake_classify(messages: list[dict[str, str]]) -> str:
         return "complex"
 
-    monkeypatch.setattr("topix.agents.assistant.manager.classify_auto_model_complexity", fake_classify)
+    openai_only.setattr("topix.agents.assistant.manager.classify_auto_model_complexity", fake_classify)
 
     selected_model = await manager._select_plan_model([{"role": "user", "content": "Hard task"}])
 
-    assert selected_model == ModelEnum.OpenAI.GPT_5_4
+    assert selected_model == _auto_complex_model()
 
 
 @pytest.mark.asyncio
-async def test_select_plan_model_uses_mini_for_medium(monkeypatch: pytest.MonkeyPatch):
-    """Auto mode should keep medium requests on the fast Kimi base plan."""
+async def test_select_plan_model_uses_mini_for_medium(openai_only: pytest.MonkeyPatch):
+    """Auto mode should keep medium requests on the fast (lite) base plan."""
     manager = AssistantManager(plan_agent=RecordingPlanAgent(), auto_mode=True)
 
     async def fake_classify(messages: list[dict[str, str]]) -> str:
         return "medium"
 
-    monkeypatch.setattr("topix.agents.assistant.manager.classify_auto_model_complexity", fake_classify)
+    openai_only.setattr("topix.agents.assistant.manager.classify_auto_model_complexity", fake_classify)
 
     selected_model = await manager._select_plan_model([{"role": "user", "content": "Medium task"}])
 
-    assert selected_model == AUTO_MODEL_BASE_PLAN
+    assert selected_model == _auto_base_model()

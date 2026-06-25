@@ -35,9 +35,8 @@ class TestEmbedderClamping:
     """The embedder must never hand the API an over-limit input."""
 
     def _embedder(self) -> tuple[OpenAIEmbedder, _FakeClient]:
-        embedder = OpenAIEmbedder(api_key="test-key")
         fake = _FakeClient()
-        embedder._client = fake
+        embedder = OpenAIEmbedder(client=fake)
         return embedder, fake
 
     async def test_oversized_input_is_clamped_before_api_call(self):

@@ -30,7 +30,7 @@ class WebCollector(BaseAgent):
 
     def __init__(
         self,
-        model: str = ModelEnum.OpenAI.GPT_5,
+        model: str = ModelEnum.OpenAI.GPT_5_4,
         instructions_template: str = "deep_research/web_collector.jinja",
         model_settings: ModelSettings | None = None,
         web_search_tool: FunctionTool | None = None,
@@ -77,20 +77,11 @@ class Synthesizer(BaseAgent):
 
     def __init__(
         self,
-        model: str = ModelEnum.OpenAI.GPT_4_1,
+        model: str = ModelEnum.OpenAI.GPT_5_4,
         instructions_template: str = "deep_research/synthesis.system.jinja",
         model_settings: ModelSettings | None = None,
     ):
         """Init method."""
-        # TODO: GPT-5.1-chat-latest is not compatible with deep research long detailed report synthesis, to
-        # replace it with GPT-5.1 for now. But need better configuration management later.
-        if model == ModelEnum.OpenAI.GPT_5_1_CHAT:
-            logger.warning(
-                "gpt-5.1-chat-latest is not compatible with deep research long detailed report synthesis "
-                "due to verbosity/formatting restrictions in hidden system prompt. Falling back to gpt-5.1."
-            )
-            model = ModelEnum.OpenAI.GPT_5_1
-
         name = "Synthesizer"
         instructions = self._render_prompt(instructions_template)
 

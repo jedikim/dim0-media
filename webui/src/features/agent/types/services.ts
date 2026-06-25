@@ -1,5 +1,3 @@
-import type { LlmModel } from "./llm"
-
 /**
  * Represents a service option with its availability and provider.
  */
@@ -9,8 +7,14 @@ export interface ServiceOption {
   provider?: string
 }
 
+/**
+ * A selectable LLM, carrying the display metadata the picker needs. `name` is
+ * the canonical model id sent back to the backend (or "auto").
+ */
 export interface LlmOption extends ServiceOption {
-  name: LlmModel
+  label: string
+  family: string
+  tier?: string
 }
 
 
@@ -37,38 +41,19 @@ export type ServiceName = typeof SERVICE_NAMES[number]
  *
  * Note: All services are marked as unavailable by default.
  */
+export const AUTO_LLM_OPTION: LlmOption = {
+  name: "auto",
+  label: "Auto",
+  family: "dim0",
+  provider: "dim0",
+  available: true,
+}
+
+
 export const defaultServices: () => Services = () => ({
-  llm: [
-    { name: "auto", available: true, provider: "dim0" },
-    { name: "openai/gpt-5.2", available: false, provider: "openai" },
-    { name: "openai/gpt-5.2-chat-latest", available: false, provider: "openai" },
-    { name: "openai/gpt-5.1", available: false, provider: "openai" },
-    { name: "openai/gpt-5.1-chat-latest", available: false, provider: "openai" },
-    { name: "openai/gpt-5.4", available: false, provider: "openai" },
-    { name: "openai/gpt-5.4-mini", available: false, provider: "openai" },
-    { name: "openai/gpt-5.4-nano", available: false, provider: "openai" },
-    // { name: "openai/gpt-5", available: false, provider: "openai" },
-    // { name: "openai/gpt-5-mini", available: false, provider: "openai" },
-    // { name: "openai/gpt-5-nano", available: false, provider: "openai" },
-    // { name: "openai/gpt-4.1", available: false, provider: "openai" },
-    // { name: "openai/gpt-4o", available: false, provider: "openai" },
-    { name: "openrouter/anthropic/claude-opus-4.6", available: false, provider: "openrouter" },
-    // { name: "openrouter/anthropic/claude-opus-4.5", available: false, provider: "openrouter" },
-    // { name: "openrouter/anthropic/claude-opus-4.1", available: false, provider: "openrouter" },
-    { name: "openrouter/anthropic/claude-sonnet-4.6", available: false, provider: "openrouter" },
-    { name: "openrouter/anthropic/claude-haiku-4.5", available: false, provider: "openrouter" },
-    { name: "openrouter/google/gemini-3-pro-preview", available: false, provider: "openrouter" },
-    { name: "openrouter/google/gemini-2.5-pro", available: false, provider: "openrouter" },
-    { name: "openrouter/google/gemini-2.5-flash", available: false, provider: "openrouter" },
-    { name: "openrouter/mistralai/mistral-large-2512", available: false, provider: "openrouter" },
-    { name: "openrouter/mistralai/mistral-medium-3.1", available: false, provider: "openrouter" },
-    { name: "openrouter/deepseek/deepseek-v3.2", available: false, provider: "openrouter" },
-    // { name: "openrouter/deepseek/deepseek-chat-v3.1", available: false, provider: "openrouter" },
-    { name: "openrouter/z-ai/glm-4.7:nitro", available: false, provider: "openrouter" },
-    { name: "openrouter/qwen/qwen3.5-plus-02-15", available: false, provider: "openrouter" },
-    // { name: "openrouter/qwen/qwen3.6-plus-preview:free", available: false, provider: "openrouter" },
-    { name: "openrouter/moonshotai/kimi-k2.5:nitro", available: false, provider: "openrouter" },
-  ],
+  // The real model list is filled in from the backend (keys-aware); only the
+  // synthetic "auto" option is known client-side.
+  llm: [AUTO_LLM_OPTION],
   search: [
     { name: "linkup", available: false, provider: "linkup" },
     { name: "exa", available: false, provider: "exa" },
