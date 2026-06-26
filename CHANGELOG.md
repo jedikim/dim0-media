@@ -1,3 +1,9 @@
+## v0.3.58 (2026-06-26)
+
+### Feat
+
+- **billing**: basic tier, model gating, freemium limits + canvas counters (#153)
+
 ## v0.3.57 (2026-06-25)
 
 ### Fix
