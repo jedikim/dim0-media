@@ -1,29 +1,19 @@
 """Helpers to resolve plan for JWT access token claims."""
 
-import os
-
 from fastapi import Request
 
+from topix.api.utils.billing.stripe_config import is_billing_active
 from topix.datatypes.user_billing import BillingPlan, effective_plan
 from topix.store.user_billing import UserBillingStore
-
-BILLING_ENABLED_ENV = "VITE_BILLING_ENABLED"
-
-
-def _is_truthy(value: str | None) -> bool:
-    """Parse common truthy env values."""
-    if value is None:
-        return False
-    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 async def resolve_plan_for_token(request: Request, user_uid: str) -> BillingPlan:
     """Resolve plan claim for access token payload.
 
-    When billing is disabled, return plus so UI naturally avoids paywall behavior.
+    When billing is inactive (disabled or unconfigured), return plus so the UI
+    unlocks all features for OSS / self-hosted deploys.
     """
-    billing_enabled = _is_truthy(os.getenv(BILLING_ENABLED_ENV))
-    if not billing_enabled:
+    if not is_billing_active():
         return "plus"
 
     store: UserBillingStore | None = getattr(request.app, "user_billing_store", None)

@@ -37,6 +37,14 @@ def _shared_client_portal():
             _active_stack = None
 
 
+@pytest.fixture(autouse=True)
+def _billing_active(monkeypatch):
+    """Force billing active so these tests exercise plan-based room caps."""
+    from topix.collab import capacity
+
+    monkeypatch.setattr(capacity, "is_billing_active", lambda: True)
+
+
 class _FakeRedis:
     def __init__(self):
         self.store: dict[str, str] = {}

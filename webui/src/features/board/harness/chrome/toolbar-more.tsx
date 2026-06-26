@@ -1,4 +1,5 @@
 import { CursorClickIcon } from "@phosphor-icons/react"
+import { useCanvasStore } from "@canvas-harness/react"
 
 import {
   CodeFileIcon,
@@ -20,7 +21,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { nodeLimitFor } from "@/features/board/lib/board-limit"
 import { cn } from "@/lib/utils"
+import { useAppStore } from "@/store"
+import { useNodeTypeCount } from "../canvas/use-node-type-count"
 import { useBoardAppStore } from "../store/board-app-store"
 import { DocumentUploadDialog } from "./document-upload-dialog"
 import { IconSearchDialog } from "./icon-search-dialog"
@@ -32,15 +36,80 @@ const moreButtonClass =
 
 
 /**
+ * `{count}` or `{count}/{limit}` badge in a menu item's right slot. Shows the
+ * denominator only when a limit applies (per-plan limits vanish in OSS mode);
+ * turns destructive once the limit is reached.
+ */
+const NodeLimitBadge = ({ count, limit }: { count: number; limit: number | null }) => (
+  <DropdownMenuShortcut
+    className={cn("tabular-nums", limit !== null && count >= limit && "text-destructive")}
+  >
+    {limit == null ? count : `${count}/${limit}`}
+  </DropdownMenuShortcut>
+)
+
+
+/**
+ * Menu body — mounted only while the dropdown is open (Radix unmounts content
+ * on close), so the per-type node counters subscribe to the store only then
+ * and the always-mounted toolbar never re-renders on canvas changes.
+ */
+const MoreMenuItems = () => {
+  const store = useCanvasStore()
+  const userPlan = useAppStore((s) => s.userPlan)
+  const setTool = useBoardAppStore((s) => s.setTool)
+  const setChromeDialog = useBoardAppStore((s) => s.setChromeDialog)
+
+  const folderCount = useNodeTypeCount(store, "folder")
+  const documentCount = useNodeTypeCount(store, "document")
+  const codeSandboxCount = useNodeTypeCount(store, "code-sandbox")
+  const miniAppCount = useNodeTypeCount(store, "mini-app")
+
+  return (
+    <>
+      <DropdownMenuItem onSelect={() => setChromeDialog("icon-search")} className="gap-2 text-sm">
+        <PuzzlePieceIcon className="size-4 shrink-0" />
+        <span>Icons</span>
+        <DropdownMenuShortcut>G</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => setChromeDialog("image-search")} className="gap-2 text-sm">
+        <ImageStackIcon className="size-4 shrink-0" />
+        <span>Images</span>
+        <DropdownMenuShortcut>I</DropdownMenuShortcut>
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => setTool("folder")} className="gap-2 text-sm">
+        <FolderPlusActionIcon className="size-4 shrink-0" />
+        <span>Sub-board</span>
+        <NodeLimitBadge count={folderCount} limit={nodeLimitFor("folder", userPlan)} />
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => setChromeDialog("document-upload")} className="gap-2 text-sm">
+        <DocumentFileIcon className="size-4 shrink-0" />
+        <span>Document</span>
+        <NodeLimitBadge count={documentCount} limit={nodeLimitFor("document", userPlan)} />
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => setTool("code-sandbox")} className="gap-2 text-sm">
+        <CodeFileIcon className="size-4 shrink-0" />
+        <span>Code sandbox</span>
+        <NodeLimitBadge count={codeSandboxCount} limit={nodeLimitFor("code-sandbox", userPlan)} />
+      </DropdownMenuItem>
+      <DropdownMenuItem onSelect={() => setTool("mini-app")} className="gap-2 text-sm">
+        <CursorClickIcon className="size-4 shrink-0" />
+        <span>Mini-app</span>
+        <NodeLimitBadge count={miniAppCount} limit={nodeLimitFor("mini-app", userPlan)} />
+      </DropdownMenuItem>
+    </>
+  )
+}
+
+
+/**
  * Overflow menu mounted at the right edge of the harness toolbar.
  * Mirrors prod's `⋯` More dropdown: Icons / Images / Sub-board /
- * Document / Code sandbox / Widget. Open state for the icon + image
- * search dialogs lives on board-app-store so keyboard shortcuts can
- * toggle them too. Sub-board / code-sandbox / widget set `tool` so the
- * next canvas click materializes the node.
+ * Document / Code sandbox / Mini-app. Sub-board / code-sandbox / mini-app
+ * set `tool` so the next canvas click materializes the node; each create-able
+ * type shows its per-board `{count}/{limit}` counter.
  */
 export function HarnessToolbarMore() {
-  const setTool = useBoardAppStore((s) => s.setTool)
   const chromeDialog = useBoardAppStore((s) => s.chromeDialog)
   const setChromeDialog = useBoardAppStore((s) => s.setChromeDialog)
 
@@ -71,51 +140,7 @@ export function HarnessToolbarMore() {
           sideOffset={8}
           className="min-w-[190px]"
         >
-          <DropdownMenuItem
-            onSelect={() => setChromeDialog("icon-search")}
-            className="gap-2 text-sm"
-          >
-            <PuzzlePieceIcon className="size-4 shrink-0" />
-            <span>Icons</span>
-            <DropdownMenuShortcut>G</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => setChromeDialog("image-search")}
-            className="gap-2 text-sm"
-          >
-            <ImageStackIcon className="size-4 shrink-0" />
-            <span>Images</span>
-            <DropdownMenuShortcut>I</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => setTool("folder")}
-            className="gap-2 text-sm"
-          >
-            <FolderPlusActionIcon className="size-4 shrink-0" />
-            <span>Sub-board</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => setChromeDialog("document-upload")}
-            className="gap-2 text-sm"
-          >
-            <DocumentFileIcon className="size-4 shrink-0" />
-            <span>Document</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => setTool("code-sandbox")}
-            className="gap-2 text-sm"
-          >
-            <CodeFileIcon className="size-4 shrink-0" />
-            <span>Code sandbox</span>
-            <DropdownMenuShortcut>Y</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => setTool("mini-app")}
-            className="gap-2 text-sm"
-          >
-            <CursorClickIcon className="size-4 shrink-0" />
-            <span>Mini-app</span>
-          </DropdownMenuItem>
+          <MoreMenuItems />
         </DropdownMenuContent>
       </DropdownMenu>
 

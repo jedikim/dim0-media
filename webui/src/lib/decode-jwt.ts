@@ -7,7 +7,7 @@ export type JwtPayload = Record<string, unknown> & {
   plan?: BillingPlan
 }
 
-export type BillingPlan = "free" | "plus"
+export type BillingPlan = "free" | "basic" | "plus"
 
 
 function base64UrlDecode(input: string): string {
@@ -30,5 +30,7 @@ export function decodeJwt<T extends JwtPayload = JwtPayload>(token: string): T {
 
 
 export function resolveBillingPlan(payload: Pick<JwtPayload, "plan">): BillingPlan {
-  return payload.plan === "plus" ? "plus" : "free"
+  if (payload.plan === "plus") return "plus"
+  if (payload.plan === "basic") return "basic"
+  return "free"
 }

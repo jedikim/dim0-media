@@ -38,7 +38,7 @@ def _build_request(store: _FakeBillingStore):
     )
 
 
-def _subscription_event(*, status: str, sub_id: str = "sub_123", event_type: str = "customer.subscription.updated"):
+def _subscription_event(*, status: str, sub_id: str = "sub_123", event_type: str = "customer.subscription.updated", metadata=None):
     return {
         "type": event_type,
         "data": {
@@ -46,7 +46,7 @@ def _subscription_event(*, status: str, sub_id: str = "sub_123", event_type: str
                 "id": sub_id,
                 "customer": "cus_123",
                 "status": status,
-                "metadata": {"user_uid": "u1"},
+                "metadata": metadata or {"user_uid": "u1"},
                 "items": {"data": [{"price": {"id": "price_x"}}]},
             }
         },
@@ -55,9 +55,12 @@ def _subscription_event(*, status: str, sub_id: str = "sub_123", event_type: str
 
 @pytest.fixture(autouse=True)
 def _stub_stripe(monkeypatch):
-    """Avoid env/signature deps: stub config + signature verification."""
-    monkeypatch.setattr(billing, "get_stripe_config", lambda: SimpleNamespace(webhook_secret="whsec"))
-    # verify returns whatever event the individual test injects via closure.
+    """Avoid env/signature deps: stub config (with empty price map) + signature."""
+    monkeypatch.setattr(
+        billing,
+        "get_stripe_config",
+        lambda: SimpleNamespace(webhook_secret="whsec", price_to_plan=lambda: {}),
+    )
 
 
 async def test_stale_incomplete_does_not_downgrade_active_subscription(monkeypatch):
@@ -86,11 +89,36 @@ async def test_incomplete_for_new_subscription_is_persisted_as_free(monkeypatch)
 
 
 async def test_active_subscription_is_persisted_as_plus(monkeypatch):
-    """An active subscription event grants the paid plan."""
+    """An active subscription event grants the paid plan (metadata fallback)."""
     store = _FakeBillingStore(existing=None)
-    monkeypatch.setattr(billing, "verify_stripe_signature", lambda **_: _subscription_event(status="active"))
+    event = _subscription_event(status="active", metadata={"user_uid": "u1", "plan": "plus"})
+    monkeypatch.setattr(billing, "verify_stripe_signature", lambda **_: event)
 
     await billing.handle_stripe_webhook(_build_request(store))
 
     assert len(store.upserts) == 1
     assert store.upserts[0]["plan"] == "plus"
+
+
+async def test_active_basic_subscription_is_persisted_as_basic(monkeypatch):
+    """The basic tier is preserved from checkout metadata on an active sub."""
+    store = _FakeBillingStore(existing=None)
+    event = _subscription_event(status="active", metadata={"user_uid": "u1", "plan": "basic"})
+    monkeypatch.setattr(billing, "verify_stripe_signature", lambda **_: event)
+
+    await billing.handle_stripe_webhook(_build_request(store))
+
+    assert store.upserts[0]["plan"] == "basic"
+
+
+async def test_unmapped_price_without_metadata_fails_closed_to_free(monkeypatch):
+    """An unmapped price id and no plan metadata must not over-grant plus."""
+    store = _FakeBillingStore(existing=None)
+    # price_to_plan() is stubbed to {} so "price_x" is unmapped; metadata carries
+    # only user_uid (portal-initiated events have no app plan metadata).
+    event = _subscription_event(status="active", metadata={"user_uid": "u1"})
+    monkeypatch.setattr(billing, "verify_stripe_signature", lambda **_: event)
+
+    await billing.handle_stripe_webhook(_build_request(store))
+
+    assert store.upserts[0]["plan"] == "free"

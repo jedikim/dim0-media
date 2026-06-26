@@ -62,14 +62,20 @@ class AssistantManager:
         graph_store: GraphStore | None = None,
         graph_uid: str | None = None,
         root_id: str | None = None,
+        allowed_tiers: set[str] | None = None,
         agent_bridge: AgentBoardBridge | None = None,
     ):
-        """Init method."""
+        """Init method.
+
+        `allowed_tiers` caps which model tiers auto-mode may route to (None =
+        unrestricted); used to keep lower plans off the `pro` tier.
+        """
         self.plan_agent = plan_agent
         self.auto_mode = auto_mode
         self.graph_store = graph_store
         self.graph_uid = graph_uid
         self.root_id = root_id
+        self.allowed_tiers = allowed_tiers
         self.agent_bridge = agent_bridge
 
     @classmethod
@@ -82,6 +88,7 @@ class AssistantManager:
         graph_uid: str | None = None,
         root_id: str | None = None,
         auto_mode: bool = False,
+        allowed_tiers: set[str] | None = None,
         agent_bridge: AgentBoardBridge | None = None,
     ) -> AssistantManager:
         """Create an instance of AssistantManager from configuration."""
@@ -105,6 +112,7 @@ class AssistantManager:
             graph_store=graph_store,
             graph_uid=graph_uid,
             root_id=root_id,
+            allowed_tiers=allowed_tiers,
             agent_bridge=agent_bridge,
         )
 
@@ -121,7 +129,8 @@ class AssistantManager:
         complexity = await classify_auto_model_complexity(agent_input)
         logger.info(f"Auto model classified complexity as {complexity}")
 
-        if complexity == "complex":
+        pro_allowed = self.allowed_tiers is None or "pro" in self.allowed_tiers
+        if complexity == "complex" and pro_allowed:
             return _auto_complex_model()
         return _auto_base_model()
 

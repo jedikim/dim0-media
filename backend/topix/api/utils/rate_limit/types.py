@@ -4,9 +4,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-PlanType = Literal["free", "plus"]
-RateLimitPeriod = Literal["minute", "day", "month"]
-RateLimitKind = Literal["fixed_utc", "cycle"]
+type PlanType = Literal["free", "basic", "plus"]
+type RateLimitPeriod = Literal["minute", "day", "month"]
+type RateLimitKind = Literal["fixed_utc", "cycle"]
 
 
 @dataclass(frozen=True)

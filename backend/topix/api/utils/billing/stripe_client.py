@@ -70,8 +70,13 @@ class StripeClient:
         success_url: str,
         cancel_url: str,
         user_uid: str,
+        plan: str,
     ) -> dict:
-        """Create a Stripe checkout session for plus monthly plan."""
+        """Create a Stripe checkout session for a monthly subscription plan.
+
+        Stamps both `user_uid` and the chosen `plan` into session and
+        subscription metadata so webhooks can resolve the user and plan.
+        """
         data = {
             "mode": "subscription",
             "customer": customer_id,
@@ -81,7 +86,9 @@ class StripeClient:
             "cancel_url": cancel_url,
             "client_reference_id": user_uid,
             "metadata[user_uid]": user_uid,
+            "metadata[plan]": plan,
             "subscription_data[metadata][user_uid]": user_uid,
+            "subscription_data[metadata][plan]": plan,
             "allow_promotion_codes": "true",
         }
         return await self._post("/checkout/sessions", data=data)

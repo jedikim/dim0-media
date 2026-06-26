@@ -3,7 +3,7 @@ import { apiFetch } from "@/api"
 import { useAppStore } from "@/store"
 import { useBoardAppStore } from "../harness/store/board-app-store"
 import { listBoards, type BoardListItem } from "./list-boards"
-import { FREE_PLAN_BOARD_LIMIT, isBoardCreationLimited } from "../lib/board-limit"
+import { boardLimitForPlan, isBoardCreationLimited } from "../lib/board-limit"
 import { toast } from "sonner"
 
 
@@ -37,7 +37,7 @@ export const useCreateBoard = () => {
       const boards = cachedBoards ?? await listBoards()
 
       if (isBoardCreationLimited(userPlan, boards.length)) {
-        toast.error(`Free plan allows ${FREE_PLAN_BOARD_LIMIT} boards. Upgrade to Plus for unlimited limits, or self-host for your own unlimited setup.`)
+        toast.error(`You've reached your plan's board limit (${boardLimitForPlan(userPlan)}). Upgrade for more, or self-host for your own unlimited setup.`)
         throw new Error("board_limit_reached")
       }
 

@@ -2,16 +2,27 @@
 
 from unittest.mock import AsyncMock
 
+import pytest
+
+from topix.collab import capacity
 from topix.collab.capacity import (
     DEFAULT_CAP,
+    MAX_CAP,
     cap_for_plan,
     get_room_cap_for_board,
 )
 
 
+@pytest.fixture(autouse=True)
+def _billing_active(monkeypatch):
+    """Force billing active by default so plan-based caps apply (OSS test overrides)."""
+    monkeypatch.setattr(capacity, "is_billing_active", lambda: True)
+
+
 def test_cap_for_plan_known_tiers():
     """Cap for plan known tiers."""
     assert cap_for_plan("free") == 5
+    assert cap_for_plan("basic") == 10
     assert cap_for_plan("plus") == 20
 
 
@@ -46,6 +57,20 @@ async def test_get_room_cap_uses_owners_plan_not_joiners():
     assert cap == 20
     graph_store.get_owner_uid.assert_awaited_once_with("b1")
     billing_store.get_user_billing.assert_awaited_once_with("alice")
+
+
+async def test_get_room_cap_unlimited_when_billing_inactive(monkeypatch):
+    """OSS / unconfigured billing gives the max cap without touching billing."""
+    monkeypatch.setattr(capacity, "is_billing_active", lambda: False)
+    graph_store = AsyncMock()
+    billing_store = AsyncMock()
+
+    cap = await get_room_cap_for_board(
+        graph_store=graph_store, user_billing_store=billing_store, board_uid="b1",
+    )
+
+    assert cap == MAX_CAP
+    graph_store.get_owner_uid.assert_not_awaited()
 
 
 async def test_get_room_cap_gates_incomplete_plus_to_free():

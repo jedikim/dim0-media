@@ -4,7 +4,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from topix.api.utils.rate_limit.token_plan import BILLING_ENABLED_ENV, resolve_plan_for_token
+from topix.api.utils.rate_limit import token_plan
+from topix.api.utils.rate_limit.token_plan import resolve_plan_for_token
+
+
+def _set_billing_active(monkeypatch, active: bool):
+    monkeypatch.setattr(token_plan, "is_billing_active", lambda: active)
 
 
 class _FailIfCalledStore:
@@ -29,9 +34,9 @@ class _StubBillingStore:
 
 
 @pytest.mark.asyncio
-async def test_resolve_plan_returns_plus_when_billing_disabled(monkeypatch):
-    """Billing disabled should force plus plan for token claims."""
-    monkeypatch.delenv(BILLING_ENABLED_ENV, raising=False)
+async def test_resolve_plan_returns_plus_when_billing_inactive(monkeypatch):
+    """Billing inactive (disabled or unconfigured) forces plus for token claims."""
+    _set_billing_active(monkeypatch, False)
     request = SimpleNamespace(app=SimpleNamespace(user_billing_store=_FailIfCalledStore()))
 
     plan = await resolve_plan_for_token(request, "user-1")
@@ -41,8 +46,8 @@ async def test_resolve_plan_returns_plus_when_billing_disabled(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_resolve_plan_returns_free_when_store_missing(monkeypatch):
-    """Billing enabled but no store should fallback to free."""
-    monkeypatch.setenv(BILLING_ENABLED_ENV, "true")
+    """Billing active but no store should fallback to free."""
+    _set_billing_active(monkeypatch, True)
     request = SimpleNamespace(app=SimpleNamespace())
 
     plan = await resolve_plan_for_token(request, "user-1")
@@ -52,8 +57,8 @@ async def test_resolve_plan_returns_free_when_store_missing(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_resolve_plan_returns_free_when_billing_row_missing(monkeypatch):
-    """Billing enabled with no row should fallback to free."""
-    monkeypatch.setenv(BILLING_ENABLED_ENV, "true")
+    """Billing active with no row should fallback to free."""
+    _set_billing_active(monkeypatch, True)
     store = _StubBillingStore(plan=None)
     request = SimpleNamespace(app=SimpleNamespace(user_billing_store=store))
 
@@ -65,8 +70,8 @@ async def test_resolve_plan_returns_free_when_billing_row_missing(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_resolve_plan_returns_persisted_plan(monkeypatch):
-    """Billing enabled should return persisted plus/free plan."""
-    monkeypatch.setenv(BILLING_ENABLED_ENV, "true")
+    """Billing active should return the persisted plan."""
+    _set_billing_active(monkeypatch, True)
     store = _StubBillingStore(plan="plus")
     request = SimpleNamespace(app=SimpleNamespace(user_billing_store=store))
 

@@ -1,8 +1,17 @@
 import { useCallback } from "react"
+import { toast } from "sonner"
 import type { CanvasStore, Node } from "@canvas-harness/core"
 import type { CanvasCreateDragEvent, CanvasPointerEvent } from "@canvas-harness/react"
+import {
+  MAX_BOARD_DEPTH,
+  canCreateSubBoard,
+  isNodeTypeAtLimit,
+  nodeLimitFor,
+} from "@/features/board/lib/board-limit"
 import { createDefaultNote } from "@/features/board/types/note"
+import { useAppStore } from "@/store"
 import { canvasTypeToDim0 } from "../convert/node-type"
+import { useBoardAppStore } from "../store/board-app-store"
 import { noteToNode, type NoteNodeData } from "../convert/note-to-node"
 import {
   adaptNodeColors,
@@ -38,6 +47,15 @@ const SHAPE_TOOLS = new Set([
 
 
 const isShapeTool = (tool: string): boolean => SHAPE_TOOLS.has(tool)
+
+
+/** Friendly labels for limit toasts, keyed by dim0 node type. */
+const CREATE_LABELS: Record<string, string> = {
+  "mini-app": "mini-app",
+  "code-sandbox": "code sandbox",
+  folder: "sub-board",
+  document: "document",
+}
 
 
 /**
@@ -115,10 +133,36 @@ export const useCreateHandlers = (
   handleCreateDrag: (e: CanvasCreateDragEvent) => void
   handleClick: (e: CanvasPointerEvent) => void
 } => {
+  const userPlan = useAppStore((s) => s.userPlan)
+  const currentFolderDepth = useBoardAppStore((s) => s.currentFolderDepth)
+
+  // Enforce per-board node limits + folder nesting depth at materialization
+  // time (defense-in-depth alongside the toolbar's disabled affordances).
+  const guardCreate = useCallback(
+    (type: string): boolean => {
+      if (type === "folder" && !canCreateSubBoard(currentFolderDepth)) {
+        toast.error(`Maximum nesting depth reached (${MAX_BOARD_DEPTH + 1} levels).`)
+        return false
+      }
+      const count = store.getAllNodes().filter((n) => n.type === type).length
+      if (isNodeTypeAtLimit(type, userPlan, count)) {
+        const label = CREATE_LABELS[type] ?? type
+        toast.error(
+          `You've reached this board's ${label} limit (${nodeLimitFor(type, userPlan)}). ` +
+          `Upgrade for more, or self-host for your own unlimited setup.`,
+        )
+        return false
+      }
+      return true
+    },
+    [store, userPlan, currentFolderDepth],
+  )
+
   const handleCreateDrag = useCallback(
     (e: CanvasCreateDragEvent): void => {
       if (!isShapeTool(e.tool)) return
       const dim0Type = canvasTypeToDim0(e.tool)
+      if (!guardCreate(dim0Type)) return
       const note = createDefaultNote({ boardId: boardId ?? "", nodeType: dim0Type })
       if (rootId) note.parentId = rootId
       note.properties.nodePosition = {
@@ -136,13 +180,14 @@ export const useCreateHandlers = (
       const id = store.addNode(applyStyleMemory(noteToNode(note), styleMemory))
       store.setSelection([id])
     },
-    [store, boardId, rootId, styleMemory],
+    [store, boardId, rootId, styleMemory, guardCreate],
   )
 
   const handleClick = useCallback(
     (e: CanvasPointerEvent): void => {
       if (!CLICK_PLACE_TOOLS.has(e.tool)) return
       const dim0Type = canvasTypeToDim0(e.tool)
+      if (!guardCreate(dim0Type)) return
       const note = createDefaultNote({ boardId: boardId ?? "", nodeType: dim0Type })
       if (rootId) note.parentId = rootId
       const size = note.properties.nodeSize.size ?? { width: 200, height: 120 }
@@ -154,7 +199,7 @@ export const useCreateHandlers = (
       const id = store.addNode(applyStyleMemory(noteToNode(note), styleMemory))
       store.setSelection([id])
     },
-    [store, boardId, rootId, styleMemory],
+    [store, boardId, rootId, styleMemory, guardCreate],
   )
 
   return { handleCreateDrag, handleClick }

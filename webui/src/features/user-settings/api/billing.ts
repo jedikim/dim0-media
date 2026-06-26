@@ -17,8 +17,17 @@ type PortalSessionData = {
   portal_url?: string
 }
 
+export type PaidPlan = "basic" | "plus"
+
+
+export type PriceInfo = {
+  unit_amount: number | null
+  currency: string | null
+  interval: string | null
+}
+
 export type BillingSummary = {
-  plan: "free" | "plus"
+  plan: "free" | "basic" | "plus"
   status: "active" | "trialing" | "past_due" | "canceled" | "incomplete"
   cancel_at_period_end: boolean
   current_period_start: string | null
@@ -27,15 +36,13 @@ export type BillingSummary = {
 
 export type BillingPublicConfig = {
   billing_enabled: boolean
-  plus_price?: {
-    unit_amount: number | null
-    currency: string | null
-    interval: string | null
-  }
+  basic_price?: PriceInfo
+  plus_price?: PriceInfo
 }
 
 
 export async function createCheckoutSession(body?: {
+  plan?: PaidPlan
   success_url?: string
   cancel_url?: string
 }): Promise<CheckoutSessionData> {

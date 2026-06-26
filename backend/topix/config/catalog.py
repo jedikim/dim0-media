@@ -132,10 +132,44 @@ def _resolved_for(present: frozenset[str]) -> tuple[tuple[Resolved, ...], Resolv
     return llms, emb
 
 
-def available_llms() -> list[Resolved]:
-    """All LLM models reachable with the configured keys, in catalog order."""
+def available_llms(allowed_tiers: set[str] | None = None) -> list[Resolved]:
+    """LLM models reachable with the configured keys, in catalog order.
+
+    When `allowed_tiers` is given, only models whose `tier` is in the set are
+    returned (used for per-plan gating); `None` means no tier restriction.
+    """
     llms, _ = _resolved_for(frozenset(available_providers()))
-    return list(llms)
+    if allowed_tiers is None:
+        return list(llms)
+    return [r for r in llms if r.tier in allowed_tiers]
+
+
+def model_tier(model_id_or_code: str) -> str | None:
+    """Return the tier of a reachable model, else None.
+
+    Normalizes the input first (canonical id, full call code, or legacy
+    provider-prefixed code) the same way the rest of the catalog resolves
+    models, so an entitled model isn't falsely gated when sent in a non-canonical
+    form.
+    """
+    code = normalize_code(model_id_or_code)
+    if code is None:
+        return None
+    for r in available_llms():
+        if r.call == code:
+            return r.tier
+    return None
+
+
+def is_model_allowed(model_id_or_code: str, allowed_tiers: set[str] | None) -> bool:
+    """Return True if the model is reachable and its tier is permitted.
+
+    `allowed_tiers=None` means unrestricted (any reachable model is allowed).
+    """
+    if allowed_tiers is None:
+        return resolve_code(model_id_or_code) is not None
+    tier = model_tier(model_id_or_code)
+    return tier is not None and tier in allowed_tiers
 
 
 def available_embedding() -> Resolved | None:

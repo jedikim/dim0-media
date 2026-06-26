@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react"
+import { BracketsCurly, CardsThree, GithubLogo, Headset, UsersThree } from "@phosphor-icons/react"
 import {
   AwardIcon,
   ChatTranslateIcon,
   DocumentIcon,
-  IdeaIcon,
-  NoteIcon,
+  LayerStackIcon,
+  PuzzlePieceIcon,
   SparklesFeatureIcon,
+  SparklesIcon,
+  ToolCodeIcon,
   WarningIcon,
   type AppIconComponent,
 } from "@/components/icons"
-
 import { refresh } from "@/api"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -22,11 +24,16 @@ import {
   getBillingPublicConfig,
   getBillingSummary,
   type BillingPublicConfig,
-  type BillingSummary
+  type BillingSummary,
+  type PaidPlan,
+  type PriceInfo
 } from "@/features/user-settings/api/billing"
 import { getAccessToken } from "@/features/signin/auth-storage"
 import { decodeJwt, resolveBillingPlan } from "@/lib/decode-jwt"
 import { useAppStore } from "@/store"
+
+
+const GITHUB_URL = "https://github.com/vcmf/dim0"
 
 
 type FeatureRowProps = {
@@ -50,7 +57,7 @@ function FeatureRow({ icon, label }: FeatureRowProps) {
 export function BillingScreen() {
   const userPlan = useAppStore(s => s.userPlan)
   const setUserPlan = useAppStore(s => s.setUserPlan)
-  const [busyAction, setBusyAction] = useState<"upgrade" | "manage" | null>(null)
+  const [busyAction, setBusyAction] = useState<"upgrade-basic" | "upgrade-plus" | "manage" | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null)
   const [billingPublicConfig, setBillingPublicConfig] = useState<BillingPublicConfig | null>(null)
@@ -94,13 +101,14 @@ export function BillingScreen() {
     })()
   }, [searchParams, setUserPlan])
 
-  const onUpgrade = async () => {
+  const onUpgrade = async (plan: PaidPlan) => {
     setErrorMessage(null)
-    setBusyAction("upgrade")
+    setBusyAction(plan === "basic" ? "upgrade-basic" : "upgrade-plus")
     try {
       const successUrl = `${window.location.origin}/settings/billing?checkout=success`
       const cancelUrl = `${window.location.origin}/settings/billing?checkout=cancel`
       const data = await createCheckoutSession({
+        plan,
         success_url: successUrl,
         cancel_url: cancelUrl,
       })
@@ -142,29 +150,35 @@ export function BillingScreen() {
     return "Active"
   }, [billingSummary, formattedPeriodEnd])
 
-  const plusPriceLabel = useMemo(() => {
-    const rawAmount = billingPublicConfig?.plus_price?.unit_amount
-    const rawCurrency = billingPublicConfig?.plus_price?.currency
-    if (typeof rawAmount !== "number" || !rawCurrency) return "€11.99"
+  const formatPrice = (price: PriceInfo | undefined, fallback: string): string => {
+    const rawAmount = price?.unit_amount
+    const rawCurrency = price?.currency
+    if (typeof rawAmount !== "number" || !rawCurrency) return fallback
     return new Intl.NumberFormat(undefined, {
       style: "currency",
       currency: rawCurrency.toUpperCase(),
       minimumFractionDigits: rawAmount % 100 === 0 ? 0 : 2,
       maximumFractionDigits: 2,
     }).format(rawAmount / 100)
-  }, [billingPublicConfig])
+  }
 
-  const plusIntervalLabel = useMemo(() => {
-    const interval = billingPublicConfig?.plus_price?.interval
-    if (!interval) return "month"
-    return interval
-  }, [billingPublicConfig])
+  const basicPriceLabel = useMemo(
+    () => formatPrice(billingPublicConfig?.basic_price, "€6.99"),
+    [billingPublicConfig]
+  )
+  const plusPriceLabel = useMemo(
+    () => formatPrice(billingPublicConfig?.plus_price, "€11.99"),
+    [billingPublicConfig]
+  )
+
+  const basicIntervalLabel = billingPublicConfig?.basic_price?.interval || "month"
+  const plusIntervalLabel = billingPublicConfig?.plus_price?.interval || "month"
 
   if (!BILLING_ENABLED) return null
 
   return (
     <div className="absolute inset-0 overflow-y-auto scrollbar-thin bg-background">
-      <div className="mx-auto w-full max-w-5xl px-6 py-20 space-y-6">
+      <div className="mx-auto w-full max-w-7xl px-6 py-20 space-y-6">
         <div className="space-y-2">
           <h1 className="text-5xl leading-none">Billing Plans</h1>
           <p className="text-sm text-muted-foreground">
@@ -222,11 +236,11 @@ export function BillingScreen() {
           ) : null}
         </Card>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <Card className="relative">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <CardTitle className="text-4xl font-informal">Free</CardTitle>
+                <CardTitle className="text-4xl font-semibold">Free</CardTitle>
                 {userPlan === "free" ? (
                   <Badge variant="outline" className="w-fit bg-background/40 font-mono font-medium uppercase tracking-wide">
                     Current
@@ -237,14 +251,78 @@ export function BillingScreen() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               <p className="text-3xl font-semibold text-foreground">Free</p>
-              <FeatureRow icon={IdeaIcon} label="40 AI requests / day" />
-              <FeatureRow icon={NoteIcon} label="5 boards maximum" />
-              <FeatureRow icon={DocumentIcon} label="1 document upload / board" />
-              <FeatureRow icon={ChatTranslateIcon} label="Basic AI actions" />
-              <FeatureRow icon={AwardIcon} label="Community support" />
+              <FeatureRow icon={SparklesIcon} label="50 AI requests / day" />
+              <FeatureRow icon={SparklesIcon} label="750 AI requests / month" />
+              <FeatureRow icon={CardsThree} label="5 boards" />
+              <FeatureRow icon={UsersThree} label="Up to 5 collaborators / board" />
+              <FeatureRow icon={DocumentIcon} label="3 documents / board" />
+              <FeatureRow icon={PuzzlePieceIcon} label="10 mini-apps / board" />
+              <FeatureRow icon={ChatTranslateIcon} label="Lite models only" />
+              <FeatureRow icon={Headset} label="Community support" />
               <p className="pt-2 text-xs leading-relaxed text-muted-foreground/80">
                 Free is currently limited while we run on a small budget. We plan to make the free plan more usable over time.
               </p>
+            </CardContent>
+          </Card>
+
+          <Card className="relative">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-4xl font-semibold">Basic</CardTitle>
+                {userPlan === "basic" ? (
+                  <Badge variant="outline" className="w-fit bg-background/40 font-mono font-medium uppercase tracking-wide">
+                    Current
+                  </Badge>
+                ) : null}
+              </div>
+              <CardDescription>For steady, everyday use</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-end gap-2">
+                <span className="text-3xl font-semibold text-foreground">{basicPriceLabel}</span>
+                <span className="text-sm text-muted-foreground">/ {basicIntervalLabel}</span>
+              </div>
+              <div className="space-y-2.5 text-sm text-muted-foreground">
+                <FeatureRow icon={SparklesIcon} label="150 AI requests / day" />
+                <FeatureRow icon={SparklesIcon} label="3,000 AI requests / month" />
+                <FeatureRow icon={CardsThree} label="Unlimited boards" />
+                <FeatureRow icon={UsersThree} label="Up to 10 collaborators / board" />
+                <FeatureRow icon={DocumentIcon} label="10 documents / board" />
+                <FeatureRow icon={PuzzlePieceIcon} label="20 mini-apps / board" />
+                <FeatureRow icon={ChatTranslateIcon} label="Lite models (no top-tier AI)" />
+                <FeatureRow icon={Headset} label="Standard support" />
+              </div>
+
+              {userPlan === "basic" ? (
+                <Button
+                  variant="outline"
+                  onClick={onManage}
+                  disabled={busyAction !== null}
+                  className="w-full"
+                >
+                  {busyAction === "manage" ? "Opening portal..." : "Manage Subscription"}
+                </Button>
+              ) : userPlan === "plus" ? (
+                // Existing subscriber → switch tier via the portal (not a new
+                // checkout, which would create a second subscription).
+                <Button
+                  variant="outline"
+                  onClick={onManage}
+                  disabled={busyAction !== null}
+                  className="w-full"
+                >
+                  {busyAction === "manage" ? "Opening portal..." : "Switch to Basic"}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() => onUpgrade("basic")}
+                  disabled={busyAction !== null}
+                  className="w-full"
+                >
+                  {busyAction === "upgrade-basic" ? "Redirecting..." : "Choose Basic"}
+                </Button>
+              )}
             </CardContent>
           </Card>
 
@@ -252,7 +330,7 @@ export function BillingScreen() {
             <CardHeader>
               <div className="flex items-center gap-2">
                 <AwardIcon className="h-6 w-6 text-secondary-foreground" strokeWidth={2} />
-                <CardTitle className="text-4xl font-informal">Plus</CardTitle>
+                <CardTitle className="text-4xl font-semibold">Plus</CardTitle>
                 {userPlan === "plus" ? (
                   <Badge variant="outline" className="w-fit bg-background/40 font-mono font-medium uppercase tracking-wide">
                     Current
@@ -267,11 +345,13 @@ export function BillingScreen() {
                 <span className="text-sm text-muted-foreground">/ {plusIntervalLabel}</span>
               </div>
               <div className="space-y-2.5 text-sm text-muted-foreground">
-                <FeatureRow icon={IdeaIcon} label="Unlimited AI requests" />
-                <FeatureRow icon={NoteIcon} label="Unlimited boards" />
-                <FeatureRow icon={DocumentIcon} label="Unlimited document uploads" />
-                <FeatureRow icon={SparklesFeatureIcon} label="Advanced AI actions" />
-                <FeatureRow icon={AwardIcon} label="Priority support" />
+                <FeatureRow icon={SparklesIcon} label="Unlimited AI requests" />
+                <FeatureRow icon={CardsThree} label="Unlimited boards" />
+                <FeatureRow icon={UsersThree} label="Up to 20 collaborators / board" />
+                <FeatureRow icon={DocumentIcon} label="25 documents / board" />
+                <FeatureRow icon={PuzzlePieceIcon} label="100 mini-apps / board" />
+                <FeatureRow icon={SparklesFeatureIcon} label="Frontier models: GPT, Claude, Gemini & more" />
+                <FeatureRow icon={Headset} label="Priority support" />
               </div>
 
               {userPlan === "plus" ? (
@@ -283,15 +363,49 @@ export function BillingScreen() {
                 >
                   {busyAction === "manage" ? "Opening portal..." : "Manage Subscription"}
                 </Button>
-              ) : (
+              ) : userPlan === "basic" ? (
+                // Existing subscriber → upgrade via the portal so Stripe swaps
+                // the plan instead of opening a second subscription.
                 <Button
-                  onClick={onUpgrade}
+                  onClick={onManage}
                   disabled={busyAction !== null}
                   className="w-full"
                 >
-                  {busyAction === "upgrade" ? "Redirecting..." : "Upgrade to Plus"}
+                  {busyAction === "manage" ? "Opening portal..." : "Switch to Plus"}
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => onUpgrade("plus")}
+                  disabled={busyAction !== null}
+                  className="w-full"
+                >
+                  {busyAction === "upgrade-plus" ? "Redirecting..." : "Upgrade to Plus"}
                 </Button>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="relative">
+            <CardHeader>
+              <CardTitle className="text-4xl font-semibold">Self-host</CardTitle>
+              <CardDescription>Run it yourself, own everything</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-muted-foreground">
+              <div className="flex items-end gap-2">
+                <span className="text-3xl font-semibold text-foreground">Free</span>
+                <span className="text-sm text-muted-foreground">MIT licensed</span>
+              </div>
+              <FeatureRow icon={ToolCodeIcon} label="Full source on GitHub" />
+              <FeatureRow icon={LayerStackIcon} label="Your infrastructure, your data" />
+              <FeatureRow icon={BracketsCurly} label="Bring your own model keys" />
+              <FeatureRow icon={UsersThree} label="Unlimited collaborators" />
+              <FeatureRow icon={AwardIcon} label="No caps, no lock-in" />
+              <Button asChild variant="outline" className="w-full">
+                <a href={GITHUB_URL} target="_blank" rel="noreferrer">
+                  <GithubLogo className="h-4 w-4" weight="fill" />
+                  Get the code
+                </a>
+              </Button>
             </CardContent>
           </Card>
         </div>

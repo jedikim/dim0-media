@@ -4,7 +4,7 @@ import logging
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Body, Depends, Request, Response
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from fastapi.params import Path, Query
 
 from topix.agents.assistant.manager import AssistantManager
@@ -21,6 +21,8 @@ from topix.api.datatypes.requests import (
 )
 from topix.api.utils.decorators import with_standard_response
 from topix.api.utils.rate_limit.dependency import rate_limiter
+from topix.api.utils.rate_limit.entitlements import resolve_entitlement_context
+from topix.api.utils.rate_limit.policy import resolve_allowed_model_tiers
 from topix.api.utils.resilient_streaming import with_streaming_resilient_ndjson
 from topix.api.utils.security import get_current_user_uid, verify_chat_user
 from topix.config import catalog
@@ -158,6 +160,7 @@ async def send_message(
     request: Request,
     chat_id: Annotated[str, Path(description="Chat ID")],
     body: Annotated[SendMessageRequest, Body(description="Message content")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
     _: Annotated[None, Depends(verify_chat_user)],
     __: Annotated[None, Depends(rate_limiter)],
 ):
@@ -165,6 +168,16 @@ async def send_message(
     chat_store: ChatStore = request.app.chat_store
     graph_store: GraphStore = request.app.graph_store
     session = AssistantSession(session_id=chat_id, chat_store=chat_store)
+
+    # Resolve the model tiers this user's plan may use. Auto mode is clamped to
+    # these tiers downstream; an explicit out-of-tier model is rejected here.
+    entitlement = await resolve_entitlement_context(request, user_id)
+    allowed_tiers = resolve_allowed_model_tiers(entitlement.plan)
+    if body.model != "auto" and not catalog.is_model_allowed(body.model, allowed_tiers):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Model '{body.model}' is not available on your plan",
+        )
 
     if body.use_deep_research:
         deepsearch_config = DeepResearchConfig.from_yaml()
@@ -213,6 +226,7 @@ async def send_message(
             graph_uid=chat.graph_uid,
             root_id=body.root_id,
             auto_mode=auto_mode,
+            allowed_tiers=allowed_tiers,
             agent_bridge=request.app.agent_board_bridge if chat.graph_uid else None,
         )
 

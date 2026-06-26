@@ -5,6 +5,7 @@ import { SendMessageError } from '../../api/send-message'
 import { useSubmitPrompt } from '../../hooks/use-submit-prompt'
 import { buildMessageContext } from '../../hooks/use-message-context'
 import { useAppStore } from '@/store'
+import type { BillingPlan } from '@/lib/decode-jwt'
 import { SendButton } from './send-button'
 import TextareaAutosize from 'react-textarea-autosize'
 import { useChat } from '../../hooks/chat-context'
@@ -14,7 +15,7 @@ import { SettingsBillingUrl } from '@/routes'
 import { WelcomeMessage } from './welcome-message'
 import { StarterPromptPills } from './starter-prompts'
 import { InputSettings } from './input-settings/settings'
-import { useIsBoardCreationLimited, FREE_PLAN_BOARD_LIMIT, FREE_PLAN_BOARD_LIMIT_TOOLTIP } from '@/features/board/lib/board-limit'
+import { useIsBoardCreationLimited, FREE_PLAN_BOARD_LIMIT_TOOLTIP } from '@/features/board/lib/board-limit'
 
 // shadcn/ui
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
@@ -51,7 +52,7 @@ const buildLimitDescription = ({
   userPlan,
   retryAfter,
 }: {
-  userPlan: "free" | "plus"
+  userPlan: BillingPlan
   retryAfter?: number
 }) => {
   const resetHint = retryAfter && retryAfter >= 60 * 60 * 8
@@ -114,7 +115,7 @@ export const InputBar = ({
   // not on title/content changes. Cheap.
   const hasActiveSurface = useBoardAppStore((s) => Boolean(s.activeNodeSurface))
   const placeholder = showBoardLimitGate
-    ? `You've used ${FREE_PLAN_BOARD_LIMIT}/${FREE_PLAN_BOARD_LIMIT} boards on the free plan`
+    ? "You've reached your plan's board limit"
     : autoCreateBoard
       ? 'Start a new board with a question…'
       : 'Ask anything...'

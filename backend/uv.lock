@@ -2430,7 +2430,7 @@ wheels = [
 
 [[package]]
 name = "topix"
-version = "0.3.53"
+version = "0.3.57"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },

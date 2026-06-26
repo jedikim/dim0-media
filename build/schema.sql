@@ -88,7 +88,7 @@ CREATE INDEX IF NOT EXISTS idx_chats_graph_uid ON chats(graph_uid);
 
 CREATE TABLE IF NOT EXISTS user_billing (
     user_uid TEXT PRIMARY KEY REFERENCES users(uid) ON DELETE CASCADE,
-    plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'plus')),
+    plan TEXT NOT NULL DEFAULT 'free' CHECK (plan IN ('free', 'basic', 'plus')),
     status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'trialing', 'past_due', 'canceled', 'incomplete')),
     stripe_customer_id TEXT UNIQUE,
     stripe_subscription_id TEXT UNIQUE,
@@ -165,3 +165,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP;
 ALTER TABLE graph_user DROP CONSTRAINT IF EXISTS graph_user_role_check;
 ALTER TABLE graph_user ADD CONSTRAINT graph_user_role_check
     CHECK (role IN ('owner', 'member', 'viewer'));
+
+-- Expand user_billing.plan to allow the 'basic' tier on already-deployed DBs.
+ALTER TABLE user_billing DROP CONSTRAINT IF EXISTS user_billing_plan_check;
+ALTER TABLE user_billing ADD CONSTRAINT user_billing_plan_check
+    CHECK (plan IN ('free', 'basic', 'plus'));

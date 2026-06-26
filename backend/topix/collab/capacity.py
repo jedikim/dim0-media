@@ -19,6 +19,7 @@ import logging
 
 from typing import Final
 
+from topix.api.utils.billing.stripe_config import is_billing_active
 from topix.datatypes.user_billing import effective_plan
 from topix.store.graph import GraphStore
 from topix.store.user_billing import UserBillingStore
@@ -28,11 +29,13 @@ logger = logging.getLogger(__name__)
 
 _ROOM_CAPS: Final[dict[str, int]] = {
     "free": 5,
+    "basic": 10,
     "plus": 20,
 }
 
 DEFAULT_PLAN: Final[str] = "free"
 DEFAULT_CAP: Final[int] = _ROOM_CAPS[DEFAULT_PLAN]
+MAX_CAP: Final[int] = _ROOM_CAPS["plus"]
 
 
 def cap_for_plan(plan: str | None) -> int:
@@ -50,9 +53,12 @@ async def get_room_cap_for_board(
 ) -> int:
     """Look up the owner's plan and return the corresponding cap.
 
+    - Billing inactive (OSS / unconfigured) → max cap (full access).
     - Board without an owner row → conservative default (free cap).
     - Owner without a `user_billing` row → free cap (they haven't paid).
     """
+    if not is_billing_active():
+        return MAX_CAP
     owner_uid = await graph_store.get_owner_uid(board_uid)
     if owner_uid is None:
         logger.warning("collab capacity: board %s has no owner; using default cap", board_uid)

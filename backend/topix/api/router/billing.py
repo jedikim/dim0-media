@@ -1,7 +1,6 @@
 """Billing API router for Stripe checkout, portal, and webhook."""
 
 import logging
-import os
 
 from datetime import datetime
 from typing import Annotated
@@ -10,11 +9,16 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 
 from topix.api.datatypes.requests import BillingCheckoutRequest, BillingPortalRequest
 from topix.api.utils.billing.stripe_client import StripeApiError, StripeClient
-from topix.api.utils.billing.stripe_config import get_stripe_config
+from topix.api.utils.billing.stripe_config import get_stripe_config, is_billing_active
 from topix.api.utils.billing.stripe_webhook import verify_stripe_signature
 from topix.api.utils.decorators import with_standard_response
 from topix.api.utils.security import get_current_user_uid
-from topix.datatypes.user_billing import ACCESS_GRANTING_STATUSES, BillingStatus, effective_plan
+from topix.datatypes.user_billing import (
+    ACCESS_GRANTING_STATUSES,
+    BillingStatus,
+    coerce_plan,
+    effective_plan,
+)
 from topix.store.user import UserStore
 from topix.store.user_billing import UserBillingStore
 
@@ -26,12 +30,6 @@ router = APIRouter(
     tags=["billing"],
     responses={404: {"description": "Not found"}},
 )
-
-
-def _is_truthy(value: str | None) -> bool:
-    if value is None:
-        return False
-    return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _resolve_status(value: str) -> BillingStatus:
@@ -110,6 +108,22 @@ async def create_checkout_session(
         cancel_url=body.cancel_url,
     )
 
+    price_id = config.plan_to_price().get(body.plan)
+    if not price_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Plan '{body.plan}' is not purchasable",
+        )
+
+    # An existing subscriber must change tier via the billing portal — a new
+    # checkout would create a second subscription (double billing).
+    existing = await user_billing_store.get_user_billing(user_id)
+    if existing and existing.stripe_subscription_id and existing.status in ACCESS_GRANTING_STATUSES:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You already have an active subscription. Use the billing portal to change your plan.",
+        )
+
     try:
         customer_id = await _ensure_stripe_customer(
             user_uid=user_id,
@@ -119,10 +133,11 @@ async def create_checkout_session(
         )
         session = await stripe_client.create_checkout_session(
             customer_id=customer_id,
-            price_id=config.plus_monthly_price_id,
+            price_id=price_id,
             success_url=success_url,
             cancel_url=cancel_url,
             user_uid=user_id,
+            plan=body.plan,
         )
     except StripeApiError as exc:
         logger.error("Stripe checkout session failed: %s", exc, exc_info=True)
@@ -138,26 +153,31 @@ async def create_checkout_session(
 @with_standard_response
 async def get_public_billing_config():
     """Return public billing pricing metadata for UI rendering."""
-    billing_enabled = _is_truthy(os.getenv("VITE_BILLING_ENABLED"))
-    if not billing_enabled:
+    if not is_billing_active():
         return {"billing_enabled": False}
 
     config = get_stripe_config()
     stripe_client = StripeClient(secret_key=config.secret_key)
 
+    async def _price_payload(price_id: str) -> dict:
+        stripe_price = await stripe_client.get_price(price_id)
+        return {
+            "unit_amount": stripe_price.get("unit_amount"),
+            "currency": stripe_price.get("currency"),
+            "interval": (stripe_price.get("recurring") or {}).get("interval"),
+        }
+
     try:
-        stripe_price = await stripe_client.get_price(config.plus_monthly_price_id)
+        basic_price = await _price_payload(config.basic_monthly_price_id)
+        plus_price = await _price_payload(config.plus_monthly_price_id)
     except StripeApiError as exc:
         logger.error("Stripe price fetch failed: %s", exc, exc_info=True)
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
     return {
         "billing_enabled": True,
-        "plus_price": {
-            "unit_amount": stripe_price.get("unit_amount"),
-            "currency": stripe_price.get("currency"),
-            "interval": (stripe_price.get("recurring") or {}).get("interval"),
-        },
+        "basic_price": basic_price,
+        "plus_price": plus_price,
     }
 
 
@@ -237,10 +257,14 @@ async def _handle_checkout_completed(data_object: dict, user_billing_store: User
     payment_status = data_object.get("payment_status")
     if payment_status not in ("paid", "no_payment_required"):
         return {"processed": False, "reason": "payment_not_settled"}
+    # Plan is stamped into session metadata at checkout; coerce to a valid plan
+    # (fail-closed) and let the price-based subscription.* events reconcile the
+    # paid tier authoritatively.
+    plan = coerce_plan(data_object.get("metadata", {}).get("plan"))
     await user_billing_store.upsert_user_billing(
         user_uid=user_uid,
         data={
-            "plan": "plus",
+            "plan": plan,
             "status": "active",
             "stripe_customer_id": data_object.get("customer"),
             "stripe_subscription_id": data_object.get("subscription"),
@@ -267,12 +291,13 @@ async def _resolve_webhook_user_uid(
 
 
 async def _handle_subscription_event(
-    event_type: str, data_object: dict, user_billing_store: UserBillingStore
+    event_type: str, data_object: dict, config, user_billing_store: UserBillingStore
 ) -> dict:
     """Persist billing state from a subscription lifecycle event.
 
-    Gates the plan on subscription status and ignores stale `incomplete` events
-    so out-of-order delivery cannot downgrade an already-active subscription.
+    Resolves the plan from the purchased price, gates it on status, and ignores
+    stale `incomplete` events so out-of-order delivery cannot downgrade an
+    already-active subscription.
     """
     stripe_customer_id = data_object.get("customer")
     stripe_subscription_id = data_object.get("id")
@@ -282,11 +307,13 @@ async def _handle_subscription_event(
 
     item_period_start = None
     item_period_end = None
+    price_id = None
     items = (data_object.get("items") or {}).get("data") or []
     if items:
         first_item = items[0] or {}
         item_period_start = first_item.get("current_period_start")
         item_period_end = first_item.get("current_period_end")
+        price_id = (first_item.get("price") or {}).get("id")
 
     user_uid = await _resolve_webhook_user_uid(
         data_object, stripe_subscription_id, stripe_customer_id, user_billing_store
@@ -309,9 +336,22 @@ async def _handle_subscription_event(
             logger.info("Ignoring stale incomplete event for active subscription %s", stripe_subscription_id)
             return {"processed": False, "reason": "stale_incomplete", "event_type": event_type}
 
-    # A deleted subscription is always free; otherwise gate on status so a
-    # never-paid (`incomplete`) subscription stays free until payment succeeds.
-    plan = "free" if event_type.endswith(".deleted") else effective_plan("plus", status_value)
+    if event_type.endswith(".deleted"):
+        plan = "free"
+    else:
+        # Price id is the source of truth (survives portal plan changes); fall
+        # back to checkout metadata. Fail closed to `free` on an unmapped price
+        # so a misconfigured/legacy price never over-grants the top tier.
+        resolved = config.price_to_plan().get(price_id) or data_object.get("metadata", {}).get("plan")
+        if resolved is None:
+            logger.warning(
+                "Stripe webhook %s: price %s not in price map and no plan metadata; defaulting to free",
+                event_type,
+                price_id,
+            )
+        # Gate on status: a never-paid (`incomplete`) or canceled subscription
+        # must not persist a paid plan.
+        plan = effective_plan(coerce_plan(resolved), status_value)
     await user_billing_store.upsert_user_billing(
         user_uid=user_uid,
         data={
@@ -351,6 +391,6 @@ async def handle_stripe_webhook(request: Request):
         "customer.subscription.updated",
         "customer.subscription.deleted",
     }:
-        return await _handle_subscription_event(event_type, data_object, user_billing_store)
+        return await _handle_subscription_event(event_type, data_object, config, user_billing_store)
 
     return {"processed": False, "event_type": event_type, "reason": "ignored_event"}

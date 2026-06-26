@@ -9,6 +9,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { isNodeTypeAtLimit, nodeLimitFor } from "@/features/board/lib/board-limit"
+import { useAppStore } from "@/store"
 import { useHarnessParseDocument } from "../canvas/use-parse-document"
 import { useBoardAppStore } from "../store/board-app-store"
 
@@ -44,6 +46,7 @@ const DocumentUploadDialogBody = ({
   const boardId = useBoardAppStore((s) => s.boardId)
   const rootId = useBoardAppStore((s) => s.rootId)
   const parseDocument = useHarnessParseDocument(store, boardId, rootId)
+  const userPlan = useAppStore((s) => s.userPlan)
 
   const [file, setFile] = useState<File | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -51,6 +54,15 @@ const DocumentUploadDialogBody = ({
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
     if (!file || !boardId || submitting) return
+
+    const documentCount = store.getAllNodes().filter((n) => n.type === "document").length
+    if (isNodeTypeAtLimit("document", userPlan, documentCount)) {
+      toast.error(
+        `You've reached this board's document limit (${nodeLimitFor("document", userPlan)}). ` +
+        `Upgrade for more, or self-host for your own unlimited setup.`,
+      )
+      return
+    }
 
     setSubmitting(true)
     const startedAt = Date.now()

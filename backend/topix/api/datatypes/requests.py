@@ -53,6 +53,7 @@ class ResetPasswordRequest(BaseModel):
 class BillingCheckoutRequest(BaseModel):
     """Request model for creating a Stripe checkout session."""
 
+    plan: Literal["basic", "plus"] = "plus"
     success_url: str | None = None
     cancel_url: str | None = None
 
@@ -69,7 +70,7 @@ class SendMessageRequest(BaseModel):
     message_id: str | None = None
     query: str
     root_id: str | None = None
-    model: str = "openai/gpt-4.1"
+    model: str = "auto"
     web_search_engine: WebSearchOption = WebSearchOption.PERPLEXITY
     force_tool: AgentToolName | None = None
 
