@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/images/long-affiche-with-icon.png" alt="Dim0, Your canvas thinks back. Together. Notes, mini-apps, and agents on one infinite board." width="100%" />
+  <img src="docs/images/dim0-icon.png" alt="Dim0" width="120" />
 </p>
 
 <h1 align="center">Dim0, The Thinking Canvas</h1>
