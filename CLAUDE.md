@@ -5,31 +5,36 @@
 - One commit should represent one logical change.
 
 ## Repo Map
-- `backend/`: API, assistant agents, prompts, model/service configs.
-- `webui/`: frontend app (routes, features, components, stores, styles).
-- `build/`: generated/build artifacts.
+- `backend/`: FastAPI service (package `topix`) — API, assistant agents, prompts, model/service configs.
+- `webui/`: frontend SPA — routes, features (`agent/` + `board/`), components, stores, styles.
+- `build/`: Docker Compose + `schema.sql`.
+- `docs/`: architecture, features, roadmap (see Docs map below).
+- Note: `@canvas-harness/*` is an npm **dependency**, not in-tree source.
+
+## Domain conventions
+Conventions live with the code they govern (loaded on demand when you work in that tree):
+- Frontend code style + FE orientation → `webui/CLAUDE.md`
+- Python conventions + backend orientation → `backend/CLAUDE.md`
+
+## Docs map (read on demand)
+- Code structure & key invariants → `docs/architecture.md`
+- What the product does, feature by feature → `docs/features.md`
+- In-flight work & known follow-ups → `docs/roadmap.md`
 
 ## Core Features
 - `webui` has two core domains:
-  - `agent/`: chat input flow, streaming lifecycle, tool-call rendering, assistant UX.
+  - `agent/`: chat input flow, streaming lifecycle, tool-call rendering, assistant UX. Two runtimes (browser engine + legacy server path).
   - `board/`: whiteboard workspace for visual note organization. Rendered by canvas-harness.
 - `board` lives under `webui/src/features/board/harness/`:
   - Mount: `harness/canvas/harness-canvas.tsx` — wires the lib `<Canvas>` to Dim0 state.
   - Convert layer (Dim0 Note/Link ↔ harness Node/Edge): `harness/convert/`.
   - Custom node-type views: `harness/node-types/`.
-  - Collab persistence: `harness/canvas/use-ws-collab.ts` ⇄ `backend/topix/collab/apply_ops.py`.
+  - Collab: `harness/sync/board-sync.ts` (v2 offline-first) / `harness/canvas/use-ws-collab.ts` (legacy) ⇄ `backend/topix/collab/`.
 
 ## Tech Stack
 - Frontend: React + TypeScript, Vite, Tailwind v4, Tanstack Router, Zustand, Phosphor icons.
 - Canvas engine: in-house `@canvas-harness/core` + `@canvas-harness/react` npm packages.
-- Backend: FastAPI (Python), Pydantic, Postgres, WebSocket collab.
-
-## Frontend Code Style
-- Use TypeScript for frontend code (`.ts` / `.tsx`), not plain JavaScript.
-- Do not use semicolons.
-- Do not use `export default` for React/components; use named exports.
-- Do not use `any`; prefer explicit types, `unknown`, generics, or narrow unions.
-- Use 2 blank lines between top-level declarations; use 1 blank line inside blocks.
+- Backend: FastAPI (Python), Pydantic, Postgres, Qdrant, Redis, WebSocket collab.
 
 ## Docstrings
 - Add a short, comprehensible docstring for new or modified functions, methods, and classes.

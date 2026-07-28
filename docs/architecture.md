@@ -1,0 +1,67 @@
+# Dim0 — Architecture
+
+How the codebase fits together — the non-obvious wiring and invariants, not a file listing (you can `ls`). For what the product does see [`features.md`](./features.md); for in-flight work see [`roadmap.md`](./roadmap.md). Read-on-demand reference — verify against code before relying on a detail.
+
+## Product in one line
+
+Dim0 ("The Thinking Canvas") is a self-hostable infinite real-time canvas where notes, mini-apps, code sandboxes, and documents live as nodes, and a board-aware AI agent reads the canvas and writes results back as editable nodes.
+
+## Repo layout
+
+- `backend/` — FastAPI service. Package name is **`topix`** (the former product name; still the module path, DB name, and Docker command).
+- `webui/` — React 19 + TypeScript SPA. Two core domains: `features/agent/` (chat/agent) and `features/board/` (canvas).
+- `build/` — Docker Compose, `schema.sql`, published-image compose.
+- `docs/`, `scripts/`, `Makefile`, `VERSION` (single semver synced by `scripts/sync_version.py`).
+- `@canvas-harness/{core,react,sync-broadcast}` is an **npm dependency** (maintained separately), **not in-tree source**.
+
+## Two mental models to hold
+
+### 1. Two agent execution paths (mid-cutover)
+
+The same chat UI drives one of two runtimes, chosen by `local` on ChatContext (`local = !canCollab`):
+
+- **Server-side agent (legacy, retires in "G5"):** `POST /chats/{id}/messages` → `AssistantManager`/`Plan` on the OpenAI-Agents SDK, runs in-process on OUR keys, writes to boards via `AgentBoardBridge`. Entries `backend/topix/agents/run.py`, `agents/assistant/manager.py`.
+- **Browser engine (current, BYOK-or-managed):** the tool-calling loop runs in the browser (`webui/src/features/agent/engine/agent-loop.ts`) and mutates the live canvas store directly. External capabilities go through thin metered proxies `/ai/llm[/stream]`, `/ai/search`, `/ai/code`, `/ai/fetch`, `/ai/parse` (`backend/topix/api/router/ai.py`).
+
+Both coexist today, but the direction is one runtime: **everything moves to the browser engine and the server-side agent is retired entirely** (the backend keeps only the `/ai/*` proxies). See roadmap "North star".
+
+### 2. Two persistence planes (backend REST vs offline-first)
+
+- **Backend/REST plane:** full Dim0 `Note`/`Link` domain model, round-tripped to canvas-harness `Node`/`Edge` through `webui/src/features/board/harness/convert/`.
+- **Offline-first plane:** the harness scene *is* the model — geometry/content/style are native harness fields, Dim0 domain fields ride in `node.data`; persistence is identity (no convert layer). `webui/src/features/board/model/`.
+
+Don't conflate them.
+
+## Backend
+
+- **Composition root** `backend/topix/api/app.py` — `create_app`/`lifespan` wire ONE shared Postgres pool (per-store pools used to exhaust PG under burst), all stores, the collab `RoomRegistry` (single-worker v1), and `AgentBoardBridge`. `apply_schema` runs idempotently every boot (additive migrations, no manual step). OpenAPI docs are stage-gated to non-prod. CORS is `*` + credentials (worth flagging).
+- **Cross-store split (load-bearing):**
+  - **Postgres** = relational metadata + durable logs: `graphs` (= boards), `graph_user` (membership/roles), chats, users, billing, share links, `board_oplog`, `note_revisions`, `mini_app_state`. Schema: `build/schema.sql`.
+  - **Qdrant** = ALL graph content in one collection (`topix`): notes, links, documents, chunks, chat messages, subscriptions — `type` is a payload field, not separate collections. `backend/topix/store/qdrant/store.py`.
+  - **Redis** = ephemeral: WS tickets, the per-board `seq` counter, rate-limit/quota windows.
+  - **No transaction spans Postgres + Qdrant.** e.g. adopt creates the PG graph row and separately writes Qdrant content; partial failures can diverge. Chunk cleanup on note delete is fire-and-forget.
+- **Collab engine** (`backend/topix/collab/`; WS handler in `api/router/collab.py`). Invariant: **collab is the only edit path** — every mutation (human WS op or in-process agent) flows through allocate-seq → apply-to-`GraphStore` → broadcast `peer-op`.
+  - Seq authority is the **oplog** (`store/collab_oplog.py`: Redis `INCR` seeded from PG `MAX(seq)`), **not** `room.seq` (a warm cache). Survives restart, so client `serverSeq` ordering holds.
+  - WS auth uses a single-use Redis ticket (a WS upgrade can't carry a bearer). Welcome modes by `since_seq`: snapshot / catch-up / live. Reconnecting clients replay their outbox; the relay **dedups by `batch.id`** and re-acks at the original seq.
+  - `apply_ops.py` persists `node.*`/`edge.*`; `group.*`/`frame.reorder` are relayed to peers but NOT persisted. Wire colors are theme-adapted and ignored — canonical colors come from `data._storedColors`.
+  - `agent_bridge.py`: the server agent appears as room client "agent" (`is_system`) without holding a slot; no-ops the broadcast when no room is open (next opener gets it via snapshot).
+- **Model catalog** `backend/topix/config/catalog.py` over `backend/topix/models.yml`: providers + ordered routes per model; resolution picks the first route whose provider key is present (`available_llms` / `resolve_code`). Adding a model = one YAML entry. `backend/topix/services.yml` does the same for non-LLM services. (`llm_models.yml` is dead — see roadmap.)
+- **Metering / tiering** `api/utils/rate_limit/`: `enforce_rate_limit` resolves plan → minute/day/billing-cycle quota windows. When billing is OFF (self-host), the plan resolves to `plus` — everything unlocked.
+- **Mini-app validation** `backend/topix/mini_app/compile.py`: agent JSX is transpile-validated via a sucrase subprocess, **never evaluated server-side** (evaluating would expose Node globals — an RCE surface).
+
+## Frontend
+
+- **Shell / routing** `webui/src/routes/index.ts` (one file, TanStack code-based). **Local-first "open front door":** `/`, `/local`, `/local/$boardId`, `/share/$token` are intentionally UNGUARDED and make zero backend calls when signed out. Signed-out sentinel is `userId === "root"` (non-empty) — gate on `isSignedIn()`, never `!!userId`. Board surface routes (`/boards/$id/sheets/$noteId`, `/mini-apps/$noteId`, …) are children of `/boards/$id` with `component: () => null` so the board stays mounted while a surface opens.
+- **Board harness** `features/board/harness/canvas/harness-canvas.tsx` — one canvas-harness store per board, created once and re-hydrated by scope. Behavior turns on three axes: `local` (device vs backend), `syncEngine` (`legacy`|`v2`, synced boards only), `rootId` (which folder layer is projected). `_storedColors` is the color source of truth across convert + both collab clients.
+- **Offline-first sync** `features/board/harness/sync/board-sync.ts` (v2 coordinator) + `persist/local/` (IndexedDB `dim0` DB). The outbox *is* the oplog tail past a `syncedSeq` cursor. Rebase LWW: undo unacked local batches → apply remote → replay local. `deleteBoard` cascades its stores incl. `sync_meta` (a stale cursor is a silent edit-loss trap). Legacy `use-ws-collab.ts` still serves untouched synced boards.
+- **Agent → canvas** `features/board/harness/agent/`: agent tool outputs land as `origin:"remote"` batches (bypass the undo stack + debounced save, since the server already has them). Human edits are `origin:"local"`/`"history"`.
+- **Metering (client):** one `X-Run-Id` is minted per user message (`use-local-submit-prompt.ts`) and threaded through every managed `/ai/*` call, so a whole multi-tool run meters as one unit; the server charges once per run id.
+- **BYOK vs managed:** LLM keys go **direct to the provider** from the browser (never our servers); search/code/parse keys are **relayed per-request** as `X-Provider-Key` (used, not stored). Keys live in `localStorage` (`features/agent/byok/byok-store.ts`).
+
+## Build targets
+
+1. Web bundle + PWA (`webui/vite.config.ts` — icon code-splitting, offline SPA fallback).
+2. Standalone mini-app runtime inlined to one HTML (`webui/vite.mini-app.config.ts`, `webui/mini-app-runtime/`) — sucrase-compiled agent JSX in a sandboxed iframe (single-frontend opaque-origin by default; cross-origin via `VITE_MINI_APP_ORIGIN`).
+3. Tauri desktop (`webui/src-tauri/`, early — version pinned `0.1.0`).
+
+Self-host via Docker Compose: `make up` (from source) or `make pull && make run` (published images `winlp4ever/dim0-{backend,webui}`). Needs at least one LLM provider key (`OPENAI_API_KEY` or `OPENROUTER_API_KEY`); `LINKUP_API_KEY` powers web search (see `.env.sample`).
