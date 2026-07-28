@@ -1,6 +1,4 @@
-import { useAppStore } from "@/store"
-import { useListMessages } from "../../api/list-messages"
-import { useChatStore } from "../../store/chat-store"
+import { useChatMessages, useChatStreaming } from "../../hooks/use-chat-messages"
 import { UserMessage } from "./user-message"
 import { AssistantMessage } from "./assistant-message"
 import type { ChatMessage } from "../../types/chat"
@@ -49,16 +47,14 @@ const TrailingAssistantIndicator = ({ isStreaming }: { isStreaming: boolean }) =
 }
 
 /**
- * Conversation component displays a chat conversation by fetching messages
- * and rendering them based on their roles (user or assistant).
+ * Conversation component displays a chat conversation by reading the active
+ * chat's messages (local-aware) and rendering them by role. The chat is
+ * scoped by the surrounding ChatProvider (backend or local engine).
  */
-export const Conversation = ({ chatId }: { chatId: string }) => {
-  const userId = useAppStore((state) => state.userId)
-  const isStreaming = useChatStore((state) => state.isStreaming)
+export const Conversation = () => {
+  const isStreaming = useChatStreaming()
 
-  const { data: serverMessages } = useListMessages({ userId, chatId })
-
-  const messages = serverMessages || EMPTY_MESSAGES
+  const messages = useChatMessages() || EMPTY_MESSAGES
 
   const userMessages = messages?.filter((m) => m.role === "user")
   const lastUserMessageId = userMessages?.at(-1)?.id

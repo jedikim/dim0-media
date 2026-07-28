@@ -34,6 +34,7 @@ async def search_perplexity(
     search_context_size: WebSearchContextSize = WebSearchContextSize.MEDIUM,
     recency: Recurrence | None = None,
     *,
+    api_key: Optional[str] = None,
     client: Optional[httpx.AsyncClient] = None,
     timeout: Optional[httpx.Timeout] = None,
 ) -> WebSearchOutput:
@@ -44,6 +45,7 @@ async def search_perplexity(
         max_results: Maximum number of results to return.
         search_context_size: Size of the search context.
         recency: Optional Recurrence filter. Returns results from the last 'daily', 'weekly', 'monthly', or 'yearly'.
+        api_key: Optional BYOK provider key; falls back to the env key.
         client: Optional shared httpx.AsyncClient to reuse.
         timeout: Optional httpx timeout (per-request).
 
@@ -52,7 +54,7 @@ async def search_perplexity(
 
     """
     url = "https://api.perplexity.ai/search"
-    api_key = _get_env_or_raise("PERPLEXITY_API_KEY")
+    api_key = api_key or _get_env_or_raise("PERPLEXITY_API_KEY")
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
@@ -117,6 +119,7 @@ async def search_tavily(
     search_context_size: WebSearchContextSize = WebSearchContextSize.MEDIUM,
     recency: Recurrence | None = None,
     *,
+    api_key: Optional[str] = None,
     client: Optional[httpx.AsyncClient] = None,
     timeout: Optional[httpx.Timeout] = None,
 ) -> WebSearchOutput:
@@ -128,6 +131,7 @@ async def search_tavily(
         search_context_size: Size of the search context.
         recency: Optional Recurrence filter. Returns results from the last 'daily', 'weekly', 'monthly', or 'yearly'.
             If not specified, no date filtering will be applied. Default is None (i.e., no filtering).
+        api_key: Optional BYOK provider key; falls back to the env key.
         client: Optional shared httpx.AsyncClient to reuse.
         timeout: Optional httpx timeout (per-request).
 
@@ -136,7 +140,7 @@ async def search_tavily(
 
     """
     url = "https://api.tavily.com/search"
-    api_key = _get_env_or_raise("TAVILY_API_KEY")
+    api_key = api_key or _get_env_or_raise("TAVILY_API_KEY")
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
@@ -188,6 +192,7 @@ async def search_linkup(
     search_context_size: WebSearchContextSize = WebSearchContextSize.MEDIUM,
     recency: Recurrence | None = None,
     *,
+    api_key: Optional[str] = None,
     client: Optional[httpx.AsyncClient] = None,
     timeout: Optional[httpx.Timeout] = None,
 ) -> WebSearchOutput:
@@ -199,6 +204,7 @@ async def search_linkup(
         search_context_size: Size of the search context.
         recency: Optional Recurrence filter. Returns results from the last 'daily', 'weekly', 'monthly', or 'yearly'.
             If not specified, no date filtering will be applied. Default is None (i.e., no filtering).
+        api_key: Optional BYOK provider key; falls back to the env key.
         client: Optional shared httpx.AsyncClient to reuse.
         timeout: Optional httpx timeout (per-request).
 
@@ -207,7 +213,7 @@ async def search_linkup(
 
     """
     url = "https://api.linkup.so/v1/search"
-    api_key = _get_env_or_raise("LINKUP_API_KEY")
+    api_key = api_key or _get_env_or_raise("LINKUP_API_KEY")
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {api_key}",
@@ -257,6 +263,7 @@ async def search_exa(
     search_context_size: WebSearchContextSize = WebSearchContextSize.MEDIUM,
     recency: Recurrence | None = None,
     *,
+    api_key: Optional[str] = None,
     client: Optional[httpx.AsyncClient] = None,
     timeout: Optional[httpx.Timeout] = None,
 ) -> WebSearchOutput:
@@ -269,6 +276,7 @@ async def search_exa(
             everything else uses "auto" (fast + neural combo).
         recency: Optional Recurrence filter. Returns results from the last 'daily',
             'weekly', 'monthly', or 'yearly'. If not specified, no date filtering.
+        api_key: Optional BYOK provider key; falls back to the env key.
         client: Optional shared httpx.AsyncClient to reuse.
         timeout: Optional httpx timeout (per-request).
 
@@ -277,7 +285,7 @@ async def search_exa(
 
     """
     url = "https://api.exa.ai/search"
-    api_key = _get_env_or_raise("EXA_API_KEY")
+    api_key = api_key or _get_env_or_raise("EXA_API_KEY")
 
     # Exa supports x-api-key or Authorization: Bearer
     headers = {
@@ -349,6 +357,7 @@ async def fetch_content(
     web_url: str,
     extract_depth: Literal["basic", "advanced"] = "basic",
     *,
+    api_key: Optional[str] = None,
     client: Optional[httpx.AsyncClient] = None,
     timeout: Optional[httpx.Timeout] = None,
 ) -> WebSearchOutput:
@@ -357,6 +366,7 @@ async def fetch_content(
     Args:
         web_url: The URL to read.
         extract_depth: "basic" or "advanced".
+        api_key: Optional BYOK provider key; falls back to the env key.
         client: Optional shared httpx.AsyncClient to reuse.
         timeout: Optional httpx timeout (per-request).
 
@@ -365,7 +375,7 @@ async def fetch_content(
 
     """
     url = "https://api.tavily.com/extract"
-    api_key = _get_env_or_raise("TAVILY_API_KEY")
+    api_key = api_key or _get_env_or_raise("TAVILY_API_KEY")
 
     headers = {
         "Content-Type": "application/json",

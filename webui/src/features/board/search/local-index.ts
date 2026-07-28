@@ -1,0 +1,111 @@
+/**
+ * Local full-text search (A5) — a derived index over the board's nodes.
+ *
+ * The index is a *derived read-model*, never a source of truth: it's rebuildable
+ * from the store at any time (`rebuildFromStore`). It updates incrementally from
+ * store `change` events (insert/update/remove) so it always reflects the live
+ * store (INV-9). A node's searchable text is its title (`data.label`) + body
+ * (`content`).
+ *
+ * Per the no-RAG decision this is full-text only (Orama BM25); a vector/hybrid
+ * upgrade stays available later without changing this seam. Index persistence to
+ * IndexedDB is a deferred optimization — cold start rebuilds from the store.
+ */
+import { count, create, getByID, insert, remove, search } from "@orama/orama"
+import type { CanvasStore, Node, NodeId } from "@canvas-harness/core"
+import type { DimNodeData } from "@/features/board/model"
+
+
+const SCHEMA = { title: "string", body: "string" } as const
+
+
+/**
+ * Coerce a value to a plain string for the index. `data.label` / `content` are
+ * typed `string`, but the store types `data` as generic and some node types put
+ * a non-string there — Orama's `"string"` schema then rejects the whole insert.
+ * A non-string just isn't full-text-indexed, which is correct.
+ */
+const asText = (value: unknown): string => (typeof value === "string" ? value : "")
+
+
+const docOf = (node: Node) => ({
+  id: node.id,
+  title: asText((node.data as DimNodeData | undefined)?.label),
+  body: asText(node.content),
+})
+
+
+export class LocalSearchIndex {
+  private db = create({ schema: SCHEMA })
+  private queue: Promise<void> = Promise.resolve()
+
+
+  /** Subscribe to store changes, keeping the index in sync. Returns unsubscribe. */
+  attach(store: CanvasStore): () => void {
+    return store.subscribe("change", (batch) => {
+      for (const op of batch.ops) {
+        if (op.type === "node.add") this.enqueue(() => this.upsert(store, op.node.id))
+        else if (op.type === "node.update") this.enqueue(() => this.upsert(store, op.id))
+        else if (op.type === "node.remove") this.enqueue(() => this.removeDoc(op.node.id))
+      }
+    })
+  }
+
+
+  /** Ranked full-text query. Returns matching node ids. */
+  async query(term: string): Promise<string[]> {
+    const results = await search(this.db, { term })
+    return results.hits.map((h) => String(h.id))
+  }
+
+
+  /** Number of indexed documents. */
+  count(): number {
+    return count(this.db)
+  }
+
+
+  /** Whether a node id is currently indexed. */
+  has(id: string): boolean {
+    return getByID(this.db, id) !== undefined
+  }
+
+
+  /** Drop and rebuild the index from the store (the derived-model recovery path). */
+  async rebuildFromStore(store: CanvasStore): Promise<void> {
+    this.db = create({ schema: SCHEMA })
+    for (const node of store.getAllNodes()) {
+      await insert(this.db, docOf(node))
+    }
+  }
+
+
+  /** Resolve once all queued incremental updates have applied. */
+  async idle(): Promise<void> {
+    await this.queue
+  }
+
+
+  private enqueue(fn: () => Promise<void>): void {
+    this.queue = this.queue.then(fn)
+  }
+
+
+  private async upsert(store: CanvasStore, id: NodeId): Promise<void> {
+    const node = store.getNode(id)
+    if (!node) return
+    // remove-then-insert (not Orama `update`): insert preserves the doc's `id`
+    // field, whereas `update` reassigns a fresh id — which would break getByID.
+    if (getByID(this.db, id) !== undefined) {
+      await remove(this.db, id)
+    }
+    await insert(this.db, docOf(node))
+  }
+
+
+  private async removeDoc(id: NodeId): Promise<void> {
+    if (getByID(this.db, id) !== undefined) {
+      await remove(this.db, id)
+    }
+  }
+}

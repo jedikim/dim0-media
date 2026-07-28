@@ -45,7 +45,7 @@ const getGraphFromQueryKey = (queryKey: QueryKey): string | undefined => {
     return queryKey[3]
   }
   if (queryKey.length >= 5 && typeof queryKey[4] === "string") {
-    return queryKey[4] as string
+    return queryKey[4]
   }
   return undefined
 }

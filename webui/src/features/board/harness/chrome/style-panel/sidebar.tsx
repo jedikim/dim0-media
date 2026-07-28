@@ -18,6 +18,7 @@ import {
   type StoredEdgeColors,
 } from "../../theme/color-adapter"
 import { computeNodeColorUpdate, storedNodeColorsOf } from "../../theme/apply-node-colors"
+import type { NoteNodeData } from "../../convert/note-to-node"
 import { StylePanel, type StylePanelStyle } from "./panel"
 
 
@@ -120,7 +121,14 @@ export function StyleSidebar() {
             const { style, data } = computeNodeColorUpdate(n, colorPatch, mode, baseStyle)
             store.updateNode(n.id, { style, data })
           } else {
-            store.updateNode(n.id, { style: baseStyle })
+            // Non-color change (border, font, …). `baseStyle` still carries OUR
+            // theme's display colors, so attach the canonical `_storedColors` too
+            // — otherwise a peer in a different theme applies our colors verbatim
+            // (theme leak). Mirrors the edge handler, which always sends them.
+            store.updateNode(n.id, {
+              style: baseStyle,
+              data: { ...((n.data ?? {}) as NoteNodeData), _storedColors: storedNodeColorsOf(n) },
+            })
           }
         }
       })

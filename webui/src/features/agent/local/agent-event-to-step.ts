@@ -1,0 +1,165 @@
+import type { ReasoningStep, ToolCallStep, ToolName } from "@/features/agent/types/stream"
+import { normalizeReasoningSteps } from "@/features/agent/types/stream"
+import type { ToolOutput, UrlAnnotation } from "@/features/agent/types/tool-outputs"
+import type { AgentEvent } from "@/features/agent/engine/types"
+
+
+const field = (o: unknown, k: string): unknown =>
+  o && typeof o === "object" ? (o as Record<string, unknown>)[k] : undefined
+
+
+const asStr = (v: unknown): string | undefined => (typeof v === "string" ? v : undefined)
+
+
+/**
+ * Map an engine tool name to the UI ToolName the chat renderers switch on. An
+ * unmapped tool keeps its own name (rendered as a generic tool card with a
+ * humanized title + fallback icon) — NOT `raw_message`, which the UI treats as
+ * assistant reasoning text (title "Reasoning") and would mis-render a real tool
+ * call as a boxed "Reasoning" step.
+ */
+const toToolName = (name: string): ToolName => {
+  if (name === "create_note" || name === "write_note") return "create_note"
+  if (name === "update_note" || name === "edit_note") return "edit_note"
+  if (name === "get_note") return "get_note"
+  if (name === "link_notes") return "link_notes"
+  if (name === "web_search") return "web_search"
+  if (name === "code_interpreter") return "code_interpreter"
+  if (name === "search_notes") return "memory_search"
+  if (name === "fetch") return "fetch"
+  if (name === "doc_search") return "doc_search"
+  return name as ToolName
+}
+
+
+// Title for the note card: write_note uses `label`, the older create_note `title`.
+const noteLabel = (args: unknown): string | null =>
+  asStr(field(args, "label")) ?? asStr(field(args, "title")) ?? null
+
+
+// Build a `UrlAnnotation` from a raw {url, title, content} record, or null when
+// it has no usable URL.
+const toUrlAnnotation = (raw: unknown): UrlAnnotation | null => {
+  const url = asStr(field(raw, "url"))
+  if (!url) return null
+  const title = asStr(field(raw, "title"))
+  const content = asStr(field(raw, "content"))
+  return { type: "url", url, ...(title ? { title } : {}), ...(content ? { content } : {}) }
+}
+
+
+/** Build the UI ToolOutput a tool-step renders, from the engine's args + result. */
+const toOutput = (name: string, args: unknown, result: unknown, boardId: string): ToolOutput => {
+  const id = asStr(field(result, "id")) ?? ""
+  if (name === "create_note" || name === "write_note") {
+    const noteType = asStr(field(args, "note_type")) ?? "note"
+    return { type: "create_note", noteId: id, graphUid: boardId, label: noteLabel(args), noteType }
+  }
+  if (name === "update_note" || name === "edit_note") {
+    return { type: "edit_note", noteId: id, graphUid: boardId, label: noteLabel(args), noteType: "note" }
+  }
+  if (name === "link_notes") {
+    return {
+      type: "link_notes",
+      linkId: id,
+      sourceId: asStr(field(args, "sourceId")) ?? "",
+      targetId: asStr(field(args, "targetId")) ?? "",
+      graphUid: boardId,
+      label: asStr(field(args, "label")) ?? null,
+    }
+  }
+  if (name === "web_search") {
+    // Result: { results: [{ url, title, content }] } → structured sources the
+    // per-step list + end-of-message "Sources" pill can read (they gate on a
+    // web_search-typed output, not a JSON string).
+    const raw = field(result, "results")
+    const searchResults = (Array.isArray(raw) ? raw : []).map(toUrlAnnotation).filter((r): r is UrlAnnotation => r !== null)
+    return { type: "web_search", answer: "", searchResults }
+  }
+  if (name === "fetch") {
+    // Result: { url, title, text } for one page → a single-source web_search
+    // output so a fetched link surfaces alongside search sources.
+    const ann = toUrlAnnotation(result)
+    return ann ? { type: "web_search", answer: "", searchResults: [ann] } : JSON.stringify(result)
+  }
+  if (name === "doc_search") {
+    // Result: { results: [{ chunkId, docId, docTitle, text }] } → structured
+    // references the answer's document Sources view reads (keyed by docId).
+    const raw = field(result, "results")
+    const references = (Array.isArray(raw) ? raw : [])
+      .map((r) => ({
+        chunkId: asStr(field(r, "chunkId")) ?? "",
+        docId: asStr(field(r, "docId")) ?? "",
+        docTitle: asStr(field(r, "docTitle")) ?? "",
+        text: asStr(field(r, "text")) ?? "",
+      }))
+      .filter((r) => r.docId !== "")
+    return { type: "doc_search", references }
+  }
+  if (name.startsWith("learn_generate")) {
+    return `Loaded ${name.replace("learn_generate_", "").replace(/_/g, " ")} guidance`
+  }
+  return JSON.stringify(result)
+}
+
+
+/**
+ * Accumulate the engine's `AgentEvent` stream into the `ReasoningStep[]` the
+ * existing chat UI renders. Pure — re-run over the full event list on each new
+ * event (cheap; fresh objects drive React re-renders).
+ */
+export const stepsFromEvents = (events: AgentEvent[], boardId: string): ReasoningStep[] => {
+  const steps: ReasoningStep[] = []
+  const openByTool = new Map<string, ToolCallStep>()
+  let seq = 0
+  for (const ev of events) {
+    if (ev.type === "tool_start") {
+      // A second tool_start for an already-open tool is the execution filling in
+      // the args after the early name-only signal — update, don't duplicate.
+      const open = openByTool.get(ev.toolName)
+      if (open) {
+        if (ev.args && Object.keys(ev.args).length > 0) open.arguments = { input: ev.args }
+        continue
+      }
+      const step: ToolCallStep = {
+        type: "tool_call",
+        id: `tool-${seq++}`,
+        name: toToolName(ev.toolName),
+        thought: "",
+        output: "",
+        state: "started",
+        eventMessages: [],
+        arguments: { input: ev.args },
+      }
+      steps.push(step)
+      openByTool.set(ev.toolName, step)
+    } else if (ev.type === "tool_result") {
+      const open = openByTool.get(ev.toolName)
+      if (open) {
+        open.output = toOutput(ev.toolName, open.arguments?.input, ev.result, boardId)
+        open.state = "completed"
+        openByTool.delete(ev.toolName)
+      }
+    } else if (ev.type === "assistant_text") {
+      // Streaming emits a cumulative assistant_text per token; coalesce a run of
+      // them into ONE step (update its message) instead of a line per token.
+      const last = steps[steps.length - 1]
+      if (last && last.type === "reasoning_step") last.message = ev.text
+      else steps.push({ type: "reasoning_step", id: `text-${seq++}`, reasoning: "", message: ev.text })
+    }
+  }
+  // Match the online path: fold text-like "tool" steps (raw_message / synthesizer
+  // / answer_reformulate) into reasoning_steps so the UI renders them as text,
+  // not as tool rows — keeping the reasoning-vs-tool differentiation consistent.
+  return normalizeReasoningSteps(steps)
+}
+
+
+/** The latest assistant text across the event stream (the answer body), if any. */
+export const latestAssistantText = (events: AgentEvent[]): string => {
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    const ev = events[i]
+    if (ev.type === "assistant_text") return ev.text
+  }
+  return ""
+}

@@ -139,6 +139,13 @@ class WebSearchHandler:
             wrapper: RunContextWrapper,
             query: str,
         ) -> WebSearchOutput:
+            """Search the web and return a concise, cited summary of the results.
+
+            Args:
+                wrapper: The agent run context (injected; not part of the tool schema).
+                query: The web search query.
+
+            """
             tool_id = getattr(wrapper, "tool_call_id", None) or gen_uid()
             search_output: WebSearchOutput = await web_search(wrapper, query)
             await ToolHandler.log_input(

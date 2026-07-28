@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
-import { asBatchId, type CanvasStore, type Node, type Op } from "@canvas-harness/core"
+import { type CanvasStore, type Node, type Op } from "@canvas-harness/core"
+import { makeBatch } from "@/features/board/harness/make-batch"
 import { useMindMapStore } from "@/features/agent/store/mindmap-store"
 import type { LinkEdge, NoteNode } from "@/features/board/types/flow"
 import type { Link } from "@/features/board/types/link"
@@ -60,13 +61,7 @@ export const useHarnessApplyMindMap = (
           }
         }
         if (ops.length > 0) {
-          store.applyBatch({
-            id: asBatchId(store.generateId()),
-            clientId: store.clientId,
-            ts: Date.now(),
-            origin: "local",
-            ops,
-          })
+          store.applyBatch(makeBatch(store, "local", ops))
         }
         state.clearMindMap(boardId)
       } finally {
@@ -137,7 +132,7 @@ const stagedEdgeToLink = (
   rootId: string | null,
   boardId: string,
 ): Link | null => {
-  const data = edge.data as Link | undefined
+  const data = edge.data
   if (!data) return null
   return {
     ...data,

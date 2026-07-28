@@ -39,6 +39,19 @@ class RedisStore:
         """Close the Redis connection."""
         await self.redis.aclose()
 
+    async def set_if_absent(self, key: str, ttl_seconds: int) -> bool:
+        """Atomically set `key` only if absent (SET NX EX).
+
+        Returns True when newly set (first caller), False when it already existed
+        — used to count a whole agent run once across its many managed calls.
+        """
+        result = await self.redis.set(key, "1", nx=True, ex=ttl_seconds)
+        return bool(result)
+
+    async def delete(self, key: str) -> None:
+        """Delete a key (used to release a run's dedup slot when metering is rejected)."""
+        await self.redis.delete(key)
+
     async def check_rate_limit(
         self,
         user_id: str,

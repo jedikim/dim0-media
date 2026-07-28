@@ -14,6 +14,7 @@ import { useCallback, useEffect, useRef } from "react"
 import { CursorClickIcon } from "@phosphor-icons/react"
 import { type NodeId } from "@canvas-harness/core"
 import { useCanvasStore, useNode, useSelection } from "@canvas-harness/react"
+import { removeNodeSubtree } from "@/features/board/harness/graph/subtree"
 
 import { MiniAppMount } from "@/features/mini-app"
 import { cn } from "@/lib/utils"
@@ -140,7 +141,7 @@ export function MiniAppView({ id }: MiniAppViewProps) {
       </div>
 
       <NodeTrafficLights
-        onDelete={canEdit ? () => store.removeNode(id) : undefined}
+        onDelete={canEdit ? () => removeNodeSubtree(store, id) : undefined}
         onExpand={canEdit ? () => openNodeSurface(id as unknown as string, "mini-app") : undefined}
       />
 

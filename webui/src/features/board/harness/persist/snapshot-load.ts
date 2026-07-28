@@ -1,4 +1,5 @@
-import { asBatchId, type CanvasStore, type Node, type Op } from "@canvas-harness/core"
+import { type CanvasStore, type Node, type Op } from "@canvas-harness/core"
+import { makeBatch } from "@/features/board/harness/make-batch"
 import { getBoard, type BoardRole } from "@/features/board/api/get-board"
 import type { Graph } from "@/features/board/types/board"
 import { linkToEdge } from "../convert/link-to-edge"
@@ -83,13 +84,7 @@ export const applyGraphToStore = (
     for (const n of nodes) ops.push({ type: "node.add", node: n })
     for (const e of edges) ops.push({ type: "edge.add", edge: e })
     if (ops.length > 0) {
-      store.applyBatch({
-        id: asBatchId(store.generateId()),
-        clientId: store.clientId,
-        ts: Date.now(),
-        origin: "remote",
-        ops,
-      })
+      store.applyBatch(makeBatch(store, "remote", ops))
     }
     store.clearHistory()
     // Replace mode signals a fresh board scope (the first-load REST
@@ -176,13 +171,7 @@ export const applyGraphToStore = (
     }
   }
   if (ops.length === 0) return
-  store.applyBatch({
-    id: asBatchId(store.generateId()),
-    clientId: store.clientId,
-    ts: Date.now(),
-    origin: "remote",
-    ops,
-  })
+  store.applyBatch(makeBatch(store, "remote", ops))
   // No clearHistory — merge preserves undo state across reconnects.
 }
 

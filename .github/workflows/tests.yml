@@ -35,6 +35,41 @@ jobs:
       - name: Unit tests
         run: make test-ui
 
+  e2e:
+    name: webui (e2e — local-only flow)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: webui/package-lock.json
+
+      - name: Install webui dependencies
+        run: npm ci
+        working-directory: webui
+
+      # Playwright's chromium needs system libs (libnspr4/libnss3/…); --with-deps
+      # installs them. This is what a local dev sandbox usually can't do.
+      - name: Install Playwright (browser + system deps)
+        run: npx playwright install --with-deps chromium
+        working-directory: webui
+
+      # The dev script loads ../.env via dotenv; the local-only flow needs no
+      # real backend values, so the sample env is enough to boot the server.
+      - name: Provide dev env
+        run: cp .env.sample .env
+
+      - name: E2E (local boards + agent, mocked provider)
+        run: npm run e2e
+        working-directory: webui
+
   backend:
     name: backend (ruff + unit tests)
     runs-on: ubuntu-latest

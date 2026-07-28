@@ -3,6 +3,8 @@
 import asyncio
 import logging
 
+from typing import Literal
+
 import asyncpg
 
 from qdrant_client.models import (
@@ -22,10 +24,12 @@ from topix.store.postgres.graph import (
     create_graph,
     delete_graph_by_uid,
     get_graph_by_uid,
+    get_graph_id_by_uid,
     update_graph_by_uid,
 )
 from topix.store.postgres.graph_user import (
     add_user_to_graph_by_uid,
+    count_owned_graphs_by_user_uid,
     get_graph_role_by_user_uid,
     get_owner_uid_by_graph_uid,
     list_graphs_by_user_uid,
@@ -685,6 +689,37 @@ class GraphStore:
         async with self._pg_pool.acquire() as conn:
             await create_graph(conn, graph)
             await add_user_to_graph_by_uid(conn, graph.uid, user_uid, "owner")
+
+    async def create_graph_within_cap(
+        self, graph: Graph, user_uid: str, cap: int | None
+    ) -> Literal["created", "at_cap", "exists"]:
+        """Create a user-owned graph, atomically enforcing an owned-board `cap`.
+
+        Runs under a per-user, transaction-scoped advisory lock so concurrent
+        creates for the same user serialize: the count-then-insert can't race past
+        `cap` (the TOCTOU that let two simultaneous adopts both slip past the
+        free-tier limit), and a duplicate UID from a concurrent adopt is detected
+        rather than hitting the unique constraint. The two inserts also become
+        atomic (previously `add_graph` ran them as separate statements).
+
+        Returns:
+          - "created": the graph + owner membership were inserted;
+          - "at_cap":  already at `cap`, nothing created (never when `cap` is None);
+          - "exists":  a concurrent create already inserted this UID, nothing created.
+
+        """
+        async with self._pg_pool.acquire() as conn:
+            async with conn.transaction():
+                # Per-user lock (auto-released at txn end): the checks + insert below
+                # can't interleave with another create for the same user.
+                await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", user_uid)
+                if await get_graph_id_by_uid(conn, graph.uid) is not None:
+                    return "exists"
+                if cap is not None and await count_owned_graphs_by_user_uid(conn, user_uid) >= cap:
+                    return "at_cap"
+                await create_graph(conn, graph)
+                await add_user_to_graph_by_uid(conn, graph.uid, user_uid, "owner")
+                return "created"
 
     async def update_graph(self, graph_uid: str, data: dict):
         """Update an existing graph."""

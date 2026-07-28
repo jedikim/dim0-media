@@ -5,6 +5,7 @@ import {
   EditNoteIcon,
   ImageGenerationIcon,
   ImageSearchWidgetIcon,
+  DocumentFileIcon,
   LinkIcon,
   MemorySearchIcon,
   NoteIcon,
@@ -113,7 +114,8 @@ export type ToolName =
   | "outline_generator"
   | "web_collector"
   | "synthesizer"
-  | "navigate"
+  | "fetch"
+  | "doc_search"
   | "raw_message"
   | "image_description"
   | "topic_illustrator"
@@ -139,7 +141,8 @@ export const ToolNameDescription: Record<ToolName, string> = {
   outline_generator: "Generate outline",
   web_collector: "Collect web content",
   synthesizer: "Synthesize response",
-  navigate: "Fetch and analyze web page content",
+  fetch: "Fetch and analyze web page content",
+  doc_search: "Search uploaded documents",
   raw_message: "Reasoning",
   image_description: "Describe image",
   topic_illustrator: "Illustrate topic",
@@ -153,14 +156,18 @@ export const ToolNameDescription: Record<ToolName, string> = {
 }
 
 
-export const ToolNameIcon: Record<string, AppIconComponent> = {
+// Keyed by the full ToolName union so the compiler flags any missing icon —
+// a missing entry rendered `undefined` (React "Element type is invalid").
+export const ToolNameIcon: Record<ToolName, AppIconComponent> = {
+  raw_message: NoteIcon,
   answer_reformulate: NoteIcon,
   web_search: BrowserSearchIcon,
   memory_search: MemorySearchIcon,
+  doc_search: DocumentFileIcon,
   outline_generator: OutlineGeneratorIcon,
   web_collector: WebCollectorIcon,
   synthesizer: NoteIcon,
-  navigate: BrowserSearchIcon,
+  fetch: BrowserSearchIcon,
   code_interpreter: ToolCodeIcon,
   write_note: WriteNoteToolIcon,
   create_note: CreateNoteIcon,
@@ -179,7 +186,25 @@ export const ToolNameIcon: Record<string, AppIconComponent> = {
 }
 
 
+/** Fallback icon for a tool name not in `ToolNameIcon` — keeps a missing entry
+ *  from rendering `undefined` (React "Element type is invalid" crash). */
+export const DEFAULT_TOOL_ICON: AppIconComponent = NoteIcon
+
+
 export const RAW_MESSAGE: ToolName = "raw_message"
+
+
+/** Legacy tool-name aliases → canonical `ToolName`. The retiring backend runtime
+ *  (and persisted history) emits `"navigate"` for what is now `"fetch"`; map it
+ *  on ingestion so old messages and the live legacy stream still render. */
+const TOOL_NAME_ALIASES: Record<string, ToolName> = {
+  navigate: "fetch",
+}
+
+
+/** Resolve a raw wire/persisted tool name to its canonical `ToolName`. */
+export const canonicalToolName = (name: string): ToolName =>
+  TOOL_NAME_ALIASES[name] ?? (name as ToolName)
 
 
 /**
@@ -195,8 +220,12 @@ export const isReasoningTextToolName = (toolName: ToolName) =>
  * Normalizes text-like tool steps into reasoning text steps for rendering.
  */
 export const normalizeReasoningStep = (step: ReasoningStep): ReasoningStep => {
-  if (step.type !== "tool_call" || !isReasoningTextToolName(step.name)) {
-    return step
+  if (step.type !== "tool_call") return step
+  // Canonicalize legacy/persisted names (e.g. "navigate" → "fetch") so old
+  // messages resolve a real icon/title.
+  const name = canonicalToolName(step.name)
+  if (!isReasoningTextToolName(name)) {
+    return name === step.name ? step : { ...step, name }
   }
 
   return {
@@ -204,7 +233,7 @@ export const normalizeReasoningStep = (step: ReasoningStep): ReasoningStep => {
     id: step.id,
     reasoning: step.thought || "",
     message: typeof step.output === "string" ? step.output : "",
-    isSynthesis: step.name === "synthesizer",
+    isSynthesis: name === "synthesizer",
   }
 }
 

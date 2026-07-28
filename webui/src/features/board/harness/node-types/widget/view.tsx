@@ -2,6 +2,7 @@ import { useRef } from "react"
 import { LayoutIcon } from "@phosphor-icons/react"
 import { type NodeId } from "@canvas-harness/core"
 import { useCanvasStore, useNode, useSelection } from "@canvas-harness/react"
+import { removeNodeSubtree } from "@/features/board/harness/graph/subtree"
 import { cn } from "@/lib/utils"
 import { WidgetIframe } from "@/features/board/components/flow/widget-iframe"
 import type { NoteNodeData } from "../../convert/note-to-node"
@@ -76,7 +77,7 @@ export function WidgetView({ id }: WidgetViewProps) {
       </div>
 
       <NodeTrafficLights
-        onDelete={canEdit ? () => store.removeNode(id) : undefined}
+        onDelete={canEdit ? () => removeNodeSubtree(store, id) : undefined}
         onExpand={canEdit ? () => openNodeSurface(id as unknown as string, "widget") : undefined}
       />
 

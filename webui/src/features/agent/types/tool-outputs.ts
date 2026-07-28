@@ -39,6 +39,23 @@ export interface MemorySearchOutput {
   references: RefAnnotation[]
 }
 
+
+/** One retrieved document passage (a `doc_search` hit) — its text plus the
+ *  document it belongs to. `docId` is the unique key; `docTitle` is the label. */
+export interface DocRef {
+  chunkId: string
+  docId: string
+  docTitle: string
+  text: string
+}
+
+
+/** The `doc_search` tool output: the passages retrieved from board documents. */
+export interface DocSearchOutput {
+  type: "doc_search"
+  references: DocRef[]
+}
+
 export interface CodeInterpreterOutput {
   type: "code_interpreter"
   status: "success" | "error" | "timeout"
@@ -120,6 +137,7 @@ export interface ImageGenerationOutput {
 export type ToolOutput =
   | WebSearchOutput
   | MemorySearchOutput
+  | DocSearchOutput
   | CodeInterpreterOutput
   | WriteNoteOutput
   | CreateNoteOutput

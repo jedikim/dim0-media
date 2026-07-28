@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
+import { LocalBoardUrl } from "@/routes"
 import { useQueryClient } from "@tanstack/react-query"
 import { hitTestAny, type CanvasStore, type NodeId, type Renderer } from "@canvas-harness/core"
 import { createDefaultNote } from "@/features/board/types/note"
@@ -40,7 +41,13 @@ import {
 import { LinearView, ListView } from "../views"
 import { boardNodeTypes, useRenderCustomNodeView } from "../node-types"
 import { hydrateBoardStore } from "../persist/snapshot-load"
+import { BoardPersistence } from "@/features/board/persist/local/board-persistence"
+import { applyContentToStore } from "@/features/board/persist/local/apply-content"
+import { getLocalStores } from "@/features/local-stores"
+import { saveLocalThumbnail } from "@/features/board/local/save-local-thumbnail"
+import { setBoardPersistenceRef } from "@/features/board/persist/local/board-persistence-ref"
 import { ShareButton } from "@/features/sharing/share-button"
+import { BoardKindBadge } from "@/features/board/components/board-kind-badge"
 import { useBoardAppStore } from "../store/board-app-store"
 import { createBoardStore } from "../store/create-board-store"
 import { adaptEdgeColors, applyColorsToEdgeStyle } from "../theme/color-adapter"
@@ -56,10 +63,16 @@ import { usePresentationMode } from "./use-presentation-mode"
 import { useBlockFolderCopy } from "./use-block-folder-copy"
 import { resolveStoredEdgeColors, useStampNewEdges } from "./use-stamp-new-edges"
 import { useStampNewNodes } from "./use-stamp-new-nodes"
+import { useLocalSearchIndex } from "@/features/board/search/use-search-index"
+import { useLocalDocIndex } from "@/features/board/search/use-doc-index"
+import { useDocNodeCascade } from "@/features/board/harness/agent/use-doc-node-cascade"
 import { useStyleMemory } from "./use-style-memory"
 import { CUSTOM_NODE_TYPES } from "./custom-node-types"
 import { useLocalPresence } from "./use-local-presence"
 import { useWsCollab } from "./use-ws-collab"
+import { useBoardSyncV2 } from "./use-board-sync-v2"
+import { useHistoryBatchIds } from "./use-history-batch-ids"
+import { useSyncEngine } from "./use-sync-engine"
 import { useThumbnailCapture } from "./use-thumbnail-capture"
 import { useViewportPersistence } from "./use-viewport-persistence"
 import { HarnessWrapRefProvider } from "./wrap-ref-provider"
@@ -80,7 +93,7 @@ import { HarnessWrapRefProvider } from "./wrap-ref-provider"
  * Tool state, top-bar wiring, keyboard shortcuts land in subsequent
  * phase-4 commits.
  */
-export function HarnessCanvas() {
+export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
   const boardId = useBoardAppStore((s) => s.boardId)
   const rootId = useBoardAppStore((s) => s.rootId)
   const canEdit = useBoardAppStore((s) => s.canEdit)
@@ -140,24 +153,42 @@ export function HarnessCanvas() {
     return () => setCanvasStoreRef(null)
   }, [store])
 
+  // First change subscriber: give undo/redo batches fresh ids so redo isn't
+  // dropped by batch-id dedup (local oplog + relay). Must precede persistence
+  // + collab so they observe the rewritten id.
+  useHistoryBatchIds(store)
   useBoardKeyboard(store)
   useViewportPersistence(store, boardId, rootId, ready)
   useCenterFromUrl(store, wrapRef, ready)
   const styleMemory = useStyleMemory(store)
   useStampNewEdges(store, boardId, rootId)
   useStampNewNodes(store, boardId, rootId)
+  useLocalSearchIndex(store, local)
+  useLocalDocIndex(boardId ?? "", local)
+  useDocNodeCascade(store, boardId ?? "", local)
   useBlockFolderCopy(store)
   useHarnessApplyMindMap(store, boardId, rootId)
   useHydrateIconNodes(store, boardId, rootId, ready)
   useThemeColorProjection(store, ready)
-  useThumbnailCapture(store, boardId, ready, theme.minimap)
+  // Local boards store the thumbnail in IndexedDB; capture only at the root
+  // layer so the dashboard shows the top-level board, not a sub-board.
+  useThumbnailCapture(
+    store,
+    boardId,
+    ready && (!local || !rootId),
+    theme.minimap,
+    local ? saveLocalThumbnail : undefined,
+  )
   usePresentationMode(store, wrapRef, rendererRef)
 
-  // Collab is the only edit path (collab-archi §1). The WS adapter is
-  // mounted unconditionally; presence + local cursor tracking go with it.
-  // The server is the sole writer — no local REST save loop, so no
-  // save-status pill either.
-  useWsCollab(store, boardId, ready, rootId)
+  // A synced board runs EITHER the legacy WS adapter OR the offline-first
+  // coordinator (v2), gated per-board by `BoardMeta.syncEngine` (dev flag as an
+  // override). `null` while resolving — hydration below waits on it, so we never
+  // mount the wrong client first. Default is legacy: untouched boards are unchanged.
+  const syncEngine = useSyncEngine(boardId, local)
+  const v2 = syncEngine === "v2"
+  useWsCollab(store, boardId, ready && !local && !v2, rootId)
+  useBoardSyncV2(store, boardId, ready && v2, rootId ?? null)
   useLocalPresence(store, wrapRef, ready)
 
   const { handleCreateDrag, handleClick } = useCreateHandlers(store, boardId, rootId, styleMemory)
@@ -227,14 +258,14 @@ export function HarnessCanvas() {
           if (node && CUSTOM_NODE_TYPES.has(node.type)) {
             store.cancelEdit()
             if (node.type === "folder" && boardId) {
-              navigate({
-                to: "/boards/$id",
-                params: { id: boardId },
-                search: (prev: Record<string, unknown>) => ({
-                  ...prev,
-                  root_id: node.id,
-                }),
-              })
+              // Enter the folder: scope to its layer via the `root_id` search
+              // param (local + backend share the mechanism, different routes).
+              const search = (prev: Record<string, unknown>) => ({ ...prev, root_id: node.id })
+              if (local) {
+                navigate({ to: LocalBoardUrl, params: { boardId }, search })
+              } else {
+                navigate({ to: "/boards/$id", params: { id: boardId }, search })
+              }
             }
           }
         }
@@ -258,10 +289,10 @@ export function HarnessCanvas() {
       store.setSelection([styled.id as NodeId])
       store.beginEdit(styled.id as NodeId)
     },
-    [store, boardId, rootId, canEdit, navigate, styleMemory],
+    [store, boardId, rootId, canEdit, navigate, styleMemory, local],
   )
 
-  // Hydrate on scope change. `cancelled` guards against late-arriving fetches
+  // Hydrate on scope change. `cancelled` guards against late-arriving loads
   // when the user navigates rapidly between boards.
   useEffect(() => {
     if (!boardId) {
@@ -271,6 +302,69 @@ export function HarnessCanvas() {
     let cancelled = false
     setReady(false)
     setIsLoading(true)
+
+    // Synced boards: wait until the engine is resolved so we hydrate the right
+    // way (v2 skips the REST hydrate). local boards never run a collab client.
+    if (!local && syncEngine === null) {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    // v2 synced board: the coordinator (useBoardSyncV2) hydrates via the welcome
+    // snapshot, so skip the REST hydrate here (running both would double-apply).
+    // Just mark ready + editable so its gate activates. (canEdit/role refinement
+    // from the ticket lands with presence in a later slice.)
+    if (v2) {
+      setCanEdit(true)
+      setBoardRole("owner")
+      setIsLoading(false)
+      setReady(true)
+      return () => {
+        cancelled = true
+      }
+    }
+
+    // Local-only board: load from IndexedDB + attach local persistence. The
+    // analog of the backend hydrate below — it fills the same empty store.
+    if (local) {
+      let detach: (() => void) | null = null
+      let persistence: BoardPersistence | null = null
+      void getLocalStores()
+        .then((stores) => {
+          if (cancelled) return undefined
+          // Share the app-wide engine (a desktop build injects SQLite here).
+          persistence = new BoardPersistence(boardId, { engine: stores.engine })
+          setBoardPersistenceRef(persistence)
+          return persistence.load()
+        })
+        .then((content) => {
+          if (cancelled || !content || !persistence) return
+          // Project only the current layer into the store (root layer when null);
+          // persistence stays whole-board, so other layers are never dropped.
+          applyContentToStore(store, content, rootId ?? null)
+          detach = persistence.attach(store)
+          setCanEdit(true)
+          setBoardRole("owner")
+          setBoardVisibility("private")
+        })
+        .catch((err) => {
+          if (!cancelled) console.error("[harness] local load failed", err)
+        })
+        .finally(() => {
+          if (cancelled) return
+          setIsLoading(false)
+          setReady(true)
+        })
+      return () => {
+        cancelled = true
+        detach?.()
+        setBoardPersistenceRef(null)
+        const p = persistence
+        if (p) void p.flush().finally(() => p.close())
+      }
+    }
+
     hydrateBoardStore(store, {
       boardId,
       rootId: rootId ?? undefined,
@@ -296,7 +390,7 @@ export function HarnessCanvas() {
     return () => {
       cancelled = true
     }
-  }, [boardId, rootId, store, setIsLoading, setCanEdit, setBoardRole, setBoardLabel, setBoardVisibility])
+  }, [boardId, rootId, store, local, v2, syncEngine, setIsLoading, setCanEdit, setBoardRole, setBoardLabel, setBoardVisibility])
 
   return (
     <CanvasProvider store={store}>
@@ -312,6 +406,7 @@ export function HarnessCanvas() {
             tool={tool}
             ready={ready}
             viewMode={viewMode}
+            canCollab={!local}
             arrowDefaults={arrowDefaults}
             onCreateDrag={handleCreateDrag}
             onClick={handleClick}
@@ -331,6 +426,7 @@ type InnerProps = {
   tool: string
   ready: boolean
   viewMode: "board" | "files" | "list"
+  canCollab: boolean
   arrowDefaults: ArrowToolDefaults
   onCreateDrag: ReturnType<typeof useCreateHandlers>["handleCreateDrag"]
   onClick: ReturnType<typeof useCreateHandlers>["handleClick"]
@@ -344,6 +440,7 @@ function HarnessCanvasInner({
   tool,
   ready,
   viewMode,
+  canCollab,
   arrowDefaults,
   onCreateDrag,
   onClick,
@@ -401,7 +498,7 @@ function HarnessCanvasInner({
           )}
           {!presenting && <HarnessViewportControls />}
           <StyleSidebar />
-          <RemoteCursors />
+          {canCollab && <RemoteCursors />}
           <EmptyBoardCoachmarks ready={ready} />
         </>
       ) : viewMode === "files" ? (
@@ -414,7 +511,7 @@ function HarnessCanvasInner({
         status badge, slide-related surfaces. NodeSurfaceHost stays
         mounted everywhere so the modal editor opens from any view.
       */}
-      {!presenting && <HarnessToolbar />}
+      {!presenting && <HarnessToolbar local={!canCollab} />}
       {/*
         Top-right chrome row: save status + share button live in one
         flex container so they never overlap (z-stack collisions cost
@@ -422,10 +519,13 @@ function HarnessCanvasInner({
         — the container is invisible when empty.
       */}
       <div className="absolute right-3 top-3 z-50 flex items-center gap-2">
-        <HarnessPeerChip />
+        {canCollab && <HarnessPeerChip />}
         <HarnessReadonlyChip />
-        <HarnessCollabStatus />
-        <ShareButton />
+        {/* Local boards have no collab chrome, so surface an explicit
+            "On device" badge so they're not mistaken for synced. */}
+        {!canCollab && <BoardKindBadge kind="local-only" />}
+        {canCollab && <HarnessCollabStatus />}
+        {canCollab && <ShareButton />}
       </div>
       <NodeSurfaceHost />
       <SlidesSheet />

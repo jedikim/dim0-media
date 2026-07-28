@@ -4,6 +4,10 @@ import { saveThumbnail } from "@/features/board/api/save-thumbnail"
 import type { MinimapColors } from "../theme/tokens"
 
 
+/** Where a captured thumbnail goes — the backend API, or a local sink. */
+export type ThumbnailSink = (args: { boardId: string; blob: Blob }) => Promise<unknown>
+
+
 const THUMBNAIL_W = 320
 const THUMBNAIL_H = 240
 /** rIC timeout — fire even if the browser stays busy past this. */
@@ -102,17 +106,23 @@ const captureSceneThumbnail = async (
  *
  * Network errors are swallowed (best-effort). A failed thumbnail
  * shouldn't surface a toast or block the board open.
+ *
+ * `save` is the sink — defaults to the backend API; local boards pass a sink
+ * that stores the thumbnail in IndexedDB instead.
  */
 export const useThumbnailCapture = (
   store: CanvasStore,
   boardId: string | null,
   ready: boolean,
   minimap: MinimapColors,
+  save: ThumbnailSink = saveThumbnail,
 ): void => {
-  // Keep latest minimap colors in a ref so we don't re-trigger capture on
-  // theme toggle — only scope + ready should drive a re-shoot.
+  // Keep latest minimap colors + sink in refs so we don't re-trigger capture on
+  // theme toggle / identity change — only scope + ready should drive a re-shoot.
   const minimapRef = useRef(minimap)
   minimapRef.current = minimap
+  const saveRef = useRef(save)
+  saveRef.current = save
 
   useEffect(() => {
     if (!ready || !boardId) return
@@ -124,7 +134,7 @@ export const useThumbnailCapture = (
         try {
           const blob = await captureSceneThumbnail(store, minimapRef.current)
           if (cancelled || !blob) return
-          await saveThumbnail({ boardId, blob })
+          await saveRef.current({ boardId, blob })
         } catch (err) {
           // Best-effort — log once, never surface.
           console.warn("[harness] thumbnail capture failed", err)

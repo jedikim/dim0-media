@@ -2,6 +2,7 @@ import type { Chat } from "../types/chat"
 import camelcaseKeys from "camelcase-keys"
 import { useInfiniteQuery, useQuery, type InfiniteData } from "@tanstack/react-query"
 import { apiFetch } from "@/api"
+import { isSignedIn } from "@/lib/auth"
 
 
 interface ListChatsResponse {
@@ -62,7 +63,7 @@ export const useListChats = ({
   return useQuery<Chat[]>({
     queryKey: ["listChats", userId, offset, limit, graphUid],
     queryFn: () => listChats(offset, limit, graphUid),
-    enabled: !!userId && offset >= 0 && limit > 0,
+    enabled: isSignedIn(userId) && offset >= 0 && limit > 0,
     staleTime: 1000 * 60 * 5 // 5 minutes
   })
 }
@@ -87,7 +88,7 @@ export const useInfiniteChats = ({
     getNextPageParam: (lastPage, allPages) => (
       lastPage.length === pageSize ? allPages.length * pageSize : undefined
     ),
-    enabled: !!userId,
+    enabled: isSignedIn(userId),
     staleTime: 1000 * 60 * 5,
   })
 }

@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react"
 import {
-  asBatchId,
   type CanvasStore,
   type Edge,
   type EdgeId,
@@ -9,6 +8,7 @@ import {
   type Op,
 } from "@canvas-harness/core"
 import { useTheme } from "@/components/theme-provider"
+import { makeBatch } from "@/features/board/harness/make-batch"
 import type { LinkEdgeData } from "../convert/link-to-edge"
 import type { NoteNodeData } from "../convert/note-to-node"
 import {
@@ -108,12 +108,6 @@ export const useThemeColorProjection = (
 
     if (ops.length === 0) return
 
-    store.applyBatch({
-      id: asBatchId(store.generateId()),
-      clientId: store.clientId,
-      ts: Date.now(),
-      origin: "remote",
-      ops,
-    })
+    store.applyBatch(makeBatch(store, "remote", ops))
   }, [store, ready, resolvedTheme])
 }

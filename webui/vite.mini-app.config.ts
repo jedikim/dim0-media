@@ -14,6 +14,7 @@ import path from "path"
 import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react-swc"
 import { defineConfig } from "vite"
+import { viteSingleFile } from "vite-plugin-singlefile"
 
 
 // CSP is intentionally not injected via index.html meta-tag (see the
@@ -30,7 +31,10 @@ export default defineConfig({
   // both and restart in lockstep. With a dedicated dir this is a
   // non-issue regardless of order or timing.
   cacheDir: path.resolve(__dirname, "node_modules/.vite-mini-app"),
-  plugins: [react(), tailwindcss()],
+  // `viteSingleFile` inlines all JS/CSS into one index.html for the local-first
+  // build (loaded into an opaque-origin srcdoc iframe — no second origin). It
+  // only affects `build`; the dev server is unchanged.
+  plugins: [react(), tailwindcss(), viteSingleFile()],
   resolve: {
     alias: {
       // The runtime will pull a curated subset of host components into
@@ -72,7 +76,10 @@ export default defineConfig({
     allowedHosts: true,
   },
   build: {
-    outDir: path.resolve(__dirname, "dist-mini-app"),
+    // Single-frontend: emit the self-contained runtime into the host's public/
+    // so it ships as a same-origin static asset (`/mini-app/index.html`) loaded
+    // into an opaque-origin (sandbox="allow-scripts") iframe — no second origin.
+    outDir: path.resolve(__dirname, "public/mini-app"),
     emptyOutDir: true,
   },
 })

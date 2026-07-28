@@ -3,6 +3,7 @@ import { apiFetch } from '@/api'
 import { useQuery } from '@tanstack/react-query'
 import camelcaseKeys from 'camelcase-keys'
 import { subscriptionsKey } from './query-keys'
+import { useIsSignedIn } from '@/lib/auth'
 
 /**
  * List all subscriptions.
@@ -20,8 +21,11 @@ export async function listSubscriptions(): Promise<Subscription[]> {
  * React query hook to list all subscriptions.
  */
 export function useListSubscriptions() {
+  // Authed endpoint mounted in the always-on SidebarLabel; without this gate it
+  // fires logged-out → 401 → forced /signin (the signed-out sentinel is truthy).
   return useQuery<Subscription[]>({
     queryKey: subscriptionsKey,
-    queryFn: () => listSubscriptions()
+    queryFn: () => listSubscriptions(),
+    enabled: useIsSignedIn(),
   })
 }

@@ -78,10 +78,15 @@ def _default_family_image(family: str) -> Image:
 class DaytonaSandboxManager:
     """Create and tear down a Daytona sandbox for a single code execution."""
 
-    def __init__(self):
-        """Initialize the sandbox manager with environment-backed defaults."""
+    def __init__(self, api_key: str | None = None):
+        """Initialize the sandbox manager.
+
+        `api_key` is a caller-supplied (BYOK) Daytona key used instead of the
+        env default; the service URL/target stay env-configured. Held only for
+        this run — never persisted.
+        """
         daytona_config = DaytonaConfig(
-            api_key=os.getenv("DAYTONA_API_KEY"),
+            api_key=api_key or os.getenv("DAYTONA_API_KEY"),
             api_url=os.getenv("DAYTONA_API_URL"),
             target=os.getenv("DAYTONA_TARGET", "eu")
         )
@@ -185,19 +190,29 @@ def _derive_status(stderr: str, timed_out: bool) -> Literal["success", "error", 
     return "success"
 
 
-def _get_missing_daytona_env_vars() -> list[str]:
-    """Return the Daytona env vars required to enable the tool but currently unset."""
-    return [name for name in REQUIRED_DAYTONA_ENV_VARS if not os.getenv(name)]
+def _get_missing_daytona_env_vars(has_byok_key: bool = False) -> list[str]:
+    """Return the Daytona env vars required to enable the tool but currently unset.
+
+    With a BYOK key the caller supplies the secret, so `DAYTONA_API_KEY` isn't
+    required from the env — only the (non-secret) service URL/target are.
+    """
+    return [
+        name
+        for name in REQUIRED_DAYTONA_ENV_VARS
+        if not os.getenv(name) and not (has_byok_key and name == "DAYTONA_API_KEY")
+    ]
 
 
 async def execute_code(
     code: str,
     language: str = DEFAULT_LANGUAGE,
+    api_key: str | None = None,
 ) -> CodeInterpreterOutput:
     """Run code in an isolated Daytona sandbox and return execution results.
 
     ``language`` must be one of ``RUNNABLE_LANGUAGES``; anything else is
-    rejected up front since Daytona has no toolbox to execute it.
+    rejected up front since Daytona has no toolbox to execute it. `api_key` is
+    an optional BYOK Daytona key (used for this run only, never stored).
     """
     started_at = time.perf_counter()
 
@@ -209,7 +224,7 @@ async def execute_code(
             duration_ms=int((time.perf_counter() - started_at) * 1000),
         )
 
-    missing_env_vars = _get_missing_daytona_env_vars()
+    missing_env_vars = _get_missing_daytona_env_vars(has_byok_key=bool(api_key))
 
     if missing_env_vars:
         return CodeInterpreterOutput(
@@ -222,7 +237,7 @@ async def execute_code(
             duration_ms=int((time.perf_counter() - started_at) * 1000),
         )
 
-    sandbox_manager = DaytonaSandboxManager()
+    sandbox_manager = DaytonaSandboxManager(api_key=api_key)
     sandbox = None
     stdout = ""
     stderr = ""
@@ -269,6 +284,10 @@ async def run_code(
     The tool executes one short-lived Python run, captures stdout/stderr, and always
     attempts sandbox cleanup after execution. Use explicit ``print(...)`` statements
     in the provided code because bare final expressions are not auto-displayed.
+
+    Args:
+        code: The Python source to execute; use print(...) to surface any output.
+
     """
     return await execute_python_code(code)
 

@@ -2,6 +2,7 @@ import { memo, useCallback } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import type { Node, NodeId } from "@canvas-harness/core"
 import { useCanvasStore } from "@canvas-harness/react"
+import { removeNodeSubtree } from "@/features/board/harness/graph/subtree"
 import {
   ConsoleIcon,
   DeleteIcon,
@@ -106,7 +107,7 @@ const ListRow = memo(function ListRow({ node, index, isLast }: RowProps) {
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
-      store.removeNode(node.id as NodeId)
+      removeNodeSubtree(store, node.id as NodeId)
     },
     [store, node.id],
   )

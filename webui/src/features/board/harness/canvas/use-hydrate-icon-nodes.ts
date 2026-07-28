@@ -1,11 +1,11 @@
 import { useEffect } from "react"
 import {
-  asBatchId,
   type CanvasStore,
   type Node,
   type NodeId,
   type Op,
 } from "@canvas-harness/core"
+import { makeBatch } from "@/features/board/harness/make-batch"
 import { fetchIconSvg } from "./use-add-icon"
 
 
@@ -94,13 +94,7 @@ export const useHydrateIconNodes = (
       }
       if (ops.length === 0) return
 
-      store.applyBatch({
-        id: asBatchId(store.generateId()),
-        clientId: store.clientId,
-        ts: Date.now(),
-        origin: "remote",
-        ops,
-      })
+      store.applyBatch(makeBatch(store, "remote", ops))
     }
 
     void run()

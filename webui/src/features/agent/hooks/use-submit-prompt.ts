@@ -95,7 +95,7 @@ export const useSubmitPrompt = () => {
         if (!preferChatRoute && (isBoardRoute || createdBoardId) && settingsBoardId) {
           if (createdBoardId) {
             // A brand-new board was just created — go to it.
-            navigate({
+            void navigate({
               to: "/boards/$id",
               params: { id: settingsBoardId },
               search: (prev: Record<string, unknown>) => ({
@@ -108,7 +108,7 @@ export const useSubmitPrompt = () => {
             // widget). `to: "."` keeps the current pathname so we don't
             // close any active surface panel just because the user sent
             // their first message in a new chat.
-            navigate({
+            void navigate({
               to: ".",
               search: (prev: Record<string, unknown>) => ({
                 ...prev,
@@ -117,7 +117,7 @@ export const useSubmitPrompt = () => {
             })
           }
         } else {
-          navigate({ to: ChatUrl, params: { id: newChatId } })
+          void navigate({ to: ChatUrl, params: { id: newChatId } })
         }
 
         setChatId(newChatId)

@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react"
-import { useAppStore } from "@/store"
 import { Button } from "@/components/ui/button"
 import { CancelPlainIcon, ExternalLinkIcon } from "@/components/icons"
 import { MarkdownView } from "@/components/markdown/markdown-view"
 import { cn } from "@/lib/utils"
 import { useChat } from "@/features/agent/hooks/chat-context"
-import { useChatStore } from "@/features/agent/store/chat-store"
-import { useListMessages } from "@/features/agent/api/list-messages"
+import type { ChatMessage } from "@/features/agent/types/chat"
+import { useChatMessages, useChatStreaming } from "@/features/agent/hooks/use-chat-messages"
 import { ResponseActions } from "@/features/agent/components/chat/actions/response-actions"
 import { trimText } from "@/lib/common"
 
@@ -22,13 +21,9 @@ export interface AnswerCardProps {
  * per-message: closing the card keeps it closed until the next completion.
  */
 export const AnswerCard = ({ onOpenFullSheet }: AnswerCardProps) => {
-  const { chatId } = useChat()
-  const userId = useAppStore((s) => s.userId)
-  const isStreaming = useChatStore((s) => s.isStreaming)
-  const { data: messages } = useListMessages({
-    chatId: chatId ?? "",
-    userId,
-  })
+  const { chatId, local } = useChat()
+  const isStreaming = useChatStreaming()
+  const messages = useChatMessages()
 
   const [dismissedMessageId, setDismissedMessageId] = useState<string | null>(null)
 
@@ -37,12 +32,13 @@ export const AnswerCard = ({ onOpenFullSheet }: AnswerCardProps) => {
   }, [chatId])
 
   const { assistantMessage, precedingUserPrompt } = useMemo(() => {
-    if (!messages?.length || !chatId) return { assistantMessage: null, precedingUserPrompt: null }
+    if (!messages?.length) return { assistantMessage: null, precedingUserPrompt: null }
+    const inChat = (m: ChatMessage): boolean => local || m.chatUid === chatId
     for (let i = messages.length - 1; i >= 0; i -= 1) {
       const m = messages[i]
-      if (m.chatUid !== chatId) continue
+      if (!inChat(m)) continue
       if (m.role === "assistant" && !m.streaming) {
-        const userMsg = [...messages.slice(0, i)].reverse().find((x) => x.role === "user" && x.chatUid === chatId)
+        const userMsg = [...messages.slice(0, i)].reverse().find((x) => x.role === "user" && inChat(x))
         return {
           assistantMessage: m,
           precedingUserPrompt: userMsg?.content?.markdown ?? null,
@@ -50,7 +46,7 @@ export const AnswerCard = ({ onOpenFullSheet }: AnswerCardProps) => {
       }
     }
     return { assistantMessage: null, precedingUserPrompt: null }
-  }, [messages, chatId])
+  }, [messages, chatId, local])
 
   if (isStreaming) return null
   if (!assistantMessage) return null

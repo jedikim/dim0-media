@@ -28,6 +28,7 @@ from topix.collab.note_to_wire import (
 from topix.collab.room import RoomRegistry
 from topix.datatypes.note.link import Link
 from topix.datatypes.note.note import Note
+from topix.store.collab_oplog import CollabOplogStore
 from topix.store.graph import GraphStore
 
 logger = logging.getLogger(__name__)
@@ -47,10 +48,16 @@ class AgentBoardBridge:
           `is_system: true` so the UI can label the originator.
     """
 
-    def __init__(self, graph_store: GraphStore, registry: RoomRegistry):
-        """Wrap the given graph_store + room registry."""
+    def __init__(
+        self,
+        graph_store: GraphStore,
+        registry: RoomRegistry,
+        oplog: CollabOplogStore,
+    ):
+        """Wrap the given graph_store + room registry + durable op-log."""
         self._graph_store = graph_store
         self._registry = registry
+        self._oplog = oplog
 
     async def add_notes(self, *, board_id: str, notes: list[Note]) -> None:
         """Add notes; broadcasts one `peer-op` containing N `node.add` ops."""
@@ -175,7 +182,8 @@ class AgentBoardBridge:
         if room is None:
             return
         async with room.lock:
-            seq = room.next_seq_unlocked()
+            seq = await self._oplog.next_seq(board_id)
+            room.seq = seq  # keep the in-memory head in sync for snapshot reads
             batch = {
                 "id": f"agent-{seq}",
                 "clientId": AGENT_CLIENT_ID,
@@ -184,8 +192,11 @@ class AgentBoardBridge:
                 "ops": ops,
                 "is_system": True,
             }
-            # Record in the ring so a reconnecting peer can catch up on
-            # agent-emitted broadcasts without a full snapshot rebuild.
+            # Durable log (same source of truth + seq allocator as the human
+            # WS path) so agent edits survive restart and feed reconnect
+            # catch-up. Idempotent by (board_id, seq).
+            await self._oplog.append(board_id, seq, batch)
+            # Also keep the in-memory ring warm (fast-path; not authoritative).
             room.remember_batch_unlocked(seq, batch)
             peer_op = json.dumps({
                 "kind": "peer-op",

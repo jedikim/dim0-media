@@ -1,9 +1,10 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { ArrowCollapseIcon, ArrowExpandIcon } from "@/components/icons"
 import type { ReasoningTextStep } from "../../types/stream"
 import { ThinkingDots } from "@/components/animations/thinking-indicator"
 import { MarkdownView } from "@/components/markdown/markdown-view"
 import { cn } from "@/lib/utils"
+import { linkifyDocTitles, type DocSource } from "../../utils/doc-sources"
 
 
 /**
@@ -12,13 +13,29 @@ import { cn } from "@/lib/utils"
 export const ReasoningStepRow = ({
   step,
   isStreaming,
+  docSources,
+  messageId,
 }: {
   step: ReasoningTextStep
   isStreaming?: boolean
+  docSources?: DocSource[]
+  messageId?: string
 }) => {
   const [viewMore, setViewMore] = useState(false)
   const hasReasoningDetails = !isStreaming && step.reasoning !== ""
   const isSynthesis = step.isSynthesis === true
+
+  // Once the answer is final, turn exact document-title mentions into links to
+  // their Sources card. Skipped mid-stream (titles arrive partial; sources
+  // aren't final yet), when the turn cited no documents, or with no message id
+  // to namespace the anchor.
+  const message = useMemo(
+    () =>
+      !isStreaming && messageId && docSources && docSources.length > 0
+        ? linkifyDocTitles(step.message, docSources, messageId)
+        : step.message,
+    [isStreaming, messageId, docSources, step.message],
+  )
 
   if (!isStreaming && step.message === "" && step.reasoning === "") {
     return null
@@ -69,7 +86,7 @@ export const ReasoningStepRow = ({
         <div
           className="font-sans text-base text-card-foreground"
         >
-          <MarkdownView content={step.message} isStreaming={isStreaming} />
+          <MarkdownView content={message} isStreaming={isStreaming} />
         </div>
       ) : isStreaming ? (
         <span className='inline-flex items-center gap-1 font-mono text-sm font-medium text-muted-foreground'>

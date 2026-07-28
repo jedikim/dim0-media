@@ -1,0 +1,122 @@
+/**
+ * Web search as a service — a managed `SearchClient` + the `web_search` agent
+ * tool + resolution.
+ *
+ * The provider APIs aren't browser-reachable (CORS), so search always goes
+ * through `/ai/search`. "Our keys first, yours as fallback": a signed-in user
+ * hits our proxy with our keys; if that's over quota (429) and the user has a
+ * BYOK search key, the same call is retried with `X-Provider-Key` (relayed,
+ * not stored). Signed-out has no authed proxy → off.
+ */
+import { z } from "zod"
+import { defineTool, type AgentEvent, type Tool } from "./types"
+import type { SearchClient, SearchResult } from "./services/clients"
+import { resolveService } from "./services/resolve"
+import { isOverQuotaError, runIdHeaders } from "./services/run"
+import { servicesPost } from "./services/transport"
+
+
+type SearchResponse = { answer: string; results: SearchResult[] }
+
+
+/** POST a query to `/ai/search`. Injectable for tests. */
+export type SearchPost = (body: { query: string; engine?: string }) => Promise<SearchResponse>
+
+
+const makeDefaultSearchPost = (runId?: string, byokKey?: string, alwaysByok = false): SearchPost => async (body) => {
+  const call = (withKey: boolean) =>
+    servicesPost<SearchResponse>("/ai/search", body, {
+      ...runIdHeaders(runId),
+      ...(withKey && byokKey ? { "X-Provider-Key": byokKey } : {}),
+    })
+  // byok mode: the user's key IS the source → send it up front. managed mode:
+  // our keys first, fall back to the user's key only if we're over quota (429).
+  if (alwaysByok && byokKey) return call(true)
+  try {
+    return await call(false)
+  } catch (e) {
+    if (byokKey && isOverQuotaError(e)) return call(true)
+    throw e
+  }
+}
+
+
+/** Managed web-search client — our keys via `/ai/search`, BYOK key as fallback (or the source in byok mode). */
+export const managedSearchClient = (
+  opts: { runId?: string; engine?: string; byokKey?: string; alwaysByok?: boolean; post?: SearchPost } = {},
+): SearchClient => {
+  const post = opts.post ?? makeDefaultSearchPost(opts.runId, opts.byokKey, opts.alwaysByok)
+  return {
+    async search(query: string): Promise<SearchResult[]> {
+      const { results } = await post({ query, ...(opts.engine ? { engine: opts.engine } : {}) })
+      return results
+    },
+  }
+}
+
+
+/** Resolve the search service to a client, or null when unavailable. A saved
+ *  key makes search available even signed-out (relayed); signed-in prefers our
+ *  keys with the key as the over-limit fallback. */
+export const resolveSearchClient = (opts: {
+  signedIn: boolean
+  runId?: string
+  /** The user-selected engine (used on the managed path too). */
+  engine?: string
+  byok?: { engine: string; apiKey: string } | null
+}): SearchClient | null => {
+  const cred = opts.byok?.apiKey ? { provider: opts.byok.engine, apiKey: opts.byok.apiKey } : undefined
+  const resolution = resolveService("search", {
+    signedIn: opts.signedIn,
+    preferManaged: opts.signedIn,
+    byok: cred ? { search: cred } : {},
+  })
+  if (resolution.mode === "off") return null
+  return managedSearchClient({
+    runId: opts.runId,
+    engine: opts.byok?.engine ?? opts.engine,
+    byokKey: opts.byok?.apiKey,
+    alwaysByok: resolution.mode === "byok",
+  })
+}
+
+
+/** Collect the source URLs a run surfaced across `web_search` (results[].url) and
+ *  `fetch` (the fetched page's url), deduped and in order — fed to citation
+ *  correction so the answer's links are the real ones. */
+export const collectSourceUrls = (events: AgentEvent[]): string[] => {
+  const urls: string[] = []
+  const seen = new Set<string>()
+  const add = (url: unknown) => {
+    if (typeof url === "string" && url && !seen.has(url)) {
+      seen.add(url)
+      urls.push(url)
+    }
+  }
+  for (const ev of events) {
+    if (ev.type !== "tool_result") continue
+    if (ev.toolName === "web_search") {
+      const results = (ev.result as { results?: { url?: unknown }[] } | undefined)?.results
+      for (const r of results ?? []) add(r.url)
+    } else if (ev.toolName === "fetch") {
+      add((ev.result as { url?: unknown } | undefined)?.url)
+    }
+  }
+  return urls
+}
+
+
+/** The `web_search` agent tool, backed by a resolved search client. */
+export const makeWebSearchTool = (client: SearchClient): Tool =>
+  defineTool({
+    name: "web_search",
+    description:
+      "Search the web for current or external information. Returns sources (url + title + snippet) to ground and cite the answer.",
+    parameters: z.object({ query: z.string().describe("The search query") }),
+    run: async ({ query }) => {
+      const results = await client.search(query)
+      return {
+        results: results.map((r) => ({ url: r.url, title: r.title, content: r.content })),
+      }
+    },
+  })

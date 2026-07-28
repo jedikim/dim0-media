@@ -117,6 +117,19 @@ class BoardVisibilityUpdateRequest(BaseModel):
     visibility: Literal["private", "public"]
 
 
+class AdoptGraphRequest(BaseModel):
+    """Body for adopting a local board into a synced graph (local → synced).
+
+    `ops` is a batch of wire ops (node.add / edge.add …) describing the board's
+    full current content — the same wire shape the collab relay applies — so the
+    server rebuilds the graph via the existing apply_batch path. `label` seeds
+    the board title.
+    """
+
+    ops: list[dict] = []
+    label: str | None = None
+
+
 class NoteUpdateRequest(BaseModel):
     """Request model for updating a note."""
 

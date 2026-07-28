@@ -4,6 +4,7 @@ import { isReasoningTextStep, isToolCallStep, type AgentResponse, type Reasoning
 import { ReasoningStepRow } from "./reasoning-step-row"
 import { ToolStepRow } from "./tool-step-row"
 import { buildToolStepWidgetAttachments, type ToolStepWidgetAttachment } from "./tool-step-widgets"
+import type { DocSource } from "../../utils/doc-sources"
 
 
 type TimelineItem =
@@ -107,13 +108,17 @@ export interface ReasoningStepsViewProps {
   isStreaming: boolean
   response?: AgentResponse
   estimatedDurationSeconds?: number
+  /** Documents cited this turn — their titles are linkified in the answer text. */
+  docSources?: DocSource[]
+  /** The owning message id — namespaces the cited-document anchors. */
+  messageId?: string
 }
 
 
 /**
  * Renders the assistant process as one ordered merged list.
  */
-export const ReasoningStepsView = ({ isStreaming, response }: ReasoningStepsViewProps) => {
+export const ReasoningStepsView = ({ isStreaming, response, docSources, messageId }: ReasoningStepsViewProps) => {
   const steps = response?.steps ?? EMPTY_STEPS
 
   const widgetAttachments = useMemo(
@@ -187,6 +192,8 @@ export const ReasoningStepsView = ({ isStreaming, response }: ReasoningStepsView
             key={item.key}
             step={item.step}
             isStreaming={isStreaming}
+            docSources={docSources}
+            messageId={messageId}
           />
         ) : item.type === "tool_block" ? (
           <ToolStepBlock

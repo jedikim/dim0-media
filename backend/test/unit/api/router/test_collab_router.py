@@ -61,6 +61,37 @@ class _FakeRedisStore:
         self.redis = _FakeRedis()
 
 
+class _FakeOplog:
+    """In-memory durable-oplog stand-in (append / catch-up / seq)."""
+
+    def __init__(self):
+        self.log: dict[str, list[tuple[int, dict]]] = {}
+        self._seq: dict[str, int] = {}
+
+    async def next_seq(self, board_id: str) -> int:
+        self._seq[board_id] = self._seq.get(board_id, 0) + 1
+        return self._seq[board_id]
+
+    async def append(self, board_id: str, seq: int, batch: dict) -> bool:
+        entries = self.log.setdefault(board_id, [])
+        if any(s == seq for s, _ in entries):
+            return False
+        entries.append((seq, batch))
+        return True
+
+    async def batches_since(self, board_id: str, since_seq: int, *, limit: int = 5000):
+        return [(s, b) for (s, b) in self.log.get(board_id, []) if s > since_seq][:limit]
+
+    async def max_seq(self, board_id: str) -> int:
+        return max((s for s, _ in self.log.get(board_id, [])), default=0)
+
+    async def seq_for_batch(self, board_id: str, batch_id: str):
+        for s, b in self.log.get(board_id, []):
+            if b.get("id") == batch_id:
+                return s
+        return None
+
+
 class _FakeGraphStore:
     """Stub GraphStore covering the surface the collab router actually uses.
 
@@ -161,6 +192,7 @@ def _build_app(
     app.graph_store = _FakeGraphStore(role=role, owner_uid=owner_uid)
     app.user_billing_store = _FakeUserBillingStore(plan=plan)
     app.redis_store = _FakeRedisStore()
+    app.collab_oplog = _FakeOplog()
     app.collab_rooms = RoomRegistry()
 
     async def _fake_current_user_uid():
@@ -345,6 +377,40 @@ def test_ws_welcome_snapshot_omits_root_id_by_default():
     assert captured["root_id"] is None
 
 
+def test_ws_welcome_catchup_fallback_snapshot_respects_root_id():
+    """A catch-up that finds no entries falls back to a snapshot — scoped to root_id.
+
+    Regression: the fallback branch called read_snapshot_payload WITHOUT root_id,
+    so a folder-scoped client that drifted past the log got the whole board.
+    """
+    client, app = _build_app()
+    captured: dict = {}
+
+    async def _capture_get_graph(*, graph_uid, root_id=None):
+        captured["root_id"] = root_id
+        return None
+
+    app.graph_store.get_graph = _capture_get_graph
+
+    # Head is ahead of since_seq, but no entries in range → snapshot fallback.
+    async def _empty_since(board_id, since_seq, *, limit=5000):
+        return []
+
+    async def _max(board_id):
+        return 10
+
+    app.collab_oplog.batches_since = _empty_since
+    app.collab_oplog.max_seq = _max
+
+    tickets = _mint_tickets(app, t1=("u1", "b1"))
+    with client.websocket_connect(
+        f"/boards/b1/collab?ticket={tickets['t1']}&since_seq=5&root_id=folder-42"
+    ) as ws:
+        welcome = ws.receive_json()
+    assert welcome["mode"] == "snapshot"  # fell back, not catch-up
+    assert captured["root_id"] == "folder-42"  # scoped, not whole-board
+
+
 def test_ws_welcome_snapshot_carries_graph_payload():
     """Welcome snapshot includes the dumped Graph when one exists.
 
@@ -445,54 +511,85 @@ def test_ws_welcome_catch_up_mode_replays_buffered_batches():
             assert welcome["batches"][0]["id"] == "batch-n2"
 
 
-def test_ws_welcome_falls_back_to_snapshot_when_since_seq_drifts_past_ring():
-    """`since_seq` older than the ring's oldest entry → snapshot fallback.
+def test_ws_welcome_catch_up_proto_v2_tags_each_batch_with_seq():
+    """A v2 client's catch-up carries per-batch relay seq; v1 stays plain-batch.
 
-    Simulates a long-disconnected peer reconnecting after the buffer
-    has rotated past their last-known seq. The server still serves a
-    correct welcome — just a more expensive one.
+    The offline-first coordinator needs each catch-up batch's serverSeq to order
+    its reload the same way live sync did; the legacy client must be unaffected.
     """
-    # We can't easily fill 500 batches in a test; instead, exploit the
-    # boundary: any `since_seq` more than 1 less than the oldest in the
-    # ring triggers the fallback. With seq=2 and a ring containing
-    # batches at seqs 1 and 2, `since_seq=-100` is past the floor.
-    # We use an empty ring + `since_seq < room.seq` to trigger the same
-    # path: `batches_since_unlocked` returns None when the buffer is
-    # empty AND since_seq is behind room.seq.
     client, app = _build_app()
-    tickets = _mint_tickets(app, t1=("u1", "b1"))
+    tickets = _mint_tickets(app, t1=("u1", "b1"), t2=("u2", "b1"), t3=("u3", "b1"))
 
-    # Pre-advance seq without populating the buffer — this is
-    # artificial but exercises the "drifted past floor" path
-    # deterministically.
-    import asyncio
-    async def _pump_seq():
-        room, _ = await app.collab_rooms.join(
-            "b1", _NullSocket(), "system",
-        )
-        async with room.lock:
-            room.next_seq_unlocked()
-            room.next_seq_unlocked()
-            room.next_seq_unlocked()
-        return room
+    with client.websocket_connect(f"/boards/b1/collab?ticket={tickets['t1']}") as sender:
+        _drain_welcome(sender)
+        for nid in ("n1", "n2"):
+            sender.send_json({
+                "kind": "op",
+                "client_seq": 1,
+                "batch": {
+                    "id": f"batch-{nid}",
+                    "clientId": "alice",
+                    "origin": "local",
+                    "ops": [{"type": "node.update", "id": nid, "patch": {"x": 1}, "prev": {}}],
+                },
+            })
+            sender.receive_json()
 
-    asyncio.new_event_loop().run_until_complete(_pump_seq())
+        # v2 client: batches are {seq, batch}.
+        with client.websocket_connect(
+            f"/boards/b1/collab?ticket={tickets['t2']}&since_seq=0&proto=2"
+        ) as peer2:
+            welcome = peer2.receive_json()
+            assert welcome["mode"] == "catch-up"
+            assert [b["seq"] for b in welcome["batches"]] == [1, 2]
+            assert welcome["batches"][0]["batch"]["id"] == "batch-n1"
 
-    with client.websocket_connect(
-        f"/boards/b1/collab?ticket={tickets['t1']}&since_seq=0"
-    ) as ws:
-        welcome = ws.receive_json()
-        # since_seq=0 < room.seq=3 but buffer is empty → snapshot.
-        assert welcome["mode"] == "snapshot"
-        assert welcome["seq"] == 3
-        assert welcome["snapshot"] == {}
+        # v1 client (default): batches are plain OpBatch.
+        with client.websocket_connect(
+            f"/boards/b1/collab?ticket={tickets['t3']}&since_seq=0"
+        ) as peer1:
+            welcome = peer1.receive_json()
+            assert welcome["mode"] == "catch-up"
+            assert welcome["batches"][0]["id"] == "batch-n1"  # no seq wrapper
+            assert "seq" not in welcome["batches"][0]
 
 
-class _NullSocket:
-    """Stand-in socket so we can bump `room.seq` without a real WS upgrade."""
+def test_ws_welcome_catch_up_is_unbounded_from_durable_log():
+    """A long-drifted reconnect still catches up — the durable log has no ring cap.
 
-    async def send_text(self, _raw: str) -> None:
-        return None
+    Before E3, catch-up was served from a 500-entry in-memory ring, so a peer
+    that drifted past it fell back to a full snapshot. With the durable op-log,
+    catch-up covers the entire history, so even a `since_seq=0` reconnect after
+    many ops gets `mode=catch-up` with every batch (not a snapshot).
+    """
+    client, app = _build_app()
+    tickets = _mint_tickets(app, t1=("u1", "b1"), t2=("u2", "b1"))
+
+    n_ops = 20
+    with client.websocket_connect(f"/boards/b1/collab?ticket={tickets['t1']}") as sender:
+        _drain_welcome(sender)
+        for i in range(n_ops):
+            sender.send_json({
+                "kind": "op",
+                "client_seq": 1,
+                "batch": {
+                    "id": f"batch-{i}",
+                    "clientId": "alice",
+                    "origin": "local",
+                    "ops": [{"type": "node.update", "id": f"n{i}", "patch": {"x": i}, "prev": {}}],
+                },
+            })
+            sender.receive_json()  # drain op-applied
+
+        with client.websocket_connect(
+            f"/boards/b1/collab?ticket={tickets['t2']}&since_seq=0"
+        ) as peer:
+            welcome = peer.receive_json()
+            assert welcome["mode"] == "catch-up"
+            assert welcome["seq"] == n_ops
+            assert len(welcome["batches"]) == n_ops
+            assert welcome["batches"][0]["id"] == "batch-0"
+            assert welcome["batches"][-1]["id"] == f"batch-{n_ops - 1}"
 
 
 # ---------------------------------------------------------------------------
@@ -666,6 +763,39 @@ def test_ws_op_seq_is_monotonic_across_ops():
             ack = ws.receive_json()
             assert ack["seq"] == client_seq
             assert ack["client_seq"] == client_seq
+
+
+def test_ws_duplicate_batch_is_deduped_not_reapplied():
+    """A replayed batch (same id) is re-acked at its original seq, applied once.
+
+    This is what makes the offline-first client's outbox replay safe against the
+    real relay: reconnect re-sends un-acked batches, and the server must not
+    double-apply or double-broadcast them.
+    """
+    client, app = _build_app()
+    tickets = _mint_tickets(app, t1=("u1", "b1"))
+
+    op = {
+        "kind": "op",
+        "client_seq": 1,
+        "batch": {
+            "id": "dup",
+            "clientId": "alice",
+            "origin": "local",
+            "ops": [{"type": "node.update", "id": "n1", "patch": {"x": 1}, "prev": {}}],
+        },
+    }
+    with client.websocket_connect(f"/boards/b1/collab?ticket={tickets['t1']}") as ws:
+        _drain_welcome(ws)
+        ws.send_json(op)
+        ack1 = ws.receive_json()
+        ws.send_json({**op, "client_seq": 2})  # reconnect replay of the same batch
+        ack2 = ws.receive_json()
+
+    assert ack1["kind"] == "op-applied" and ack2["kind"] == "op-applied"
+    assert ack1["seq"] == ack2["seq"]  # re-acked at the original seq
+    assert ack2["client_seq"] == 2  # but tagged to the resend's client_seq
+    assert len(app.graph_store.patch_calls) == 1  # applied to the graph exactly once
 
 
 def test_ws_two_peers_same_board_register_in_same_room():

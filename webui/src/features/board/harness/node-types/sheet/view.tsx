@@ -3,6 +3,7 @@ import { NotepadIcon } from "@phosphor-icons/react"
 import type { Editor } from "@tiptap/react"
 import { type NodeId } from "@canvas-harness/core"
 import { useCanvasStore, useNode } from "@canvas-harness/react"
+import { removeNodeSubtree } from "@/features/board/harness/graph/subtree"
 import { IconPropertyView } from "@/components/icons/icon-property-view"
 import { useTheme } from "@/components/theme-provider"
 import { createBoardPageProvider } from "@/features/board/providers/board-page-provider"
@@ -236,7 +237,7 @@ export function SheetView({ id }: SheetViewProps) {
       </div>
 
       <NodeTrafficLights
-        onDelete={canEdit ? () => store.removeNode(id) : undefined}
+        onDelete={canEdit ? () => removeNodeSubtree(store, id) : undefined}
         onExpand={canEdit ? () => openNodeSurface(id as unknown as string, "sheet") : undefined}
       />
 

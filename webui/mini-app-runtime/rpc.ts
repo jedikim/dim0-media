@@ -16,7 +16,9 @@
 // last-known persisted state for this widget mount, set by main.tsx
 // from the `mini-app:render` payload before the agent's code runs.
 
-const HOST_ORIGIN = import.meta.env.VITE_HOST_ORIGIN
+// Single-frontend (no configured host origin) → reply to the parent with "*"
+// (the iframe is sandboxed/opaque; its only peer is its embedder).
+const REPLY_TARGET: string = import.meta.env.VITE_HOST_ORIGIN || "*"
 
 
 type Resolver = { resolve: (value: unknown) => void; reject: (err: Error) => void }
@@ -32,7 +34,7 @@ function send<T>(method: string, args: unknown): Promise<T> {
     pending.set(id, { resolve: resolve as Resolver["resolve"], reject })
     window.parent.postMessage(
       { type: "mini-app:rpc", id, method, args },
-      HOST_ORIGIN,
+      REPLY_TARGET,
     )
   })
 }

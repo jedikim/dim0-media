@@ -7,7 +7,7 @@ import { UNTITLED_LABEL } from "@/features/board/const"
 import { useNavigate, useRouterState } from "@tanstack/react-router"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "../ui/context-menu"
 import { Collapsible, CollapsibleContent } from "../ui/collapsible"
-import { BoardContextIcon, ChatHistoryIcon, ChevronRightIcon, DashboardAddIcon, DeleteIcon, EditIcon } from "@/components/icons"
+import { BoardContextIcon, ChatHistoryIcon, ChevronRightIcon, CloudArrowUpIcon, DashboardAddIcon, DeleteIcon, EditIcon } from "@/components/icons"
 import { ChatsDialog } from "./chats-dialog"
 import { ConfirmDeleteBoardAlert } from "./confirm-delete-board"
 import { BoardTreeNode } from "./board-tree-node"
@@ -94,6 +94,135 @@ export function NewBoardItem() {
         <EditIcon className="text-xs shrink-0 text-sidebar-icon-1" strokeWidth={2} />
         <span>New Board</span>
       </SidebarMenuButton>
+    </SidebarMenuItem>
+  )
+}
+
+
+/**
+ * "New board" tile — creates a LOCAL board (local-first default). Synced boards
+ * are never created directly; they come from promoting a local board. `onClick`
+ * is wired by the sidebar to the local registry + navigation.
+ */
+export function NewLocalBoardItem({ onClick }: { onClick: () => void }) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        className="text-xs text-secondary-foreground font-medium transition-all"
+        onClick={onClick}
+      >
+        <EditIcon className="text-xs shrink-0 text-sidebar-icon-1" strokeWidth={2} />
+        <span>New board</span>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  )
+}
+
+
+/**
+ * A local-only board row in the sidebar's LOCAL group. Presentational — the
+ * sidebar owns the local registry + enable-sync hooks and passes callbacks.
+ * Routes to `/local/$boardId`; context menu offers Enable sync (one-way promote)
+ * and Delete. No sub-tree expansion (local board contents aren't served by the
+ * backend contents API the synced BoardItem uses).
+ */
+export function LocalBoardItem({
+  label,
+  isActive,
+  syncing = false,
+  onOpen,
+  onEnableSync,
+  onDelete,
+}: {
+  label?: string
+  isActive: boolean
+  syncing?: boolean
+  onOpen: () => void
+  onEnableSync: () => void
+  onDelete: () => void
+}) {
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+  const boardLabel = label || UNTITLED_LABEL
+  const boardDisplayLabel = trimText(boardLabel, 20)
+
+  return (
+    <SidebarMenuItem>
+      <ContextMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <ContextMenuTrigger asChild>
+              <SidebarMenuButton
+                onClick={onOpen}
+                className="text-xs font-medium truncate"
+                isActive={isActive}
+              >
+                <BoardContextIcon
+                  className="size-4 shrink-0"
+                  weight={isActive ? "fill" : undefined}
+                />
+                <span className="truncate">{boardDisplayLabel}</span>
+              </SidebarMenuButton>
+            </ContextMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="right" align="center" className="max-w-64">
+            <p className="text-xs">{boardLabel}</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">On this device</p>
+          </TooltipContent>
+        </Tooltip>
+
+        <ContextMenuContent className="w-44">
+          <ContextMenuItem
+            onSelect={() => onEnableSync()}
+            disabled={syncing}
+            className="text-xs flex flex-row items-center"
+          >
+            <CloudArrowUpIcon className="mr-2 size-4" strokeWidth={2} />
+            <span>{syncing ? "Enabling sync…" : "Enable sync"}</span>
+          </ContextMenuItem>
+          <ContextMenuItem
+            onSelect={() =>
+              window.setTimeout(() => setIsConfirmOpen(true), 0)
+            }
+            variant="destructive"
+            className="text-xs flex flex-row items-center"
+          >
+            <DeleteIcon className="mr-2 size-4" strokeWidth={2} />
+            <span>Delete board</span>
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+
+      {/* Visible one-click promote-to-sync (also in the context menu above).
+          Local rows have no chat action, so this is the single trailing icon —
+          the menu-button's built-in pr-8 reserves its space, keeping the title
+          truncation correct. */}
+      {/* Not `disabled` while syncing: a disabled button fires no hover/title, so
+          the "Enabling sync…" tooltip would never show. Re-entry is instead guarded
+          at the source (useEnableSync), so a click mid-sync is a safe no-op. */}
+      <SidebarMenuAction
+        showOnHover
+        onClick={(e) => {
+          e.stopPropagation()
+          onEnableSync()
+        }}
+        title={syncing ? "Enabling sync…" : "Enable sync — back up + share this board"}
+        aria-label="Enable sync"
+        className={cn(
+          "text-muted-foreground/50 hover:text-secondary-foreground",
+          syncing && "opacity-50",
+        )}
+      >
+        <CloudArrowUpIcon className={cn("size-4", syncing && "animate-pulse")} strokeWidth={2} />
+      </SidebarMenuAction>
+
+      <ConfirmDeleteBoardAlert
+        open={isConfirmOpen}
+        onOpenChange={setIsConfirmOpen}
+        onConfirm={() => {
+          onDelete()
+          setIsConfirmOpen(false)
+        }}
+      />
     </SidebarMenuItem>
   )
 }

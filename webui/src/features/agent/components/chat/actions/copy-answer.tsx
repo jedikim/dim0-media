@@ -14,7 +14,7 @@ export const CopyAnswer = ({ answer, compact = false }: { answer: string, compac
   const actionLabel = "Copy current answer to the clipboard"
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(answer).then(() => {
+    void navigator.clipboard.writeText(answer).then(() => {
       setCopied(true)
       toast('Answer copied to clipboard!')
       setTimeout(() => setCopied(false), 2000) // Reset after 2 seconds

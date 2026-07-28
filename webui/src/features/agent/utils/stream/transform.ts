@@ -1,4 +1,5 @@
-import type { AgentStreamMessage, StreamingContentType, StreamingMessageType, ToolName } from "../../types/stream"
+import type { AgentStreamMessage, StreamingContentType, StreamingMessageType } from "../../types/stream"
+import { canonicalToolName } from "../../types/stream"
 import type { Annotation, FileAnnotation, RefAnnotation, UrlAnnotation } from "../../types/tool-outputs"
 
 type RawChunk = Record<string, unknown>
@@ -39,7 +40,7 @@ const mapAnnotation = (a: RawAnnotation): Annotation | null => {
 export const simpleTransform = (raw: RawChunk): AgentStreamMessage => {
   const type = (raw.type ?? raw.type_) as StreamingMessageType
   const toolId = (raw.tool_id ?? raw.toolId ?? "") as string
-  const toolName = (raw.tool_name ?? raw.toolName ?? "") as ToolName
+  const toolName = canonicalToolName((raw.tool_name ?? raw.toolName ?? "") as string)
   const isStop = Boolean(raw.is_stop ?? raw.isStop)
 
   const rawContent = raw.content as RawChunk | undefined

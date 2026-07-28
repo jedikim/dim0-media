@@ -78,7 +78,9 @@ export const SheetPanel = memo(function SheetPanel({
   const { data: notePath = [] } = useGetNotePath({
     boardId: boardId ?? undefined,
     noteId: nodeId,
-    enabled: !!boardId,
+    // Mirror the useGetNote gate above: a local note's path is resolved from the
+    // store/local breadcrumb, never the backend (which 401s logged-out).
+    enabled: !isLocalNote && !!boardId,
   })
   const ancestors = useMemo(() => notePath.slice(0, -1), [notePath])
   // The open note's live title/icon are `noteLabel` / its iconData (store for

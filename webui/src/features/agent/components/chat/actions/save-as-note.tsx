@@ -26,6 +26,8 @@ import clsx from "clsx"
 import { useState } from "react"
 import { toast } from "sonner"
 import { useAppStore } from "@/store"
+import { useIsLocalBoard } from "@/features/board/lib/use-is-local-board"
+import { useLocalTransform } from "@/features/agent/local/use-local-transform"
 
 
 // Spinner icon for loading state
@@ -77,6 +79,8 @@ export const SaveAsNote = ({
   const { convertToMindMapAsync } = useConvertToMindMap()
   const { data: boardList } = useListBoards(userId)
   const { createBoardAsync } = useCreateBoard()
+  const isLocal = useIsLocalBoard()
+  const runLocalTransform = useLocalTransform()
 
   const navigate = useNavigate()
 
@@ -84,7 +88,7 @@ export const SaveAsNote = ({
    * Navigate to a board, preserving the current subfolder context when present.
    */
   const goToBoard = (targetBoardId: string) => {
-    navigate({
+    void navigate({
       to: '/boards/$id',
       params: { id: targetBoardId },
       search: rootId
@@ -99,6 +103,26 @@ export const SaveAsNote = ({
       return false
     }
     return true
+  }
+
+  // Local board: run the in-browser transform on the current canvas (no backend,
+  // no cross-board picker — everything happens on the board you're looking at).
+  const launchLocal = async () => {
+    if (!ensureMessage() || processing) return
+    setProcessing(true)
+    const id = toast(`${label}…`, { icon: <LoadingIcon />, duration: Infinity })
+    try {
+      const { ok } = await runLocalTransform(type, message)
+      toast.dismiss(id)
+      if (ok) toast.success("Added to the board.", { icon: <SuccessIcon />, duration: 3000 })
+      else toast.error("Nothing was created.", { icon: <ErrorIcon />, duration: 4000 })
+    } catch (error) {
+      console.error("Local transform failed:", error)
+      toast.dismiss(id)
+      toast.error("Failed — check your model key in settings.", { icon: <ErrorIcon />, duration: 4000 })
+    } finally {
+      setProcessing(false)
+    }
   }
 
   // Launch on an existing board, with loading/success/error toasts
@@ -272,6 +296,17 @@ export const SaveAsNote = ({
     ) : (
       trigger
     )
+
+  // Local board: a plain button that runs the in-browser transform on the
+  // current canvas — no board picker (other boards aren't in this store).
+  if (isLocal) {
+    return withTooltip(
+      <button className={buttonClass} onClick={launchLocal} aria-label={actionLabel} title={actionLabel}>
+        {iconCpn}
+        {!compact && <span>{label}</span>}
+      </button>,
+    )
+  }
 
   return (
     <>

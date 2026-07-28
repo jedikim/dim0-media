@@ -2,6 +2,7 @@ import camelcaseKeys from "camelcase-keys"
 import type { LinkPreview } from "../types/web"
 import { useQuery } from "@tanstack/react-query"
 import { apiFetch } from "@/api"
+import { isSignedIn } from "@/lib/auth"
 
 interface LinkPreviewResponse {
   data: {
@@ -45,7 +46,7 @@ export const usePreviewWebpage = ({
   return useQuery<LinkPreview>({
     queryKey: ["previewWebpage", userId, url],
     queryFn: () => previewWebpage(userId, url),
-    enabled: !!userId && !!url,
+    enabled: isSignedIn(userId) && !!url,
     staleTime: 1000 * 60 * 5, // 5 minutes
     refetchInterval: Infinity
   })

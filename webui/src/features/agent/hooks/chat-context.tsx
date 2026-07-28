@@ -1,9 +1,15 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 
-// shape of the context: chatId value + setter function
+// shape of the context: chatId value + setter, plus the local-engine flag
 type ChatContextType = {
   chatId?: string
   setChatId: (id?: string) => void
+  /**
+   * When true, the chat runs on the frontend (local-first) engine: data hooks
+   * read the local store and submit runs the in-browser agent. The single
+   * switch point that keeps every chat component transport-agnostic.
+   */
+  local: boolean
 }
 
 // the actual context (starts undefined until provided)
@@ -12,9 +18,11 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined)
 // provider component: wraps children and stores chatId state
 export const ChatProvider = ({
   initialChatId,
+  local = false,
   children,
 }: {
   initialChatId?: string
+  local?: boolean
   children: ReactNode
 }) => {
   const [chatId, setChatId] = useState<string | undefined>(initialChatId)
@@ -24,7 +32,7 @@ export const ChatProvider = ({
   }, [initialChatId])
 
   return (
-    <ChatContext.Provider value={{ chatId, setChatId }}>
+    <ChatContext.Provider value={{ chatId, setChatId, local }}>
       {children}
     </ChatContext.Provider>
   )

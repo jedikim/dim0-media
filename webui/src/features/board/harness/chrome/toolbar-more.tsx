@@ -24,6 +24,7 @@ import {
 import { nodeLimitFor } from "@/features/board/lib/board-limit"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store"
+import { useLocalDocUpload, type LocalDocUpload } from "@/features/agent/local/use-local-doc-upload"
 import { useNodeTypeCount } from "../canvas/use-node-type-count"
 import { useBoardAppStore } from "../store/board-app-store"
 import { DocumentUploadDialog } from "./document-upload-dialog"
@@ -54,7 +55,13 @@ const NodeLimitBadge = ({ count, limit }: { count: number; limit: number | null 
  * on close), so the per-type node counters subscribe to the store only then
  * and the always-mounted toolbar never re-renders on canvas changes.
  */
-const MoreMenuItems = () => {
+const MoreMenuItems = ({
+  localUpload,
+  upload,
+}: {
+  localUpload: boolean
+  upload: LocalDocUpload
+}) => {
   const store = useCanvasStore()
   const userPlan = useAppStore((s) => s.userPlan)
   const setTool = useBoardAppStore((s) => s.setTool)
@@ -82,7 +89,15 @@ const MoreMenuItems = () => {
         <span>Sub-board</span>
         <NodeLimitBadge count={folderCount} limit={nodeLimitFor("folder", userPlan)} />
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => setChromeDialog("document-upload")} className="gap-2 text-sm">
+      <DropdownMenuItem
+        // Local boards use the offline pipeline (OCR → chunks → doc node); the
+        // legacy server dialog is for synced/backend boards only. Grey out when
+        // parsing is unavailable (no managed access and no BYOK Mistral key).
+        onSelect={() => (localUpload ? upload.pick() : setChromeDialog("document-upload"))}
+        disabled={localUpload && !upload.canParse}
+        title={localUpload && !upload.canParse ? "Sign in or add a Mistral key to upload documents" : undefined}
+        className="gap-2 text-sm"
+      >
         <DocumentFileIcon className="size-4 shrink-0" />
         <span>Document</span>
         <NodeLimitBadge count={documentCount} limit={nodeLimitFor("document", userPlan)} />
@@ -109,9 +124,15 @@ const MoreMenuItems = () => {
  * set `tool` so the next canvas click materializes the node; each create-able
  * type shows its per-board `{count}/{limit}` counter.
  */
-export function HarnessToolbarMore() {
+export function HarnessToolbarMore({ local = false }: { local?: boolean } = {}) {
   const chromeDialog = useBoardAppStore((s) => s.chromeDialog)
   const setChromeDialog = useBoardAppStore((s) => s.setChromeDialog)
+  const boardId = useBoardAppStore((s) => s.boardId) ?? ""
+
+  // Local boards upload documents through the offline pipeline (same hook as the
+  // chat attach button); synced boards keep the legacy server dialog.
+  const upload = useLocalDocUpload(boardId)
+  const localUpload = local && !!boardId
 
   const openImageSearch = chromeDialog === "image-search"
   const openIconSearch = chromeDialog === "icon-search"
@@ -140,9 +161,11 @@ export function HarnessToolbarMore() {
           sideOffset={8}
           className="min-w-[190px]"
         >
-          <MoreMenuItems />
+          <MoreMenuItems localUpload={localUpload} upload={upload} />
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {localUpload && upload.elements}
 
       <ImageSearchDialog
         open={openImageSearch}

@@ -134,6 +134,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // SPA offline routing: serve the app shell for any deep link (e.g.
+        // /local/:id) when offline so client-side routing can take over.
+        navigateFallback: "/index.html",
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         // The bundle visualizer is huge and irrelevant to the runtime
         // — never precache it. Without this, prod builds with

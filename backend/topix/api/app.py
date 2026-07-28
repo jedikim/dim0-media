@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from topix.api.router import (
+    ai,
     billing,
     boards,
     chats,
@@ -33,6 +34,7 @@ from topix.datatypes.stage import StageEnum
 from topix.nlp.pipeline.parsing import ParsingPipeline
 from topix.setup import setup
 from topix.store.chat import ChatStore
+from topix.store.collab_oplog import CollabOplogStore
 from topix.store.email_verification import EmailVerificationStore
 from topix.store.graph import GraphStore
 from topix.store.mini_app_state import MiniAppStateStore
@@ -84,6 +86,12 @@ def create_app(stage: StageEnum):
         # Initialize Redis
         app.redis_store = RedisStore.from_config()
 
+        # Durable collab op-log (post-office substrate): persists every applied
+        # batch and allocates a restart-safe per-board seq (Redis INCR seeded
+        # from Postgres). Makes the client's serverSeq ordering survive restarts.
+        app.collab_oplog = CollabOplogStore(app.redis_store)
+        await app.collab_oplog.open(app.pg_pool)
+
         # Per-worker collab room registry (in-process; single-worker for v1).
         app.collab_rooms = RoomRegistry()
         # Agent → room bridge: agent tools call this so their edits
@@ -91,6 +99,7 @@ def create_app(stage: StageEnum):
         app.agent_board_bridge = AgentBoardBridge(
             graph_store=app.graph_store,
             registry=app.collab_rooms,
+            oplog=app.collab_oplog,
         )
 
         yield
@@ -105,6 +114,7 @@ def create_app(stage: StageEnum):
         await app.password_reset_store.close()
         await app.mini_app_state_store.close()
         await app.subscription_store.close()
+        await app.collab_oplog.close()
         # Close Redis
         await app.redis_store.close()
         await app.pg_pool.close()
@@ -130,6 +140,7 @@ def create_app(stage: StageEnum):
         allow_headers=["*"],
     )
 
+    app.include_router(ai.router)
     app.include_router(boards.router)
     app.include_router(chats.router)
     app.include_router(collab.router)

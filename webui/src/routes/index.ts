@@ -16,7 +16,7 @@ import { getEmailVerificationStatus } from "@/api"
 import { SubscriptionsScreen } from "@/features/newsfeed/screens/subscriptions"
 import { NewsfeedsScreen } from "@/features/newsfeed/screens/newsfeeds"
 import { NewsfeedLinearPage } from "@/features/newsfeed/screens/newsfeed-linear-page"
-import { HomePage } from "@/features/home/screens/home"
+import { IndexHome } from "@/features/home/screens/index-home"
 import { DashboardScreen } from "@/features/board/screens/dashboard-screen"
 import { NotFoundPage } from "@/components/not-found"
 import { SettingsScreen } from "@/features/user-settings/screens/settings-screen"
@@ -26,6 +26,7 @@ import { ForgotPasswordPage } from "@/features/signin/screens/forgot-password"
 import { ResetPasswordPage } from "@/features/signin/screens/reset-password"
 import { InstallScreen } from "@/features/install/screens/install-screen"
 import { ShareLandingScreen } from "@/features/sharing/screens/share-landing"
+import { LocalBoardScreen } from "@/features/board/local/local-board-screen"
 
 
 export const rootRoute = createRootRoute({
@@ -102,8 +103,26 @@ const resetPasswordRoute = createRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  beforeLoad: requireVerifiedAuth,
-  component: HomePage,
+  // The front door is open: signed-out users land on the local dashboard.
+  // Only enforce auth/email-verification once a user is genuinely signed in. A
+  // missing OR stale/expired token is treated as logged-out (clear + fall
+  // through) so the front door never bounces to /signin.
+  beforeLoad: async () => {
+    const token = getAccessToken()
+    if (!token) return
+    try {
+      const payload = decodeJwt(token)
+      if (payload.exp && payload.exp * 1000 < Date.now()) {
+        clearTokens()
+        return
+      }
+    } catch {
+      clearTokens()
+      return
+    }
+    await requireVerifiedAuth()
+  },
+  component: IndexHome,
 })
 
 const homeRoute = createRoute({
@@ -252,7 +271,27 @@ const shareLandingRoute = createRoute({
   component: ShareLandingScreen,
 })
 
+// /local + /local/:boardId — local-only boards. Intentionally UNGUARDED:
+// no account required, no backend. The whole point of Phase A.
+export const LocalDashboardUrl = "/local"
+const localDashboardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: LocalDashboardUrl,
+  // Same unified dashboard as `/boards`, but unguarded: a signed-out user lands
+  // here and sees the on-device group only (the synced group needs an account).
+  component: DashboardScreen,
+})
+
+export const LocalBoardUrl = "/local/$boardId"
+const localBoardRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: LocalBoardUrl,
+  component: LocalBoardScreen,
+})
+
 const routeTree = rootRoute.addChildren([
+  localDashboardRoute,
+  localBoardRoute,
   signinRoute,
   signupRoute,
   verifyEmailRoute,

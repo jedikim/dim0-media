@@ -15,9 +15,14 @@
 //     (e.g. references an identifier not in scope).
 //
 // Security note: the security boundary is the iframe sandbox + cross-origin
-// treatment, not this function. We use `new Function` knowingly — the iframe
-// has no parent DOM access, no host cookies, no network (CSP `connect-src
-// 'none'` in prod). See mini-app-archi.md §11.
+// treatment, not this function. We use `new Function` knowingly — the sandbox
+// gives the iframe an opaque origin, so compiled code has no parent DOM access
+// and no host cookies. Network egress, however, is NOT blocked by anything in
+// this repo: a sandboxed iframe on an opaque origin can still `fetch()` and load
+// external `<script src>`. Restricting network (e.g. `connect-src 'none'`)
+// requires a Content-Security-Policy delivered by the deployment (Caddy response
+// headers, see mini-app-deploy.md) — it is not shipped as a repo asset, so do
+// not treat "no network" as guaranteed here. See mini-app-archi.md §11.
 
 import { transform } from "sucrase"
 

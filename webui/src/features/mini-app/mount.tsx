@@ -56,6 +56,21 @@ const RUNTIME_ORIGIN =
   ""
 
 
+// Single-frontend (default): no separate runtime origin configured, so load the
+// self-contained runtime as a same-origin static asset into an OPAQUE-origin
+// iframe (sandbox WITHOUT allow-same-origin) — isolation without a second origin
+// (best practice for untrusted code; see mini-app-archi.md). Cross-origin mode
+// (with Vite HMR) is opt-in by setting VITE_MINI_APP_ORIGIN.
+const SINGLE_FRONTEND = RUNTIME_ORIGIN === ""
+const RUNTIME_PATH = SINGLE_FRONTEND ? "/mini-app/index.html" : `${RUNTIME_ORIGIN}/index.html`
+// postMessage target: an opaque iframe has no addressable origin → "*". The
+// inbound guard (source === contentWindow) is the real boundary either way.
+const POST_TARGET = SINGLE_FRONTEND ? "*" : RUNTIME_ORIGIN
+// Inbound origin to trust: an opaque-sandbox iframe posts with origin "null".
+const EXPECTED_ORIGIN = SINGLE_FRONTEND ? "null" : RUNTIME_ORIGIN
+const SANDBOX = SINGLE_FRONTEND ? "allow-scripts" : "allow-scripts allow-same-origin"
+
+
 // Deployment safeguard: the iframe is sandboxed with `allow-same-origin`
 // for legit browser-API reasons (see the comment near the `sandbox`
 // attribute below). That flag is SAFE only when the runtime is served
@@ -179,7 +194,7 @@ export function MiniAppMount({
   // only on retry (reloadKey++), at which point we capture the
   // current theme for the fresh iframe instance.
   const iframeSrc = useMemo(() => {
-    const u = new URL(`${RUNTIME_ORIGIN}/index.html`)
+    const u = new URL(RUNTIME_PATH, window.location.origin)
     u.searchParams.set("theme", themeId)
     u.searchParams.set("mode", resolvedTheme)
     return u.toString()
@@ -214,10 +229,10 @@ export function MiniAppMount({
     }
     const handler = createMessageHandler({
       postToIframe: (msg) => {
-        iframeRef.current?.contentWindow?.postMessage(msg, RUNTIME_ORIGIN)
+        iframeRef.current?.contentWindow?.postMessage(msg, POST_TARGET)
       },
       getIframeWindow: () => iframeRef.current?.contentWindow ?? null,
-      expectedOrigin: RUNTIME_ORIGIN,
+      expectedOrigin: EXPECTED_ORIGIN,
       noteId,
       saveState: saveMiniAppState,
       toastInfo: (m) => toast(m),
@@ -251,7 +266,7 @@ export function MiniAppMount({
         savedState: savedStateRef.current,
         theme: { id: themeId, mode: resolvedTheme },
       },
-      RUNTIME_ORIGIN,
+      POST_TARGET,
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [iframeReady, savedStateLoaded, source])
@@ -269,7 +284,7 @@ export function MiniAppMount({
         type: "mini-app:theme",
         theme: { id: themeId, mode: resolvedTheme },
       },
-      RUNTIME_ORIGIN,
+      POST_TARGET,
     )
   }, [iframeReady, themeId, resolvedTheme])
 
@@ -322,7 +337,7 @@ export function MiniAppMount({
       // `allow-same-origin` becomes catastrophic — the iframe could
       // then read host cookies/localStorage/DOM. Keep mini-app on its
       // own subdomain; the assertion below enforces it at boot.
-      sandbox="allow-scripts allow-same-origin"
+      sandbox={SANDBOX}
       src={iframeSrc}
       title="mini-app"
       onError={() => setIframeFailed(true)}

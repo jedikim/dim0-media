@@ -27,6 +27,9 @@ import {
 } from "@/components/icons"
 import { buildContextTextFromNodes } from "@/features/board/utils/context-text"
 import { useAiSparkActions } from "@/features/board/hooks/use-ai-spark-actions"
+import { useIsLocalBoard } from "@/features/board/lib/use-is-local-board"
+import { useLocalTransform, type LocalTransformKind } from "@/features/agent/local/use-local-transform"
+import { useHasUsableModel } from "@/features/agent/services/use-agent-availability"
 import { useBoardAppStore } from "../store/board-app-store"
 import { nodeToNote } from "../convert/node-to-note"
 import type { NoteNode } from "@/features/board/types/flow"
@@ -102,8 +105,26 @@ const buildSelectedContextText = (
  * Translate sections — wired entirely against the harness store +
  * lib export helpers (no react-flow).
  */
+// Canvas AI-action key → the local (in-browser) transform kind. Actions with no
+// local equivalent (drawify, translate) are omitted and stay backend-only.
+const LOCAL_TRANSFORM_BY_ACTION: Record<string, LocalTransformKind> = {
+  summarize: "summify",
+  mapify: "mapify",
+  schemify: "schemify",
+  quizify: "quizify",
+  explain: "mapify",
+}
+
+
 export function CanvasContextMenu({ wrapRef, store, rendererRef }: CanvasContextMenuProps) {
   const boardId = useBoardAppStore((s) => s.boardId)
+  // AI Spark / Translate are backend-only — hidden on local boards for now.
+  const isLocal = useIsLocalBoard()
+  // Local transforms need an in-browser LLM; hide the AI section when no model
+  // key is usable (parity with the floating island) instead of offering actions
+  // that can only fail. Online boards use the backend, so they're unaffected.
+  const hasUsableModel = useHasUsableModel()
+  const showAiSection = !isLocal || hasUsableModel
   const [menuPos, setMenuPos] = useState<{ x: number; y: number } | null>(null)
   const [aiOpen, setAiOpen] = useState(false)
   const [translateOpen, setTranslateOpen] = useState(false)
@@ -111,10 +132,12 @@ export function CanvasContextMenu({ wrapRef, store, rendererRef }: CanvasContext
   const [customLanguage, setCustomLanguage] = useState("")
   const menuRef = useRef<HTMLDivElement | null>(null)
   const { actions: aiActions, processingKey, runAction } = useAiSparkActions()
+  const runLocalTransform = useLocalTransform()
 
   const aiMenuActions = useMemo(
-    () => aiActions.filter((a) => a.key !== "translate"),
-    [aiActions],
+    // On local boards, drop actions with no in-browser transform yet (drawify).
+    () => aiActions.filter((a) => a.key !== "translate" && !(isLocal && a.key === "drawify")),
+    [aiActions, isLocal],
   )
 
   const closeMenu = useCallback(() => {
@@ -252,9 +275,29 @@ export function CanvasContextMenu({ wrapRef, store, rendererRef }: CanvasContext
         return
       }
       closeMenu()
+      // Local board: run the in-browser transform instead of the backend /tools.
+      if (isLocal) {
+        const kind = LOCAL_TRANSFORM_BY_ACTION[actionKey]
+        if (!kind) {
+          toast.error("Not available on local boards yet.")
+          return
+        }
+        const id = toast(`${actionKey}…`, { duration: Infinity })
+        try {
+          const { ok } = await runLocalTransform(kind, contextText)
+          toast.dismiss(id)
+          if (ok) toast.success("Added to the board.")
+          else toast.error("Nothing was created.")
+        } catch (error) {
+          console.error("Local transform failed:", error)
+          toast.dismiss(id)
+          toast.error("Failed — check your model key in settings.")
+        }
+        return
+      }
       await runAction({ boardId, contextText, actionKey })
     },
-    [boardId, store, runAction, closeMenu],
+    [boardId, store, runAction, closeMenu, isLocal, runLocalTransform],
   )
 
   const handleTranslate = useCallback(
@@ -336,6 +379,7 @@ export function CanvasContextMenu({ wrapRef, store, rendererRef }: CanvasContext
         onClick={handleExportSvg}
       />
 
+      {showAiSection && (<>
       <Divider />
       <button
         type="button"
@@ -369,6 +413,7 @@ export function CanvasContextMenu({ wrapRef, store, rendererRef }: CanvasContext
               />
             )
           })}
+          {!isLocal && (<>
           <button
             type="button"
             className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left hover:bg-muted"
@@ -418,8 +463,10 @@ export function CanvasContextMenu({ wrapRef, store, rendererRef }: CanvasContext
               </div>
             </div>
           )}
+          </>)}
         </div>
       )}
+      </>)}
     </div>
   )
 }

@@ -20,6 +20,8 @@ import {
   CirclesFourIcon as CirclesFourGlyphIcon,
   CircuitryIcon,
   ClockIcon as ClockGlyphIcon,
+  CloudArrowUpIcon as PhosphorCloudArrowUpIcon,
+  CloudCheckIcon as PhosphorCloudCheckIcon,
   CloudFogIcon,
   CloudIcon,
   CloudRainIcon,
@@ -266,6 +268,9 @@ export const PresentationIcon = createPhosphorIcon(PresentationChartIcon)
 export const SlidesIcon = createPhosphorIcon(PresentationChartIcon)
 export const StopPresentationIcon = createPhosphorIcon(StopCircleIcon)
 export const WarningIcon = createPhosphorIcon(WarningCircleIcon)
+export const CloudSyncIcon = createPhosphorIcon(CloudIcon)
+export const CloudArrowUpIcon = createPhosphorIcon(PhosphorCloudArrowUpIcon)
+export const CloudCheckIcon = createPhosphorIcon(PhosphorCloudCheckIcon)
 export const WeatherCloudIcon = createPhosphorIcon(CloudIcon)
 export const WeatherCloudDrizzleIcon = createPhosphorIcon(CloudFogIcon)
 export const WeatherCloudRainIcon = createPhosphorIcon(CloudRainIcon)

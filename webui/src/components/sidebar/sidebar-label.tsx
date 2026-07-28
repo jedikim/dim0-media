@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useParams, useRouterState, useSearch, useNavigate } from "@tanstack/react-router"
 import { useListChats } from "@/features/agent/api/list-chats"
 import { useListBoards } from "@/features/board/api/list-boards"
+import { useLocalBoards } from "@/features/board/local/use-local-boards"
 import { useUpdateBoard } from "@/features/board/api/update-board"
 import { useUpdateChat } from "@/features/agent/api/update-chat"
 import { LabelEditor } from "./label-editor"
@@ -25,10 +26,12 @@ export const SidebarLabel = ({ mobileContextOnly = false }: { mobileContextOnly?
   // route params
   const chatParams  = useParams({ from: "/chats/$id", shouldThrow: false })
   const boardParams = useParams({ from: "/boards/$id", shouldThrow: false })
+  const localBoardParams = useParams({ from: "/local/$boardId", shouldThrow: false })
   const sheetParams = useParams({ from: SheetUrl, shouldThrow: false })
   const subscriptionParams = useParams({ from: "/subscriptions/$id", shouldThrow: false })
   const chatId  = chatParams?.id
   const boardId = boardParams?.id
+  const localBoardId = localBoardParams?.boardId
   const boardRootId = useSearch({
     from: "/boards/$id",
     select: (s: { root_id?: string }) => s.root_id,
@@ -57,6 +60,7 @@ export const SidebarLabel = ({ mobileContextOnly = false }: { mobileContextOnly?
   const active = useMemo(() => {
     if (sheetBoardId && sheetNoteId) return { view: "sheet" as const, id: sheetNoteId, boardId: sheetBoardId }
     if (boardId) return { view: "board" as const, id: boardId }
+    if (localBoardId) return { view: "local-board" as const, id: localBoardId }
     if (chatId)  return { view: "chat"  as const, id: chatId }
     if (subscriptionId) return { view: "subscriptions" as const, id: subscriptionId }
     if (isHome) return { view: "home" as const, id: undefined }
@@ -66,11 +70,14 @@ export const SidebarLabel = ({ mobileContextOnly = false }: { mobileContextOnly?
     if (isSettings) return { view: "settings" as const, id: undefined }
     if (isSettingsBilling) return { view: "settings-billing" as const, id: undefined }
     return { view: "unknown" as const, id: undefined }
-  }, [boardId, chatId, subscriptionId, isNewChat, isDashboard, isSubscriptionsRoot, isHome, sheetBoardId, sheetNoteId, isSettings, isSettingsBilling])
+  }, [boardId, localBoardId, chatId, subscriptionId, isNewChat, isDashboard, isSubscriptionsRoot, isHome, sheetBoardId, sheetNoteId, isSettings, isSettingsBilling])
 
   // data
   const { data: chatList }  = useListChats({ graphUid: null, userId })
   const { data: boardList } = useListBoards(userId)
+  // Local boards live in IndexedDB (name is `title`, not the remote `label`);
+  // read the title for the header and rename in place on this device.
+  const { boards: localBoards, renameBoard: renameLocalBoard } = useLocalBoards()
   const { data: subscriptionList } = useListSubscriptions()
   const { updateBoard } = useUpdateBoard()
   const { updateChat }  = useUpdateChat()
@@ -101,6 +108,11 @@ export const SidebarLabel = ({ mobileContextOnly = false }: { mobileContextOnly?
       setLabel(b?.label ?? boardLabel ?? "")
       return
     }
+    if (active.view === "local-board" && active.id) {
+      const b = localBoards.find((x) => x.id === active.id)
+      setLabel(b?.title ?? "")
+      return
+    }
     if (active.view === "chat" && active.id) {
       const c = chatList?.find((x) => x.uid === active.id)
       setLabel(c?.label ?? "")
@@ -129,13 +141,16 @@ export const SidebarLabel = ({ mobileContextOnly = false }: { mobileContextOnly?
       return
     }
     setLabel("")
-  }, [active.view, active.id, boardList, boardLabel, chatList, subscriptionList, sheetNodeLabel, fetchedSheet])
+  }, [active.view, active.id, boardList, boardLabel, localBoards, chatList, subscriptionList, sheetNodeLabel, fetchedSheet])
 
   const handleSaveEdit = (newLabel: string) => {
     setLabel(newLabel)
     if (active.view === "board" && active.id) {
       setBoardLabel(newLabel)
       updateBoard({ boardId: active.id, graphData: { label: newLabel } })
+    }
+    if (active.view === "local-board" && active.id) {
+      void renameLocalBoard(active.id, newLabel)
     }
     if (active.view === "chat" && active.id) {
       updateChat({ chatId: active.id, chatData: { label: newLabel } })
@@ -271,6 +286,20 @@ export const SidebarLabel = ({ mobileContextOnly = false }: { mobileContextOnly?
             {label.trim() || UNTITLED_LABEL}
           </span>
         )}
+      </div>
+    )
+  }
+
+  // LOCAL BOARD — always editable (it's this device's own board; name is `title`)
+  if (active.view === "local-board" && active.id) {
+    return (
+      <div className={`${wrapClass} flex-1 min-w-0`}>
+        <LabelEditor
+          key={`local-board:${active.id}`}
+          initialLabel={label}
+          onSave={handleSaveEdit}
+          className='min-w-0'
+        />
       </div>
     )
   }

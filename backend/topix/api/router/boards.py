@@ -13,11 +13,13 @@ from topix.agents.sessions import AssistantSession
 from topix.api.datatypes.requests import (
     AddLinksRequest,
     AddNotesRequest,
+    AdoptGraphRequest,
     BoardVisibilityUpdateRequest,
     GraphUpdateRequest,
     LinkUpdateRequest,
     NoteUpdateRequest,
 )
+from topix.api.utils.billing.stripe_config import is_billing_active
 from topix.api.utils.decorators import with_standard_response
 from topix.api.utils.security import (
     get_current_user_uid,
@@ -25,10 +27,16 @@ from topix.api.utils.security import (
     verify_board_read_access,
 )
 from topix.api.utils.thumbnail import load_png_as_data_url, save_thumbnail
+from topix.collab.apply_ops import apply_batch
 from topix.datatypes.graph.graph import Graph
 from topix.datatypes.note.style import NodeType
+from topix.datatypes.user_billing import effective_plan
 from topix.store.chat import ChatStore
 from topix.store.graph import GraphStore
+
+# Synced-board cap for the free plan (local boards are unlimited). Mirrors the
+# frontend BOARD_LIMITS.free — keep the two in sync until a shared catalog exists.
+FREE_SYNCED_BOARD_LIMIT = 5
 
 router = APIRouter(
     prefix="/boards",
@@ -45,12 +53,102 @@ async def create_graph(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_uid)]
 ):
-    """Create a new graph for the user."""
+    """Create a new synced board for the user, enforcing the plan's board cap.
+
+    Shares the atomic, race-free cap primitive with adopt so the free-tier limit
+    can't be bypassed by creating boards directly instead of promoting local ones.
+    """
     store: GraphStore = request.app.graph_store
 
+    cap = await _synced_board_cap(request, user_id)
     new_graph = Graph(user_uid=user_id)
-    await store.add_graph(graph=new_graph, user_uid=user_id)
+    outcome = await store.create_graph_within_cap(graph=new_graph, user_uid=user_id, cap=cap)
+    if outcome == "at_cap":
+        raise HTTPException(status_code=402, detail=_CAP_DETAIL)
+    # A fresh server-generated UID can't collide, so "created" is the only other
+    # outcome.
     return {"graph_id": new_graph.uid}
+
+
+_CAP_DETAIL = "Synced-board limit reached for your plan. Upgrade, or delete a synced board."
+
+
+async def _synced_board_cap(request: Request, user_id: str) -> int | None:
+    """Resolve the caller's synced-board cap, or None when unlimited.
+
+    None in OSS mode (billing off) and for paid plans; the free plan's fixed cap
+    otherwise. The count of owned boards is done atomically at create time (see
+    `create_graph_within_cap`) — this only resolves the limit.
+    """
+    if not is_billing_active():
+        return None
+    billing = await request.app.user_billing_store.get_user_billing(user_id)
+    plan = effective_plan(billing.plan, billing.status) if billing else "free"
+    if plan != "free":
+        return None
+    return FREE_SYNCED_BOARD_LIMIT
+
+
+@router.post("/{graph_id}:adopt/", include_in_schema=False)
+@router.post("/{graph_id}:adopt")
+@with_standard_response
+async def adopt_graph(
+    response: Response,
+    request: Request,
+    graph_id: Annotated[str, Path(description="Client-provided board UID to adopt")],
+    body: AdoptGraphRequest,
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+):
+    """Adopt a local-only board into a synced graph, preserving its UID.
+
+    Promotes a device-only board (local → synced): creates the graph under the
+    caller as owner with the board's existing UID, then rebuilds its content via
+    the same `apply_batch` path the collab relay uses. The stored graph is the
+    snapshot base a joining v2 client hydrates from, so no oplog seeding is
+    needed (seq starts at 0).
+
+    Idempotent: re-adopting a board the caller already owns is a no-op that
+    returns the same id, so a retried promotion is safe. A UID owned by someone
+    else is rejected (409) rather than overwritten.
+    """
+    store: GraphStore = request.app.graph_store
+
+    existing = await store.get_graph_metadata(graph_uid=graph_id)
+    if existing is not None:
+        role = await store.get_graph_role(graph_uid=graph_id, user_uid=user_id)
+        if role != "owner":
+            raise HTTPException(status_code=409, detail="board id already in use")
+        return {"graph_id": graph_id, "adopted": False, "applied": 0}
+
+    # Create the graph row FIRST, atomically enforcing the synced-board cap: a
+    # per-user advisory lock inside create_graph_within_cap makes the count+insert
+    # race-free (no two concurrent adopts can both slip past the cap) and detects a
+    # concurrent duplicate UID instead of hitting the unique constraint. Content is
+    # rebuilt only AFTER a successful create, so a rejected/duplicate adopt writes
+    # nothing to Qdrant that would need cleaning up.
+    cap = await _synced_board_cap(request, user_id)
+    graph = Graph(uid=graph_id, label=body.label)
+    outcome = await store.create_graph_within_cap(graph=graph, user_uid=user_id, cap=cap)
+    if outcome == "at_cap":
+        raise HTTPException(status_code=402, detail=_CAP_DETAIL)
+    if outcome == "exists":
+        # A concurrent adopt of this UID won the race and owns the content rebuild;
+        # this call is an idempotent no-op. Confirm ownership though — a UID owned
+        # by someone else is a conflict, not a silent success.
+        role = await store.get_graph_role(graph_uid=graph_id, user_uid=user_id)
+        if role != "owner":
+            raise HTTPException(status_code=409, detail="board id already in use")
+        return {"graph_id": graph_id, "adopted": False, "applied": 0}
+
+    # Rebuild content on the freshly-created graph (idempotent Qdrant upserts).
+    results = await apply_batch(
+        graph_store=store,
+        board_id=graph_id,
+        user_id=user_id,
+        ops=body.ops,
+    )
+    applied = sum(1 for r in results if r.applied)
+    return {"graph_id": graph_id, "adopted": True, "applied": applied}
 
 
 @router.patch("/{graph_id}/", include_in_schema=False)

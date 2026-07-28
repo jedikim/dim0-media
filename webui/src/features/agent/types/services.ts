@@ -24,13 +24,13 @@ export interface LlmOption extends ServiceOption {
 export interface Services {
   llm: LlmOption[]
   search: ServiceOption[]
-  navigate: ServiceOption[]
+  fetch: ServiceOption[]
   code: ServiceOption[]
   imageGeneration: ServiceOption[]
 }
 
 // Constant array of service category names
-export const SERVICE_NAMES = ["llm", "search", "navigate", "code", "imageGeneration"] as const
+export const SERVICE_NAMES = ["llm", "search", "fetch", "code", "imageGeneration"] as const
 
 // Type representing the names of the service categories
 export type ServiceName = typeof SERVICE_NAMES[number]
@@ -61,7 +61,7 @@ export const defaultServices: () => Services = () => ({
     { name: "tavily", available: false, provider: "tavily" },
     { name: "openai", available: false, provider: "openai" },
   ],
-  navigate: [
+  fetch: [
     { name: "tavily", available: false, provider: "tavily" },
   ],
   code: [

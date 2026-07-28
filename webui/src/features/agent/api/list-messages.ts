@@ -2,7 +2,8 @@ import camelcaseKeys from "camelcase-keys"
 import type { ChatMessage, MessageRole } from "../types/chat"
 import { useQuery } from "@tanstack/react-query"
 import { apiFetch } from "@/api"
-import { normalizeReasoningSteps, type ReasoningStep, type ToolExecutionState, type ToolName } from "../types/stream"
+import { isSignedIn } from "@/lib/auth"
+import { normalizeReasoningSteps, type ToolExecutionState, type ToolName } from "../types/stream"
 import type { ToolOutput } from "../types/tool-outputs"
 import { trimReasoningSteps } from "../utils/annotations"
 
@@ -73,7 +74,7 @@ export async function listMessages(
       normalized.properties.reasoning = {
         type: "reasoning",
         reasoning: normalizeReasoningSteps(
-          normalized.properties.reasoning.reasoning as ReasoningStep[]
+          normalized.properties.reasoning.reasoning
         ),
       }
     }
@@ -100,7 +101,7 @@ export const useListMessages = ({
   return useQuery<ChatMessage[]>({
     queryKey: ["listMessages", chatId, userId],
     queryFn: () => listMessages(chatId, userId),
-    enabled: !!chatId && !!userId,
+    enabled: !!chatId && isSignedIn(userId),
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     // keep current data visible if something triggers a fetch elsewhere

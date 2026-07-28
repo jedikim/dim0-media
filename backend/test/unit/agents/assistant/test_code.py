@@ -120,6 +120,32 @@ async def test_run_code_returns_error_when_daytona_env_is_missing(monkeypatch):
     assert "DAYTONA_TARGET" in result.stderr
 
 
+def test_byok_key_satisfies_daytona_api_key_requirement(monkeypatch):
+    """A BYOK key stands in for DAYTONA_API_KEY; url/target still come from env."""
+    monkeypatch.delenv("DAYTONA_API_KEY", raising=False)
+    monkeypatch.setenv("DAYTONA_API_URL", "https://daytona.example")
+    monkeypatch.setenv("DAYTONA_TARGET", "eu")
+    assert code_module._get_missing_daytona_env_vars(has_byok_key=True) == []
+    assert "DAYTONA_API_KEY" in code_module._get_missing_daytona_env_vars(has_byok_key=False)
+
+
+@pytest.mark.asyncio
+async def test_execute_code_forwards_byok_key_to_manager(monkeypatch):
+    """The BYOK Daytona key reaches the sandbox manager for this run."""
+    for env_var in code_module.REQUIRED_DAYTONA_ENV_VARS:
+        monkeypatch.setenv(env_var, "configured")
+    seen: dict = {}
+    manager = FakeSandboxManager(FakeResponse(stdout="ok\n", exit_code=0))
+
+    def _factory(**kw):
+        seen.update(kw)
+        return manager
+
+    monkeypatch.setattr(code_module, "DaytonaSandboxManager", _factory)
+    await code_module.execute_code("print(1)", language="python", api_key="dtn-user")
+    assert seen.get("api_key") == "dtn-user"
+
+
 @pytest.mark.asyncio
 async def test_run_code_returns_stdout_on_success(monkeypatch):
     """Successful execution should expose stdout and a success status."""
@@ -127,7 +153,7 @@ async def test_run_code_returns_stdout_on_success(monkeypatch):
         monkeypatch.setenv(env_var, "configured")
 
     manager = FakeSandboxManager(FakeResponse(stdout="4\n", exit_code=0))
-    monkeypatch.setattr(code_module, "DaytonaSandboxManager", lambda: manager)
+    monkeypatch.setattr(code_module, "DaytonaSandboxManager", lambda **_kw: manager)
 
     result = await code_module.run_code(None, "print(2 + 2)")
 
@@ -146,7 +172,7 @@ async def test_run_code_returns_error_when_execution_fails(monkeypatch):
         monkeypatch.setenv(env_var, "configured")
 
     manager = FakeSandboxManager(FakeResponse(result="boom", exit_code=1))
-    monkeypatch.setattr(code_module, "DaytonaSandboxManager", lambda: manager)
+    monkeypatch.setattr(code_module, "DaytonaSandboxManager", lambda **_kw: manager)
 
     result = await code_module.run_code(None, "raise RuntimeError('boom')")
 
@@ -163,7 +189,7 @@ async def test_run_code_deletes_sandbox_when_runtime_raises(monkeypatch):
         monkeypatch.setenv(env_var, "configured")
 
     manager = FakeSandboxManager(RuntimeError("network failure"))
-    monkeypatch.setattr(code_module, "DaytonaSandboxManager", lambda: manager)
+    monkeypatch.setattr(code_module, "DaytonaSandboxManager", lambda **_kw: manager)
 
     result = await code_module.run_code(None, "print('hello')")
 
@@ -215,7 +241,7 @@ async def test_execute_code_runs_in_requested_language(monkeypatch):
         monkeypatch.setenv(env_var, "configured")
 
     manager = FakeSandboxManager(FakeResponse(stdout="3\n", exit_code=0))
-    monkeypatch.setattr(code_module, "DaytonaSandboxManager", lambda: manager)
+    monkeypatch.setattr(code_module, "DaytonaSandboxManager", lambda **_kw: manager)
 
     result = await code_module.execute_code("console.log(1 + 2)", "javascript")
 

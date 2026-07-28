@@ -22,6 +22,8 @@ import remarkGfm from "remark-gfm"
 import remarkMath from "remark-math"
 import rehypeKatex from "rehype-katex"
 import rehypeRaw from "rehype-raw"
+import rehypeSanitize from "rehype-sanitize"
+import { SANITIZE_SCHEMA, rehypeSafeStyle } from "./sanitize-schema"
 
 
 const DISPLAY_MATH_RE = /\\\[([\s\S]+?)\\\]/g
@@ -244,6 +246,17 @@ const REHYPE_PLUGINS = [
   // remark-math nodes).
   rehypeRaw,
   rehypeKatex,
+  // rehype-sanitize runs LAST so it scrubs both rehype-raw's parsed raw HTML
+  // (untrusted agent/newsfeed/citation content) and rehype-katex's generated
+  // output, stripping scripts, event handlers, and dangerous URLs/embeds. The
+  // extended schema (see sanitize-schema) preserves KaTeX, highlight marks,
+  // tag chips, toggles and page-ref links. Without it, raw HTML would reach
+  // the DOM unsanitized (stored/DOM XSS).
+  [rehypeSanitize, SANITIZE_SCHEMA],
+  // rehype-sanitize allowlists `style` but can't inspect CSS values; this
+  // scrubs inline styles (drops fixed/absolute positioning, z-index, url())
+  // so untrusted CSS can't paint clickjacking overlays or beacon out.
+  rehypeSafeStyle,
 ] as const
 
 const STREAMDOWN_PLUGINS_STATIC = { code: codePlugin } as const

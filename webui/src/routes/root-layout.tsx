@@ -8,6 +8,7 @@ import { StyleDefaultsProvider } from '@/features/board/style-provider'
 import { useQueryClient } from '@tanstack/react-query'
 
 import { useAppStore } from '@/store'
+import { isSignedIn } from '@/lib/auth'
 import { clearTokens } from '@/features/signin/auth-storage'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useBoardAppStore } from '@/features/board/harness/store/board-app-store'
@@ -43,14 +44,21 @@ export function RootLayout() {
     navigate({ to: '/signin', replace: true })
   }, [navigate, queryClient, setEmailVerificationEnabled, setEmailVerified, setUserEmail, setUserId, setUserPlan])
 
-  const isAuthed = userId !== 'root'
+  const isAuthed = isSignedIn(userId)
 
   // do not show shell on auth pages (prevents flicker / overlap)
   const onAuthPage = useMemo(
     () => location.pathname === '/signin' || location.pathname === '/signup' || location.pathname === '/verify-email',
     [location.pathname]
   )
-  const showShell = isAuthed && !onAuthPage
+  // One shell for everyone (auth pages excepted): signed-out users get the same
+  // frame, with the sidebar showing only local boards + a sign-in CTA. The
+  // backend-coupled bits stay dormant logged-out (board/chat lists are
+  // `enabled: !!userId`; the ping only starts when authed).
+  const showShell = !onAuthPage
+  // Still used to keep offline-first on local boards: the connectivity overlay is
+  // suppressed on a /local route so a device-only board never shows "server down".
+  const isLocalRoute = location.pathname.startsWith("/local")
   const presentationMode = useBoardAppStore(s => s.presentationMode)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const effectiveSidebarOpen = presentationMode ? false : sidebarOpen
@@ -62,8 +70,13 @@ export function RootLayout() {
   }, [presentationMode])
 
   useEffect(() => {
+    // Start connectivity detection only once the user is signed in. Signed-out
+    // (local-first) sessions never ping the backend, so a device-only workflow
+    // makes zero server contact. The overlay itself is additionally gated on
+    // `!isLocalRoute` at render, so a local board never shows "server down".
+    if (!isAuthed) return
     initConnectionState()
-  }, [])
+  }, [isAuthed])
 
   // When the user finishes sign-in after clicking a share link, route
   // them back to /share/<token> automatically so they don't have to
@@ -93,7 +106,7 @@ export function RootLayout() {
   return (
     <ThemeProvider>
       <StyleDefaultsProvider>
-        <OfflineOverlay />
+        {isAuthed && !isLocalRoute && <OfflineOverlay />}
         <main>
           {showShell ? (
             <SidebarProvider open={effectiveSidebarOpen} onOpenChange={setSidebarOpen}>

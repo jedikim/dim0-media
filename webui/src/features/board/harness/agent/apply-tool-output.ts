@@ -1,11 +1,10 @@
 import type { QueryClient } from "@tanstack/react-query"
 import {
-  asBatchId,
   type CanvasStore,
-  type NodeId,
   type Op,
 } from "@canvas-harness/core"
 import { getBoardLink, getBoardNote } from "@/features/board/api/get-board"
+import { makeBatch } from "@/features/board/harness/make-batch"
 import type {
   CreateNoteOutput,
   EditNoteOutput,
@@ -24,13 +23,7 @@ export type NoteToolOutput = CreateNoteOutput | WriteNoteOutput | EditNoteOutput
 /** Apply a list of ops to the store as a single `remote`-origin batch. */
 const applyRemoteBatch = (store: CanvasStore, ops: Op[]): void => {
   if (ops.length === 0) return
-  store.applyBatch({
-    id: asBatchId(store.generateId()),
-    clientId: store.clientId,
-    ts: Date.now(),
-    origin: "remote",
-    ops,
-  })
+  store.applyBatch(makeBatch(store, "remote", ops))
 }
 
 
@@ -91,7 +84,7 @@ export const applyNoteOutput = async (
   }
 
   const node = noteToNode(note)
-  const existing = store.getNode(node.id as NodeId)
+  const existing = store.getNode(node.id)
   const op: Op = existing
     ? { type: "node.update", id: node.id, patch: node, prev: existing }
     : { type: "node.add", node }

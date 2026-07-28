@@ -1,5 +1,5 @@
 import { Chat } from "@/features/agent/components/chat-view"
-import { Dashboard } from "@/features/board/components/dashboard"
+import { BoardsHome } from "@/features/board/screens/boards-home"
 import { NoteIcon } from "@/components/icons"
 
 /**
@@ -16,7 +16,7 @@ export const HomePage = () => {
             <span>Note Boards</span>
           </h3>
         </div>
-        <Dashboard className="h-auto" hideTitle />
+        <BoardsHome className="h-auto" hideTitle />
       </div>
     </div>
   )

@@ -39,6 +39,26 @@ async def add_user_to_graph_by_uid(
     return True
 
 
+async def count_owned_graphs_by_user_uid(
+    conn: asyncpg.Connection,
+    user_uid: str,
+) -> int:
+    """Count the non-deleted boards a user OWNS — the synced-board cap basis.
+
+    Mirrors `list_graphs_by_user_uid`'s owner rows (joins `graphs` to exclude
+    soft-deleted boards), so the cap counts exactly what the sidebar shows.
+    """
+    user_id = await get_user_id_by_uid(conn, user_uid)
+    if user_id is None:
+        return 0
+    query = (
+        "SELECT count(*) FROM graph_user gu "
+        "JOIN graphs g ON gu.graph_id = g.id "
+        "WHERE gu.user_id = $1 AND gu.role = 'owner' AND g.deleted_at IS NULL"
+    )
+    return await conn.fetchval(query, user_id)
+
+
 async def list_graphs_by_user_uid(
     conn: asyncpg.Connection,
     user_uid: str

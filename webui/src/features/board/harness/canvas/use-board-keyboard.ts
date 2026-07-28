@@ -80,6 +80,12 @@ export const useBoardKeyboard = (store: CanvasStore): void => {
         store.redo()
         return
       }
+      if (meta && (e.key === "k" || e.key === "K")) {
+        e.preventDefault()
+        const app = useBoardAppStore.getState()
+        app.setChromeDialog(app.chromeDialog === "notes-search" ? null : "notes-search")
+        return
+      }
 
       if (meta || e.altKey || e.shiftKey) return
 

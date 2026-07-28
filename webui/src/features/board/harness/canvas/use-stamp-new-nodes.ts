@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { type CanvasStore } from "@canvas-harness/core"
-import type { NoteNodeData } from "../convert/note-to-node"
+import { AUTOFIT_DISABLED_TYPES, type NoteNodeData } from "../convert/note-to-node"
 import {
   adaptNodeColors,
   applyColorsToStyle,
@@ -10,9 +10,11 @@ import { getBoardThemeMode } from "../theme/theme-mode-ref"
 
 
 /**
- * Stamp `data.graphUid` / `data.parentId` to current scope AND
- * re-project display colors from `_storedColors` for the current
- * theme on every local `node.add`.
+ * Stamp `data.graphUid` / `data.parentId` to current scope, re-project
+ * display colors from `_storedColors` for the current theme, AND force
+ * `autoFit:false` on custom-type nodes (sheet/mini-app/…) — on every
+ * local `node.add`. The catch-all for local-create emitters that don't
+ * go through `noteToNode` (notably the agent's `write_note`).
  *
  * Three sources produce a local `node.add`:
  *
@@ -70,7 +72,7 @@ export const useStampNewNodes = (
         // toggle re-projects it.
         const stored = data._storedColors as StoredColors | undefined
         const currentStyle = op.node.style ?? {}
-        let restyled: typeof currentStyle | null = null
+        let nextStyle: typeof currentStyle | null = null
         if (stored) {
           const mode = getBoardThemeMode()
           const display = mode === "dark" ? adaptNodeColors(stored, "dark") : stored
@@ -79,17 +81,26 @@ export const useStampNewNodes = (
             currentStyle.strokeColor !== display.strokeColor ||
             currentStyle.textColor !== display.textColor
           ) {
-            restyled = applyColorsToStyle(currentStyle, display)
+            nextStyle = applyColorsToStyle(currentStyle, display)
           }
         }
 
-        if (!needsRescope && !restyled) continue
+        // Custom types render only a PREVIEW of node.content, so the lib's
+        // grow-to-fit must stay off — otherwise the node grows to the whole
+        // body. noteToNode / normalizeBatchAutoFit do this on the snapshot +
+        // remote paths; this covers local-create emitters (e.g. the agent's
+        // write_note, which addNode()s directly without a style).
+        if (AUTOFIT_DISABLED_TYPES.has(op.node.type) && currentStyle.autoFit !== false) {
+          nextStyle = { ...(nextStyle ?? currentStyle), autoFit: false }
+        }
+
+        if (!needsRescope && !nextStyle) continue
 
         const patch: Parameters<typeof store.updateNode>[1] = {}
         if (needsRescope) {
           patch.data = { ...data, graphUid: boardId, parentId: wantedParentId }
         }
-        if (restyled) patch.style = restyled
+        if (nextStyle) patch.style = nextStyle
         store.updateNode(op.node.id, patch)
       }
     })

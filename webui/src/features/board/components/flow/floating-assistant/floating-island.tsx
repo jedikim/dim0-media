@@ -5,8 +5,12 @@ import { SparklesIcon } from "@/components/icons"
 import { ThinkingIndicator } from "@/components/animations/thinking-indicator"
 import { cn } from "@/lib/utils"
 import { SendMessageError } from "@/features/agent/api/send-message"
-import { useSubmitPrompt } from "@/features/agent/hooks/use-submit-prompt"
+import { useChatSubmit } from "@/features/agent/hooks/use-chat-submit"
+import { useChat } from "@/features/agent/hooks/chat-context"
+import { DocAttachButton } from "@/features/agent/components/chat/doc-attach"
 import { buildMessageContext, useHasMessageContext } from "@/features/agent/hooks/use-message-context"
+import { SettingsButton } from "@/features/agent/settings/settings-button"
+import { useHasUsableModel } from "@/features/agent/services/use-agent-availability"
 import { ProgressLine } from "./progress-line"
 import { useCurrentAssistantMessage } from "./use-current-assistant-message"
 import { useBoardAppStore } from "../../../harness/store/board-app-store"
@@ -26,14 +30,19 @@ export const FloatingIsland = ({ boardId, onOpenFullSheet }: FloatingIslandProps
   const [input, setInput] = useState("")
   const latestAssistantMessage = useCurrentAssistantMessage()
   const isStreaming = latestAssistantMessage?.streaming === true
-  const submit = useSubmitPrompt()
+  const submit = useChatSubmit()
+  // Document Q&A lives on the local (in-browser) agent only.
+  const { local } = useChat()
   const hasMessageContext = useHasMessageContext()
   // Single boolean derivation — only re-renders when a surface opens or
   // closes, never when its content/title changes. Cheap.
   const hasActiveSurface = useBoardAppStore((s) => Boolean(s.activeNodeSurface))
+  // The agent can't run without a usable model (managed when signed in, or a
+  // BYOK model key). When absent we dim the composer and light the key icon.
+  const hasModel = useHasUsableModel()
 
   const handleSubmit = async () => {
-    if (isStreaming) return
+    if (isStreaming || !hasModel) return
     const trimmed = input.trim()
     if (!trimmed) return
     setInput("")
@@ -70,6 +79,10 @@ export const FloatingIsland = ({ boardId, onOpenFullSheet }: FloatingIslandProps
       )}>
         <ProgressLine />
         <div className='flex items-center gap-2 p-3'>
+          <div className={cn(
+            'flex flex-1 min-w-0 items-center gap-2',
+            !hasModel && 'pointer-events-none select-none opacity-40',
+          )}>
           {isStreaming ? (
             <button
               type='button'
@@ -106,15 +119,18 @@ export const FloatingIsland = ({ boardId, onOpenFullSheet }: FloatingIslandProps
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder='Ask about this board, or give a task…'
+            placeholder={hasModel ? 'Ask about this board, or give a task…' : 'Set a model key to start'}
             minRows={1}
             maxRows={4}
-            disabled={isStreaming}
+            disabled={isStreaming || !hasModel}
             className='flex-1 min-w-0 bg-transparent text-sm outline-none resize-none py-1 placeholder:text-muted-foreground scrollbar-thin'
           />
           <span className='shrink-0 text-sm text-muted-foreground/70 font-mono px-1 select-none hidden sm:inline'>
             ⌘↵
           </span>
+          </div>
+          {local && <DocAttachButton boardId={boardId} />}
+          <SettingsButton emphasize={!hasModel} />
         </div>
       </div>
       <p className='text-center text-[11px] text-muted-foreground/70 px-3'>

@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react"
 import {
   ChevronDownIcon,
   CircleClusterIcon,
@@ -97,7 +98,104 @@ const VIEW_OPTIONS = [
 ]
 
 
-export function HarnessToolbar() {
+const TRAY_H = 46
+const TRAY_R = 13
+
+
+/**
+ * SVG silhouette for the toolbar "tray": concave top corners that flare OUTWARD
+ * to the top edge, convex rounded bottom corners, open top. One path, sized to
+ * the measured content width so the corners stay circular at any width.
+ */
+const trayPath = (w: number, h: number, r: number): string =>
+  `M0 0 A${r} ${r} 0 0 1 ${r} ${r}` +
+  ` L${r} ${h - r} A${r} ${r} 0 0 0 ${2 * r} ${h}` +
+  ` L${w - 2 * r} ${h} A${r} ${r} 0 0 0 ${w - r} ${h - r}` +
+  ` L${w - r} ${r} A${r} ${r} 0 0 1 ${w} 0`
+
+
+/**
+ * Toolbar shell shaped as a flared tray docked to the top edge. The blurred,
+ * themed fill is clipped to the path; a hairline SVG stroke draws the outline;
+ * a drop-shadow (stronger on hover) follows the silhouette. Width is measured
+ * from the content row so the path fits the current toolbar exactly.
+ */
+function FlaredTray({
+  children,
+  className,
+  ...rest
+}: { children: React.ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
+  const rowRef = useRef<HTMLDivElement>(null)
+  const [w, setW] = useState(0)
+  const [hover, setHover] = useState(false)
+
+  useEffect(() => {
+    const el = rowRef.current
+    if (!el) return
+    // Measure the BORDER box (offsetWidth) so the tray path spans the full row
+    // incl. its horizontal padding. contentRect excludes padding, which drew the
+    // path ~32px short and let the rightmost ("…") button spill past the border.
+    const ro = new ResizeObserver(() => setW(el.offsetWidth))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  const d = w > 0 ? trayPath(w, TRAY_H, TRAY_R) : ""
+
+  return (
+    <div
+      className={cn("absolute left-1/2 top-0 z-50 -translate-x-1/2", className)}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      {...rest}
+    >
+      <div className="relative">
+        {d && (
+          <>
+            {/* Frosted backdrop. CRITICAL: nothing above this in the tree may set
+                `filter`/`opacity`/`mask` — such an ancestor becomes a "backdrop
+                root" and silently no-ops backdrop-filter (the blur had nothing to
+                sample). So the drop-shadow lives on the sibling tint layer below,
+                never on a wrapper. */}
+            <div
+              className="pointer-events-none absolute inset-0 backdrop-blur-xl backdrop-saturate-[1.8]"
+              style={{ clipPath: `path('${d}')` }}
+            />
+            {/* Translucent tint + the tray's drop-shadow. A sibling of the blur
+                layer (not an ancestor), so it doesn't isolate the backdrop. */}
+            <div
+              className="pointer-events-none absolute inset-0 bg-sidebar/60"
+              style={{
+                clipPath: `path('${d}')`,
+                filter: hover
+                  ? "drop-shadow(0 10px 22px rgba(0,0,0,0.22))"
+                  : "drop-shadow(0 2px 5px rgba(0,0,0,0.10))",
+                transition: "filter .2s ease",
+              }}
+            />
+            <svg
+              className="pointer-events-none absolute inset-0"
+              width={w}
+              height={TRAY_H}
+              style={{ overflow: "visible" }}
+              aria-hidden
+            >
+              <path d={d} fill="none" stroke="var(--border)" strokeWidth={1} />
+            </svg>
+          </>
+        )}
+        {/* px chosen so the first/last button sit ~5px inside the tray's side
+            border (x = TRAY_R), matching the ~5px top/bottom gap → balanced. */}
+        <div ref={rowRef} className="relative flex items-center gap-1 px-[18px]" style={{ height: TRAY_H }}>
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
   const tool = useBoardAppStore((s) => s.tool)
   const setTool = useBoardAppStore((s) => s.setTool)
   const chromeDialog = useBoardAppStore((s) => s.chromeDialog)
@@ -117,13 +215,8 @@ export function HarnessToolbar() {
   const ActiveViewIcon = activeView.icon
 
   return (
-    <div
-      className={cn(
-        "absolute left-1/2 top-2 z-50 flex -translate-x-1/2 items-center gap-1",
-        "rounded-xl border border-border/60 shadow-md backdrop-blur-md backdrop-saturate-150",
-        "bg-sidebar text-sidebar-foreground supports-[backdrop-filter]:bg-sidebar/80",
-        "p-1",
-      )}
+    <FlaredTray
+      className="text-sidebar-foreground"
       role="toolbar"
       aria-label="Board toolbar"
       data-coachmark="toolbar"
@@ -355,7 +448,7 @@ export function HarnessToolbar() {
       </>
       )}
 
-      <HarnessToolbarMore />
-    </div>
+      <HarnessToolbarMore local={local} />
+    </FlaredTray>
   )
 }

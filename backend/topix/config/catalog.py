@@ -144,6 +144,28 @@ def available_llms(allowed_tiers: set[str] | None = None) -> list[Resolved]:
     return [r for r in llms if r.tier in allowed_tiers]
 
 
+def public_llm_catalog() -> list[dict]:
+    """All declared LLM models with their per-provider routes.
+
+    Safe to expose unauthenticated — model names/metadata only, no keys. `id` is
+    the canonical id a MANAGED call sends; each route's `model` is the string a
+    BYOK caller sends to that provider (e.g. openai→"gpt-5.4",
+    openrouter→"openai/gpt-5.4"). Lets the client render a picker and translate
+    the chosen model to the right string for the user's own provider.
+    """
+    _, llms, _ = _load()
+    return [
+        {
+            "id": m.id,
+            "label": m.label,
+            "family": m.family,
+            "tier": m.tier,
+            "routes": [{"via": r.via, "model": r.model} for r in m.routes],
+        }
+        for m in llms
+    ]
+
+
 def model_tier(model_id_or_code: str) -> str | None:
     """Return the tier of a reachable model, else None.
 

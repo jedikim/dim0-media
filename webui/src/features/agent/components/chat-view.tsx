@@ -2,7 +2,10 @@ import { Conversation } from "./chat/conversation"
 import { InputBar } from "./chat/input"
 import { useListChats } from "../api/list-chats"
 import { ChatProvider, useChat } from "../hooks/chat-context"
+import { useActiveChatId } from "../hooks/use-chat-messages"
+import { useLocalMessagesStore } from "../store/local-messages-store"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 import { useMemo } from "react"
 import type { Chat as ChatEntity } from "../types/chat"
 import { Button } from "@/components/ui/button"
@@ -25,6 +28,8 @@ type ChatProps = {
   preferChatRoute?: boolean
   enableSelectionContext?: boolean
   autoCreateBoard?: boolean
+  /** Run on the in-browser engine (local-first board) instead of the backend. */
+  local?: boolean
 }
 
 const formatChatDate = (value?: string) => {
@@ -164,23 +169,52 @@ const ChatBody = ({
   enableSelectionContext = false,
   autoCreateBoard = false,
 }: ChatProps) => {
-  const { chatId, setChatId } = useChat()
+  const { setChatId, local } = useChat()
   const userId = useAppStore(s => s.userId)
-  const { data: chatList = [] } = useListChats({ graphUid: initialBoardId, userId })
+  const activeChatId = useActiveChatId()
+  const selectLocalChat = useLocalMessagesStore(s => s.selectChat)
+  const newLocalChat = useLocalMessagesStore(s => s.newChat)
+  const localChats = useLocalMessagesStore(s => s.chats)
+  const localMessages = useLocalMessagesStore(s => s.messages)
+  // A local turn streams into the in-memory store and only `persist`s when done.
+  // Switching/starting a chat mid-stream clears those messages, so the turn is
+  // never written (and any nodes it created are orphaned) — block it while live.
+  // `streaming` clears in runAgent's `finally`; a turn that never settles would
+  // keep this true (bounded by the turn-cancellation follow-up).
+  const localStreaming = local && localMessages.some(m => m.streaming)
+
+
+  // Guard the local chat-switch handlers while a turn streams; surface why so the
+  // blocked click isn't a silent no-op.
+  const blockedByStream = (): boolean => {
+    if (!localStreaming) return false
+    toast.info("Wait for the response to finish before switching chats.")
+    return true
+  }
+  // Backend chat list is disabled in local mode (empty userId → no fetch).
+  const { data: backendChats = [] } = useListChats({ graphUid: initialBoardId, userId: local ? "" : userId })
   const navigate = useNavigate()
   const routerLocation = useRouterState({ select: (s) => s.location })
 
+  // Local chats (ChatRecord) adapted to the shared chat-list shape.
+  const chatList = useMemo<ChatEntity[]>(
+    () => local
+      ? localChats.map((c) => ({ id: 0, uid: c.id, label: c.label, graphUid: c.boardId, updatedAt: new Date(c.updatedAt).toISOString() }))
+      : backendChats,
+    [local, localChats, backendChats],
+  )
+
   const attachedBoardId = useMemo(() => {
-    const currentChat = chatList?.find(c => c.uid === chatId)
+    const currentChat = chatList?.find(c => c.uid === activeChatId)
     return currentChat?.graphUid || initialBoardId
-  }, [chatList, chatId, initialBoardId])
+  }, [chatList, activeChatId, initialBoardId])
 
   const historicalChats = showHistoricalChats && initialBoardId
     ? chatList
     : []
 
   const historyVariant: "inline" | "dropdown" =
-    showHistoricalChats && chatId ? "dropdown" : "inline"
+    showHistoricalChats && activeChatId ? "dropdown" : "inline"
 
   const chatClassName = cn(
     "absolute inset-0 h-full w-full overflow-hidden flex flex-col",
@@ -195,7 +229,7 @@ const ChatBody = ({
     // Stay on whatever board-family path we're on (board, sheet, code,
     // widget) — `to: "."` keeps the current pathname so an active surface
     // panel isn't closed when the chat changes. We only swap the search.
-    navigate({
+    void navigate({
       to: ".",
       search: (prev: Record<string, unknown>) => ({
         ...prev,
@@ -205,6 +239,12 @@ const ChatBody = ({
   }
 
   const handleNewChat = () => {
+    if (local) {
+      if (blockedByStream()) return // don't discard the in-flight turn
+      newLocalChat()
+      return
+    }
+
     setChatId(undefined)
 
     if (isBoardRoute) {
@@ -213,8 +253,18 @@ const ChatBody = ({
     }
 
     if (routerLocation.pathname?.startsWith("/chats/")) {
-      navigate({ to: "/chats" })
+      void navigate({ to: "/chats" })
     }
+  }
+
+  const handleSelectChat = (id: string) => {
+    if (local) {
+      if (blockedByStream()) return // don't discard the in-flight turn
+      void selectLocalChat(id)
+      return
+    }
+    setChatId(id)
+    syncBoardUrl(id)
   }
 
   return (
@@ -222,11 +272,8 @@ const ChatBody = ({
       {showHistoricalChats && (
         <HistoryList
           chats={historicalChats}
-          activeChatId={chatId}
-          onSelectChat={(id) => {
-            setChatId(id)
-            syncBoardUrl(id)
-          }}
+          activeChatId={activeChatId}
+          onSelectChat={handleSelectChat}
           onNewChat={handleNewChat}
           variant={historyVariant}
         />
@@ -247,14 +294,14 @@ const ChatBody = ({
 
       <div className={cn(
         "w-full min-h-0",
-        chatId ? "flex-1" : "flex-none",
+        activeChatId ? "flex-1" : "flex-none",
         showHistoricalChats ? "flex flex-col items-center" : "flex flex-col"
       )}>
-        {chatId ? (
+        {activeChatId ? (
           <div className="w-full min-w-0 h-full p-4 overflow-auto scrollbar-thin">
             <div className="w-full h-full flex flex-col items-center justify-center">
               <div className="w-full max-w-[800px] h-full">
-                <Conversation chatId={chatId} />
+                <Conversation />
               </div>
             </div>
           </div>
@@ -276,10 +323,10 @@ const ChatBody = ({
  * Chat view component
  */
 export const Chat = (props: ChatProps) => {
-  const { chatId } = props
+  const { chatId, local = false } = props
 
   return (
-    <ChatProvider initialChatId={chatId}>
+    <ChatProvider initialChatId={chatId} local={local}>
       <ChatBody {...props} />
     </ChatProvider>
   )

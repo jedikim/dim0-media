@@ -4,6 +4,7 @@ import { UNTITLED_LABEL } from "../const"
 import type { Graph } from "../types/board"
 import { useCreateBoard } from "../api/create-board"
 import { formatDateForUI } from "../utils/datetime"
+import { BoardKindBadge } from "./board-kind-badge"
 
 
 // Board card thumbnail component
@@ -55,13 +56,12 @@ export const BoardCard = ({
       }
       <div className='p-2 w-full overflow-ellipsis'>
         <h4 className='inline-block font-medium text-sm'>{board.label || UNTITLED_LABEL}</h4>
-        {
-          dateString && (
-            <div className='w-full text-xs text-muted-foreground font-mono mt-1'>
-              <span className='ml-auto'>{dateString}</span>
-            </div>
-          )
-        }
+        <div className='mt-1 flex w-full items-center justify-between gap-2'>
+          <BoardKindBadge kind="synced" />
+          {dateString && (
+            <span className='text-xs text-muted-foreground font-mono'>{dateString}</span>
+          )}
+        </div>
       </div>
     </div>
   )

@@ -70,6 +70,25 @@ class _RecordingGraphStore:
         return [self.nodes_by_uid[uid] for uid in node_ids if uid in self.nodes_by_uid]
 
 
+class _FakeOplog:
+    """In-memory stand-in for CollabOplogStore (no DB/Redis in unit tests)."""
+
+    def __init__(self):
+        """Init per-board seq counters + captured appends."""
+        self._seq: dict[str, int] = {}
+        self.appended: list[tuple[str, int, dict]] = []
+
+    async def next_seq(self, board_id: str) -> int:
+        """Return a monotonic per-board seq starting at 1."""
+        self._seq[board_id] = self._seq.get(board_id, 0) + 1
+        return self._seq[board_id]
+
+    async def append(self, board_id: str, seq: int, batch: dict) -> bool:
+        """Capture the appended batch."""
+        self.appended.append((board_id, seq, batch))
+        return True
+
+
 def _make_note(note_id: str = "n1", *, w: float | None = None, h: float | None = None) -> Note:
     """Build a Note for tests.
 
@@ -94,7 +113,7 @@ async def test_add_notes_persists_and_broadcasts_when_room_exists():
     """Add notes persists and broadcasts when room exists."""
     registry = RoomRegistry()
     store = _RecordingGraphStore()
-    bridge = AgentBoardBridge(graph_store=store, registry=registry)
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=_FakeOplog())
 
     # Pre-seed a room with one connected client.
     sock = _FakeSocket()
@@ -122,7 +141,7 @@ async def test_no_broadcast_when_no_room_exists():
     """With no live session, only the persist step runs."""
     registry = RoomRegistry()
     store = _RecordingGraphStore()
-    bridge = AgentBoardBridge(graph_store=store, registry=registry)
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=_FakeOplog())
 
     note = _make_note()
     await bridge.add_notes(board_id="b1", notes=[note])
@@ -135,7 +154,7 @@ async def test_patch_note_broadcasts_node_update():
     """Patch note broadcasts node update."""
     registry = RoomRegistry()
     store = _RecordingGraphStore()
-    bridge = AgentBoardBridge(graph_store=store, registry=registry)
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=_FakeOplog())
 
     sock = _FakeSocket()
     await registry.join("b1", sock, "u1")
@@ -169,7 +188,7 @@ async def test_patch_note_with_unsupported_patch_still_persists():
     """
     registry = RoomRegistry()
     store = _RecordingGraphStore()
-    bridge = AgentBoardBridge(graph_store=store, registry=registry)
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=_FakeOplog())
 
     sock = _FakeSocket()
     await registry.join("b1", sock, "u1")
@@ -190,7 +209,7 @@ async def test_delete_node_broadcasts_node_remove():
     """Delete node broadcasts node remove."""
     registry = RoomRegistry()
     store = _RecordingGraphStore()
-    bridge = AgentBoardBridge(graph_store=store, registry=registry)
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=_FakeOplog())
 
     sock = _FakeSocket()
     await registry.join("b1", sock, "u1")
@@ -215,7 +234,7 @@ async def test_add_links_broadcasts_edge_add():
     # exercise in the resolver.
     store.nodes_by_uid["a"] = _make_note("a", w=200, h=100)
     store.nodes_by_uid["b"] = _make_note("b", w=400, h=80)
-    bridge = AgentBoardBridge(graph_store=store, registry=registry)
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=_FakeOplog())
 
     sock = _FakeSocket()
     await registry.join("b1", sock, "u1")
@@ -257,7 +276,7 @@ async def test_add_links_broadcasts_full_edge_shape():
     store = _RecordingGraphStore()
     store.nodes_by_uid["a"] = _make_note("a", w=200, h=100)
     store.nodes_by_uid["b"] = _make_note("b", w=200, h=100)
-    bridge = AgentBoardBridge(graph_store=store, registry=registry)
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=_FakeOplog())
 
     sock = _FakeSocket()
     await registry.join("b1", sock, "u1")
@@ -376,7 +395,7 @@ async def test_add_links_defaults_path_style_to_bezier():
     store = _RecordingGraphStore()
     store.nodes_by_uid["a"] = _make_note("a", w=100, h=100)
     store.nodes_by_uid["b"] = _make_note("b", w=100, h=100)
-    bridge = AgentBoardBridge(graph_store=store, registry=registry)
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=_FakeOplog())
 
     sock = _FakeSocket()
     await registry.join("b1", sock, "u1")
@@ -397,7 +416,7 @@ async def test_add_links_falls_back_to_zero_offset_when_node_missing():
     """
     registry = RoomRegistry()
     store = _RecordingGraphStore()  # nodes_by_uid intentionally empty
-    bridge = AgentBoardBridge(graph_store=store, registry=registry)
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=_FakeOplog())
 
     sock = _FakeSocket()
     await registry.join("b1", sock, "u1")
@@ -427,7 +446,7 @@ async def test_bridge_broadcast_lands_in_ring_buffer():
     """
     registry = RoomRegistry()
     store = _RecordingGraphStore()
-    bridge = AgentBoardBridge(graph_store=store, registry=registry)
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=_FakeOplog())
 
     sock = _FakeSocket()
     room, _ = await registry.join("b1", sock, "u1")
@@ -448,7 +467,7 @@ async def test_seq_is_monotonic_per_room():
     """Seq is monotonic per room."""
     registry = RoomRegistry()
     store = _RecordingGraphStore()
-    bridge = AgentBoardBridge(graph_store=store, registry=registry)
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=_FakeOplog())
 
     sock = _FakeSocket()
     await registry.join("b1", sock, "u1")
@@ -468,7 +487,7 @@ async def test_broadcast_runs_under_same_lock_as_seq_assignment():
     """
     registry = RoomRegistry()
     store = _RecordingGraphStore()
-    bridge = AgentBoardBridge(graph_store=store, registry=registry)
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=_FakeOplog())
 
     sock = _FakeSocket()
     await registry.join("b1", sock, "u1")

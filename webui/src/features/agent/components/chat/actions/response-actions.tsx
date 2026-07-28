@@ -40,6 +40,8 @@ export const ResponseActions = ({
       )}
     >
       <CopyAnswer answer={message} compact={compact} />
+      {/* SaveAsNote self-routes: backend board-picker online, in-browser
+          transform on local boards. */}
       <SaveAsNote message={message} type="notify" saveAsIs={saveAsIs} boardId={attachedBoardId} compact={compact} />
       <SaveAsNote message={message} type="mapify" boardId={attachedBoardId} compact={compact} />
       <SaveAsNote message={message} type="schemify" boardId={attachedBoardId} compact={compact} />

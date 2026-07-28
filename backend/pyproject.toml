@@ -51,6 +51,7 @@ dev = [
     "ruff>=0.12.2",
     "black>=25.1.0",
     "datasets>=3.6.0",
+    "fakeredis>=2.26.0",
 ]
 
 [tool.uv]
@@ -105,6 +106,7 @@ timeout_method = "thread"
 dev = [
     "black>=25.1.0",
     "datasets>=3.6.0",
+    "fakeredis>=2.26.0",
     "flake8>=7.3.0",
     "pytest>=8.4.1",
     "pytest-asyncio>=1.0.0",

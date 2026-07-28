@@ -1,6 +1,16 @@
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { ArrowsOutSimpleIcon, XIcon } from "@phosphor-icons/react"
 import { DragGripIcon } from "@/components/icons"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { cn } from "@/lib/utils"
 import { useEmbeddedDragHandle } from "./embedded-node-view-context"
 import { useStopCanvasGesture } from "./use-stop-canvas-gesture"
@@ -9,6 +19,11 @@ import { useStopCanvasGesture } from "./use-stop-canvas-gesture"
 export type NodeTrafficLightsProps = {
   /** Optional. When omitted the red dot is not rendered. */
   onDelete?: () => void
+  /**
+   * When set, the red dot opens a confirm dialog with this copy and only fires
+   * `onDelete` once the user confirms. Use for durable (non-undoable) deletes.
+   */
+  confirmDelete?: { title: string; description: string }
   /** Optional. When omitted the green dot is not rendered. */
   onExpand?: () => void
   className?: string
@@ -39,16 +54,25 @@ export type NodeTrafficLightsProps = {
  */
 export function NodeTrafficLights({
   onDelete,
+  confirmDelete,
   onExpand,
   className,
 }: NodeTrafficLightsProps) {
   const dragHandleProps = useEmbeddedDragHandle()
   const deleteRef = useRef<HTMLButtonElement>(null)
   const expandRef = useRef<HTMLButtonElement>(null)
+  const [confirming, setConfirming] = useState(false)
   useStopCanvasGesture(deleteRef)
   useStopCanvasGesture(expandRef)
 
+  // Confirmed deletes route through the dialog; plain deletes fire immediately.
+  const handleDelete = (): void => {
+    if (confirmDelete) setConfirming(true)
+    else onDelete?.()
+  }
+
   return (
+    <>
     <div
       {...dragHandleProps}
       title="Drag to move · click to select"
@@ -65,7 +89,7 @@ export function NodeTrafficLights({
           type="button"
           onClick={(e) => {
             e.stopPropagation()
-            onDelete()
+            handleDelete()
           }}
           onDoubleClick={(e) => e.stopPropagation()}
           aria-label="Delete"
@@ -133,5 +157,28 @@ export function NodeTrafficLights({
         </button>
       ) : null}
     </div>
+
+    {confirmDelete ? (
+      <AlertDialog open={confirming} onOpenChange={setConfirming}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{confirmDelete.title}</AlertDialogTitle>
+            <AlertDialogDescription>{confirmDelete.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirming(false)
+                onDelete?.()
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    ) : null}
+    </>
   )
 }

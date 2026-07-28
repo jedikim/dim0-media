@@ -251,7 +251,7 @@ services:
       # Mini-app sandboxed iframe runtime — see mini-app-archi.md §6.1.
       # Both bundles read these from window.__APP_CONFIG__ at boot;
       # docker-entrypoint.sh substitutes them into config.js per-env.
-      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-http://localhost:${MINI_APP_PORT:-5001}}
+      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-}
       VITE_HOST_ORIGIN: ${VITE_HOST_ORIGIN:-http://localhost:${APP_PORT:-3000}}
     depends_on:
       - backend-local
@@ -297,7 +297,7 @@ services:
     environment:
       API_ORIGIN: ${API_ORIGIN:-http://localhost:${API_PORT:-8081}}
       VITE_BILLING_ENABLED: ${VITE_BILLING_ENABLED:-false}
-      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-http://localhost:${MINI_APP_PORT:-5181}}
+      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-}
       VITE_HOST_ORIGIN: ${VITE_HOST_ORIGIN:-http://localhost:${APP_PORT:-5174}}
     depends_on:
       - backend-dev
@@ -341,7 +341,7 @@ services:
     environment:
       API_ORIGIN: ${API_ORIGIN:-http://localhost:${API_PORT:-8082}}
       VITE_BILLING_ENABLED: ${VITE_BILLING_ENABLED:-false}
-      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-http://localhost:${MINI_APP_PORT:-5182}}
+      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-}
       VITE_HOST_ORIGIN: ${VITE_HOST_ORIGIN:-http://localhost:${APP_PORT:-5175}}
     depends_on:
       - backend-test
@@ -385,7 +385,7 @@ services:
     environment:
       API_ORIGIN: ${API_ORIGIN:-http://localhost:${API_PORT:-8083}}
       VITE_BILLING_ENABLED: ${VITE_BILLING_ENABLED:-false}
-      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-http://localhost:${MINI_APP_PORT:-5183}}
+      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-}
       VITE_HOST_ORIGIN: ${VITE_HOST_ORIGIN:-http://localhost:${APP_PORT:-5176}}
     depends_on:
       - backend-staging
@@ -429,7 +429,7 @@ services:
     environment:
       API_ORIGIN: ${API_ORIGIN:-http://localhost:${API_PORT:-8084}}
       VITE_BILLING_ENABLED: ${VITE_BILLING_ENABLED:-false}
-      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-http://localhost:${MINI_APP_PORT:-5184}}
+      VITE_MINI_APP_ORIGIN: ${VITE_MINI_APP_ORIGIN:-}
       VITE_HOST_ORIGIN: ${VITE_HOST_ORIGIN:-http://localhost:${APP_PORT:-5177}}
     depends_on:
       - backend-prod

@@ -55,7 +55,13 @@ def create_memory_search_tool(
     Returns: An awaitable MemorySearchOutput.
 
     """
-    async def tool(wrapper: RunContextWrapper[Context], query: str) -> MemorySearchOutput:
+    async def tool(_wrapper: RunContextWrapper[Context], query: str) -> MemorySearchOutput:
+        """Search the board's notes and documents by meaning and return matching references.
+
+        Args:
+            query: Natural-language text to match against note titles and content.
+
+        """
         return await mem_search(
             query=query,
             content_store=content_store,

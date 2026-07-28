@@ -64,6 +64,9 @@ export const useCenterFromUrl = (
       return
     }
 
+    // Select the target(s) too, so a jump (e.g. from search) highlights them.
+    store.setSelection(nodes.map((n) => n.id))
+
     const rect = wrap.getBoundingClientRect()
     if (nodes.length === 1) {
       const node = nodes[0]

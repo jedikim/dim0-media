@@ -3,22 +3,22 @@
 Translates canvas-harness wire ops into existing `GraphStore`
 mutations.
 
-Scope (Phase 1b first cut):
-  - node.update for the scene-graph primitives (x, y, w, h, z, angle,
-    content). Covers drag, resize, z-order, rotate, text-edit — the
-    bulk of collab traffic.
+Supported (persisted to the graph):
+  - node.add / node.update — scene primitives (x, y, w, h, z, angle,
+    content), full `style` (every camelCase field → snake_case, except the
+    theme-adapted display colors, which come via `data._storedColors`), and
+    `data.properties` (imageUrl, iconData, emoji, pinned, listOrder, slide*,
+    …) + scope (`parentId` / `graphUid`) + `label`. See
+    `_node_patch_to_note_data` / `_wire_node_to_note`. Covers drag, resize,
+    z-order, rotate, text-edit, restyle, image/icon — the bulk of traffic.
   - node.remove — id-only delete.
-  - node.add — minimal conversion that round-trips through the existing
-    Note model. Style/data nuances delegated to the existing pydantic
-    defaults; richer fidelity lands as deepenings.
-  - edge.add / edge.update / edge.remove — the Link analogues.
+  - edge.add / edge.update / edge.remove — the Link analogues (incl. the
+    curve `_midpoint` → `edge_control_point`).
 
-Deferred (still log + return `unsupported`):
-  - Full `style` / `data` translation for `node.update` / `node.add`.
-    The relay still broadcasts the op to peers; the server just doesn't
-    persist the unsupported fields yet.
-  - `group.upsert` / `group.remove` (Dim0 doesn't surface groups yet).
-  - `frame.reorder` (z-shuffle of multiple ids in one op).
+Deferred (still log + return `unsupported`; relayed to peers but not persisted):
+  - `group.upsert` / `group.remove` — Dim0 doesn't surface groups yet.
+  - `frame.reorder` — a bulk multi-id z-shuffle op (per-node `z` IS persisted
+    via node.update, so the effect is reachable without it).
 """
 
 import logging

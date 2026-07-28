@@ -1,12 +1,12 @@
 import { useCallback } from "react"
 import {
-  asBatchId,
   type CanvasStore,
   type Edge,
   type Node,
   type Op,
 } from "@canvas-harness/core"
 import { parseDocument } from "@/features/board/api/parse-document"
+import { makeBatch } from "@/features/board/harness/make-batch"
 import { linkToEdge } from "../convert/link-to-edge"
 import { noteToNode } from "../convert/note-to-node"
 
@@ -70,13 +70,7 @@ export const useHarnessParseDocument = (
       for (const edge of edges) ops.push({ type: "edge.add", edge })
       if (ops.length === 0) return { nodesAdded: 0, edgesAdded: 0 }
 
-      store.applyBatch({
-        id: asBatchId(store.generateId()),
-        clientId: store.clientId,
-        ts: Date.now(),
-        origin: "remote",
-        ops,
-      })
+      store.applyBatch(makeBatch(store, "remote", ops))
 
       return { nodesAdded: nodes.length, edgesAdded: edges.length }
     },

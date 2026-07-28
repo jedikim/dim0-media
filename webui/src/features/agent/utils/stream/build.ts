@@ -1,12 +1,11 @@
 import type { AgentResponse, ReasoningStep, ToolCallStep, ToolExecutionState, ToolName } from "../../types/stream"
 import { RAW_MESSAGE, ToolNameDescription, isReasoningTextToolName } from "../../types/stream"
 import { simpleTransform } from "./transform"
+import { createFlushGate } from "./throttle"
 import type {
   CreateNoteOutput,
   EditNoteOutput,
   WriteNoteOutput,
-  WebSearchOutput,
-  MemorySearchOutput,
   ToolOutput,
   Annotation,
   UrlAnnotation
@@ -41,11 +40,11 @@ type BuildResponseOptions = {
  */
 const makeToolOutput = (acc: StepAccum): ToolOutput => {
   if (acc.name === "web_search") {
-    const urls = acc.annotations.filter(a => a.type === "url") as WebSearchOutput["searchResults"]
+    const urls = acc.annotations.filter(a => a.type === "url")
     return { type: "web_search", answer: "", searchResults: urls }
   }
   if (acc.name === "memory_search") {
-    const refs = acc.annotations.filter(a => a.type === "reference") as MemorySearchOutput["references"]
+    const refs = acc.annotations.filter(a => a.type === "reference")
     return { type: "memory_search", answer: "", references: refs }
   }
   if (acc.name === "code_interpreter") {
@@ -167,8 +166,7 @@ export async function* buildResponse(
     annotationsCap = 1000
   } = opts
 
-  const minIntervalMs = Math.max(1, Math.floor(1000 / maxFps))
-  let lastYieldAt = 0
+  const gate = createFlushGate({ maxFps, safetyMaxIntervalMs })
   let bufferedChars = 0
 
   const stepsById = new Map<string, StepAccum>()
@@ -215,11 +213,9 @@ export async function* buildResponse(
 
   const maybeYield = async (force = false) => {
     const now = Date.now()
-    const dueByTime = now - lastYieldAt >= minIntervalMs
-    const hitSafety = now - lastYieldAt >= safetyMaxIntervalMs
     const hitSize = bufferedChars >= sizeThresholdChars
 
-    if (force || shouldBurstYield || hitSize || hitSafety || (dueByTime && bufferedChars > 0)) {
+    if (gate.shouldFlush(now, { force: force || shouldBurstYield || hitSize, hasPending: bufferedChars > 0 })) {
       for (const id of order) {
         const s = stepsById.get(id)!
         if (s.dirty) {
@@ -230,7 +226,7 @@ export async function* buildResponse(
 
       shouldBurstYield = false
       const resp: AgentResponse = { steps: order.map(id => toReasoningStep(stepsById.get(id)!)) }
-      lastYieldAt = now
+      gate.markFlushed(now)
       bufferedChars = 0
       return { response: resp, isStop: false }
     }
@@ -367,7 +363,7 @@ export function extractStepDescription(step: ReasoningStep): { reasoning: string
   if (
     step.name === "web_search" ||
     step.name === "memory_search" ||
-    step.name === "navigate" ||
+    step.name === "fetch" ||
     step.name === "code_interpreter"
   ) {
     input = extractInputOrQuery(step) || undefined
@@ -448,12 +444,12 @@ export function extractStepDescription(step: ReasoningStep): { reasoning: string
 
 
 /**
- * Extracts URL annotations from a web search tool step.
+ * Extracts URL annotations from a web_search-typed tool step (web_search or
+ * fetch/navigate), for the per-step inline source list.
  */
 export function getWebSearchUrls(step: ReasoningStep): UrlAnnotation[] {
-  if (step.type === "tool_call" && step.name === "web_search" && typeof step.output !== "string") {
-    const out = step.output as WebSearchOutput
-    return out.searchResults
+  if (step.type === "tool_call" && typeof step.output !== "string" && step.output.type === "web_search") {
+    return step.output.searchResults
   }
   return []
 }

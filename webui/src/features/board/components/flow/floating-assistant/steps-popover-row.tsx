@@ -6,7 +6,7 @@ import { MiniLinkCard } from "@/features/agent/components/link-preview"
 import { useChat } from "@/features/agent/hooks/chat-context"
 import { CodeInterpreterResult, NoteToolResult, ToolArgsRows } from "@/features/agent/components/chat/tool-step-row"
 import type { ToolCallStep } from "@/features/agent/types/stream"
-import { ToolNameIcon } from "@/features/agent/types/stream"
+import { DEFAULT_TOOL_ICON, ToolNameIcon } from "@/features/agent/types/stream"
 import type {
   CodeInterpreterOutput,
   CreateNoteOutput,
@@ -51,7 +51,7 @@ export const StepsPopoverRow = ({ step, index }: { step: ToolCallStep; index: nu
     shouldThrow: false,
   }) ?? {}
 
-  const Icon = ToolNameIcon[step.name]
+  const Icon = ToolNameIcon[step.name] ?? DEFAULT_TOOL_ICON
   const title = getToolTitle(step.name)
   const { input } = extractStepDescription(step)
   const sources = useMemo(() => getWebSearchUrls(step), [step])

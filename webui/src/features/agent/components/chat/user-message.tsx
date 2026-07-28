@@ -86,7 +86,7 @@ const CopyUserMessageButton = ({ text, className }: { text: string, className?: 
   const [copied, setCopied] = useState(false)
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(text).then(() => {
+    void navigator.clipboard.writeText(text).then(() => {
       setCopied(true)
       toast("Message copied to clipboard!")
       setTimeout(() => setCopied(false), 2000)

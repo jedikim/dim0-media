@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react"
 import { type NodeId } from "@canvas-harness/core"
 import { useCanvasStore, useNode } from "@canvas-harness/react"
+import { removeNodeSubtree } from "@/features/board/harness/graph/subtree"
 import { cn } from "@/lib/utils"
 import { useTheme } from "@/components/theme-provider"
 import { ensureLanguage, highlightCodeSync } from "@/lib/shiki"
@@ -101,7 +102,7 @@ export function CodeSandboxView({ id }: CodeSandboxViewProps) {
       </button>
 
       <NodeTrafficLights
-        onDelete={canEdit ? () => store.removeNode(id) : undefined}
+        onDelete={canEdit ? () => removeNodeSubtree(store, id) : undefined}
         onExpand={canEdit ? () => openNodeSurface(id as unknown as string, "code-sandbox") : undefined}
       />
 

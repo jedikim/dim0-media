@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query"
 import type { Graph } from "../types/board"
 import camelcaseKeys from "camelcase-keys"
 import { apiFetch } from "@/api"
+import { isSignedIn } from "@/lib/auth"
 
 
 /**
@@ -61,7 +62,9 @@ export const useListBoards = (userId: string) => {
   return useQuery<BoardListItem[]>({
     queryKey: ["listBoards", userId],
     queryFn: () => listBoards(),
-    enabled: !!userId,
+    // `isSignedIn`, not `!!userId`: the logged-out sentinel "root" is truthy, so
+    // `!!userId` would fire this authed request logged-out → 401 → forced signin.
+    enabled: isSignedIn(userId),
     staleTime: 1000 * 60 * 5 // 5 minutes
   })
 }
