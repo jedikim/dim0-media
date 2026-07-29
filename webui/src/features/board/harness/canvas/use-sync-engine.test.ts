@@ -15,17 +15,17 @@ const meta = (syncEngine?: "legacy" | "v2"): BoardMeta => ({
 
 
 describe("resolveSyncEngine", () => {
-  it("defaults to legacy when no meta and no override (untouched backend board)", () => {
-    expect(resolveSyncEngine(undefined, false)).toBe("legacy")
+  it("defaults to v2 when no meta and no override (Phase 1: v2 is the default)", () => {
+    expect(resolveSyncEngine(undefined, false)).toBe("v2")
   })
 
-  it("reads the stored engine from meta", () => {
+  it("reads the stored engine from meta (incl. the legacy-pin escape hatch)", () => {
     expect(resolveSyncEngine(meta("v2"), false)).toBe("v2")
-    expect(resolveSyncEngine(meta("legacy"), false)).toBe("legacy")
+    expect(resolveSyncEngine(meta("legacy"), false)).toBe("legacy") // pin holds a board on legacy
   })
 
-  it("treats meta without syncEngine as legacy", () => {
-    expect(resolveSyncEngine(meta(undefined), false)).toBe("legacy")
+  it("treats meta without syncEngine as v2 (the default)", () => {
+    expect(resolveSyncEngine(meta(undefined), false)).toBe("v2")
   })
 
   it("dev override forces v2 regardless of stored engine or missing meta", () => {

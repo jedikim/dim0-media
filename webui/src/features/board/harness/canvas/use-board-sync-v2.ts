@@ -13,11 +13,12 @@
  * snapshot re-hydrates the base on each load (true offline-first load is a
  * follow-up).
  */
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import type { CanvasStore } from "@canvas-harness/core"
 import camelcaseKeys from "camelcase-keys"
 import { API_URL } from "@/config/api"
 import { mintCollabTicket } from "@/features/board/api/collab-ticket"
+import type { BoardRole } from "@/features/board/api/get-board"
 import { getLocalStores } from "@/features/local-stores"
 import { useAppStore } from "@/store"
 import type { Graph } from "@/features/board/types/board"
@@ -43,9 +44,17 @@ export const useBoardSyncV2 = (
   boardId: string | null,
   enabled: boolean,
   rootId: string | null,
+  // Reports the caller's board role, resolved from the collab ticket at connect
+  // time. The v2 hydrate path can't compute canEdit/role itself (it skips the
+  // REST hydrate), so it defaults to read-only and upgrades via this callback.
+  onRole?: (role: BoardRole) => void,
 ): void => {
   const userEmail = useAppStore((s) => s.userEmail)
   const userId = useAppStore((s) => s.userId)
+  // Held in a ref so a fresh inline `onRole` each render never re-runs the mount
+  // effect (which would tear down + rebuild the coordinator).
+  const onRoleRef = useRef(onRole)
+  onRoleRef.current = onRole
 
   useEffect(() => {
     if (!enabled || !boardId) return
@@ -82,7 +91,14 @@ export const useBoardSyncV2 = (
                 clientId,
                 sinceSeq,
                 rootId: rootId ?? undefined,
-                mintTicket: async (id) => (await mintCollabTicket(id)).ticket,
+                mintTicket: async (id) => {
+                  const { ticket, role } = await mintCollabTicket(id)
+                  // Ignore a mint that resolved after this board's effect was torn
+                  // down (rapid board switch) — else a stale role would clobber the
+                  // now-current board's state on the singleton store.
+                  if (!cancelled) onRoleRef.current?.(role)
+                  return ticket
+                },
                 wsUrl: (path) => `${wsBaseFromApiUrl(API_URL)}${path}`,
                 onClose: (code) => supe.onClose(code),
               })

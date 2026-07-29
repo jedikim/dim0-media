@@ -1,9 +1,12 @@
 import { apiFetch } from "@/api"
+import type { BoardRole } from "./get-board"
 
 
 export type CollabTicketResponse = {
   ticket: string
   expires_in: number
+  /** The caller's effective role on the board, resolved server-side at mint. */
+  role: BoardRole
 }
 
 

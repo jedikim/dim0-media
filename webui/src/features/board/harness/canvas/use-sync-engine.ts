@@ -5,8 +5,9 @@
  * Source of truth is the board's `BoardMeta.syncEngine` (persisted in the local
  * registry). The `dim0SyncV2` localStorage flag stays as a dev/testing override
  * that forces v2 on any board — it wins over the stored engine. A board with no
- * local meta and no override resolves to `legacy`, so untouched backend boards
- * behave exactly as before.
+ * local meta and no override resolves to `v2` (the default as of Phase 1 of the
+ * backend-agent retirement); a board can still be pinned to the legacy client
+ * with an explicit `syncEngine: "legacy"` (an escape hatch during rollout).
  */
 import { useEffect, useState } from "react"
 import type { BoardMeta } from "@/features/board/model"
@@ -17,11 +18,11 @@ import { isBoardSyncV2 } from "../sync/sync-engine-flag"
 export type SyncEngine = "legacy" | "v2"
 
 
-/** Pure engine resolution: dev override wins, else stored engine, else legacy. */
+/** Pure engine resolution: dev override wins, else stored engine, else v2 (default). */
 export const resolveSyncEngine = (
   meta: BoardMeta | undefined,
   devOverride: boolean,
-): SyncEngine => (devOverride ? "v2" : (meta?.syncEngine ?? "legacy"))
+): SyncEngine => (devOverride ? "v2" : (meta?.syncEngine ?? "v2"))
 
 
 /**
@@ -54,7 +55,7 @@ export const useSyncEngine = (
         if (!cancelled) setEngine(resolveSyncEngine(meta, false))
       })
       .catch(() => {
-        if (!cancelled) setEngine("legacy")
+        if (!cancelled) setEngine("v2") // default engine; consistent with resolveSyncEngine
       })
     return () => {
       cancelled = true
