@@ -107,6 +107,15 @@ export type DimEdgeData = {
   parentId?: Id | null
   props?: Record<string, DataProperty>
   meta: SyncMeta
+
+  /**
+   * Source-of-truth edge colors as picked (theme-independent; no fill — edges
+   * are stroke + label). `edge.style.{stroke,text}` is projected from these per
+   * theme mode. Kept here so a theme flip re-projects without corrupting the
+   * stored colors, and so persist round-trips the canonical (not dark-adapted)
+   * value. Mirrors `DimNodeData._storedColors` / `LinkEdgeData._storedColors`.
+   */
+  _storedColors?: { strokeColor?: string; textColor?: string }
 }
 
 

@@ -105,6 +105,19 @@ class MessageUpdateRequest(BaseModel):
     data: dict
 
 
+class StoreTranscriptRequest(BaseModel):
+    """Request model for storing a browser-agent chat transcript.
+
+    ``transcript`` is the client's message array, stored verbatim as opaque
+    JSON (no server-side chat model). ``board_id``/``label`` are metadata used
+    for cross-device seed and the chat list.
+    """
+
+    transcript: list[dict]
+    board_id: str | None = None
+    label: str | None = None
+
+
 class GraphUpdateRequest(BaseModel):
     """Request model for updating a graph."""
 

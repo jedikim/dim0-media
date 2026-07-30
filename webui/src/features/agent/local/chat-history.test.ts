@@ -13,6 +13,15 @@ const user = (text: string): ChatMessage => ({
 })
 
 
+const userWithContext = (text: string, context: string): ChatMessage => ({
+  id: `u-${text}`,
+  role: "user",
+  content: { markdown: text },
+  chatUid: "c1",
+  properties: { context: { type: "text", text: context } },
+})
+
+
 const assistant = (text: string, reasoning: ReasoningStep[] = []): ChatMessage => ({
   id: `a-${text}`,
   role: "assistant",
@@ -61,6 +70,23 @@ describe("toLlmHistory", () => {
     const history = toLlmHistory([user("build"), assistant("", [createNoteStep("n9", "X")])])
     expect(history).toHaveLength(2)
     expect(history[1].content).toContain("create_note")
+  })
+
+
+  it("re-wraps a past user turn's selected-note context (mirrors the backend)", () => {
+    const ctx = "<SelectedNote>\nNoteId: n1\nTitle: Cats\n</SelectedNote>"
+    const [first] = toLlmHistory([
+      userWithContext("expand it", ctx),
+      assistant("sure"),
+    ])
+    // The agent must still see WHAT "it" referred to on a reloaded conversation.
+    expect(first.content).toBe(`<MessageContext>\n\n${ctx}\n\n</MessageContext>\n\nexpand it`)
+  })
+
+
+  it("leaves a user turn without context as bare text", () => {
+    const [first] = toLlmHistory([user("hi"), assistant("hello")])
+    expect(first.content).toBe("hi") // no empty <MessageContext> envelope
   })
 
 

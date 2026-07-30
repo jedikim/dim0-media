@@ -18,6 +18,7 @@ from topix.api.datatypes.requests import (
     ChatUpdateRequest,
     MessageUpdateRequest,
     SendMessageRequest,
+    StoreTranscriptRequest,
 )
 from topix.api.utils.decorators import with_standard_response
 from topix.api.utils.rate_limit.dependency import rate_limiter
@@ -57,6 +58,51 @@ async def create_chat(
     store: ChatStore = request.app.chat_store
     await store.create_chat(new_chat)
     return {"chat_id": new_chat.uid}
+
+
+# --- Browser-agent transcript storage (Phase 2) ------------------------------
+# Additive, owner-scoped by the authenticated user. The browser engine is the
+# source of truth; these routes back up its transcript verbatim and seed it on
+# another device. No agent, no streaming, no embedding — distinct from the
+# server-agent `POST /{chat_id}/messages` path below. Declared before the
+# `/{chat_id}` routes so `GET /transcripts` isn't captured as a chat id.
+
+
+@router.get("/transcripts/", include_in_schema=False)
+@router.get("/transcripts")
+@with_standard_response
+async def list_transcripts(
+    response: Response,
+    request: Request,
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+    board_id: Annotated[str, Query(description="Board UID to list transcripts for")],
+):
+    """List the caller's browser-agent transcripts for a board (seed source)."""
+    store: ChatStore = request.app.chat_store
+    transcripts = await store.list_transcripts_by_board(user_id, board_id)
+    return {"transcripts": transcripts}
+
+
+@router.put("/{chat_id}/transcript/", include_in_schema=False)
+@router.put("/{chat_id}/transcript")
+@with_standard_response
+async def store_transcript(
+    response: Response,
+    request: Request,
+    chat_id: Annotated[str, Path(description="Chat ID")],
+    body: Annotated[StoreTranscriptRequest, Body(description="Transcript payload")],
+    user_id: Annotated[str, Depends(get_current_user_uid)],
+):
+    """Store a browser-agent chat transcript verbatim (owner-scoped upsert)."""
+    store: ChatStore = request.app.chat_store
+    await store.upsert_transcript(
+        chat_uid=chat_id,
+        user_uid=user_id,
+        board_id=body.board_id,
+        label=body.label,
+        transcript=body.transcript,
+    )
+    return {"chat_id": chat_id, "stored": len(body.transcript)}
 
 
 @router.post("/{chat_id}:describe/", include_in_schema=False)

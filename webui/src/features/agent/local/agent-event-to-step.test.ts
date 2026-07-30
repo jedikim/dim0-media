@@ -26,6 +26,24 @@ describe("stepsFromEvents", () => {
   })
 
 
+  it("marks a step failed and shows the message when the result is a ToolFailure", () => {
+    const events: AgentEvent[] = [
+      { type: "tool_start", toolName: "web_search", args: { query: "x" } },
+      {
+        type: "tool_result",
+        toolName: "web_search",
+        result: { ok: false, error: "user_declined", tool: "web_search", message: "The user declined this request." },
+      },
+    ]
+    const [tool] = stepsFromEvents(events, "b")
+    expect(tool.type).toBe("tool_call")
+    if (tool.type === "tool_call") {
+      expect(tool.state).toBe("failed")
+      expect(tool.output).toBe("The user declined this request.")
+    }
+  })
+
+
   it("maps update_note → edit_note and link_notes correctly", () => {
     const events: AgentEvent[] = [
       { type: "tool_start", toolName: "update_note", args: { id: "n1", title: "B" } },

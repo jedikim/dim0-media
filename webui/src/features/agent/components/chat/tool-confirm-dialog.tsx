@@ -1,7 +1,7 @@
 import { GlobeIcon, CodeInterpreterIcon, BrowserSearchIcon } from "@/components/icons"
+import { Button } from "@/components/ui/button"
 import {
   AlertDialog,
-  AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
@@ -44,9 +44,11 @@ const describe = (req: ToolConfirmRequest): { title: string; hint: string; previ
 
 /**
  * Confirmation for off-board agent tools (`fetch` / `web_search` / `code_interpreter`).
- * Mounted once on a local board; shows the exact URL/query/code and pauses the run until the
- * user allows or declines (see `useToolConfirm` + the agent loop's CONFIRM_TOOLS).
- * The preview is rendered as plain text — never HTML — so it can't inject markup.
+ * Mounted at the board level whenever the browser engine runs (LocalBoardScreen
+ * for local boards, BoardView for synced ones); shows the exact URL/query/code
+ * and pauses the run until the user decides (see `useToolConfirm` + the agent
+ * loop's CONFIRM_TOOLS). The preview is plain text — never HTML — so it can't
+ * inject markup.
  */
 export const ToolConfirmDialog = () => {
   const pending = useToolConfirm((s) => s.pending)
@@ -56,7 +58,7 @@ export const ToolConfirmDialog = () => {
   const { title, hint, preview, Icon } = describe(pending)
 
   return (
-    <AlertDialog open onOpenChange={(open) => !open && resolve(false)}>
+    <AlertDialog open onOpenChange={(open) => !open && resolve("deny")}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle className="flex items-center gap-2">
@@ -71,8 +73,11 @@ export const ToolConfirmDialog = () => {
           </pre>
         )}
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={() => resolve(false)}>Don't allow</AlertDialogCancel>
-          <AlertDialogAction onClick={() => resolve(true)}>Allow</AlertDialogAction>
+          <AlertDialogCancel onClick={() => resolve("deny")}>Don't allow</AlertDialogCancel>
+          {/* "Allow once" gates the next call again; "Allow for this request"
+              auto-approves further calls to this tool for the rest of the run. */}
+          <Button variant="outline" onClick={() => resolve("once")}>Allow once</Button>
+          <Button onClick={() => resolve("always")}>Allow for this request</Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

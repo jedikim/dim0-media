@@ -1,4 +1,5 @@
 import { ChatProvider } from "@/features/agent/hooks/chat-context"
+import { isLocalAgentOnSynced } from "@/features/agent/local/local-agent-flag"
 import { AnswerCard } from "./answer-card"
 import { FloatingIsland } from "./floating-island"
 
@@ -25,8 +26,24 @@ export const FloatingAssistant = ({
   onOpenFullSheet,
   local = false,
 }: FloatingAssistantProps) => {
+  // Phase 3 (flag-gated): run the browser engine on a synced board too. The chat
+  // then goes fully local-mode (browser engine + local transcript store), and its
+  // edits ride the v2 relay to peers with no server agent. Off → unchanged.
+  const browserAgent = local || isLocalAgentOnSynced()
+  // Phase 2: a SYNCED board in browser-agent mode backs up transcripts to the
+  // server (cross-device). A local-only board (`local`) has nothing to sync to.
+  const syncTranscript = browserAgent && !local
+
+  // The local store is initialized at the screen level (BoardView for synced
+  // boards, LocalBoardScreen for local ones) so the pill and drawer — which
+  // never mount together — share one conversation. This surface just consumes it.
+
   return (
-    <ChatProvider initialChatId={local ? boardId : currentChatId} local={local}>
+    <ChatProvider
+      initialChatId={browserAgent ? boardId : currentChatId}
+      local={browserAgent}
+      syncTranscript={syncTranscript}
+    >
       <FloatingIsland boardId={boardId} onOpenFullSheet={onOpenFullSheet} />
       <AnswerCard onOpenFullSheet={onOpenFullSheet} />
     </ChatProvider>

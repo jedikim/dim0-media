@@ -10,6 +10,12 @@ type ChatContextType = {
    * switch point that keeps every chat component transport-agnostic.
    */
   local: boolean
+  /**
+   * When true, the browser engine runs on a SYNCED board (not a local-only
+   * one), so finished turns are backed up to the server for cross-device seed.
+   * Always false when `local` is a local-only board (nothing to sync to).
+   */
+  syncTranscript: boolean
 }
 
 // the actual context (starts undefined until provided)
@@ -19,10 +25,12 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined)
 export const ChatProvider = ({
   initialChatId,
   local = false,
+  syncTranscript = false,
   children,
 }: {
   initialChatId?: string
   local?: boolean
+  syncTranscript?: boolean
   children: ReactNode
 }) => {
   const [chatId, setChatId] = useState<string | undefined>(initialChatId)
@@ -32,7 +40,7 @@ export const ChatProvider = ({
   }, [initialChatId])
 
   return (
-    <ChatContext.Provider value={{ chatId, setChatId, local }}>
+    <ChatContext.Provider value={{ chatId, setChatId, local, syncTranscript }}>
       {children}
     </ChatContext.Provider>
   )

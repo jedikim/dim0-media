@@ -34,14 +34,20 @@ export const loadMessages = async (chatUid: string): Promise<ChatMessage[]> => {
 }
 
 
-/** Persist a chat's full transcript and stamp its record (optional label). */
+/**
+ * Persist a chat's full transcript and stamp its record (optional label).
+ * `updatedAt` overrides the recency stamp — the live path omits it (defaults to
+ * now); the cross-device seed passes the server's timestamp so a batch of seeded
+ * chats keeps its real order instead of being reordered by seed-loop timing.
+ */
 export const saveMessages = async (
   chatUid: string,
   boardId: string,
   messages: ChatMessage[],
   label?: string,
+  updatedAt?: number,
 ): Promise<void> => {
-  await (await getLocalStores()).chats.saveTranscript(chatUid, boardId, messages, label)
+  await (await getLocalStores()).chats.saveTranscript(chatUid, boardId, messages, label, updatedAt)
 }
 
 

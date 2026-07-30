@@ -4,7 +4,9 @@
  * construction — the LLM is injected, so tests use a scripted mock.
  */
 import { z } from "zod"
+import { CONFIRM_TOOL_NAMES } from "./types"
 import type { AgentEvent, LlmClient, LlmMessage, LlmToolDef, LlmTurn, Tool, ToolContext } from "./types"
+import { isToolSoftError, toolRejected, toolThrew, unknownTool, userDeclined } from "./tool-result"
 import { agentLog } from "./debug"
 
 
@@ -24,7 +26,7 @@ export const DEFAULT_MAX_TURNS = 30
  * data or run attacker code. Note tools stay auto — they act on the user's own
  * board and gating them would wreck the normal build flow.
  */
-const CONFIRM_TOOLS = new Set(["fetch", "code_interpreter", "web_search"])
+const CONFIRM_TOOLS = new Set<string>(CONFIRM_TOOL_NAMES)
 
 
 /** Convert a tool's Zod schema to a plain JSON Schema (dropping the `$schema` tag). */
@@ -51,6 +53,89 @@ const parseArgs = (raw: string): Record<string, unknown> => {
 }
 
 
+/** Order-independent JSON of a value, so equal args produce the same string. */
+const stableStringify = (v: unknown): string => {
+  if (v === null || typeof v !== "object") return JSON.stringify(v) ?? "null"
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(",")}]`
+  const obj = v as Record<string, unknown>
+  return `{${Object.keys(obj)
+    .sort()
+    .map((k) => `${JSON.stringify(k)}:${stableStringify(obj[k])}`)
+    .join(",")}}`
+}
+
+
+/** Identity of a specific tool call (name + args) — the decline gate's key, so a
+ *  refusal is scoped to THAT call, not the whole tool. */
+const callKey = (name: string, args: Record<string, unknown>): string => `${name}:${stableStringify(args)}`
+
+
+/**
+ * Per-run memory for the off-board confirm gate:
+ *  - `declined` — SPECIFIC calls (tool + args, see `callKey`) the user refused.
+ *    An identical later call fails closed WITHOUT reopening the dialog (a
+ *    retrying model can't nag), but a DIFFERENT call of the same tool still
+ *    prompts — declining one web search doesn't ban the next.
+ *  - `approved` — TOOLS the user chose "allow for this request" for; every later
+ *    call to that tool runs without prompting (a deliberate broad grant).
+ */
+export type ConfirmGate = { declined: Set<string>; approved: Set<string> }
+
+
+/** A fresh gate for one run. */
+export const newConfirmGate = (): ConfirmGate => ({ declined: new Set(), approved: new Set() })
+
+
+/**
+ * Execute one tool call under the loop's policy and return the model-facing
+ * result: the tool's own output on success, or a structured `ToolFailure`
+ * (unknown tool / user-declined / thrown error) the model can act on. The
+ * single choke point for tool execution — the frontend analog of the backend's
+ * tool decorator, so every failure origin yields one consistent shape.
+ *
+ * The off-board confirm gate is consulted only when the tool is neither already
+ * declined nor already approved this run (see {@link ConfirmGate}).
+ */
+export async function executeToolCall(
+  name: string,
+  args: Record<string, unknown>,
+  tools: Tool[],
+  ctx: ToolContext,
+  gate: ConfirmGate,
+): Promise<unknown> {
+  const tool = tools.find((t) => t.name === name)
+  if (!tool) return unknownTool(name)
+
+  // Confirm gate + run share one try/catch, so neither a throwing confirmer nor
+  // a throwing tool aborts the whole run — both surface as a `tool_error`.
+  try {
+    if (CONFIRM_TOOLS.has(tool.name) && ctx.confirmTool) {
+      // Decline is per specific call; approval is per tool (broad). Check the
+      // exact-call decline first so an explicitly refused call stays refused
+      // even if the tool was later broadly approved.
+      const key = callKey(tool.name, args)
+      if (gate.declined.has(key)) return userDeclined(tool.name)
+      if (!gate.approved.has(tool.name)) {
+        const decision = await ctx.confirmTool({ name: tool.name, args })
+        if (decision === "deny") {
+          gate.declined.add(key)
+          return userDeclined(tool.name)
+        }
+        // "always" broadens consent to the rest of the run; "once" does not.
+        if (decision === "always") gate.approved.add(tool.name)
+      }
+    }
+    const result = await tool.run(args, ctx)
+    // Normalize a tool's own `{ error }` rejection into the shared ToolFailure
+    // shape, so every failure origin — unknown / declined / thrown / rejected —
+    // answers `isToolFailure` uniformly.
+    return isToolSoftError(result) ? toolRejected(tool.name, result.error) : result
+  } catch (err) {
+    return toolThrew(tool.name, err)
+  }
+}
+
+
 export type RunAgentOptions = {
   userMessage: string
   tools: Tool[]
@@ -71,6 +156,10 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
   if (opts.system) messages.push({ role: "system", content: opts.system })
   if (opts.history) messages.push(...opts.history)
   messages.push({ role: "user", content: opts.userMessage })
+
+  // Per-run confirm memory (declined + approved). Spans all turns, so a retry
+  // or a follow-up call in a later round respects the earlier decision.
+  const gate = newConfirmGate()
 
   for (let turn = 0; turn < maxTurns; turn += 1) {
     // Prefer streaming: emit cumulative `assistant_text` per delta so the UI
@@ -107,27 +196,11 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
     for (const call of result.calls) {
       const args = parseArgs(call.arguments)
       yield { type: "tool_start", toolName: call.name, args }
-      const tool = opts.tools.find((t) => t.name === call.name)
-      // A tool that throws (e.g. a managed service returning 500) must not abort
-      // the whole run: feed the error back as the tool result so the model can
-      // recover or answer without it, matching the unknown-tool path.
-      let output: unknown
-      if (!tool) {
-        output = { error: `unknown tool: ${call.name}` }
-      } else {
-        // Confirm + run share one try/catch so neither a declined confirm nor a
-        // throwing confirmer/tool aborts the whole run — the error is fed back.
-        try {
-          if (CONFIRM_TOOLS.has(tool.name) && opts.ctx.confirmTool && !(await opts.ctx.confirmTool({ name: tool.name, args }))) {
-            // Declined off-board action: feed a result back so the model adapts.
-            output = { error: "declined by user" }
-          } else {
-            output = await tool.run(args, opts.ctx)
-          }
-        } catch (err) {
-          output = { error: err instanceof Error ? err.message : String(err) }
-        }
-      }
+      // One choke point: unknown-tool guard, the off-board confirm gate, and
+      // error normalization all live in executeToolCall, so every outcome —
+      // declined, unknown, or thrown — feeds back one consistent structured
+      // result and no failure origin aborts the run.
+      const output = await executeToolCall(call.name, args, opts.tools, opts.ctx, gate)
       agentLog.tool(call.name, args, output)
       yield { type: "tool_result", toolName: call.name, result: output }
       messages.push({ role: "tool", toolCallId: call.id, content: JSON.stringify(output) })

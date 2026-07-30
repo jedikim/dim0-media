@@ -10,6 +10,7 @@ import type { LlmMessage } from "@/features/agent/engine/types"
 import type { ReasoningStep } from "@/features/agent/types/stream"
 import { isToolCallStep } from "@/features/agent/types/stream"
 import type { ToolOutput } from "@/features/agent/types/tool-outputs"
+import { wrapWithMessageContext } from "./message-context"
 
 
 // Recent turns fed back as context. Mirrors the backend AssistantSession
@@ -84,7 +85,13 @@ const compactReasoning = (steps: ReasoningStep[]): string => {
 /** A message's LLM content: assistant turns prepend their reasoning/tool traces. */
 const compactMessageContent = (message: ChatMessage): string => {
   const markdown = message.content.markdown?.trim() ?? ""
-  if (message.role !== "assistant") return markdown
+  if (message.role !== "assistant") {
+    // Mirror the backend's `to_chat_message`: a past user turn re-includes the
+    // selected-note context it was sent with, so cross-turn references ("expand
+    // it") stay resolvable. wrapWithMessageContext emits the same envelope the
+    // live turn uses, and returns the bare prompt when there's no context.
+    return wrapWithMessageContext(markdown, message.properties?.context?.text)
+  }
   const reasoning = compactReasoning(message.properties?.reasoning?.reasoning ?? [])
   return reasoning ? `${reasoning}\n\n${markdown}`.trim() : markdown
 }

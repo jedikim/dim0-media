@@ -13,6 +13,12 @@ from topix.store.postgres.chat import (
     list_chats_by_user_uid,
     update_chat_by_uid,
 )
+from topix.store.postgres.chat_transcript import (
+    list_transcripts_by_board as _list_transcripts_by_board,
+)
+from topix.store.postgres.chat_transcript import (
+    upsert_transcript as _upsert_transcript,
+)
 from topix.store.postgres.pool import create_pool
 from topix.store.qdrant.store import ContentStore
 
@@ -147,6 +153,27 @@ class ChatStore:
             return None
         await self._content_store.delete([messages[0].id])
         return messages[0]
+
+    async def upsert_transcript(
+        self,
+        chat_uid: str,
+        user_uid: str,
+        board_id: str | None,
+        label: str | None,
+        transcript: list,
+    ):
+        """Store a browser-agent chat transcript verbatim (opaque client JSON).
+
+        Owner-scoped by ``user_uid``; overwrites any prior transcript for this
+        chat. No Qdrant/embedding — this is backup + cross-device seed only.
+        """
+        async with self._pg_pool.acquire() as conn:
+            await _upsert_transcript(conn, chat_uid, user_uid, board_id, label, transcript)
+
+    async def list_transcripts_by_board(self, user_uid: str, board_id: str) -> list[dict]:
+        """List this user's browser-agent transcripts for a board (seed source)."""
+        async with self._pg_pool.acquire() as conn:
+            return await _list_transcripts_by_board(conn, user_uid, board_id)
 
     async def close(self):
         """Close the store. Only closes the pool if this store created it."""

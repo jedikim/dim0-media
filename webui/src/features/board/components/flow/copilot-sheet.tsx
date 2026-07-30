@@ -9,6 +9,10 @@ interface CopilotSheetProps {
   boardId?: string
   currentChatId?: string
   onOpenFullChat: (chatId?: string) => void
+  /** Run the drawer on the in-browser engine (synced board + flag on). */
+  local?: boolean
+  /** Back finished browser-agent turns up to the server (synced board). */
+  syncTranscript?: boolean
 }
 
 /**
@@ -21,6 +25,8 @@ export function CopilotSheet({
   boardId,
   currentChatId,
   onOpenFullChat,
+  local = false,
+  syncTranscript = false,
 }: CopilotSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange} modal={false} disablePointerDismissal>
@@ -73,6 +79,8 @@ export function CopilotSheet({
               showHistoricalChats
               chatId={currentChatId}
               enableSelectionContext
+              local={local}
+              syncTranscript={syncTranscript}
             />
           ) : open ? (
             <div className="w-full h-full flex items-center justify-center text-sm text-muted-foreground">

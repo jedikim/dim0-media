@@ -2,6 +2,7 @@ import type { ReasoningStep, ToolCallStep, ToolName } from "@/features/agent/typ
 import { normalizeReasoningSteps } from "@/features/agent/types/stream"
 import type { ToolOutput, UrlAnnotation } from "@/features/agent/types/tool-outputs"
 import type { AgentEvent } from "@/features/agent/engine/types"
+import { isToolFailure } from "@/features/agent/engine/tool-result"
 
 
 const field = (o: unknown, k: string): unknown =>
@@ -136,8 +137,15 @@ export const stepsFromEvents = (events: AgentEvent[], boardId: string): Reasonin
     } else if (ev.type === "tool_result") {
       const open = openByTool.get(ev.toolName)
       if (open) {
-        open.output = toOutput(ev.toolName, open.arguments?.input, ev.result, boardId)
-        open.state = "completed"
+        // A structured failure (declined / unknown / thrown / rejected) marks the
+        // step failed and shows its message; a success builds the UI output.
+        if (isToolFailure(ev.result)) {
+          open.output = ev.result.message
+          open.state = "failed"
+        } else {
+          open.output = toOutput(ev.toolName, open.arguments?.input, ev.result, boardId)
+          open.state = "completed"
+        }
         openByTool.delete(ev.toolName)
       }
     } else if (ev.type === "assistant_text") {

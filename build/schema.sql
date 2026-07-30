@@ -149,6 +149,23 @@ CREATE TABLE IF NOT EXISTS mini_app_state (
 CREATE INDEX IF NOT EXISTS idx_mini_app_state_user_uid ON mini_app_state(user_uid);
 
 
+-- Browser-agent chat transcripts for synced boards: the client is the source of
+-- truth and the server stores/returns the transcript verbatim (opaque JSON, no
+-- server-side chat model). Backup + cross-device seed only.
+CREATE TABLE IF NOT EXISTS chat_transcript (
+    chat_uid TEXT NOT NULL,
+    user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+    -- FK + cascade so transcripts don't outlive their board (matches
+    -- chats.graph_uid). Nullable: a null board_id simply skips the constraint.
+    board_id TEXT REFERENCES graphs(uid) ON DELETE CASCADE,
+    label TEXT,
+    transcript JSONB NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (chat_uid, user_uid)
+);
+CREATE INDEX IF NOT EXISTS idx_chat_transcript_board ON chat_transcript (user_uid, board_id);
+
+
 -- ============================================================================
 -- Additive deltas for older self-hosted DBs.
 -- For each column added to an existing table after its CREATE TABLE was first

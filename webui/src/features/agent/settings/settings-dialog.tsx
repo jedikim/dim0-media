@@ -11,6 +11,8 @@ import {
 import { cn } from "@/lib/utils"
 import { useIsSignedIn } from "@/lib/auth"
 import { useByokStore, type SearchEngine } from "@/features/agent/byok/byok-store"
+import { useToolTrustStore, type ConfirmToolName } from "@/features/agent/settings/tool-trust-store"
+import { Switch } from "@/components/ui/switch"
 import { ByokKeyForm } from "@/features/agent/byok/byok-key-form"
 import { ModelChoiceMenu } from "@/features/agent/components/chat/input-settings/model-card"
 import { useChatStore } from "@/features/agent/store/chat-store"
@@ -286,6 +288,27 @@ function ProvidersPane() {
 
 
 /**
+ * A standing "always allow" grant for one off-board tool. When on, the agent
+ * skips the per-call confirm prompt for that tool (this device only). Per-tool
+ * on purpose — trusting web search shouldn't silently trust code execution.
+ */
+function TrustToolRow({ tool, title, description }: { tool: ConfirmToolName; title: string; description: string }) {
+  const on = useToolTrustStore((s) => s.autoAllow[tool])
+  const setAutoAllow = useToolTrustStore((s) => s.setAutoAllow)
+
+  return (
+    <div className="mb-4 flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
+      <div className="min-w-0">
+        <div className="text-sm">{title}</div>
+        <div className="text-[11px] text-muted-foreground">{description}</div>
+      </div>
+      <Switch checked={on} onCheckedChange={(v) => setAutoAllow(tool, v)} label={title} />
+    </div>
+  )
+}
+
+
+/**
  * Web search: a list of engine options with a usable marker. Available engines
  * (our keys when signed in, or a saved BYOK key) are selectable; the rest are
  * greyed until you add a key below. The picked engine is the one the agent uses;
@@ -314,6 +337,17 @@ function SearchPane() {
   return (
     <div>
       <PaneTitle title="Web search" hint="Pick a provider. Available ones use our keys; add your own key to enable another (relayed, never stored)." />
+
+      <TrustToolRow
+        tool="web_search"
+        title="Always allow web search"
+        description="Skip the confirmation prompt for web searches on this device."
+      />
+      <TrustToolRow
+        tool="fetch"
+        title="Always allow fetching web pages"
+        description="Skip the prompt when the assistant opens a URL. Only enable if you trust the pages your boards link to."
+      />
 
       <div className="mb-4 overflow-hidden rounded-lg border border-border">
         {SEARCH_ENGINES.map((e) => {
@@ -369,6 +403,11 @@ function CodePane() {
   return (
     <div>
       <PaneTitle title="Code interpreter" hint="Runs in a Daytona sandbox. Add your Daytona key to run on your own account (relayed, never stored)." />
+      <TrustToolRow
+        tool="code_interpreter"
+        title="Always allow running code"
+        description="Skip the confirmation prompt before the assistant runs code. It runs in a sandbox, but only enable if you understand the risk."
+      />
       <div className="mb-2 flex items-center gap-2 text-xs font-medium">
         <StatusDot usable={usable} />
         Daytona

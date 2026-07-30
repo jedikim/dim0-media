@@ -22,11 +22,11 @@ type SubmitOptions = {
  * options (board creation, deep research) are ignored in local mode.
  */
 export const useChatSubmit = () => {
-  const { local } = useChat()
+  const { local, syncTranscript } = useChat()
   const boardId = useBoardAppStore((s) => s.boardId) ?? ""
   const boardRole = useBoardAppStore((s) => s.boardRole)
   const backendSubmit = useSubmitPrompt()
-  const localSubmit = useLocalSubmitPrompt(boardId)
+  const localSubmit = useLocalSubmitPrompt(boardId, syncTranscript)
 
   return useCallback(
     async (text: string, options: SubmitOptions = {}): Promise<void> => {

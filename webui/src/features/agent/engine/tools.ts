@@ -14,6 +14,18 @@ import type { Node } from "@canvas-harness/core"
 import type { DimEdgeData, DimNodeData } from "@/features/board/model"
 import { pickRandomColorOfShade } from "@/features/board/lib/colors/tailwind"
 import { AUTOFIT_DISABLED_TYPES } from "@/features/board/harness/convert/note-to-node"
+import { dim0LinkStyleToCanvas, dim0StyleToCanvas } from "@/features/board/harness/convert/style"
+import {
+  adaptEdgeColors,
+  adaptNodeColors,
+  applyColorsToEdgeStyle,
+  applyColorsToStyle,
+  pickStoredEdgeColors,
+  type StoredColors,
+  type StoredEdgeColors,
+} from "@/features/board/harness/theme/color-adapter"
+import { getBoardThemeMode } from "@/features/board/harness/theme/theme-mode-ref"
+import { createDefaultLinkStyle, createDefaultStyle } from "@/features/board/types/style"
 import { beneathBorderOrigin } from "@/features/board/harness/agent/beneath-border"
 import { validateMiniAppSource } from "@/features/mini-app/validate"
 import { defineTool } from "./types"
@@ -29,7 +41,7 @@ import { estimateNoteSize } from "./note-size"
  * default (always light). Black text reads on every light-200 swatch; the dark
  * variant is derived on theme flip.
  */
-const randomNoteColors = (): DimNodeData["_storedColors"] => ({
+const randomNoteColors = (): StoredColors => ({
   backgroundColor: pickRandomColorOfShade(200)?.hex ?? "#dbeafe",
   strokeColor: "#00000000",
   textColor: "#000000",
@@ -63,6 +75,38 @@ const meta = (): DimNodeData["meta"] => {
 }
 
 
+/**
+ * Canonical canvas style for a live-created rectangle / edge — mirrors the
+ * convert layer (`noteToNode` / `linkToEdge`) so a freshly inserted object
+ * renders identically to its reloaded / peer-synced form. Without it the harness
+ * paints with its own library defaults (rounded corners, extra roughness), so
+ * the live board drifted from the persisted one until reload. Keep the field
+ * logic in sync with note-to-node.ts / link-to-edge.ts.
+ */
+const canonicalNodeStyle = (colors: StoredColors) => {
+  const base = dim0StyleToCanvas(createDefaultStyle({ type: "rectangle" }))
+  const mode = getBoardThemeMode()
+  const display = mode === "dark" ? adaptNodeColors(colors, "dark") : colors
+  return applyColorsToStyle(base, display)
+}
+
+
+/**
+ * Canonical edge `style` (theme-adapted for display) plus the canonical
+ * light-space `_storedColors` that must ride on `data` — mirrors `linkToEdge`.
+ * The stored colors are the source of truth on save; without them `edgeToLink`
+ * would persist the dark-adapted display hex as canonical and corrupt the color
+ * for a light-mode peer / on reload.
+ */
+const canonicalEdge = (): { style: ReturnType<typeof dim0LinkStyleToCanvas>; storedColors: StoredEdgeColors } => {
+  const base = dim0LinkStyleToCanvas(createDefaultLinkStyle())
+  const storedColors = pickStoredEdgeColors(base)
+  const mode = getBoardThemeMode()
+  const style = mode === "light" ? base : applyColorsToEdgeStyle(base, adaptEdgeColors(storedColors, mode))
+  return { style, storedColors }
+}
+
+
 // Map a prompt-level note_type to a canvas node type. Shapes the agent can't
 // render distinctly (ellipse/diamond) fall back to the default rectangle.
 const NODE_TYPE: Record<string, string> = {
@@ -92,6 +136,7 @@ export const createNote = defineTool({
     // Default new notes beneath the current graph border (mirrors the backend's
     // compute_note_position); explicit coords from the model still win.
     const origin = beneathBorderOrigin(ctx.store)
+    const storedColors = randomNoteColors()
     ctx.store.batch(() => {
       ctx.store.addNode({
         id: nodeId,
@@ -103,7 +148,8 @@ export const createNote = defineTool({
         angle: 0,
         groups: [],
         content: body,
-        data: { label: title, parentId: ctx.rootId ?? undefined, meta: meta(), _storedColors: randomNoteColors() } satisfies DimNodeData,
+        style: canonicalNodeStyle(storedColors),
+        data: { label: title, parentId: ctx.rootId ?? undefined, meta: meta(), _storedColors: storedColors } satisfies DimNodeData,
       })
     })
     return { id: String(nodeId), created: true }
@@ -155,6 +201,10 @@ export const linkNotes = defineTool({
       const node = ctx.store.getNode(nodeId)
       return node ? { x: node.w / 2, y: node.h / 2 } : { x: 0, y: 0 }
     }
+    // Canonical edge style (arrowhead, stroke, roughness) so the live edge
+    // matches its reloaded form — the lib default is otherwise rougher — plus the
+    // canonical stored colors so a dark-mode edge saves the right (light) color.
+    const { style, storedColors } = canonicalEdge()
     ctx.store.batch(() => {
       ctx.store.addEdge({
         id,
@@ -162,7 +212,13 @@ export const linkNotes = defineTool({
         target: { nodeId: tgt, localOffset: center(tgt) },
         pathStyle: "bezier",
         groups: [],
-        data: { label: label || undefined, parentId: ctx.rootId ?? undefined, meta: meta() } satisfies DimEdgeData,
+        style,
+        data: {
+          label: label || undefined,
+          parentId: ctx.rootId ?? undefined,
+          meta: meta(),
+          _storedColors: storedColors,
+        } satisfies DimEdgeData,
       })
     })
     return { id: String(id) }
@@ -221,6 +277,14 @@ export const writeNote = defineTool({
     // Born beneath the current graph border (mirrors the backend's
     // compute_note_position); a multi-note turn is re-laid-out afterward.
     const origin = beneathBorderOrigin(ctx.store)
+    const storedColors = randomNoteColors()
+    // Plain rectangles are painted by the lib from `style`, so give them the same
+    // canonical style the convert layer would (else the live render uses the lib's
+    // rounded/rough defaults until reload). Custom types paint via their own
+    // node-type view, so they only need autoFit disabled at birth.
+    const style = nodeType === "rect"
+      ? { ...canonicalNodeStyle(storedColors), ...(autoFitStyle ?? {}) }
+      : autoFitStyle
     ctx.store.batch(() => {
       ctx.store.addNode({
         id,
@@ -232,8 +296,8 @@ export const writeNote = defineTool({
         angle: 0,
         groups: [],
         content,
-        ...(autoFitStyle ? { style: autoFitStyle } : {}),
-        data: { label: label ?? "", parentId: ctx.rootId ?? undefined, meta: meta(), _storedColors: randomNoteColors() } satisfies DimNodeData,
+        ...(style ? { style } : {}),
+        data: { label: label ?? "", parentId: ctx.rootId ?? undefined, meta: meta(), _storedColors: storedColors } satisfies DimNodeData,
       })
     })
     return { id: String(id), created: true }

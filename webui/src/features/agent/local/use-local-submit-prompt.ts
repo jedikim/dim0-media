@@ -19,7 +19,8 @@ import { getDocIndexRef } from "@/features/board/search/doc-index-ref"
 import { rebuildDocIndex } from "@/features/board/search/use-doc-index"
 import { getLocalStores } from "@/features/local-stores"
 import { makeDocSearchTool } from "@/features/agent/engine/doc-search"
-import { useToolConfirm } from "@/features/agent/engine/tool-confirm-store"
+import { resolveConfirmDecision, useToolConfirm, type ToolConfirmDecision } from "@/features/agent/engine/tool-confirm-store"
+import { useToolTrustStore } from "@/features/agent/settings/tool-trust-store"
 import type { AgentEvent } from "@/features/agent/engine/types"
 import { planSystemPrompt } from "@/features/agent/prompts"
 import { useByokStore } from "@/features/agent/byok/byok-store"
@@ -27,6 +28,7 @@ import { useChatStore } from "@/features/agent/store/chat-store"
 import { byokModelForId } from "@/features/agent/types/model-catalog"
 import { useBoardAppStore } from "@/features/board/harness/store/board-app-store"
 import { useLocalMessagesStore } from "@/features/agent/store/local-messages-store"
+import { putChatTranscript } from "@/features/agent/api/chat-transcript"
 import type { ChatMessage } from "@/features/agent/types/chat"
 import { agentLog } from "@/features/agent/engine/debug"
 import { latestAssistantText, stepsFromEvents } from "./agent-event-to-step"
@@ -56,8 +58,12 @@ const mintId = (): string => `local-${Date.now()}-${counter++}`
  * with `ReasoningStep[]` — so the existing rich chat UI renders it unchanged.
  * Mints a chat on the first turn (mirrors the backend creating a chat) and
  * labels it from the opening prompt.
+ *
+ * When `syncTranscript` is set (a synced board in browser-agent mode), the
+ * finished transcript is also backed up to the server for cross-device access —
+ * a fire-and-forget mirror of the local persist, never part of the turn's path.
  */
-export function useLocalSubmitPrompt(boardId: string) {
+export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
   // Source of truth for the client agent: byok-store (keys + search engine) plus
   // service availability. Deliberately NOT chat-store's webSearchEngine /
   // enabledTools / useDeepResearch — those feed only the retiring backend path.
@@ -196,9 +202,16 @@ export function useLocalSubmitPrompt(boardId: string) {
           : system
         const userMessageForAgent = wrapWithMessageContext(prompt, messageContext)
         // Gate off-board tools (network/code) behind a user confirmation, so a
-        // prompt-injected tool call can't silently exfiltrate or run code.
-        const confirmTool = (req: { name: string; args: Record<string, unknown> }) =>
-          useToolConfirm.getState().request(req)
+        // prompt-injected tool call can't silently exfiltrate or run code. A
+        // standing per-tool "always allow" grant (Settings) skips the prompt for
+        // that tool. Both ports are read via getState() per call, so a mid-run
+        // toggle (on OR off) applies to the next call.
+        const confirmTool = (req: { name: string; args: Record<string, unknown> }): Promise<ToolConfirmDecision> =>
+          resolveConfirmDecision(
+            req.name,
+            useToolTrustStore.getState().isAutoAllowed,
+            () => useToolConfirm.getState().request(req),
+          )
         for await (const ev of runAgent({ system: systemWithDocs, userMessage: userMessageForAgent, history, tools, llm, ctx: { store, rootId, search, confirmTool } })) {
           // Streaming yields a cumulative assistant_text per token — replace the
           // previous snapshot in place instead of appending one event per token.
@@ -265,10 +278,18 @@ export function useLocalSubmitPrompt(boardId: string) {
         await persist(label)
         const { chatUid: savedUid, messages } = useLocalMessagesStore.getState()
         agentLog.turnDone(savedUid, messages.length)
+        // Back up the finished transcript to the server (Phase 2 cross-device),
+        // mirroring the local persist. Fire-and-forget and gated on sign-in: a
+        // failed or unauthenticated backup must never surface as a turn error.
+        if (syncTranscript && signedIn && savedUid) {
+          void putChatTranscript(savedUid, boardId, messages, label).catch((e) =>
+            agentLog.error("putChatTranscript", e),
+          )
+        }
         // Auto-label a still-"Untitled" board from its first turn (fire-and-forget).
         void maybeAutoLabelBoard(boardId, messages, resolveAgentLlm(config, { signedIn, runId, model: llmModel, byokModel }))
       }
     },
-    [asConfig, searchByok, searchEngine, codeByok, llmModel, llmCatalog, signedIn, setMessages, setChatUid, persist, boardId, navigate],
+    [asConfig, searchByok, searchEngine, codeByok, llmModel, llmCatalog, signedIn, syncTranscript, setMessages, setChatUid, persist, boardId, navigate],
   )
 }

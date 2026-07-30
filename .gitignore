@@ -30,7 +30,6 @@ notebooks.exclude/
 
 # Ignore Codex files
 .codex/
-AGENTS.md
 SKILL.md
 .codex
 

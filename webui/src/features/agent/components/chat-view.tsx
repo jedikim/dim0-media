@@ -30,6 +30,8 @@ type ChatProps = {
   autoCreateBoard?: boolean
   /** Run on the in-browser engine (local-first board) instead of the backend. */
   local?: boolean
+  /** Synced board in browser-agent mode: back finished turns up to the server. */
+  syncTranscript?: boolean
 }
 
 const formatChatDate = (value?: string) => {
@@ -323,10 +325,10 @@ const ChatBody = ({
  * Chat view component
  */
 export const Chat = (props: ChatProps) => {
-  const { chatId, local = false } = props
+  const { chatId, local = false, syncTranscript = false } = props
 
   return (
-    <ChatProvider initialChatId={chatId} local={local}>
+    <ChatProvider initialChatId={chatId} local={local} syncTranscript={syncTranscript}>
       <ChatBody {...props} />
     </ChatProvider>
   )

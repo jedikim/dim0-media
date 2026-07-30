@@ -261,6 +261,7 @@ export const ToolStepRow = ({
   }
 
   const isLoading = isStreaming && step.state === "started"
+  const isFailed = step.state === "failed"
   const spanMessageClass = "text-sm text-card-foreground whitespace-pre-line"
   const StepIcon = ToolNameIcon[step.name] ?? DEFAULT_TOOL_ICON
   const iconClass = "size-4"
@@ -289,15 +290,15 @@ export const ToolStepRow = ({
             {isLoading ? (
               <CircleNotchIcon className={cn(iconClass, 'shrink-0 text-secondary-foreground animate-spin')} strokeWidth={2} />
             ) : (
-              <StepIcon className={cn(iconClass, 'shrink-0 text-secondary-foreground')} strokeWidth={2} />
+              <StepIcon className={cn(iconClass, 'shrink-0', isFailed ? 'text-destructive' : 'text-secondary-foreground')} strokeWidth={2} />
             )}
             {message !== "" ? (
               <div className='flex-1 min-w-0 flex flex-col'>
-                <h4 className={cn('text-sm font-medium font-mono leading-5 transition-colors', isLoading ? 'text-muted-foreground' : 'text-foreground')}>{title}</h4>
-                <span className={spanMessageClass}>{message}</span>
+                <h4 className={cn('text-sm font-medium font-mono leading-5 transition-colors', isLoading ? 'text-muted-foreground' : isFailed ? 'text-destructive' : 'text-foreground')}>{title}</h4>
+                <span className={cn(spanMessageClass, isFailed && 'text-destructive')}>{message}</span>
               </div>
             ) : (
-              <h4 className={cn('flex-1 min-w-0 truncate text-sm font-medium font-mono leading-5 transition-colors', isLoading ? 'text-muted-foreground' : 'text-foreground')}>{title}</h4>
+              <h4 className={cn('flex-1 min-w-0 truncate text-sm font-medium font-mono leading-5 transition-colors', isLoading ? 'text-muted-foreground' : isFailed ? 'text-destructive' : 'text-foreground')}>{title}</h4>
             )}
             {canExpand && (
               <button
