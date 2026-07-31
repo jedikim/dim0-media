@@ -53,8 +53,10 @@ export function NewBoardItem() {
   const userId = useAppStore(s => s.userId)
   const { data: boards = [] } = useListBoards(userId)
   const userPlan = useAppStore(s => s.userPlan)
+  // Subscribe so the gate re-renders when billingActive is hydrated at boot.
+  const billingActive = useAppStore(s => s.billingActive)
   const navigate = useNavigate()
-  const boardCreationLimited = isBoardCreationLimited(userPlan, boards.length)
+  const boardCreationLimited = billingActive && isBoardCreationLimited(userPlan, boards.length)
 
   const handleClick = async () => {
     if (boardCreationLimited) return

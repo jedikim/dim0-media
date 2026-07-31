@@ -4,7 +4,6 @@ import { useNavigate } from "@tanstack/react-router"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { BILLING_ENABLED } from "@/config/billing"
 import { getBillingSummary, type BillingSummary } from "@/features/user-settings/api/billing"
 import { TierBadge } from "@/features/user-settings/components/tier-badge"
 import { useAppStore } from "@/store"
@@ -14,10 +13,11 @@ export function SettingsScreen() {
   const navigate = useNavigate()
   const userEmail = useAppStore(s => s.userEmail)
   const userPlan = useAppStore(s => s.userPlan)
+  const billingActive = useAppStore(s => s.billingActive)
   const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null)
 
   useEffect(() => {
-    if (!BILLING_ENABLED) return
+    if (!billingActive) return
 
     void (async () => {
       try {
@@ -27,7 +27,7 @@ export function SettingsScreen() {
         setBillingSummary(null)
       }
     })()
-  }, [])
+  }, [billingActive])
 
   const expiresAtLabel = useMemo(() => {
     if (!billingSummary?.cancel_at_period_end) return null
@@ -48,7 +48,7 @@ export function SettingsScreen() {
               <span className="text-sm text-muted-foreground">Email</span>
               <span className="text-sm font-medium">{userEmail}</span>
             </div>
-            {BILLING_ENABLED ? (
+            {billingActive ? (
               <div className="flex items-center justify-between gap-4">
                 <span className="text-sm text-muted-foreground">Current plan</span>
                 <div className="flex items-center gap-2">
@@ -64,7 +64,7 @@ export function SettingsScreen() {
           </CardContent>
         </Card>
 
-        {BILLING_ENABLED ? (
+        {billingActive ? (
           <Card className="border-secondary-foreground/60 bg-gradient-to-br from-secondary-foreground/20 via-secondary-foreground/10 to-card">
             <CardHeader>
               <CardTitle>Billing</CardTitle>

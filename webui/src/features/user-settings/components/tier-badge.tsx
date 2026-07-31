@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge"
-import { BILLING_ENABLED } from "@/config/billing"
+import { useAppStore } from "@/store"
 import type { BillingPlan } from "@/lib/decode-jwt"
 import { AwardIcon } from "@/components/icons"
 
@@ -10,7 +10,8 @@ type TierBadgeProps = {
 
 
 export function TierBadge({ plan }: TierBadgeProps) {
-  if (!BILLING_ENABLED) return null
+  const billingActive = useAppStore((s) => s.billingActive)
+  if (!billingActive) return null
 
   const isPaid = plan === "plus" || plan === "basic"
 

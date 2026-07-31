@@ -34,7 +34,6 @@ import {
 import { ModeToggle } from '@/components/mode-toggle'
 import { HomeMenuItem } from './home'
 import { useNavigate } from '@tanstack/react-router'
-import { BILLING_ENABLED } from '@/config/billing'
 import { TierBadge } from '@/features/user-settings/components/tier-badge'
 
 
@@ -58,6 +57,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
   const userId = useAppStore(s => s.userId)
   const userEmail = useAppStore(s => s.userEmail)
   const userPlan = useAppStore(s => s.userPlan)
+  const billingActive = useAppStore(s => s.billingActive)
   // Signed-out ("root") gets the same shell but a local-only nav: no Dashboard/
   // Chats (both need the backend), and a sign-in CTA instead of the account menu.
   const signedIn = isSignedIn(userId)
@@ -289,7 +289,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
                             >
                               {userEmail}
                             </span>
-                            {BILLING_ENABLED ? (
+                            {billingActive ? (
                               <div className="mt-1">
                                 <TierBadge plan={userPlan} />
                               </div>
@@ -305,7 +305,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
                           <UserProfileIcon className="mr-2 h-4 w-4" strokeWidth={2} />
                           <span>Profile</span>
                         </DropdownMenuItem>
-                        {BILLING_ENABLED ? (
+                        {billingActive ? (
                           <DropdownMenuItem
                             className='text-xs bg-gradient-to-br from-secondary-foreground/10 via-secondary-foreground/5 to-transparent text-secondary-foreground'
                             onClick={() => navigate({ to: "/settings/billing" })}

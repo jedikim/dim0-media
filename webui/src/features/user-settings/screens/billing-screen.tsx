@@ -16,7 +16,6 @@ import { refresh } from "@/api"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { BILLING_ENABLED } from "@/config/billing"
 import { TierBadge } from "@/features/user-settings/components/tier-badge"
 import {
   createCheckoutSession,
@@ -57,6 +56,7 @@ function FeatureRow({ icon, label }: FeatureRowProps) {
 export function BillingScreen() {
   const userPlan = useAppStore(s => s.userPlan)
   const setUserPlan = useAppStore(s => s.setUserPlan)
+  const billingActive = useAppStore(s => s.billingActive)
   const [busyAction, setBusyAction] = useState<"upgrade-basic" | "upgrade-plus" | "manage" | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null)
@@ -66,7 +66,7 @@ export function BillingScreen() {
   const searchParams = useMemo(() => new URLSearchParams(window.location.search), [])
 
   useEffect(() => {
-    if (!BILLING_ENABLED) return
+    if (!billingActive) return
 
     void (async () => {
       try {
@@ -78,10 +78,10 @@ export function BillingScreen() {
         setErrorMessage(error instanceof Error ? error.message : "Could not load billing status.")
       }
     })()
-  }, [])
+  }, [billingActive])
 
   useEffect(() => {
-    if (!BILLING_ENABLED) return
+    if (!billingActive) return
     if (refreshedAfterReturn.current) return
     if (searchParams.get("checkout") !== "success") return
 
@@ -99,7 +99,7 @@ export function BillingScreen() {
         setErrorMessage("Could not refresh billing plan after checkout.")
       }
     })()
-  }, [searchParams, setUserPlan])
+  }, [billingActive, searchParams, setUserPlan])
 
   const onUpgrade = async (plan: PaidPlan) => {
     setErrorMessage(null)
@@ -174,7 +174,7 @@ export function BillingScreen() {
   const basicIntervalLabel = billingPublicConfig?.basic_price?.interval || "month"
   const plusIntervalLabel = billingPublicConfig?.plus_price?.interval || "month"
 
-  if (!BILLING_ENABLED) return null
+  if (!billingActive) return null
 
   return (
     <div className="absolute inset-0 overflow-y-auto scrollbar-thin bg-background">
