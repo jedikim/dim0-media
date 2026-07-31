@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react"
-import { useNavigate } from "@tanstack/react-router"
+import { useNavigate, useRouter } from "@tanstack/react-router"
 import { useQueryClient } from "@tanstack/react-query"
 import { toast } from "sonner"
 import { useAppStore } from "@/store"
@@ -16,19 +16,40 @@ import { enableSync } from "@/features/board/harness/sync/enable-sync"
 import type { EnableSyncResult } from "@/features/board/harness/sync/enable-sync"
 
 
+/** Where to send the view after a promote, or `null` to leave it put. */
+export type PromoteNavTarget = { to: "/boards/$id"; params: { id: string } } | null
+
+
 /**
- * Promote a local board to synced (local → synced) from the dashboard.
+ * Decide where the view goes after a successful promote. When the promoted board
+ * is the one currently open at `/local/$id`, return the synced-route target so it
+ * re-mounts in collab mode; otherwise `null` (promoting a board you're NOT
+ * viewing, from the dashboard/sidebar, leaves your current view put). Pure so the
+ * navigate decision + target shape are unit-testable without a router.
+ */
+export function promoteNavTarget(pathname: string, boardId: string): PromoteNavTarget {
+  return pathname === `/local/${boardId}` ? { to: "/boards/$id", params: { id: boardId } } : null
+}
+
+
+/**
+ * Promote a local board to synced (local → synced), from the dashboard or the
+ * sidebar.
  *
  * Wires the real deps to the `enableSync` orchestrator: a fresh BoardPersistence
  * for the snapshot + compaction, the adopt API, and the registry flip. Signed-out
  * users are routed to sign-in (a synced board needs an owner). On success it
- * invalidates the synced-board list so the card moves into the "Synced" group.
- * `pendingId` is the board mid-promotion (for a spinner / disabled state).
+ * invalidates the synced-board list so the card moves into the "Synced" group,
+ * and — if the promoted board is the one currently open — navigates it to the
+ * synced route so the live view re-mounts in collab mode instead of continuing
+ * to edit the now-superseded local copy. `pendingId` is the board mid-promotion
+ * (for a spinner / disabled state).
  */
 export function useEnableSync() {
   const userId = useAppStore((s) => s.userId)
   const userPlan = useAppStore((s) => s.userPlan)
   const navigate = useNavigate()
+  const router = useRouter()
   const queryClient = useQueryClient()
   const { data: syncedBoards = [] } = useListBoards(userId)
   const [pendingId, setPendingId] = useState<string | null>(null)
@@ -74,6 +95,25 @@ export function useEnableSync() {
         if (result.ok) {
           await queryClient.invalidateQueries({ queryKey: ["listBoards", userId] })
           toast.success("Sync enabled — this board is now backed up and shareable.")
+          // If the promoted board is the one currently open at `/local/$id`, move
+          // the view to the synced route so it re-mounts in collab mode. Promotion
+          // is in-place (same id) but LocalBoardScreen renders `<HarnessCanvas
+          // local />` and never re-binds, so without this the live view keeps
+          // editing the local-only copy and edits never reach the backend. Only
+          // the currently-viewed board navigates; promoting another from the
+          // dashboard/sidebar leaves your view put. Preserve the folder layer.
+          // Read the LIVE pathname (not one captured at promote-start): the
+          // promote spans several awaits, and if the user navigated away
+          // meanwhile we must not yank them to the synced route.
+          const navTarget = promoteNavTarget(router.state.location.pathname, boardId)
+          if (navTarget) {
+            void navigate({
+              ...navTarget,
+              // Carry the current search (incl. the folder-layer `root_id`) across
+              // the route change so promotion doesn't jump back to the root layer.
+              search: (prev: Record<string, unknown>) => ({ ...prev }),
+            })
+          }
         } else {
           toast.error("Couldn't enable sync. Please try again.")
         }
@@ -84,7 +124,7 @@ export function useEnableSync() {
         setPendingId(null)
       }
     },
-    [userId, userPlan, syncedBoards, navigate, queryClient],
+    [userId, userPlan, syncedBoards, navigate, router, queryClient],
   )
 
   return { enableSync: run, pendingId }
