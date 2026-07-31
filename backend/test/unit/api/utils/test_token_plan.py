@@ -4,12 +4,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from topix.api.utils.rate_limit import token_plan
+from topix.api.utils.rate_limit import entitlements
 from topix.api.utils.rate_limit.token_plan import resolve_plan_for_token
 
 
 def _set_billing_active(monkeypatch, active: bool):
-    monkeypatch.setattr(token_plan, "is_billing_active", lambda: active)
+    # resolve_plan_for_token delegates to resolve_effective_plan, which reads the
+    # gate from the entitlements module namespace.
+    monkeypatch.setattr(entitlements, "is_billing_active", lambda: active)
 
 
 class _FailIfCalledStore:

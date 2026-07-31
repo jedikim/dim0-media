@@ -7,7 +7,7 @@ import pytest
 
 from fastapi import HTTPException, status
 
-from topix.api.utils.rate_limit import policy
+from topix.api.utils.rate_limit import entitlements, policy
 from topix.api.utils.rate_limit.dependency import rate_limiter
 from topix.api.utils.rate_limit.policy import (
     DAILY_UTC_LIMITS,
@@ -17,8 +17,12 @@ from topix.api.utils.rate_limit.policy import (
 
 
 def _set_billing_active(monkeypatch, active: bool):
-    """Patch the billing-active gate the policy layer consults."""
+    """Patch the billing-active gate in both namespaces that consult it.
+
+    `policy` resolves the limits; `entitlements` resolves the plan.
+    """
     monkeypatch.setattr(policy, "is_billing_active", lambda: active)
+    monkeypatch.setattr(entitlements, "is_billing_active", lambda: active)
 
 
 class _FakeRedisStore:

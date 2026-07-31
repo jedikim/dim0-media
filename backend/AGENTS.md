@@ -15,4 +15,5 @@ Applies to `backend/**` (package `topix`). Repo-wide rules (commits) are in the 
 - **Collab is the only edit path:** human WS ops and the in-process agent (`collab/agent_bridge.py`) both allocate a seq from the oplog, apply to `GraphStore`, and broadcast a `peer-op`. Seq authority is the oplog, not `room.seq`.
 - Two agent execution models coexist: the server-side OpenAI-Agents agent (`agents/`) and the thin `/ai/*` proxies for the browser engine (`api/router/ai.py`).
 - `chat_transcript` stores browser-agent transcripts as opaque JSON (never the `Message` model) — see `docs/adr/ADR-AGENT-001` before changing that path.
-- Models resolve via `config/catalog.py` over `backend/topix/models.yml` (one YAML entry per model; first route whose provider key is present wins). Billing off → plan resolves to `plus`.
+- Models resolve via `config/catalog.py` over `backend/topix/models.yml` (one YAML entry per model; first route whose provider key is present wins).
+- Billing off (`is_billing_active()` false — flag off OR Stripe keys missing) → full-OSS: plan resolves to `plus`, no limits, resolved through the one `resolve_effective_plan` helper. See `docs/adr/ADR-BILLING-001`.

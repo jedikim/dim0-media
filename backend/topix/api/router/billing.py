@@ -187,21 +187,40 @@ async def get_billing_state(
     request: Request,
     user_id: Annotated[str, Depends(get_current_user_uid)],
 ):
-    """Return billing state used by the settings UI."""
+    """Return billing state used by the settings UI.
+
+    `billing_enabled` is the authoritative deploy flag (`is_billing_active` =
+    flag on AND Stripe keys present); the UI must gate tiers/limits on it rather
+    than re-deriving from its own env flag. When billing is inactive the deploy
+    runs full-OSS: plan `plus`, everything unlocked.
+    """
+    if not is_billing_active():
+        return {
+            "plan": "plus",
+            "status": "active",
+            "billing_enabled": False,
+            "cancel_at_period_end": False,
+            "current_period_start": None,
+            "current_period_end": None,
+        }
+
     user_billing_store: UserBillingStore = request.app.user_billing_store
     billing = await user_billing_store.get_user_billing(user_id)
     if billing is None:
         return {
             "plan": "free",
             "status": "active",
+            "billing_enabled": True,
             "cancel_at_period_end": False,
             "current_period_start": None,
             "current_period_end": None,
         }
 
     return {
-        "plan": billing.plan,
+        # Status-gated so a never-paid (`incomplete`) sub doesn't display as paid.
+        "plan": effective_plan(billing.plan, billing.status),
         "status": billing.status,
+        "billing_enabled": True,
         "cancel_at_period_end": billing.cancel_at_period_end,
         "current_period_start": billing.current_period_start,
         "current_period_end": billing.current_period_end,
