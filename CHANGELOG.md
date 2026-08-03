@@ -1,3 +1,9 @@
+## v0.3.63 (2026-08-03)
+
+### Fix
+
+- **ci**: raise Node heap for desktop builds (macOS runner OOM) (#185)
+
 ## v0.3.62 (2026-08-03)
 
 ### Fix
