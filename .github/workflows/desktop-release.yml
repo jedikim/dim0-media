@@ -101,6 +101,11 @@ jobs:
       - name: Build desktop installers
         run: npm run tauri-build
         working-directory: webui
+        env:
+          # Pin the V8 heap: Node auto-sizes to available RAM, so the ~7 GB macOS
+          # runner defaults to ~2 GB and OOMs on the main `vite build` (works
+          # locally on 16 GB+). 4 GB matches a dev machine and fits every runner.
+          NODE_OPTIONS: --max-old-space-size=4096
 
       # install.sh curls a zip of the .app (not the .dmg): a terminal download isn't
       # Gatekeeper-quarantined, so the ad-hoc-signed app launches with no prompt.

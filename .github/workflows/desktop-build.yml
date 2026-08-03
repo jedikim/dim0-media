@@ -65,6 +65,10 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         with:
           projectPath: webui
+        env:
+          # See desktop-release.yml: the ~7 GB macOS runner OOMs the main
+          # `vite build` at Node's default heap; pin it to 4 GB.
+          NODE_OPTIONS: --max-old-space-size=4096
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
