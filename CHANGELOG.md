@@ -1,3 +1,17 @@
+## v0.3.60 (2026-08-03)
+
+### Feat
+
+- **desktop**: standalone Tauri app — offline local + optional remote, with distribution (#178)
+- **agent**: browser agent on synced boards + cross-device transcript (Phase 2+3, flag-gated) (#172)
+
+### Fix
+
+- **board**: navigate the open board to the synced route after promoting it (#176)
+- **billing**: gate frontend tiers/limits on backend billing_enabled (OSS fix, FE half) (#175)
+- **billing**: OSS deploys resolve to plus everywhere (plan reporting matched to enforcement) (#174)
+- **board**: default synced boards to the v2 sync engine (Phase 1) (#170)
+
 ## v0.3.59 (2026-06-26)
 
 ## v0.3.58 (2026-06-26)
