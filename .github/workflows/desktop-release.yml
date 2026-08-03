@@ -8,12 +8,29 @@ name: Desktop Release
 # (`desktop-build.yml` is the workflow_dispatch "does it compile on every OS" check;
 # this one is the tag-driven publish.)
 #
+# Triggered three ways: `workflow_call` from the Release workflow (the normal path —
+# a GITHUB_TOKEN-pushed tag does NOT fire the `push: tags` event, so Release invokes
+# this directly), a `push` of a `v*` tag (a manually pushed tag still works), and a
+# manual `workflow_dispatch` to (re)build a specific existing tag.
+#
 # The public server URL is baked in from the `API_ORIGIN` repo variable — the same
 # server-origin var `.env` uses — into VITE_API_URL. Unset ⇒ a local-only build that
 # asks the user to connect a server.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build installers for and attach (e.g. v0.3.61)
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      tag:
+        description: Version tag to build installers for and attach (e.g. v0.3.61)
+        required: true
+        type: string
 
 permissions:
   contents: write # create the release + upload assets
@@ -30,6 +47,10 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          # push: builds the pushed tag. call/dispatch: build the requested tag
+          # (the reusable-workflow default would otherwise be the caller's ref).
+          ref: ${{ inputs.tag || github.ref_name }}
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -118,9 +139,9 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: ${{ inputs.tag || github.ref_name }}
+          prerelease: ${{ contains(inputs.tag || github.ref_name, '-') }}
           generate_release_notes: true
           files: dist/**
           fail_on_unmatched_files: false
