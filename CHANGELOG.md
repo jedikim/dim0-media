@@ -1,3 +1,9 @@
+## v0.3.62 (2026-08-03)
+
+### Fix
+
+- **ci**: build desktop installers from Release, not the tag event (#184)
+
 ## v0.3.61 (2026-08-03)
 
 ## v0.3.60 (2026-08-03)
