@@ -7,8 +7,10 @@
  * that goes through `getLocalStores` is then repointed with no other change.
  */
 import { IndexedDbEngine } from "@/features/board/persist/local/indexeddb-engine"
+import { SqliteEngine } from "@/features/board/persist/local/sqlite-engine"
 import { BoardRegistry } from "@/features/board/persist/local/board-registry"
 import type { StorageEngine } from "@/features/board/persist/local/engine"
+import { isTauri } from "@/platform"
 import { ChatRepo } from "@/features/agent/store/chat-repo"
 import { MiniAppRepo } from "@/features/mini-app/mini-app-repo"
 import { DocRepo } from "@/features/board/persist/local/doc-repo"
@@ -38,13 +40,18 @@ let opening: Promise<LocalStores> | null = null
 
 
 /**
- * The app-wide local stores, opening the IndexedDB engine once on first use.
- * Concurrent callers await the same in-flight open.
+ * The app-wide local stores, opening the storage engine once on first use —
+ * SQLite on the Tauri desktop build, IndexedDB in the browser. Concurrent
+ * callers await the same in-flight open.
  */
+const openEngine = (): Promise<StorageEngine> =>
+  isTauri() ? SqliteEngine.open() : IndexedDbEngine.open()
+
+
 export const getLocalStores = async (): Promise<LocalStores> => {
   if (singleton) return singleton
   if (!opening) {
-    opening = IndexedDbEngine.open()
+    opening = openEngine()
       .then((engine) => {
         singleton = createLocalStores(engine)
         return singleton

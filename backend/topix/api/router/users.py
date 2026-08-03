@@ -10,12 +10,18 @@ from fastapi.security import OAuth2PasswordRequestForm
 from topix.api.datatypes.requests import (
     EmailVerificationRequest,
     ForgotPasswordRequest,
+    GoogleDesktopSigninRequest,
     GoogleSigninRequest,
     RefreshRequest,
     ResetPasswordRequest,
     UserSignupRequest,
 )
-from topix.api.utils.auth_methods import get_google_client_id, is_google_connect_available
+from topix.api.utils.auth_methods import (
+    get_google_client_id,
+    get_google_desktop_client_id,
+    is_google_connect_available,
+    is_google_desktop_available,
+)
 from topix.api.utils.decorators import with_standard_response
 from topix.api.utils.email_verification import (
     DEFAULT_RESEND_COOLDOWN_SECONDS,
@@ -28,7 +34,7 @@ from topix.api.utils.email_verification import (
     send_email_verification_link,
     utc_now,
 )
-from topix.api.utils.google_connect import verify_google_id_token
+from topix.api.utils.google_connect import exchange_desktop_code, verify_google_id_token
 from topix.api.utils.password_reset import (
     DEFAULT_RESET_RESEND_COOLDOWN_SECONDS,
     build_password_reset_url,
@@ -100,10 +106,13 @@ async def _issue_tokens(request: Request, user: User) -> dict:
 async def get_auth_methods():
     """Return which authentication methods are currently available."""
     google_available = is_google_connect_available()
+    desktop_available = is_google_desktop_available()
     return {
         "local": True,
         "google": google_available,
         "google_client_id": get_google_client_id() if google_available else None,
+        # The desktop app authorizes against its own "Desktop app" OAuth client.
+        "google_desktop_client_id": get_google_desktop_client_id() if desktop_available else None,
     }
 
 
@@ -125,21 +134,8 @@ async def login_for_access_token(
     return await _issue_tokens(request, user)
 
 
-@router.post("/google-signin")
-@with_standard_response
-async def google_signin(
-    response: Response,
-    request: Request,
-    body: Annotated[GoogleSigninRequest, Body(description="Google sign-in token payload")],
-):
-    """Sign in with Google when the provider is enabled and configured."""
-    if not is_google_connect_available():
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Google connect is not available",
-        )
-
-    payload = verify_google_id_token(body.id_token)
+async def _google_signin_with_payload(request: Request, payload: dict):
+    """Find/create the user for a verified Google payload, then issue tokens (web + desktop)."""
     user_store: UserStore = request.app.user_store
     user = await user_store.get_user_by_google_sub(payload["sub"])
     if user is not None:
@@ -173,6 +169,40 @@ async def google_signin(
         ) from exc
 
     return await _issue_tokens(request, new_user)
+
+
+@router.post("/google-signin")
+@with_standard_response
+async def google_signin(
+    response: Response,
+    request: Request,
+    body: Annotated[GoogleSigninRequest, Body(description="Google sign-in token payload")],
+):
+    """Sign in with Google (web) — verify the GIS id_token and issue tokens."""
+    if not is_google_connect_available():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Google connect is not available",
+        )
+    payload = verify_google_id_token(body.id_token)
+    return await _google_signin_with_payload(request, payload)
+
+
+@router.post("/google-signin-desktop")
+@with_standard_response
+async def google_signin_desktop(
+    request: Request,
+    body: Annotated[GoogleDesktopSigninRequest, Body(description="Desktop loopback auth code + PKCE")],
+):
+    """Desktop Google sign-in: exchange the loopback code (PKCE) server-side, then issue tokens."""
+    if not is_google_desktop_available():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Google desktop sign-in is not available",
+        )
+    id_token = await exchange_desktop_code(body.code, body.code_verifier, body.redirect_uri)
+    payload = verify_google_id_token(id_token, audience=get_google_desktop_client_id())
+    return await _google_signin_with_payload(request, payload)
 
 
 @router.post("/signup")

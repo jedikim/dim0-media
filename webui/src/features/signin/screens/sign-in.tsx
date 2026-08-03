@@ -13,6 +13,8 @@ import { Separator } from "@/components/ui/separator"
 import { Loader2Icon, LockIcon, MailIcon } from "@/components/icons"
 import { PasswordInput } from "../components/password-input"
 import { renderGoogleSigninButton } from "../lib/google-connect"
+import { desktopGoogleSignin } from "../lib/desktop-google"
+import { isTauri } from "@/platform"
 
 /** Renders the sign-in screen and routes successful authentication into the app. */
 export function SigninPage() {
@@ -67,7 +69,19 @@ export function SigninPage() {
     },
   })
 
+  // Desktop: GIS can't run in the webview, so sign in via the system browser
+  // (loopback + PKCE). Uses the "Desktop app" OAuth client, exchanged server-side.
+  const desktopGoogleMutation = useMutation({
+    mutationFn: (clientId: string) => desktopGoogleSignin(clientId),
+    onMutate: () => setGoogleError(null),
+    onSuccess: completeSignin,
+    onError: error => {
+      setGoogleError((error as Error).message || "Unable to continue with Google")
+    },
+  })
+
   React.useEffect(() => {
+    if (isTauri()) return // web-only: the GIS button doesn't work in the desktop webview
     const authMethods = authMethodsQuery.data
     const target = googleButtonRef.current
     const clientId = authMethods?.google_client_id
@@ -106,9 +120,16 @@ export function SigninPage() {
   }, [authMethodsQuery.data, googleSigninMutation])
 
   const authMethods = authMethodsQuery.data
+  const desktop = isTauri()
   const showLocalSignin = authMethods?.local ?? true
-  const showGoogleSignin = Boolean(authMethods?.google && authMethods.google_client_id)
-  const showSeparator = showLocalSignin && showGoogleSignin
+  // Web uses GIS (needs the web client id); desktop uses the system-browser flow
+  // (needs the "Desktop app" client id). Never both.
+  const showGoogleWeb = !desktop && Boolean(authMethods?.google && authMethods.google_client_id)
+  // Desktop availability is independent of the web client — the backend only
+  // returns google_desktop_client_id when the Desktop OAuth client is configured,
+  // so its presence alone gates the button (a deploy may have desktop but no web).
+  const showGoogleDesktop = desktop && Boolean(authMethods?.google_desktop_client_id)
+  const showSeparator = showLocalSignin && (showGoogleWeb || showGoogleDesktop)
   const localError = localSigninMutation.isError
     ? (localSigninMutation.error as Error).message || "Unable to sign in"
     : null
@@ -196,7 +217,7 @@ export function SigninPage() {
               </div>
             ) : null}
 
-            {showGoogleSignin ? (
+            {showGoogleWeb ? (
               <div className="space-y-3">
                 {googleError ? (
                   <p className="text-sm text-destructive">{googleError}</p>
@@ -213,7 +234,34 @@ export function SigninPage() {
               </div>
             ) : null}
 
-            {!authMethodsQuery.isLoading && !showLocalSignin && !showGoogleSignin ? (
+            {showGoogleDesktop ? (
+              <div className="space-y-2">
+                {googleError ? (
+                  <p className="text-sm text-destructive">{googleError}</p>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => desktopGoogleMutation.mutate(authMethods!.google_desktop_client_id!)}
+                  disabled={desktopGoogleMutation.isPending}
+                >
+                  {desktopGoogleMutation.isPending ? (
+                    <span className="inline-flex items-center gap-2">
+                      <Loader2Icon className="h-4 w-4 animate-spin" />
+                      Continue in your browser…
+                    </span>
+                  ) : (
+                    "Continue with Google"
+                  )}
+                </Button>
+                <p className="text-center text-xs text-muted-foreground">
+                  Opens your browser to sign in, then returns here.
+                </p>
+              </div>
+            ) : null}
+
+            {!authMethodsQuery.isLoading && !showLocalSignin && !showGoogleWeb && !showGoogleDesktop ? (
               <p className="text-sm text-destructive">
                 No sign-in methods are currently available.
               </p>
@@ -256,6 +304,12 @@ export function SigninPage() {
               </span>
               <Link to="/forgot-password" className="text-muted-foreground underline">
                 Forgot password?
+              </Link>
+            </div>
+
+            <div className="text-center">
+              <Link to="/" className="text-sm text-muted-foreground underline underline-offset-2">
+                ← Back to boards
               </Link>
             </div>
           </form>

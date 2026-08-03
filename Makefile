@@ -29,6 +29,14 @@ up-build: ## Force rebuild images, then start all services for $(PROFILE)
 build: ## Just (re)build images (no start)
 	$(COMPOSE) --profile $(PROFILE) build
 
+.PHONY: desktop-dev
+desktop-dev: ## Run the Tauri desktop app in dev (native window + hot reload); needs Rust
+	cd webui && npm run tauri-dev
+
+.PHONY: desktop-build
+desktop-build: ## Build the desktop installer for this OS → webui/src-tauri/target/release/bundle
+	cd webui && npm run tauri-build
+
 .PHONY: pull
 pull: ## Pull published backend and webui images for DIM0_VERSION
 	DIM0_VERSION=$(DIM0_VERSION) $(COMPOSE_IMAGES_BASE) pull backend webui
@@ -168,6 +176,13 @@ setup-mini-app-compiler: ## Install mini-app compiler node deps (sucrase) for th
 test-backend: setup-mini-app-compiler ## Backend unit tests (integration deferred — they need DBs)
 	cd backend && uv run pytest test/unit
 
+.PHONY: test-tauri
+test-tauri: ## Desktop (Tauri) Rust unit tests — the rusqlite storage layer (needs Rust + WebKit/GTK)
+	cd webui/src-tauri && cargo test
+
+# `test-tauri` is intentionally NOT in `test-ci`: CI runs it as its own job, but a
+# dev laptop may lack the Rust + libwebkit2gtk/gtk toolchain, and `make check`
+# shouldn't fail there. Run `make test-tauri` explicitly when working on src-tauri.
 .PHONY: test-ci
 test-ci: lint-ui test-ui lint-backend test-backend ## Full CI suite: lint+test for webui then backend
 

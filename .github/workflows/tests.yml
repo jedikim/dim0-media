@@ -110,3 +110,38 @@ jobs:
 
       - name: Unit tests
         run: make test-backend
+
+  tauri:
+    name: desktop (rust — rusqlite storage)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # The Tauri crate links native libs on Linux even for `cargo test`, so the
+      # webkit2gtk/gtk stack must be present. rusqlite's `bundled` feature
+      # compiles SQLite from source (needs a C toolchain, present by default).
+      - name: Install Tauri system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libxdo-dev \
+            patchelf
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: webui/src-tauri
+
+      - name: Rust unit tests (storage layer)
+        run: make test-tauri

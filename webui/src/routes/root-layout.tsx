@@ -129,7 +129,7 @@ export function RootLayout() {
             <SidebarProvider open={effectiveSidebarOpen} onOpenChange={setSidebarOpen}>
               {!presentationMode && <AppSidebar onLogout={onLogout} />}
               <SidebarInset className='overflow-hidden'>
-                <header className="flex h-16 shrink-0 items-center gap-2 p-4 absolute top-0 inset-x-0 z-50">
+                <header className={`flex h-16 shrink-0 items-center gap-2 p-4 absolute top-0 inset-x-0 z-50 ${effectiveSidebarOpen ? "" : "[.tauri:not(.tauri-fullscreen)_&]:pl-20"}`}>
                   {!presentationMode && <SidebarTrigger className="-ml-1" />}
                   {!presentationMode && <div className="hidden md:block"><SidebarLabel /></div>}
                   {!presentationMode && <div className="md:hidden"><SidebarLabel mobileContextOnly /></div>}

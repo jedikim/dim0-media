@@ -86,6 +86,24 @@ Stop it with `make down-run` (add `make kill-run` to wipe volumes).
 
 > Want to hack on the source instead of the images? See **[Run from source](#run-from-source)** below.
 
+## Desktop app
+
+Prefer a native app? Dim0 ships a standalone desktop build (macOS · Linux · Windows) that runs **fully local and offline on your own keys** — boards live on-device and the agent calls providers directly. Sign in to use managed AI and sync boards across devices.
+
+**macOS / Linux**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vcmf/dim0/main/install.sh | sh
+```
+
+**Windows** (PowerShell)
+
+```powershell
+irm https://raw.githubusercontent.com/vcmf/dim0/main/install.ps1 | iex
+```
+
+The install scripts fetch the latest release from your terminal, so the app launches **without a Gatekeeper / SmartScreen prompt** (it's ad-hoc signed; not yet notarized). You can also grab installers straight from the [Releases page](https://github.com/vcmf/dim0/releases) — a browser download shows the usual first-run security prompt until we notarize.
+
 ## What it is
 
 Most AI tools start with a chat box and bolt the rest of the product on around it. Dim0 goes the other way - the board is the workspace, and the agent is one of the things living on it.

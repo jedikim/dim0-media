@@ -132,6 +132,8 @@ def test_auth_methods_reports_google_disabled_by_default(monkeypatch):
     """Auth methods endpoint should only expose local auth by default."""
     monkeypatch.delenv("GOOGLE_CONNECT_ENABLED", raising=False)
     monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_DESKTOP_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_DESKTOP_CLIENT_SECRET", raising=False)
     client, _, _ = _build_client()
 
     response = client.get("/users/auth-methods")
@@ -139,7 +141,12 @@ def test_auth_methods_reports_google_disabled_by_default(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "success"
-    assert payload["data"] == {"local": True, "google": False, "google_client_id": None}
+    assert payload["data"] == {
+        "local": True,
+        "google": False,
+        "google_client_id": None,
+        "google_desktop_client_id": None,
+    }
 
 
 def test_google_signin_rejects_when_google_connect_disabled(monkeypatch):
@@ -273,6 +280,8 @@ def test_auth_methods_reports_google_enabled_when_configured(monkeypatch):
     """Auth methods endpoint should expose Google when enabled and configured."""
     monkeypatch.setenv("GOOGLE_CONNECT_ENABLED", "true")
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "client-id.apps.googleusercontent.com")
+    monkeypatch.delenv("GOOGLE_DESKTOP_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_DESKTOP_CLIENT_SECRET", raising=False)
     client, _, _ = _build_client()
 
     response = client.get("/users/auth-methods")
@@ -284,6 +293,7 @@ def test_auth_methods_reports_google_enabled_when_configured(monkeypatch):
         "local": True,
         "google": True,
         "google_client_id": "client-id.apps.googleusercontent.com",
+        "google_desktop_client_id": None,
     }
 
 
@@ -291,6 +301,8 @@ def test_auth_methods_hides_google_when_client_id_missing(monkeypatch):
     """Auth methods endpoint should hide Google when client id is missing."""
     monkeypatch.setenv("GOOGLE_CONNECT_ENABLED", "true")
     monkeypatch.delenv("GOOGLE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_DESKTOP_CLIENT_ID", raising=False)
+    monkeypatch.delenv("GOOGLE_DESKTOP_CLIENT_SECRET", raising=False)
     client, _, _ = _build_client()
 
     response = client.get("/users/auth-methods")
@@ -298,7 +310,12 @@ def test_auth_methods_hides_google_when_client_id_missing(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["status"] == "success"
-    assert payload["data"] == {"local": True, "google": False, "google_client_id": None}
+    assert payload["data"] == {
+        "local": True,
+        "google": False,
+        "google_client_id": None,
+        "google_desktop_client_id": None,
+    }
 
 
 def test_verify_email_marks_user_and_token_used(monkeypatch):

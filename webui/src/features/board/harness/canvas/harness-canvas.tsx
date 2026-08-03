@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { LocalBoardUrl } from "@/routes"
+import { isTauri } from "@/platform"
 import { useQueryClient } from "@tanstack/react-query"
 import { hitTestAny, type CanvasStore, type NodeId, type Renderer } from "@canvas-harness/core"
 import { createDefaultNote } from "@/features/board/types/note"
@@ -479,6 +480,12 @@ function HarnessCanvasInner({
             theme={theme.resolver}
             selectionColor={theme.selectionColor}
             background={theme.background}
+            // Desktop (WKWebView) has slower Canvas2D than Chrome, so the lib's
+            // area-based default (maxDpr 2 on a mid-size retina board) repaints
+            // too many pixels per frame and feels laggy. Cap it lower on desktop
+            // — trades a little crispness for smoother pan/zoom. Web keeps the
+            // auto default. Tune 1..2 on-device (1 = smoothest, 2 = crispest).
+            maxDpr={isTauri() ? 1.5 : undefined}
             renderCustomNodeView={renderView}
             editorAdapter={createHarnessTextareaEditor}
             arrowDefaults={arrowDefaults}

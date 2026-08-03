@@ -12,6 +12,7 @@ import {
 import { useInfiniteChats } from '@/features/agent/api/list-chats'
 import { useAppStore } from '@/store'
 import { isSignedIn } from '@/lib/auth'
+import { SignInCta } from '@/features/desktop/sign-in-cta'
 import { useListBoards } from '@/features/board/api/list-boards'
 import { useLocalBoards } from '@/features/board/local/use-local-boards'
 import { useEnableSync } from '@/features/board/local/use-enable-sync'
@@ -170,7 +171,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
   return (
     <Sidebar variant="sidebar" collapsible="offcanvas">
       <SidebarContent className="w-full h-full flex flex-col overflow-hidden">
-        <SidebarGroup className="shrink-0">
+        <SidebarGroup className="shrink-0 [.tauri:not(.tauri-fullscreen)_&]:pt-7">
           <SidebarGroupContent>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -322,13 +323,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   ) : (
-                    <SidebarMenuButton
-                      className="h-auto py-2 flex items-center gap-2 font-medium text-xs min-w-0 flex-1 text-secondary-foreground"
-                      onClick={() => navigate({ to: "/signin" })}
-                    >
-                      <UserProfileIcon className="size-4 shrink-0" strokeWidth={2} />
-                      <span>Sign in to sync &amp; share</span>
-                    </SidebarMenuButton>
+                    <SignInCta />
                   )}
 
                   <div className="ml-auto shrink-0 pt-1">

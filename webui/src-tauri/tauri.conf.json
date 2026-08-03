@@ -1,22 +1,27 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "topix",
-  "version": "0.1.0",
+  "productName": "Dim0",
+  "version": "0.3.59",
   "identifier": "com.topix.app",
   "build": {
     "frontendDist": "../dist",
-    "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "npm run dev:tauri",
     "beforeBuildCommand": "npm run build"
   },
   "app": {
     "windows": [
       {
-        "title": "topix",
-        "width": 1920,
-        "height": 1080,
+        "title": "Dim0",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {
@@ -32,6 +37,9 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "macOS": {
+      "signingIdentity": "-"
+    }
   }
 }

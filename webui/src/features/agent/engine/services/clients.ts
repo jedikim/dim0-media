@@ -10,6 +10,8 @@
 import type { LlmClient } from "../types"
 import { ByokLlmClient, type ByokProvider } from "../byok-client"
 import type { ServiceResolution } from "./kinds"
+import { isTauri } from "@/platform"
+import { tauriFetch } from "./desktop-http"
 
 
 // ── forward-declared shapes for the non-LLM services ──
@@ -56,6 +58,9 @@ export const llmClientFromResolution = (
       provider: provider as ByokProvider,
       apiKey,
       model: model ?? "",
+      // On desktop the webview enforces CORS; route the provider call through the
+      // Tauri fetch so BYOK LLM (incl. streaming) works. No-op in the browser.
+      ...(isTauri() ? { fetch: tauriFetch } : {}),
     })
   }
   if (resolution.mode === "managed") {

@@ -14,6 +14,8 @@ import type { SearchClient, SearchResult } from "./services/clients"
 import { resolveService } from "./services/resolve"
 import { isOverQuotaError, runIdHeaders } from "./services/run"
 import { servicesPost } from "./services/transport"
+import { desktopSearchPost } from "./services/desktop-search"
+import { isTauri } from "@/platform"
 
 
 type SearchResponse = { answer: string; results: SearchResult[] }
@@ -72,11 +74,19 @@ export const resolveSearchClient = (opts: {
     byok: cred ? { search: cred } : {},
   })
   if (resolution.mode === "off") return null
+  // Desktop BYOK: reach the provider directly (CORS-free) instead of our proxy,
+  // so search works offline-of-our-servers. Unported engines keep the /ai/search
+  // path (online). In the browser this is always null → unchanged behaviour.
+  const desktopPost =
+    isTauri() && resolution.mode === "byok" && opts.byok?.apiKey
+      ? desktopSearchPost(opts.byok.engine, opts.byok.apiKey)
+      : null
   return managedSearchClient({
     runId: opts.runId,
     engine: opts.byok?.engine ?? opts.engine,
     byokKey: opts.byok?.apiKey,
     alwaysByok: resolution.mode === "byok",
+    ...(desktopPost ? { post: desktopPost } : {}),
   })
 }
 

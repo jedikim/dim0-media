@@ -25,6 +25,14 @@ class GoogleSigninRequest(BaseModel):
     id_token: str
 
 
+class GoogleDesktopSigninRequest(BaseModel):
+    """Desktop loopback Google sign-in: auth code + PKCE verifier + the redirect URI."""
+
+    code: str
+    code_verifier: str
+    redirect_uri: str
+
+
 class RefreshRequest(BaseModel):
     """Refresh token request model."""
 

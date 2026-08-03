@@ -32,6 +32,8 @@ export type ByokConfig = {
   model: string
   /** Override the default base URL (e.g. an OpenAI-compatible proxy). */
   baseURL?: string
+  /** Custom fetch (e.g. the Tauri CORS-free fetch on desktop). Default: global fetch. */
+  fetch?: typeof fetch
 }
 
 
@@ -100,6 +102,7 @@ export const makeCompleter = (config: ByokConfig): ChatCompleter => {
     apiKey: config.apiKey,
     baseURL: config.baseURL ?? BASE_URLS[config.provider],
     dangerouslyAllowBrowser: true,
+    ...(config.fetch ? { fetch: config.fetch } : {}),
   })
   return {
     create: (params) => client.chat.completions.create(params),

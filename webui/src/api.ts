@@ -85,6 +85,8 @@ export type AuthMethods = {
   local: boolean
   google: boolean
   google_client_id?: string | null
+  /** Desktop (Tauri) authorizes against its own "Desktop app" OAuth client. */
+  google_desktop_client_id?: string | null
 }
 
 
@@ -326,6 +328,39 @@ export async function googleSignin(idToken: string): Promise<TokenPayload> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id_token: idToken }),
+  })
+
+  if (!res.ok) {
+    const message = await readErrorMessage(res, "Google sign in failed")
+    throw new Error(message)
+  }
+
+  const json: unknown = await res.json()
+  const token = (json as { data?: { token?: TokenPayload }; token?: TokenPayload }).data?.token
+    ?? (json as { token?: TokenPayload }).token
+
+  if (!token?.access_token) throw new Error("Google sign in failed")
+
+  setAccessToken(token.access_token)
+  if (token.refresh_token) setRefreshToken(token.refresh_token)
+
+  return token
+}
+
+
+/**
+ * Desktop Google sign-in: hand the loopback auth code + PKCE verifier to the
+ * backend, which exchanges them (secret stays server-side) and returns app tokens.
+ */
+export async function googleSigninDesktop(
+  code: string,
+  codeVerifier: string,
+  redirectUri: string,
+): Promise<TokenPayload> {
+  const res = await trackedFetch(new URL("/users/google-signin-desktop", API_URL).toString(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code, code_verifier: codeVerifier, redirect_uri: redirectUri }),
   })
 
   if (!res.ok) {

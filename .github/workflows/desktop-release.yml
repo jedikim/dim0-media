@@ -1,0 +1,126 @@
+name: Desktop Release
+
+# Cut a desktop release: push a version tag (e.g. `v0.3.60`) → build installers for
+# macOS, Linux, and Windows → publish ONE GitHub Release with them attached, plus a
+# curl-installable macOS `.app` zip (see install.sh). A tag with a prerelease part
+# (e.g. `v0.3.60-rc.1`) publishes as a pre-release.
+#
+# (`desktop-build.yml` is the workflow_dispatch "does it compile on every OS" check;
+# this one is the tag-driven publish.)
+#
+# The public server URL is baked in from the `API_ORIGIN` repo variable — the same
+# server-origin var `.env` uses — into VITE_API_URL. Unset ⇒ a local-only build that
+# asks the user to connect a server.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the release + upload assets
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.platform }}
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: webui/package-lock.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: webui/src-tauri
+
+      - name: Install Tauri system dependencies (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libxdo-dev \
+            patchelf
+
+      - name: Install webui dependencies
+        run: npm ci
+        working-directory: webui
+
+      # Bake VITE_API_URL (the server users sign in to) from the API_ORIGIN repo
+      # variable — the same server-origin var `.env` uses. Unset ⇒ drop it entirely
+      # → a local-only build. bash so it runs the same on the Windows runner (git-bash).
+      - name: Prepare build env
+        shell: bash
+        run: |
+          cp .env.sample .env
+          grep -v '^VITE_API_URL=' .env > .env.tmp && mv .env.tmp .env
+          if [ -n "${API_ORIGIN}" ]; then
+            echo "VITE_API_URL=${API_ORIGIN}" >> .env
+          fi
+        env:
+          API_ORIGIN: ${{ vars.API_ORIGIN }}
+
+      - name: Build desktop installers
+        run: npm run tauri-build
+        working-directory: webui
+
+      # install.sh curls a zip of the .app (not the .dmg): a terminal download isn't
+      # Gatekeeper-quarantined, so the ad-hoc-signed app launches with no prompt.
+      - name: Package macOS .app zip
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          ditto -c -k --keepParent \
+            "webui/src-tauri/target/release/bundle/macos/Dim0.app" \
+            "Dim0-aarch64-mac.zip"
+
+      - name: Collect installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: dim0-${{ matrix.platform }}
+          path: |
+            webui/src-tauri/target/release/bundle/dmg/*.dmg
+            webui/src-tauri/target/release/bundle/appimage/*.AppImage
+            webui/src-tauri/target/release/bundle/deb/*.deb
+            webui/src-tauri/target/release/bundle/msi/*.msi
+            webui/src-tauri/target/release/bundle/nsis/*-setup.exe
+            Dim0-aarch64-mac.zip
+          if-no-files-found: ignore
+          retention-days: 14
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all installers
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          files: dist/**
+          fail_on_unmatched_files: false

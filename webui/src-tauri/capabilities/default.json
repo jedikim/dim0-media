@@ -6,6 +6,18 @@
     "main"
   ],
   "permissions": [
-    "core:default"
+    "core:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://api.openai.com/*" },
+        { "url": "https://openrouter.ai/*" },
+        { "url": "https://api.linkup.so/*" },
+        { "url": "https://api.tavily.com/*" },
+        { "url": "https://api.perplexity.ai/*" },
+        { "url": "https://api.exa.ai/*" },
+        { "url": "https://api.mistral.ai/*" }
+      ]
+    }
   ]
 }

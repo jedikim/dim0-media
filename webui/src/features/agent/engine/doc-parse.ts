@@ -12,6 +12,8 @@ import type { ServiceResolution } from "./services/kinds"
 import { resolveService } from "./services/resolve"
 import { isOverQuotaError, runIdHeaders } from "./services/run"
 import { servicesUpload } from "./services/transport"
+import { desktopMistralParse } from "./services/desktop-parse"
+import { isTauri } from "@/platform"
 
 
 /** The `/ai/parse` reply: the document's OCR'd markdown + its page count. */
@@ -77,9 +79,17 @@ export const resolveParseClient = (opts: {
     byok: cred ? { parse: cred } : {},
   })
   if (resolution.mode === "off") return null
+  // Desktop BYOK: OCR the PDF directly against Mistral (CORS-free) instead of our
+  // proxy, so parsing works offline-of-our-servers. In the browser this is always
+  // null → unchanged behaviour.
+  const desktopPost =
+    isTauri() && resolution.mode === "byok" && opts.byokKey
+      ? desktopMistralParse(opts.byokKey)
+      : null
   return managedParseClient({
     runId: opts.runId,
     byokKey: opts.byokKey ?? undefined,
     alwaysByok: resolution.mode === "byok",
+    ...(desktopPost ? { post: desktopPost } : {}),
   })
 }
