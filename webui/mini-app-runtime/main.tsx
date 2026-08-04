@@ -19,6 +19,11 @@ import { handleHostMessage, setHostInitialState } from "./rpc"
 import { MINI_APP_SCOPE_NAMES, MINI_APP_SCOPE_VALUES } from "./scope"
 import { isSingleFrontend } from "./single-frontend"
 import "./runtime.css"
+// Self-hosted fonts (same as the main app). runtime.css re-uses src/index.css,
+// which only defines the `--font-*` vars — the actual @font-face declarations
+// live in src/fonts.ts. Import them here too or the mini-app falls back to
+// system fonts. viteSingleFile inlines the woff2 into the one-file bundle.
+import "../src/fonts"
 // Tailwind v4's browser build JIT-compiles utility classes at runtime
 // by scanning the live DOM. Critical for mini-apps: the agent's JSX is
 // a string at compile time, so the static @tailwindcss/vite plugin
