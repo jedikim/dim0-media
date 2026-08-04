@@ -1,3 +1,9 @@
+## v0.3.65 (2026-08-04)
+
+### Fix
+
+- **webui**: load self-hosted fonts in the mini-app runtime (#187)
+
 ## v0.3.64 (2026-08-04)
 
 ### Fix
