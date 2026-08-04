@@ -29,13 +29,20 @@ up-build: ## Force rebuild images, then start all services for $(PROFILE)
 build: ## Just (re)build images (no start)
 	$(COMPOSE) --profile $(PROFILE) build
 
+# ENVFILE reaches the webui build via npm_config_envfile, which its scripts read
+# as `dotenv -e ../$npm_config_envfile`. Set it explicitly (not `npm --envfile=`,
+# which leans on npm's unknown-flag→config passthrough) so it can't regress on a
+# future npm; it then propagates through `tauri {dev,build}` → its before*Command.
+# $(strip) drops the trailing spaces the ENVFILE default carries from its inline
+# comment. ENVFILE must be repo-root-relative (the build prefixes `../`), same as
+# the default `.env`; an absolute path won't resolve.
 .PHONY: desktop-dev
 desktop-dev: ## Run the Tauri desktop app in dev (native window + hot reload); needs Rust
-	cd webui && npm run tauri-dev
+	cd webui && npm_config_envfile="$(strip $(ENVFILE))" npm run tauri-dev
 
 .PHONY: desktop-build
 desktop-build: ## Build the desktop installer for this OS → webui/src-tauri/target/release/bundle
-	cd webui && npm run tauri-build
+	cd webui && npm_config_envfile="$(strip $(ENVFILE))" npm run tauri-build
 
 .PHONY: pull
 pull: ## Pull published backend and webui images for DIM0_VERSION
