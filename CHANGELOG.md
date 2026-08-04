@@ -1,3 +1,9 @@
+## v0.3.66 (2026-08-04)
+
+### Fix
+
+- **webui**: exclude mini-app from PWA precache (unbreaks build) (#188)
+
 ## v0.3.65 (2026-08-04)
 
 ### Fix
