@@ -1,3 +1,9 @@
+## v0.3.64 (2026-08-04)
+
+### Fix
+
+- **ci**: desktop publish downloads only its own artifacts (#186)
+
 ## v0.3.63 (2026-08-03)
 
 ### Fix
