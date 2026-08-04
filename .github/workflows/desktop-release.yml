@@ -138,6 +138,11 @@ jobs:
       - name: Download all installers
         uses: actions/download-artifact@v4
         with:
+          # Only the desktop build artifacts (dim0-<platform>). When invoked via
+          # workflow_call from Release, the run also holds the docker job's
+          # `*.dockerbuild` artifact; downloading everything pulls that in and the
+          # step dies on it ("failed after 5 retries").
+          pattern: dim0-*
           path: dist
           merge-multiple: true
 
