@@ -1,3 +1,9 @@
+## v0.3.67 (2026-08-04)
+
+### Fix
+
+- **build**: honor ENVFILE in the desktop make targets (#189)
+
 ## v0.3.66 (2026-08-04)
 
 ### Fix
