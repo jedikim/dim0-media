@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { useParams, useSearch } from "@tanstack/react-router"
+import { Outlet, useParams, useSearch } from "@tanstack/react-router"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 import { ArrowExpandIcon, SparklesIcon } from "@/components/icons"
@@ -10,6 +10,7 @@ import { HarnessCanvas } from "@/features/board/harness/canvas"
 import { LocalFolderBreadcrumb } from "@/features/board/local/local-folder-breadcrumb"
 import { NotesSearchDialog } from "@/features/board/local/notes-search-dialog"
 import { useBoardAppStore } from "@/features/board/harness/store/board-app-store"
+import { useHarnessSurfaceFromUrl } from "@/features/board/harness/hooks/use-surface-from-url"
 import { FloatingAssistant } from "@/features/board/components/flow/floating-assistant/floating-assistant"
 import { requestPersistentStorage } from "@/features/board/persist/local/persist-storage"
 
@@ -43,10 +44,18 @@ export function LocalBoardScreen() {
     if (boardId) void openBoard(boardId)
   }, [boardId, openBoard])
 
+  // Sync the /local/$boardId/{sheets,code-sandbox,widgets,mini-apps}/$noteId
+  // surface routes ⇄ activeNodeSurface (the panel is mounted inside the canvas).
+  useHarnessSurfaceFromUrl(true)
+
   return (
     <div className="absolute inset-0 h-full w-full overflow-hidden bg-background">
       <div className="relative h-full w-full">
         <HarnessCanvas local />
+
+        {/* Null-component surface child routes render here; the actual panel is
+            mounted inside the canvas (NodeSurfaceHost), driven by the URL sync. */}
+        <Outlet />
 
         {/* Off-board tool (fetch/code) confirmation. Mounted at screen level
             (not inside FloatingAssistant) so it stays present when the full

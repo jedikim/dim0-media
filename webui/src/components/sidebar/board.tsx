@@ -12,6 +12,7 @@ import { ChatsDialog } from "./chats-dialog"
 import { ConfirmDeleteBoardAlert } from "./confirm-delete-board"
 import { BoardTreeNode } from "./board-tree-node"
 import { useBoardContents } from "@/features/board/api/list-board-contents"
+import { useLocalBoardContents } from "@/features/board/api/list-local-board-contents"
 import { useState, type MouseEvent } from "react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
 import { useAppStore } from "@/store"
@@ -125,10 +126,12 @@ export function NewLocalBoardItem({ onClick }: { onClick: () => void }) {
  * A local-only board row in the sidebar's LOCAL group. Presentational — the
  * sidebar owns the local registry + enable-sync hooks and passes callbacks.
  * Routes to `/local/$boardId`; context menu offers Enable sync (one-way promote)
- * and Delete. No sub-tree expansion (local board contents aren't served by the
- * backend contents API the synced BoardItem uses).
+ * and Delete. Expands to its surface-node hierarchy (sheets/folders/…) read from
+ * the on-device store via `useLocalBoardContents` — the local analog of the
+ * synced BoardItem's backend-served tree.
  */
 export function LocalBoardItem({
+  boardId,
   label,
   isActive,
   syncing = false,
@@ -136,6 +139,7 @@ export function LocalBoardItem({
   onEnableSync,
   onDelete,
 }: {
+  boardId: string
   label?: string
   isActive: boolean
   syncing?: boolean
@@ -144,54 +148,104 @@ export function LocalBoardItem({
   onDelete: () => void
 }) {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(false)
   const boardLabel = label || UNTITLED_LABEL
   const boardDisplayLabel = trimText(boardLabel, 20)
+
+  // Whole-board surface list, loaded once on expand; each level filters in memory.
+  const { data: allContents = [], isLoading } = useLocalBoardContents(boardId, {
+    enabled: isOpen,
+  })
+  const rootContents = allContents.filter((c) => (c.parentId ?? null) === null)
+
+  const handleToggle = (e: MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setIsOpen((v) => !v)
+  }
 
   return (
     <SidebarMenuItem>
       <ContextMenu>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <ContextMenuTrigger asChild>
-              <SidebarMenuButton
-                onClick={onOpen}
-                className="text-xs font-medium truncate"
-                isActive={isActive}
-              >
-                <BoardContextIcon
-                  className="size-4 shrink-0"
-                  weight={isActive ? "fill" : undefined}
-                />
-                <span className="truncate">{boardDisplayLabel}</span>
-              </SidebarMenuButton>
-            </ContextMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="right" align="center" className="max-w-64">
-            <p className="text-xs">{boardLabel}</p>
-            <p className="mt-1 text-[10px] text-muted-foreground">On this device</p>
-          </TooltipContent>
-        </Tooltip>
+        <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <ContextMenuTrigger asChild>
+                <SidebarMenuButton
+                  onClick={onOpen}
+                  className="group/board-row text-xs font-medium truncate"
+                  isActive={isActive}
+                >
+                  <span
+                    role="button"
+                    aria-label={isOpen ? "Collapse board" : "Expand board"}
+                    onClick={handleToggle}
+                    className="size-4 shrink-0 grid place-items-center cursor-pointer"
+                  >
+                    <BoardContextIcon
+                      className="size-4 group-hover/board-row:hidden"
+                      weight={isActive ? "fill" : undefined}
+                    />
+                    <ChevronRightIcon
+                      className={cn(
+                        "size-4 hidden group-hover/board-row:block transition-transform",
+                        isOpen && "rotate-90",
+                      )}
+                      strokeWidth={2}
+                    />
+                  </span>
+                  <span className="truncate">{boardDisplayLabel}</span>
+                </SidebarMenuButton>
+              </ContextMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="right" align="center" className="max-w-64">
+              <p className="text-xs">{boardLabel}</p>
+              <p className="mt-1 text-[10px] text-muted-foreground">On this device</p>
+            </TooltipContent>
+          </Tooltip>
 
-        <ContextMenuContent className="w-44">
-          <ContextMenuItem
-            onSelect={() => onEnableSync()}
-            disabled={syncing}
-            className="text-xs flex flex-row items-center"
-          >
-            <CloudArrowUpIcon className="mr-2 size-4" strokeWidth={2} />
-            <span>{syncing ? "Enabling sync…" : "Enable sync"}</span>
-          </ContextMenuItem>
-          <ContextMenuItem
-            onSelect={() =>
-              window.setTimeout(() => setIsConfirmOpen(true), 0)
-            }
-            variant="destructive"
-            className="text-xs flex flex-row items-center"
-          >
-            <DeleteIcon className="mr-2 size-4" strokeWidth={2} />
-            <span>Delete board</span>
-          </ContextMenuItem>
-        </ContextMenuContent>
+          <ContextMenuContent className="w-44">
+            <ContextMenuItem
+              onSelect={() => onEnableSync()}
+              disabled={syncing}
+              className="text-xs flex flex-row items-center"
+            >
+              <CloudArrowUpIcon className="mr-2 size-4" strokeWidth={2} />
+              <span>{syncing ? "Enabling sync…" : "Enable sync"}</span>
+            </ContextMenuItem>
+            <ContextMenuItem
+              onSelect={() =>
+                window.setTimeout(() => setIsConfirmOpen(true), 0)
+              }
+              variant="destructive"
+              className="text-xs flex flex-row items-center"
+            >
+              <DeleteIcon className="mr-2 size-4" strokeWidth={2} />
+              <span>Delete board</span>
+            </ContextMenuItem>
+          </ContextMenuContent>
+
+          <CollapsibleContent>
+            {isLoading && rootContents.length === 0 ? (
+              <p className="pl-7 py-1 text-[11px] italic text-muted-foreground">Loading…</p>
+            ) : rootContents.length === 0 ? (
+              <p className="pl-7 py-1 text-[11px] italic text-muted-foreground">Empty</p>
+            ) : (
+              <ul className="flex flex-col">
+                {rootContents.map((item) => (
+                  <BoardTreeNode
+                    key={item.id}
+                    boardId={boardId}
+                    item={item}
+                    depth={1}
+                    local
+                    localContents={allContents}
+                  />
+                ))}
+              </ul>
+            )}
+          </CollapsibleContent>
+        </Collapsible>
       </ContextMenu>
 
       {/* Visible one-click promote-to-sync (also in the context menu above).

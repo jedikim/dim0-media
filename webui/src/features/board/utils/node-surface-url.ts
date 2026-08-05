@@ -1,18 +1,28 @@
-import { CodeSandboxUrl, MiniAppUrl, SheetUrl, WidgetUrl } from "@/routes"
+import {
+  CodeSandboxUrl,
+  LocalCodeSandboxUrl,
+  LocalMiniAppUrl,
+  LocalSheetUrl,
+  LocalWidgetUrl,
+  MiniAppUrl,
+  SheetUrl,
+  WidgetUrl,
+} from "@/routes"
 import type { NodeSurfaceKind } from "../harness/store/board-app-store"
 
 
 /**
  * Map a node-surface kind to its URL path. The dialog system shares one
  * sub-tree under the board route — only the path segment (`sheets`,
- * `code-sandbox`, `widgets`, `mini-apps`) differs per kind.
+ * `code-sandbox`, `widgets`, `mini-apps`) differs per kind. `local` selects the
+ * `/local/$boardId/*` mirror of the synced `/boards/$id/*` routes.
  */
-export function nodeSurfacePath(kind: NodeSurfaceKind): string {
+export function nodeSurfacePath(kind: NodeSurfaceKind, local = false): string {
   switch (kind) {
-    case "sheet": return SheetUrl
-    case "code-sandbox": return CodeSandboxUrl
-    case "widget": return WidgetUrl
-    case "mini-app": return MiniAppUrl
+    case "sheet": return local ? LocalSheetUrl : SheetUrl
+    case "code-sandbox": return local ? LocalCodeSandboxUrl : CodeSandboxUrl
+    case "widget": return local ? LocalWidgetUrl : WidgetUrl
+    case "mini-app": return local ? LocalMiniAppUrl : MiniAppUrl
   }
 }
 

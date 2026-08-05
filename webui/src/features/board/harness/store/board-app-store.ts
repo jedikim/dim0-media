@@ -8,7 +8,6 @@ import {
   setBoardBackground as persistSetBoardBackground,
   setBoardBackgroundTexture as persistSetBoardBackgroundTexture,
 } from "@/features/board/utils/board-background"
-import { nodeSurfacePath } from "@/features/board/utils/node-surface-url"
 
 
 export type NodeSurfaceKind = "sheet" | "code-sandbox" | "widget" | "mini-app"
@@ -33,7 +32,10 @@ export type ChromeDialog =
  * create a cycle through the screen components). Mirrors prod's
  * `setBoardNavigate` pattern in graph-store.ts.
  */
-type SurfaceNavigateOpen = (path: string, params: { id: string; noteId: string }) => void
+// The host hook (synced vs local) owns URL construction — it knows the route
+// family (`/boards/$id/*` vs `/local/$boardId/*`) and param names — so the store
+// stays route-agnostic and only forwards the surface kind + ids.
+type SurfaceNavigateOpen = (kind: NodeSurfaceKind, boardId: string, nodeId: string) => void
 type SurfaceNavigateClose = (boardId: string) => void
 let _navigateOpen: SurfaceNavigateOpen | null = null
 let _navigateClose: SurfaceNavigateClose | null = null
@@ -238,7 +240,7 @@ export const useBoardAppStore = create<BoardAppState & BoardAppActions>((set, ge
     set({ activeNodeSurface: { nodeId, kind } })
     const boardId = get().boardId
     if (!boardId || !_navigateOpen) return
-    _navigateOpen(nodeSurfacePath(kind), { id: boardId, noteId: nodeId })
+    _navigateOpen(kind, boardId, nodeId)
   },
   closeNodeSurface: () => {
     set({ activeNodeSurface: null })

@@ -289,9 +289,46 @@ const localBoardRoute = createRoute({
   component: LocalBoardScreen,
 })
 
+// Local surface routes mirror the synced `/boards/$id/*` children (same
+// null-component pattern): LocalBoardScreen reads URL state via
+// `useHarnessSurfaceFromUrl(local)` and mounts the panel over the still-mounted
+// canvas. Param is `$boardId` (not `$id`).
+export const LocalSheetUrl = "/local/$boardId/sheets/$noteId"
+const localSheetRoute = createRoute({
+  getParentRoute: () => localBoardRoute,
+  path: "/sheets/$noteId",
+  component: () => null,
+})
+
+export const LocalCodeSandboxUrl = "/local/$boardId/code-sandbox/$noteId"
+const localCodeSandboxRoute = createRoute({
+  getParentRoute: () => localBoardRoute,
+  path: "/code-sandbox/$noteId",
+  component: () => null,
+})
+
+export const LocalWidgetUrl = "/local/$boardId/widgets/$noteId"
+const localWidgetRoute = createRoute({
+  getParentRoute: () => localBoardRoute,
+  path: "/widgets/$noteId",
+  component: () => null,
+})
+
+export const LocalMiniAppUrl = "/local/$boardId/mini-apps/$noteId"
+const localMiniAppRoute = createRoute({
+  getParentRoute: () => localBoardRoute,
+  path: "/mini-apps/$noteId",
+  component: () => null,
+})
+
 const routeTree = rootRoute.addChildren([
   localDashboardRoute,
-  localBoardRoute,
+  localBoardRoute.addChildren([
+    localSheetRoute,
+    localCodeSandboxRoute,
+    localWidgetRoute,
+    localMiniAppRoute,
+  ]),
   signinRoute,
   signupRoute,
   verifyEmailRoute,
