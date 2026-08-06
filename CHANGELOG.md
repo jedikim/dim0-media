@@ -1,3 +1,13 @@
+## v0.3.69 (2026-08-06)
+
+### Feat
+
+- **sidebar**: active-row highlight + filled kind icon for the open surface (#195)
+
+### Fix
+
+- **board**: visible hover on top toolbar buttons via border (#194)
+
 ## v0.3.68 (2026-08-06)
 
 ### Feat
