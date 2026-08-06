@@ -1,3 +1,9 @@
+## v0.3.71 (2026-08-06)
+
+### Feat
+
+- **desktop**: frameless window + custom title bar & window controls (#198)
+
 ## v0.3.70 (2026-08-06)
 
 ### Fix
