@@ -1,3 +1,9 @@
+## v0.3.72 (2026-08-06)
+
+### Perf
+
+- **desktop**: unlock WKWebView 120fps + drop canvas-overlay backdrop-blur on WebKit (#199)
+
 ## v0.3.71 (2026-08-06)
 
 ### Feat
