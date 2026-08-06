@@ -270,12 +270,17 @@ async def get_graph(
     user_id: Annotated[str, Depends(get_current_user_uid)],
     _: Annotated[None, Depends(verify_board_read_access)],
     root_id: Annotated[str | None, Query(description="Root node ID for subgraph (direct children only)")] = None,
+    whole: Annotated[bool, Query(description="Return the whole board (all layers), ignoring root_id — for offline materialization")] = False,
 ):
     """Get a graph by its ID."""
     store: GraphStore = request.app.graph_store
 
     try:
-        graph = await store.get_graph(graph_uid=graph_id, root_id=root_id)
+        graph = await store.get_graph(
+            graph_uid=graph_id,
+            root_id=None if whole else root_id,
+            all_layers=whole,
+        )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     if not graph:

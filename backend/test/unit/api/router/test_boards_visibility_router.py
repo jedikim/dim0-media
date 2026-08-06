@@ -16,6 +16,7 @@ class _FakeGraphStore:
         self.metadata: dict[str, Graph] = {}
         self.graphs: dict[str, Graph] = {}
         self.updated: list[tuple[str, dict]] = []
+        self.last_get_graph: dict | None = None
 
     async def get_graph_role(self, graph_uid: str, user_uid: str) -> str | None:
         return self.roles.get((graph_uid, user_uid))
@@ -23,7 +24,10 @@ class _FakeGraphStore:
     async def get_graph_metadata(self, graph_uid: str) -> Graph | None:
         return self.metadata.get(graph_uid)
 
-    async def get_graph(self, graph_uid: str, root_id: str | None = None) -> Graph | None:
+    async def get_graph(
+        self, graph_uid: str, root_id: str | None = None, all_layers: bool = False
+    ) -> Graph | None:
+        self.last_get_graph = {"root_id": root_id, "all_layers": all_layers}
         return self.graphs.get(graph_uid)
 
     async def update_graph(self, graph_uid: str, data: dict):
@@ -104,6 +108,34 @@ def test_private_board_read_allowed_for_viewer_role():
     assert payload["data"]["graph"]["uid"] == graph_uid
     assert payload["data"]["can_edit"] is False
     assert payload["data"]["role"] == "viewer"
+
+
+def test_get_graph_whole_requests_all_layers():
+    """`?whole=true` fetches the entire board (all layers), ignoring root_id."""
+    store = _FakeGraphStore()
+    graph_uid = "g-public"
+    store.metadata[graph_uid] = Graph(uid=graph_uid, label="Public", visibility="public")
+    store.graphs[graph_uid] = Graph(uid=graph_uid, label="Public", visibility="public")
+    client = _build_client(store, user_uid="viewer")
+
+    response = client.get(f"/boards/{graph_uid}?whole=true&root_id=folder-1")
+
+    assert response.status_code == 200
+    assert store.last_get_graph == {"root_id": None, "all_layers": True}
+
+
+def test_get_graph_scoped_to_layer_by_default():
+    """Without `whole`, the read is scoped to root_id's layer (unchanged)."""
+    store = _FakeGraphStore()
+    graph_uid = "g-public"
+    store.metadata[graph_uid] = Graph(uid=graph_uid, label="Public", visibility="public")
+    store.graphs[graph_uid] = Graph(uid=graph_uid, label="Public", visibility="public")
+    client = _build_client(store, user_uid="viewer")
+
+    response = client.get(f"/boards/{graph_uid}?root_id=folder-1")
+
+    assert response.status_code == 200
+    assert store.last_get_graph == {"root_id": "folder-1", "all_layers": False}
 
 
 def test_non_member_write_denied_even_when_public():

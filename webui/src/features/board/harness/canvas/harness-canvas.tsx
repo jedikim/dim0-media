@@ -76,6 +76,7 @@ import { useHistoryBatchIds } from "./use-history-batch-ids"
 import { useSyncEngine } from "./use-sync-engine"
 import { useThumbnailCapture } from "./use-thumbnail-capture"
 import { useViewportPersistence } from "./use-viewport-persistence"
+import { useSidebarContentsSync } from "./use-sidebar-contents-sync"
 import { HarnessWrapRefProvider } from "./wrap-ref-provider"
 
 
@@ -164,6 +165,7 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
   const styleMemory = useStyleMemory(store)
   useStampNewEdges(store, boardId, rootId)
   useStampNewNodes(store, boardId, rootId)
+  useSidebarContentsSync(store, boardId)
   useLocalSearchIndex(store, local)
   useLocalDocIndex(boardId ?? "", local)
   useDocNodeCascade(store, boardId ?? "", local)

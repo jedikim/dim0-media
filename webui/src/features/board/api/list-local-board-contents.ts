@@ -65,11 +65,12 @@ export const useLocalBoardContents = (
     queryKey: ["localBoardContents", boardId],
     queryFn: () => listLocalBoardContents(boardId),
     enabled: enabled && Boolean(boardId),
-    // The on-device board is mutable and there's no invalidation wired to local
-    // canvas edits (unlike the synced `invalidateBoardContents`), so keep it
-    // `stale` — each expand re-reads the store and reflects created / renamed /
-    // deleted surfaces. Local boards are small, so the snapshot+oplog replay is
-    // cheap; `refetchOnWindowFocus` off so we only pay it on an actual expand.
+    // `useSidebarContentsSync` invalidates this exact key on a surface-relevant
+    // canvas edit (create / delete / rename / re-icon / move) for the open board,
+    // so the tree refreshes live. `staleTime: 0` also makes each fresh expand
+    // re-read the store; `refetchOnWindowFocus` off so we don't replay on focus.
+    // The snapshot+oplog replay is cheap for local boards; larger synced offline
+    // bases could read the open board from the live store instead (a follow-up).
     staleTime: 0,
     refetchOnWindowFocus: false,
   })

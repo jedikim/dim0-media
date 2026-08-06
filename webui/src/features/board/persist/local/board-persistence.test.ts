@@ -67,6 +67,84 @@ describe("BoardPersistence", () => {
   })
 
 
+  // --- offline base for synced boards (writeInitialBase) ---
+
+  /** A server-only base, as `graphToContent(welcome)` would produce. */
+  const serverBase = (...ids: string[]) => {
+    const s = freshStore("srv")
+    for (const id of ids) addNode(s, id)
+    return readContent(s)
+  }
+
+  it("writeInitialBase seeds a base so a synced board loads offline", async () => {
+    const p = new BoardPersistence("b")
+    await p.init()
+    await p.writeInitialBase(() => serverBase("s1", "s2"))
+    p.close()
+
+    // Next session / offline: a fresh instance loads the persisted base.
+    const p2 = new BoardPersistence("b")
+    await p2.init()
+    const content = await p2.load()
+    expect(content.nodes.map((n) => n.id).sort()).toEqual(["s1", "s2"])
+    p2.close()
+  })
+
+  it("writeInitialBase writes an (empty) base for a genuinely empty board", async () => {
+    const p = new BoardPersistence("b")
+    await p.init()
+    // A genuinely empty whole-board fetch is offline-available (nothing to load),
+    // so it writes a base and reports success — the offline marker can flip.
+    expect(await p.writeInitialBase(() => serverBase())).toBe(true)
+    const content = await p.load()
+    expect(content.nodes).toEqual([])
+    p.close()
+  })
+
+  it("writeInitialBase no-ops when a base already exists (drift-safe)", async () => {
+    const p = new BoardPersistence("b")
+    await p.init()
+    await p.writeInitialBase(() => serverBase("s1"))
+    // A later (reconnect drift) snapshot must NOT replace the seeded base.
+    await p.writeInitialBase(() => serverBase("s2", "s3"))
+    const content = await p.load()
+    expect(content.nodes.map((n) => n.id)).toEqual(["s1"])
+    p.close()
+  })
+
+  it("writeInitialBase no-ops once local edits exist (never truncates the outbox)", async () => {
+    const p = new BoardPersistence("b")
+    await p.init()
+    const store = freshStore("c")
+    p.attach(store)
+    addNode(store, "local1")
+    await p.flush() // this.seq > 0 now
+
+    await p.writeInitialBase(() => serverBase("server1")) // must no-op
+
+    const content = await p.load()
+    expect(content.nodes.map((n) => n.id)).toEqual(["local1"]) // base skipped, edit intact
+    p.close()
+  })
+
+  it("edits after the seeded base replay on top of it (serverSeq order)", async () => {
+    const p = new BoardPersistence("b")
+    await p.init()
+    await p.writeInitialBase(() => serverBase("s1"))
+    await p.load() // sync the seq cursor to the base
+
+    const store = freshStore("c")
+    p.attach(store)
+    addNode(store, "local1") // unacked local (no serverSeq) → sorts last
+    p.recordRemote(captureRemoteBatch((s) => addNode(s, "remote1")), 10)
+    await p.flush()
+
+    const content = await p.load()
+    expect(content.nodes.map((n) => n.id).sort()).toEqual(["local1", "remote1", "s1"])
+    p.close()
+  })
+
+
   it("INV-2 reconstruction: load() reproduces the live store exactly", async () => {
     const p = new BoardPersistence("b")
     await p.init()

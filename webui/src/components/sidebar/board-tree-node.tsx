@@ -11,7 +11,7 @@ import {
 } from "@/components/icons"
 import { IconPropertyView } from "@/components/icons/icon-property-view"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import { useBoardContents, type BoardContentItem, type BoardContentKind } from "@/features/board/api/list-board-contents"
+import { type BoardContentItem, type BoardContentKind } from "@/features/board/api/list-board-contents"
 import { nodeSurfacePath } from "@/features/board/utils/node-surface-url"
 import { trimText } from "@/lib/common"
 import { UNTITLED_LABEL } from "@/features/board/const"
@@ -43,14 +43,17 @@ type BoardTreeNodeProps = {
    */
   parentFolderId?: string
   /**
-   * Local mode: children come from `localContents` (filtered by `parentId`) rather
-   * than the backend, and navigation targets the `/local/$boardId/*` routes. Local
-   * persistence has no per-level query, so the whole tree is loaded once by the
-   * board row and threaded down here.
+   * Navigation routing only: `true` targets the `/local/$boardId/*` routes,
+   * `false` the synced `/boards/$id/*` routes. The tree DATA always comes from
+   * `treeContents` (the on-device store) regardless — a synced board reads its
+   * own local base once it's available offline, same as a local board.
    */
   local?: boolean
-  /** Full flat surface-node list for a local board (all levels). Ignored unless `local`. */
-  localContents?: BoardContentItem[]
+  /**
+   * Full flat surface-node list for the board (all levels), loaded once by the
+   * board row from the on-device store; each level filters by `parentId`.
+   */
+  treeContents: BoardContentItem[]
 }
 
 
@@ -67,7 +70,7 @@ export function BoardTreeNode({
   depth,
   parentFolderId,
   local = false,
-  localContents,
+  treeContents,
 }: BoardTreeNodeProps) {
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(false)
@@ -84,16 +87,10 @@ export function BoardTreeNode({
   const fullLabel = item.label?.trim() || UNTITLED_LABEL
   const displayLabel = trimText(fullLabel, 40)
 
-  // Synced: fetch this level from the backend on expand. Local: the whole board's
-  // surface list is already in memory (threaded via `localContents`), so filter
-  // children by parentId — the hook is still called (disabled) to keep hook order.
-  const syncedQuery = useBoardContents(boardId, item.id, {
-    enabled: !local && isExpandable && expanded,
-  })
-  const children: BoardContentItem[] = local
-    ? (localContents ?? []).filter((c) => (c.parentId ?? null) === item.id)
-    : (syncedQuery.data ?? [])
-  const isLoading = local ? false : syncedQuery.isLoading
+  // The whole board's surface list is already in memory (threaded via
+  // `treeContents` from the on-device store), so filter children by parentId —
+  // no per-level fetch, and no loading state.
+  const children = treeContents.filter((c) => (c.parentId ?? null) === item.id)
 
   const handleNavigate = () => {
     // Keep `current_chat_id` etc. but realign `root_id` to the closest
@@ -209,14 +206,7 @@ export function BoardTreeNode({
 
       {isExpandable && expanded && (
         <ul className="flex flex-col">
-          {isLoading && children.length === 0 ? (
-            <li
-              className="py-1 text-[11px] italic text-muted-foreground"
-              style={{ paddingLeft: paddingLeft + INDENT_PX_PER_LEVEL + 20 }}
-            >
-              Loading…
-            </li>
-          ) : children.length === 0 ? (
+          {children.length === 0 ? (
             <li
               className="py-1 text-[11px] italic text-muted-foreground"
               style={{ paddingLeft: paddingLeft + INDENT_PX_PER_LEVEL + 20 }}
@@ -234,7 +224,7 @@ export function BoardTreeNode({
                 // inherit the closest folder ancestor unchanged.
                 parentFolderId={isFolder ? item.id : parentFolderId}
                 local={local}
-                localContents={localContents}
+                treeContents={treeContents}
               />
             ))
           )}

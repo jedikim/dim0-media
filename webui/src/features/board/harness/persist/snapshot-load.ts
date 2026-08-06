@@ -1,7 +1,9 @@
-import { type CanvasStore, type Node, type Op } from "@canvas-harness/core"
+import { createCanvasStore, type CanvasStore, type Node, type Op } from "@canvas-harness/core"
 import { makeBatch } from "@/features/board/harness/make-batch"
 import { getBoard, type BoardRole } from "@/features/board/api/get-board"
 import type { Graph } from "@/features/board/types/board"
+import type { BoardContent } from "@/features/board/model"
+import { contentToScene, emptyContent, readContent } from "@/features/board/persist/local/codec"
 import { linkToEdge } from "../convert/link-to-edge"
 import { noteToNode } from "../convert/note-to-node"
 
@@ -173,6 +175,19 @@ export const applyGraphToStore = (
   if (ops.length === 0) return
   store.applyBatch(makeBatch(store, "remote", ops))
   // No clearHistory — merge preserves undo state across reconnects.
+}
+
+
+/**
+ * Convert a server Graph (the welcome-snapshot payload) into a `BoardContent` by
+ * replaying it into a throwaway store — the server-only base, with no local
+ * edits mixed in. Used to persist a synced board's base locally for offline
+ * reads (`BoardPersistence.writeInitialBase`).
+ */
+export const graphToContent = (graph: Graph): BoardContent => {
+  const store = createCanvasStore({ initial: contentToScene(emptyContent()) })
+  applyGraphToStore(store, graph, { mode: "replace" })
+  return readContent(store)
 }
 
 

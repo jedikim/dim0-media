@@ -40,6 +40,11 @@ deferred, not adopted.
   `data._storedColors` — see `docs/adr/ADR-AGENT-002` neighbours / architecture).
 - `serverSeq` is stamped at ack so a reload replays in relay order and converges
   to the same state as the live session.
+- A v2 board's base is materialized locally on first open — the **whole** board
+  (all layers) via `GET /boards/:id?whole=true`, seeded with `writeInitialBase` on
+  a pristine replica — so it loads offline at every layer; reconnect-drift base-
+  replace is deferred (needs serverSeq-based truncation — roadmap). Model + guard →
+  [`offline-first-data-model.md`](../offline-first-data-model.md).
 - Single-worker `RoomRegistry` v1 (in-process dict, `room.lock` serializes a
   room). Multi-worker (Redis room-pinning + per-peer queues) is deferred — roadmap.
 - Deleting a board MUST cascade `sync_meta`: a stale `syncedSeq` left behind makes

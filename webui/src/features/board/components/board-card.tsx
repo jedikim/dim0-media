@@ -1,10 +1,49 @@
 import { useNavigate } from "@tanstack/react-router"
-import { AddIcon } from "@/components/icons"
+import { AddIcon, CloudArrowDownIcon, CloudCheckIcon } from "@/components/icons"
+import { cn } from "@/lib/utils"
 import { UNTITLED_LABEL } from "../const"
 import type { Graph } from "../types/board"
 import { useCreateBoard } from "../api/create-board"
 import { formatDateForUI } from "../utils/datetime"
+import { useBoardOfflineStatus, useDownloadBoard } from "../api/board-offline-status"
 import { BoardKindBadge } from "./board-kind-badge"
+
+
+/** Offline status / download control for a synced board card. */
+const CardOfflineBadge = ({ boardId }: { boardId: string }) => {
+  const { data: offline } = useBoardOfflineStatus(boardId)
+  const download = useDownloadBoard()
+  // Still resolving the idb read — render nothing rather than flash the download
+  // icon on a board that turns out to already be offline-available.
+  if (offline === undefined) return null
+  if (offline) {
+    return (
+      <span title="Available offline" className="text-secondary-foreground/60">
+        <CloudCheckIcon className="size-4" strokeWidth={2} />
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      title={download.isPending ? "Downloading for offline…" : "Download for offline use"}
+      aria-label={download.isPending ? "Downloading for offline" : "Download for offline use"}
+      className={cn(
+        "text-muted-foreground/50 hover:text-secondary-foreground",
+        download.isPending && "opacity-60",
+      )}
+      onClick={(e) => {
+        e.stopPropagation()
+        if (!download.isPending) download.mutate(boardId)
+      }}
+    >
+      <CloudArrowDownIcon
+        className={cn("size-4", download.isPending && "animate-pulse")}
+        strokeWidth={2}
+      />
+    </button>
+  )
+}
 
 
 // Board card thumbnail component
@@ -57,7 +96,10 @@ export const BoardCard = ({
       <div className='p-2 w-full overflow-ellipsis'>
         <h4 className='inline-block font-medium text-sm'>{board.label || UNTITLED_LABEL}</h4>
         <div className='mt-1 flex w-full items-center justify-between gap-2'>
-          <BoardKindBadge kind="synced" />
+          <div className='flex items-center gap-2'>
+            <BoardKindBadge kind="synced" />
+            <CardOfflineBadge boardId={board.uid} />
+          </div>
           {dateString && (
             <span className='text-xs text-muted-foreground font-mono'>{dateString}</span>
           )}

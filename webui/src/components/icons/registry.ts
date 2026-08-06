@@ -20,6 +20,7 @@ import {
   CirclesFourIcon as CirclesFourGlyphIcon,
   CircuitryIcon,
   ClockIcon as ClockGlyphIcon,
+  CloudArrowDownIcon as PhosphorCloudArrowDownIcon,
   CloudArrowUpIcon as PhosphorCloudArrowUpIcon,
   CloudCheckIcon as PhosphorCloudCheckIcon,
   CloudFogIcon,
@@ -111,6 +112,7 @@ import {
   UserIcon as UserGlyphIcon,
   UserSquareIcon as UserSquareGlyphIcon,
   WarningCircleIcon,
+  WifiSlashIcon as PhosphorWifiSlashIcon,
   XCircleIcon,
   XIcon,
 } from "@phosphor-icons/react"
@@ -270,7 +272,9 @@ export const StopPresentationIcon = createPhosphorIcon(StopCircleIcon)
 export const WarningIcon = createPhosphorIcon(WarningCircleIcon)
 export const CloudSyncIcon = createPhosphorIcon(CloudIcon)
 export const CloudArrowUpIcon = createPhosphorIcon(PhosphorCloudArrowUpIcon)
+export const CloudArrowDownIcon = createPhosphorIcon(PhosphorCloudArrowDownIcon)
 export const CloudCheckIcon = createPhosphorIcon(PhosphorCloudCheckIcon)
+export const WifiSlashIcon = createPhosphorIcon(PhosphorWifiSlashIcon)
 export const WeatherCloudIcon = createPhosphorIcon(CloudIcon)
 export const WeatherCloudDrizzleIcon = createPhosphorIcon(CloudFogIcon)
 export const WeatherCloudRainIcon = createPhosphorIcon(CloudRainIcon)

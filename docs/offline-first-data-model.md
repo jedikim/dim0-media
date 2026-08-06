@@ -50,6 +50,17 @@ open and an upgrade converge on the same shape).
 - **Load = snapshot + replay.** `load()` reads the snapshot and replays oplog rows
   with `seq > snapshot.seq`, ordered by `serverSeq` (unacked-local sorts last).
   Correctness never depends on oplog truncation.
+- **Synced boards seed the base offline (v2).** On first open,
+  `materializeBoardOffline` fetches the **WHOLE board — all layers** (`GET
+  /boards/:id?whole=true`; the live per-layer welcome would only cover the opened
+  layer, leaving subboards blank offline) and writes it to `snapshots` once via
+  `writeInitialBase`, **only on a pristine replica** (no snapshot row, empty
+  oplog, nothing pending) — stored at seq `0`, so it truncates nothing and later
+  local/remote ops replay on top (unacked locals stay in the outbox). It skips the
+  fetch if a base already exists (idempotent). The board is then readable offline
+  at **every** layer/subboard after one online open; the store is painted from the
+  local replica on load. Replacing the base mid-session (drift) needs serverSeq-
+  based truncation — deferred (roadmap).
 - **Snapshot+truncate is one transaction** (`writeSnapshot`) so the dangerous
   inverse (oplog deleted without a snapshot) can't happen on a crash.
 - **The outbox is the oplog tail** past the durable `syncedSeq` cursor — not a

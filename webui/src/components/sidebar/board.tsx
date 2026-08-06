@@ -11,8 +11,9 @@ import { BoardContextIcon, ChatHistoryIcon, ChevronRightIcon, CloudArrowUpIcon, 
 import { ChatsDialog } from "./chats-dialog"
 import { ConfirmDeleteBoardAlert } from "./confirm-delete-board"
 import { BoardTreeNode } from "./board-tree-node"
-import { useBoardContents } from "@/features/board/api/list-board-contents"
+import { BoardOfflineAction } from "./board-offline-action"
 import { useLocalBoardContents } from "@/features/board/api/list-local-board-contents"
+import { useBoardOfflineStatus } from "@/features/board/api/board-offline-status"
 import { useState, type MouseEvent } from "react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
 import { useAppStore } from "@/store"
@@ -239,7 +240,7 @@ export function LocalBoardItem({
                     item={item}
                     depth={1}
                     local
-                    localContents={allContents}
+                    treeContents={allContents}
                   />
                 ))}
               </ul>
@@ -312,11 +313,18 @@ export function BoardItem({
     pathname === `/boards/${boardId}` ||
     pathname.startsWith(`/boards/${boardId}/`)
 
-  const { data: rootContents = [], isLoading: isLoadingContents } = useBoardContents(
+  // The surface tree comes from the on-device store (same source as local
+  // boards), gated on the board being available offline — a synced board with no
+  // local base yet has no hierarchy to show (download it first). One source +
+  // `useSidebarContentsSync` invalidation means create/rename/re-icon/delete all
+  // reflect live, and there's no server round-trip that could race persistence.
+  const { data: offlineAvailable } = useBoardOfflineStatus(boardId)
+  const canShowTree = offlineAvailable === true
+  const { data: allContents = [], isLoading: isLoadingContents } = useLocalBoardContents(
     boardId,
-    undefined,
-    { enabled: isOpen },
+    { enabled: isOpen && canShowTree },
   )
+  const rootContents = allContents.filter((c) => (c.parentId ?? null) === null)
 
   const handleClick = () => {
     navigate({ to: "/boards/$id", params: { id: boardId } })
@@ -356,7 +364,9 @@ export function BoardItem({
               <ContextMenuTrigger asChild>
                 <SidebarMenuButton
                   onClick={handleClick}
-                  className="group/board-row text-xs font-medium truncate"
+                  // pr reserves room for the two trailing actions (offline marker
+                  // at right-8 + chats at right-1.5) so the label truncates clear.
+                  className="group/board-row text-xs font-medium truncate pr-14"
                   isActive={isActive}
                 >
                   <span
@@ -405,20 +415,35 @@ export function BoardItem({
           )}
 
           <CollapsibleContent>
-            {isLoadingContents && rootContents.length === 0 ? (
+            {offlineAvailable === undefined ? (
+              <p className="pl-7 py-1 text-[11px] italic text-muted-foreground">Loading…</p>
+            ) : !canShowTree ? (
+              <p className="pl-7 py-1 text-[11px] italic text-muted-foreground">
+                Download for offline to view contents
+              </p>
+            ) : isLoadingContents && rootContents.length === 0 ? (
               <p className="pl-7 py-1 text-[11px] italic text-muted-foreground">Loading…</p>
             ) : rootContents.length === 0 ? (
               <p className="pl-7 py-1 text-[11px] italic text-muted-foreground">Empty</p>
             ) : (
               <ul className="flex flex-col">
                 {rootContents.map((item) => (
-                  <BoardTreeNode key={item.id} boardId={boardId} item={item} depth={1} />
+                  <BoardTreeNode
+                    key={item.id}
+                    boardId={boardId}
+                    item={item}
+                    depth={1}
+                    treeContents={allContents}
+                  />
                 ))}
               </ul>
             )}
           </CollapsibleContent>
         </Collapsible>
       </ContextMenu>
+
+      {/* Offline marker / download — sits left of the chats action (right-8). */}
+      <BoardOfflineAction boardId={boardId} />
 
       <SidebarMenuAction
         className="right-1.5 text-muted-foreground/40 hover:text-muted-foreground hover:bg-transparent"

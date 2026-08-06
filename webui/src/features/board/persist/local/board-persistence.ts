@@ -166,6 +166,34 @@ export class BoardPersistence {
   }
 
 
+  /**
+   * Seed the local base from a server welcome snapshot so a synced board is
+   * readable offline (today the welcome is applied in-memory only and discarded).
+   *
+   * `makeContent` is a thunk: the (non-trivial) graph→content conversion runs
+   * ONLY when we actually write. The caller fires this on every welcome, but a
+   * write happens at most once — deliberately ONLY on a pristine replica: no
+   * snapshot row yet, no oplog, nothing pending or in-flight (we drain the append
+   * queue first so `this.seq` is current). Then `writeSnapshot(content, 0)`
+   * truncates nothing and later local/remote ops replay on top (unacked locals
+   * stay in the outbox).
+   *
+   * On reconnect drift or once edits exist it no-ops: replacing a base mid-session
+   * needs serverSeq-based truncation (a follow-up). `makeContent` must yield the
+   * server-only base (from the authoritative whole-board fetch, not the live
+   * store) so nothing double-applies — a genuinely empty board writes an empty
+   * base (it's trivially offline-available). Returns whether it wrote.
+   */
+  async writeInitialBase(makeContent: () => BoardContent): Promise<boolean> {
+    await this.queue // let any in-flight append settle so `this.seq` is current
+    if (this.seq !== 0 || this.pending.length > 0) return false
+    const engine = this.requireEngine()
+    if (await engine.get<SnapshotRecord>("snapshots", this.boardId)) return false
+    await this.writeSnapshot(makeContent(), 0)
+    return true
+  }
+
+
   /** Close the engine if owned, and cancel any pending flush. */
   close(): void {
     if (this.timer !== null) {

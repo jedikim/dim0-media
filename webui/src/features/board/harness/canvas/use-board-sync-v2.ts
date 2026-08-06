@@ -9,11 +9,14 @@
  * boards are completely untouched.
  *
  * Hydration reuses `applyGraphToStore` (one `origin:"remote"` batch → no echo).
- * The local replica gives the outbox its offline durability; the welcome
- * snapshot re-hydrates the base on each load (true offline-first load is a
- * follow-up).
+ * The local replica gives the outbox its offline durability, and the store is
+ * painted from it on load so a board isn't blank offline. On first open the WHOLE
+ * board (all layers) is seeded into the local base via `materializeBoardOffline`
+ * — so every subboard is offline-readable, not just the opened layer. Replacing a
+ * base on reconnect drift is a follow-up (roadmap).
  */
 import { useEffect, useRef } from "react"
+import { useQueryClient } from "@tanstack/react-query"
 import type { CanvasStore } from "@canvas-harness/core"
 import camelcaseKeys from "camelcase-keys"
 import { API_URL } from "@/config/api"
@@ -33,6 +36,9 @@ import { attachBoardSync } from "../sync/board-sync"
 import type { BoardSyncHandle } from "../sync/board-sync"
 import { createWebSocketRelay } from "../sync/ws-relay"
 import { applyGraphToStore } from "../persist/snapshot-load"
+import { applyContentToStore } from "@/features/board/persist/local/apply-content"
+import { materializeBoardOffline } from "@/features/board/persist/local/materialize-board"
+import { boardOfflineKey } from "@/features/board/api/board-offline-status"
 
 
 const wsBaseFromApiUrl = (apiUrl: string): string => apiUrl.replace(/^http/i, "ws")
@@ -51,10 +57,14 @@ export const useBoardSyncV2 = (
 ): void => {
   const userEmail = useAppStore((s) => s.userEmail)
   const userId = useAppStore((s) => s.userId)
-  // Held in a ref so a fresh inline `onRole` each render never re-runs the mount
-  // effect (which would tear down + rebuild the coordinator).
+  // Held in refs so neither a fresh inline `onRole` nor a new QueryClient
+  // identity re-runs the mount effect (which would tear down + rebuild the whole
+  // coordinator: stop the supervisor, detach sync, flush+close persistence).
   const onRoleRef = useRef(onRole)
   onRoleRef.current = onRole
+  const queryClient = useQueryClient()
+  const queryClientRef = useRef(queryClient)
+  queryClientRef.current = queryClient
 
   useEffect(() => {
     if (!enabled || !boardId) return
@@ -69,9 +79,31 @@ export const useBoardSyncV2 = (
         if (cancelled) return
         persistence = new BoardPersistence(boardId, { engine: stores.engine })
         setBoardPersistenceRef(persistence)
-        return persistence.load().then(() => {
+        return persistence.load().then((content) => {
           if (cancelled || !persistence) return
+          // Paint from the local replica so a synced board isn't blank offline
+          // (or before the welcome arrives). Applied as one remote batch (no
+          // echo/persist) and BEFORE attach, so it isn't recorded; the welcome
+          // merges authoritative state on top when online. Projected to the
+          // current layer like a local board — persistence stays whole-board.
+          // Called unconditionally (like the local branch): a no-op on empty
+          // content, and restores groups/frame layout too, not just nodes/edges.
+          applyContentToStore(store, content, rootId ?? null)
           detachPersist = persistence.attach(store) // local replica: outbox + durable edits
+          // Seed the WHOLE board offline once (all layers, not just the opened
+          // one). Reuse this mounted persistence (single writer). Self-guarding +
+          // best-effort: no-ops if already seeded / non-pristine, and a rejection
+          // (offline) just means "not materialized this time".
+          void materializeBoardOffline(boardId, {
+            engine: stores.engine,
+            persistence,
+          })
+            .then((wrote) => {
+              // Flip the sidebar's offline marker to "ready" without waiting for
+              // the status query's staleTime.
+              if (wrote) void queryClientRef.current.invalidateQueries({ queryKey: boardOfflineKey(boardId) })
+            })
+            .catch(() => {})
           const clientId = store.clientId
           // Seed local presence identity (name + color). Cursor/selection are
           // filled in live by useLocalPresence; attachSync ships changes to peers.
@@ -107,6 +139,8 @@ export const useBoardSyncV2 = (
             onSnapshot: (snapshot) => {
               // Server ships snake_case; the converters expect camelCase (same as
               // the REST path). Merge mode: never wipe on an empty/partial payload.
+              // This is the live per-layer welcome; the offline base is seeded
+              // separately from the WHOLE board (materializeBoardOffline above).
               const graph = camelcaseKeys(
                 snapshot as Record<string, unknown>,
                 { deep: true },

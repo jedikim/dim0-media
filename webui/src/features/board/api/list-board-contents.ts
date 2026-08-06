@@ -54,6 +54,13 @@ export async function listBoardContents(
 /**
  * React Query hook for one level of a board's contents tree.
  * Pass `enabled: false` until the user expands a folder so we don't fetch eagerly.
+ *
+ * NOTE: no component consumes this anymore — the sidebar tree migrated to the
+ * on-device store (`useLocalBoardContents` + `useSidebarContentsSync`). The REST
+ * `/contents` path (this hook, `invalidateBoardContents`, and the `boardContents`
+ * cache patches in sheet-panel / node-title-caption) is now unused by the tree
+ * and is a candidate for removal in a follow-up sweep. `listBoardContents` (the
+ * raw fn) is still used by the editor's page-provider.
  */
 export const useBoardContents = (
   boardId: string,

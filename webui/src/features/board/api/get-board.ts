@@ -37,6 +37,23 @@ export async function getBoard(
 
 
 /**
+ * Fetch a board's ENTIRE graph — every folder layer — in one payload
+ * (`?whole=true`, which ignores `root_id`). `getBoard` returns only a single
+ * layer; this is for materializing a synced board for offline use, where all
+ * subboards must be persisted, not just the opened layer.
+ */
+export async function getWholeBoard(boardId: string): Promise<Graph> {
+  const res = await apiFetch<{ data: Record<string, unknown> }>({
+    path: `/boards/${boardId}`,
+    method: "GET",
+    params: { whole: "true" },
+  })
+  const data = camelcaseKeys(res.data, { deep: true })
+  return data.graph as Graph
+}
+
+
+/**
  * Fetch a single note from a board.
  */
 export async function getBoardNote(

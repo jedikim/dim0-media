@@ -16,6 +16,7 @@ import { useAuth } from '@/features/signin/hooks/auth'
 import { getBillingPublicConfig } from '@/features/user-settings/api/billing'
 import { initConnectionState } from '@/features/connection/connection-state'
 import { OfflineOverlay } from '@/features/connection/offline-overlay'
+import { ConnectionIndicator } from '@/features/connection/connection-indicator'
 import { AuthGraphTexture } from '@/features/signin/components/auth-graph-texture'
 
 export function RootLayout() {
@@ -76,6 +77,13 @@ export function RootLayout() {
   // Still used to keep offline-first on local boards: the connectivity overlay is
   // suppressed on a /local route so a device-only board never shows "server down".
   const isLocalRoute = location.pathname.startsWith("/local")
+  // The synced board currently open (if any) — drives the board-aware overlay:
+  // a downloaded board stays usable offline (non-blocking), an undownloaded one
+  // keeps the blocking modal. `/boards/:id[/...surface]` → the id segment.
+  const syncedBoardId = useMemo(() => {
+    const match = location.pathname.match(/^\/boards\/([^/]+)/)
+    return match ? match[1] : null
+  }, [location.pathname])
   const presentationMode = useBoardAppStore(s => s.presentationMode)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const effectiveSidebarOpen = presentationMode ? false : sidebarOpen
@@ -123,7 +131,7 @@ export function RootLayout() {
   return (
     <ThemeProvider>
       <StyleDefaultsProvider>
-        {isAuthed && !isLocalRoute && <OfflineOverlay />}
+        {isAuthed && !isLocalRoute && <OfflineOverlay boardId={syncedBoardId} />}
         <main>
           {showShell ? (
             <SidebarProvider open={effectiveSidebarOpen} onOpenChange={setSidebarOpen}>
@@ -133,6 +141,7 @@ export function RootLayout() {
                   {!presentationMode && <SidebarTrigger className="-ml-1" />}
                   {!presentationMode && <div className="hidden md:block"><SidebarLabel /></div>}
                   {!presentationMode && <div className="md:hidden"><SidebarLabel mobileContextOnly /></div>}
+                  <div className="ml-auto"><ConnectionIndicator /></div>
                 </header>
 
                 <div className="flex flex-1 w-full min-w-0">

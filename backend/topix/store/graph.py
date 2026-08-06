@@ -480,8 +480,16 @@ class GraphStore:
         results = await self._content_store.get(link_ids)
         return [result.resource for result in results]
 
-    async def get_graph(self, graph_uid: str, root_id: str | None = None) -> Graph | None:
-        """Retrieve the entire graph by its UID."""
+    async def get_graph(
+        self, graph_uid: str, root_id: str | None = None, all_layers: bool = False
+    ) -> Graph | None:
+        """Retrieve a graph by its UID.
+
+        Scoped to `root_id`'s layer by default (the root layer when `root_id`
+        is None). `all_layers=True` returns the whole board — every layer's
+        nodes and edges — in one payload; used to materialize a synced board for
+        offline use (no per-layer walk). `root_id` is ignored when `all_layers`.
+        """
         async with self._pg_pool.acquire() as conn:
             graph = await get_graph_by_uid(conn, graph_uid)
         if not graph:
@@ -505,37 +513,49 @@ class GraphStore:
                 match=MatchAny(any=["note", "document"]),
             ),
         ]
+        node_filter = Filter(must=node_must_filters)
+        # Fetch EVERY node of the board, not `filt`'s default 1000 cap: this feeds
+        # the whole-board offline base (all layers in one payload), so a silent
+        # truncation would seed a partial base and falsely mark it "available
+        # offline". Size the limit to the actual count and drop the ordering
+        # (irrelevant here) so the scroll pages by MAX_PAGE_SIZE to exhaustion.
+        node_total = await self._content_store.count(filter=node_filter)
         node_results = await self._content_store.filt(
-            filters=Filter(
-                must=node_must_filters
-            )
+            filters=node_filter,
+            limit=node_total,
+            order_by=None,
         )
         graph.nodes = [
             node
             for node in (result.resource for result in node_results)
-            if (root_id is None and node.parent_id is None)
+            if all_layers
+            or (root_id is None and node.parent_id is None)
             or (root_id is not None and node.parent_id == root_id)
         ]
 
+        link_filter = Filter(
+            must=[
+                FieldCondition(
+                    key="graph_uid",
+                    match=MatchValue(value=graph_uid),
+                ),
+                FieldCondition(
+                    key="type",
+                    match=MatchValue(value="link"),
+                ),
+            ]
+        )
+        link_total = await self._content_store.count(filter=link_filter)
         link_results = await self._content_store.filt(
-            filters=Filter(
-                must=[
-                    FieldCondition(
-                        key="graph_uid",
-                        match=MatchValue(value=graph_uid),
-                    ),
-                    FieldCondition(
-                        key="type",
-                        match=MatchValue(value="link"),
-                    ),
-                ]
-            )
+            filters=link_filter,
+            limit=link_total,
+            order_by=None,
         )
         graph.edges = [
             result.resource
             for result in link_results
             if isinstance(result.resource, Link)
-            and self._link_is_visible_in_scope(result.resource, root_id)
+            and (all_layers or self._link_is_visible_in_scope(result.resource, root_id))
         ]
 
         return graph
