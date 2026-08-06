@@ -76,7 +76,10 @@ const SHAPE_TOOL_IDS = new Set(SHAPE_TOOLS.map((t) => t.id))
 const baseButtonClass =
   "transition-colors !p-2.5 rounded-lg flex items-center justify-center gap-2 border border-transparent"
 const inactiveClass = `${baseButtonClass} text-card-foreground hover:bg-secondary hover:text-secondary-foreground hover:border-secondary-foreground/30`
-const activeClass = `${baseButtonClass} bg-secondary text-secondary-foreground`
+// Active buttons carry the same border as the hover state (the base's transparent
+// border keeps the box size constant), so active + hovered read consistently —
+// including the always-active view button (board/list/files).
+const activeClass = `${baseButtonClass} bg-secondary text-secondary-foreground border-secondary-foreground/30`
 
 
 /**
