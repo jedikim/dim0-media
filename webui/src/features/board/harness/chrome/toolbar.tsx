@@ -69,9 +69,13 @@ const SHAPE_TOOLS: ReadonlyArray<ShapeTool> = [
 const SHAPE_TOOL_IDS = new Set(SHAPE_TOOLS.map((t) => t.id))
 
 
+// A transparent border sits on EVERY state so toggling a visible one on hover
+// doesn't shift the icon — the tray fill (`bg-sidebar`) and the hover fill
+// (`bg-secondary`) are close enough that the fill change alone reads as no hover,
+// so the border carries the affordance.
 const baseButtonClass =
-  "transition-colors !p-2.5 rounded-lg flex items-center justify-center gap-2"
-const inactiveClass = `${baseButtonClass} text-card-foreground hover:bg-secondary hover:text-secondary-foreground`
+  "transition-colors !p-2.5 rounded-lg flex items-center justify-center gap-2 border border-transparent"
+const inactiveClass = `${baseButtonClass} text-card-foreground hover:bg-secondary hover:text-secondary-foreground hover:border-secondary-foreground/30`
 const activeClass = `${baseButtonClass} bg-secondary text-secondary-foreground`
 
 
