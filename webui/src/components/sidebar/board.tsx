@@ -4,7 +4,7 @@ import { useDeleteBoard } from "@/features/board/api/delete-board"
 import { trimText } from "@/lib/common"
 import { cn } from "@/lib/utils"
 import { UNTITLED_LABEL } from "@/features/board/const"
-import { useNavigate, useRouterState } from "@tanstack/react-router"
+import { useNavigate, useParams, useRouterState } from "@tanstack/react-router"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "../ui/context-menu"
 import { Collapsible, CollapsibleContent } from "../ui/collapsible"
 import { BoardContextIcon, ChatHistoryIcon, ChevronRightIcon, CloudArrowUpIcon, DashboardAddIcon, DeleteIcon, EditIcon } from "@/components/icons"
@@ -14,11 +14,36 @@ import { BoardTreeNode } from "./board-tree-node"
 import { BoardOfflineAction } from "./board-offline-action"
 import { useLocalBoardContents } from "@/features/board/api/list-local-board-contents"
 import { useBoardOfflineStatus } from "@/features/board/api/board-offline-status"
+import { nodeSurfaceKindFromPath } from "@/features/board/utils/node-surface-url"
 import { useState, type MouseEvent } from "react"
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip"
 import { useAppStore } from "@/store"
 import { FREE_PLAN_BOARD_LIMIT_TOOLTIP, isBoardCreationLimited } from "@/features/board/lib/board-limit"
 import { useListBoards } from "@/features/board/api/list-boards"
+
+/**
+ * The open surface (sheet/code-sandbox/widget) — or scoped folder — node id for
+ * `boardId`, read from the URL. Drives the sidebar tree's active-row highlight;
+ * `null` unless this is the board on screen. A tree-rendered surface `noteId`
+ * wins over a folder `root_id` (highlight the note, not its parent); a mini-app
+ * (no tree row) falls through to the scoped folder instead of suppressing it.
+ */
+function useActiveTreeId(boardId: string): string | null {
+  const params = useParams({ strict: false }) as { id?: string; boardId?: string; noteId?: string }
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const rootId = useRouterState({ select: (s) => (s.location.search as { root_id?: string }).root_id })
+
+  // Only board routes drive the tree highlight — other routes (`/chats/$id`,
+  // `/subscriptions/$id`) reuse the `$id` param for an unrelated entity.
+  if (!pathname.startsWith("/boards/") && !pathname.startsWith("/local/")) return null
+  const openBoardId = params.id ?? params.boardId
+  if (openBoardId !== boardId) return null
+
+  const kind = nodeSurfaceKindFromPath(pathname)
+  const surfaceInTree = kind === "sheet" || kind === "code-sandbox" || kind === "widget"
+  return (surfaceInTree ? params.noteId : undefined) ?? rootId ?? null
+}
+
 
 /**
  * Dashboard menu item component
@@ -158,6 +183,7 @@ export function LocalBoardItem({
     enabled: isOpen,
   })
   const rootContents = allContents.filter((c) => (c.parentId ?? null) === null)
+  const activeTreeId = useActiveTreeId(boardId)
 
   const handleToggle = (e: MouseEvent) => {
     e.stopPropagation()
@@ -241,6 +267,7 @@ export function LocalBoardItem({
                     depth={1}
                     local
                     treeContents={allContents}
+                    activeId={activeTreeId}
                   />
                 ))}
               </ul>
@@ -325,6 +352,7 @@ export function BoardItem({
     { enabled: isOpen && canShowTree },
   )
   const rootContents = allContents.filter((c) => (c.parentId ?? null) === null)
+  const activeTreeId = useActiveTreeId(boardId)
 
   const handleClick = () => {
     navigate({ to: "/boards/$id", params: { id: boardId } })
@@ -434,6 +462,7 @@ export function BoardItem({
                     item={item}
                     depth={1}
                     treeContents={allContents}
+                    activeId={activeTreeId}
                   />
                 ))}
               </ul>

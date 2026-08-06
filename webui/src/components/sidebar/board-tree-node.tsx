@@ -54,6 +54,13 @@ type BoardTreeNodeProps = {
    * board row from the on-device store; each level filters by `parentId`.
    */
   treeContents: BoardContentItem[]
+  /**
+   * Id of the currently-open surface (sheet/code-sandbox/widget) or scoped
+   * folder for this board, from the URL — computed once by the board row and
+   * threaded down. The matching row renders active (highlight + filled kind
+   * icon). `null`/absent when this board isn't the one on screen.
+   */
+  activeId?: string | null
 }
 
 
@@ -71,6 +78,7 @@ export function BoardTreeNode({
   parentFolderId,
   local = false,
   treeContents,
+  activeId,
 }: BoardTreeNodeProps) {
   const navigate = useNavigate()
   const [expanded, setExpanded] = useState(false)
@@ -78,6 +86,7 @@ export function BoardTreeNode({
   const isFolder = item.kind === "folder"
   const isSheet = item.kind === "sheet"
   const isExpandable = isFolder || isSheet
+  const isActive = !!activeId && item.id === activeId
   const KindIcon = ICON_BY_KIND[item.kind]
   const customIcon = item.iconData ?? null
 
@@ -137,7 +146,11 @@ export function BoardTreeNode({
       <div
         role="button"
         tabIndex={0}
-        className="group/tree-row flex items-center gap-2 rounded-md text-xs text-sidebar-foreground hover:bg-sidebar-accent transition-colors cursor-pointer min-h-7 pr-1.5"
+        aria-current={isActive ? "page" : undefined}
+        className={cn(
+          "group/tree-row flex items-center gap-2 rounded-md text-xs text-sidebar-foreground hover:bg-sidebar-accent transition-colors cursor-pointer min-h-7 pr-1.5",
+          isActive && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
+        )}
         style={{ paddingLeft }}
         onClick={handleNavigate}
         onKeyDown={(e) => {
@@ -167,10 +180,12 @@ export function BoardTreeNode({
             ) : (
               <KindIcon
                 className={cn(
-                  "size-4 text-muted-foreground transition-opacity",
+                  "size-4 transition-opacity",
+                  isActive ? "text-sidebar-accent-foreground" : "text-muted-foreground",
                   "group-hover/tree-row:hidden",
                   expanded && "hidden",
                 )}
+                weight={isActive ? "fill" : undefined}
                 strokeWidth={2}
               />
             )}
@@ -189,7 +204,11 @@ export function BoardTreeNode({
             {customIcon ? (
               <IconPropertyView icon={customIcon} size={16} />
             ) : (
-              <KindIcon className="size-4 text-muted-foreground" strokeWidth={2} />
+              <KindIcon
+                className={cn("size-4", isActive ? "text-sidebar-accent-foreground" : "text-muted-foreground")}
+                weight={isActive ? "fill" : undefined}
+                strokeWidth={2}
+              />
             )}
           </span>
         )}
@@ -225,6 +244,7 @@ export function BoardTreeNode({
                 parentFolderId={isFolder ? item.id : parentFolderId}
                 local={local}
                 treeContents={treeContents}
+                activeId={activeId}
               />
             ))
           )}
