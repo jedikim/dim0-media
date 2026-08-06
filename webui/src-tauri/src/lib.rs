@@ -7,8 +7,14 @@ mod storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
-    .plugin(tauri_plugin_http::init())
+  let builder = tauri::Builder::default().plugin(tauri_plugin_http::init());
+
+  // macOS: unlock WKWebView's 60fps rAF cap so the canvas runs at the display's
+  // native refresh (120Hz ProMotion). No-op on macOS 26+ (cap already gone).
+  #[cfg(target_os = "macos")]
+  let builder = builder.plugin(tauri_plugin_macos_fps::init());
+
+  builder
     .setup(|app| {
       // Open the local SQLite database in the app-data dir and hold the single
       // connection in state. The webui drives the schema via `sql_execute`.

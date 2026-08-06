@@ -104,7 +104,7 @@ checksum = "b0674a1ddeecb70197781e945de4b3b8ffb61fa939a5597bcf48503737663100"
 
 [[package]]
 name = "app"
-version = "0.3.70"
+version = "0.3.71"
 dependencies = [
  "log",
  "open",
@@ -115,6 +115,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-http",
  "tauri-plugin-log",
+ "tauri-plugin-macos-fps",
  "tiny_http",
  "urlencoding",
 ]
@@ -4023,6 +4024,19 @@ dependencies = [
  "tauri-plugin",
  "thiserror 2.0.15",
  "time",
+]
+
+[[package]]
+name = "tauri-plugin-macos-fps"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11177f7c97f1322fbcb5d966ebb0378e411145d65f3f2a2f897d8389ebdba583"
+dependencies = [
+ "log",
+ "objc2 0.6.4",
+ "objc2-foundation 0.3.1",
+ "serde",
+ "tauri",
 ]
 
 [[package]]

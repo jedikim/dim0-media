@@ -34,6 +34,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { isWebKitWebview } from "@/platform"
 import { useBoardAppStore } from "../store/board-app-store"
 import { HarnessToolbarMore } from "./toolbar-more"
 
@@ -135,6 +136,8 @@ function FlaredTray({
   const rowRef = useRef<HTMLDivElement>(null)
   const [w, setW] = useState(0)
   const [hover, setHover] = useState(false)
+  // WebKit webviews only (see isWebKitWebview) — Windows/Chromium keeps the blur.
+  const webkit = isWebKitWebview()
 
   useEffect(() => {
     const el = rowRef.current
@@ -163,15 +166,22 @@ function FlaredTray({
                 `filter`/`opacity`/`mask` — such an ancestor becomes a "backdrop
                 root" and silently no-ops backdrop-filter (the blur had nothing to
                 sample). So the drop-shadow lives on the sibling tint layer below,
-                never on a wrapper. */}
-            <div
-              className="pointer-events-none absolute inset-0 backdrop-blur-xl backdrop-saturate-[1.8]"
-              style={{ clipPath: `path('${d}')` }}
-            />
+                never on a wrapper.
+                SKIPPED on WebKit webviews (macOS/Linux): `backdrop-filter`
+                re-samples the canvas behind the tray every pan frame, a real jank
+                source there — the tint below goes near-opaque instead. Kept on
+                Windows/Chromium (cheap) and web. */}
+            {!webkit && (
+              <div
+                className="pointer-events-none absolute inset-0 backdrop-blur-xl backdrop-saturate-[1.8]"
+                style={{ clipPath: `path('${d}')` }}
+              />
+            )}
             {/* Translucent tint + the tray's drop-shadow. A sibling of the blur
-                layer (not an ancestor), so it doesn't isolate the backdrop. */}
+                layer (not an ancestor), so it doesn't isolate the backdrop. On
+                WebKit it carries the fill alone (near-opaque, no blur). */}
             <div
-              className="pointer-events-none absolute inset-0 bg-sidebar/60"
+              className={cn("pointer-events-none absolute inset-0", webkit ? "bg-sidebar/95" : "bg-sidebar/60")}
               style={{
                 clipPath: `path('${d}')`,
                 filter: hover

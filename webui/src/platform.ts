@@ -8,3 +8,15 @@
  */
 export const isTauri = (): boolean =>
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
+
+
+/**
+ * True inside a **WebKit-based** Tauri webview — macOS (`WKWebView`) and Linux
+ * (`WebKitGTK`), where `backdrop-filter` re-samples the backdrop every frame and
+ * janks over a moving canvas. NOT Windows: `WebView2` is Chromium, where blur is
+ * cheap. Distinguished by the `Chrome/` UA token (present in Chromium/WebView2,
+ * absent in the Safari-family WebKit engines). Used to drop blur only where it
+ * actually hurts.
+ */
+export const isWebKitWebview = (): boolean =>
+  isTauri() && typeof navigator !== "undefined" && !/Chrome\//.test(navigator.userAgent)

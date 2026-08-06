@@ -173,7 +173,7 @@ export function RootLayout() {
                       so the board toolbar (which floats below) never overlaps it. */}
                   <div
                     data-tauri-drag-region
-                    className="z-50 flex h-11 shrink-0 items-center gap-2 border-b border-border/60 bg-background/80 px-3 backdrop-blur-md [.tauri-fullscreen_&]:hidden"
+                    className="z-50 flex h-11 shrink-0 items-center gap-2 border-b border-border/60 bg-background/95 px-3 [.tauri-fullscreen_&]:hidden"
                   >
                     {navCluster}
                     <div className="ml-auto flex items-center gap-2 self-stretch">

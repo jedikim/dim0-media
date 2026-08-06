@@ -34,3 +34,10 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 tiny_http = "0.12"
 open = "5"
 urlencoding = "2"
+
+# macOS only: unlock WKWebView's 60fps requestAnimationFrame cap so the canvas
+# renders at the display's native refresh (120Hz ProMotion). Toggles a private
+# WebKit flag (the same one Safari uses) — fine for direct distribution (NOT App
+# Store safe), and a harmless no-op on macOS 26+ where Apple dropped the cap.
+[target.'cfg(target_os = "macos")'.dependencies]
+tauri-plugin-macos-fps = "0.1"

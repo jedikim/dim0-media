@@ -29,6 +29,11 @@
       "csp": null
     }
   },
+  "plugins": {
+    "macos-fps": {
+      "enabled": true
+    }
+  },
   "bundle": {
     "active": true,
     "targets": "all",

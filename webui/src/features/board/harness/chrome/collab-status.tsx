@@ -41,7 +41,7 @@ export function HarnessCollabStatus() {
   return (
     <div
       className={cn(
-        "rounded-md border border-border bg-background/95 px-2 py-1 text-xs shadow-sm backdrop-blur",
+        "rounded-md border border-border bg-background/95 px-2 py-1 text-xs shadow-sm backdrop-blur [.tauri-webkit_&]:backdrop-blur-none",
         STATUS_CLASS[state],
       )}
       aria-live="polite"

@@ -50,7 +50,7 @@ export function PresentationControls() {
     <div
       role="toolbar"
       aria-label="Presentation controls"
-      className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-border bg-sidebar/90 px-3 py-2 shadow-lg backdrop-blur-md"
+      className="fixed bottom-4 left-1/2 z-50 flex -translate-x-1/2 items-center gap-2 rounded-lg border border-border bg-sidebar/90 px-3 py-2 shadow-lg backdrop-blur-md [.tauri-webkit_&]:backdrop-blur-none"
     >
       <Button
         size="icon"

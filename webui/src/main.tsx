@@ -7,7 +7,7 @@ import { queryClient } from './query-client'
 import { router } from './routes'
 import { RouterProvider } from '@tanstack/react-router'
 import { registerSW } from 'virtual:pwa-register'
-import { isTauri } from './platform'
+import { isTauri, isWebKitWebview } from './platform'
 
 /**
  * Registers the PWA service worker and keeps it up to date automatically.
@@ -20,6 +20,10 @@ if (!isTauri()) {
   // Desktop shell is frameless (decorations: false) with our own title bar +
   // window controls. This class drives the rounded-window CSS + title-bar chrome.
   document.documentElement.classList.add("tauri")
+  // WebKit webviews (macOS/Linux, not Windows' Chromium WebView2) drop
+  // canvas-overlay backdrop-blur via the `[.tauri-webkit_&]:` variant — it janks
+  // there but is cheap on Chromium.
+  if (isWebKitWebview()) document.documentElement.classList.add("tauri-webkit")
   // In fullscreen the title bar is hidden and the window is square.
   void import("./features/desktop/fullscreen-class").then(m => m.initFullscreenClass())
   // WKWebView treats Backspace as "history back"; stop it stealing node deletes.
