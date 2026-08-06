@@ -90,10 +90,11 @@ export const useBoardSyncV2 = (
           // content, and restores groups/frame layout too, not just nodes/edges.
           applyContentToStore(store, content, rootId ?? null)
           detachPersist = persistence.attach(store) // local replica: outbox + durable edits
-          // Seed the WHOLE board offline once (all layers, not just the opened
-          // one). Reuse this mounted persistence (single writer). Self-guarding +
-          // best-effort: no-ops if already seeded / non-pristine, and a rejection
-          // (offline) just means "not materialized this time".
+          // Seed the WHOLE board offline (all layers, not just the opened one).
+          // Reuse this mounted persistence (single writer). Self-guarding +
+          // best-effort: seeds whenever fully synced (an all-acked oplog seeds
+          // too, not just a pristine one); defers on an unsent-local edit or a
+          // relay op mid-fetch; a rejection (offline) just means "not this time".
           void materializeBoardOffline(boardId, {
             engine: stores.engine,
             persistence,

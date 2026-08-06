@@ -24,7 +24,7 @@ describe("isBoardAvailableOffline", () => {
   it("is false with no local snapshot, true once a base exists", async () => {
     expect(await isBoardAvailableOffline("b")).toBe(false)
 
-    // Seeding a snapshot row (what writeInitialBase does) marks it offline-ready.
+    // Seeding a snapshot row (what materializeBoardOffline → foldBase does) marks it offline-ready.
     await h.stores.engine!.put<SnapshotRecord>(
       "snapshots",
       { content: emptyContent(), seq: 0 },

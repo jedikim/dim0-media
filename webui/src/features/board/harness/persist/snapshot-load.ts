@@ -182,7 +182,7 @@ export const applyGraphToStore = (
  * Convert a server Graph (the welcome-snapshot payload) into a `BoardContent` by
  * replaying it into a throwaway store — the server-only base, with no local
  * edits mixed in. Used to persist a synced board's base locally for offline
- * reads (`BoardPersistence.writeInitialBase`).
+ * reads (`materializeBoardOffline` → `BoardPersistence.foldBase`).
  */
 export const graphToContent = (graph: Graph): BoardContent => {
   const store = createCanvasStore({ initial: contentToScene(emptyContent()) })

@@ -67,7 +67,10 @@ describe("BoardPersistence", () => {
   })
 
 
-  // --- offline base for synced boards (writeInitialBase) ---
+  // --- offline base for synced boards (foldBase) ---
+  // The base is written by `materializeBoardOffline` via `foldBase` (its guards —
+  // snapshot-exists / unsent-local / oplog-stable — are covered in
+  // materialize-board.test.ts). Here we cover the primitive's replay contract.
 
   /** A server-only base, as `graphToContent(welcome)` would produce. */
   const serverBase = (...ids: string[]) => {
@@ -76,10 +79,10 @@ describe("BoardPersistence", () => {
     return readContent(s)
   }
 
-  it("writeInitialBase seeds a base so a synced board loads offline", async () => {
+  it("foldBase seeds a base so a synced board loads offline", async () => {
     const p = new BoardPersistence("b")
     await p.init()
-    await p.writeInitialBase(() => serverBase("s1", "s2"))
+    await p.foldBase(serverBase("s1", "s2"), 0)
     p.close()
 
     // Next session / offline: a fresh instance loads the persisted base.
@@ -90,47 +93,10 @@ describe("BoardPersistence", () => {
     p2.close()
   })
 
-  it("writeInitialBase writes an (empty) base for a genuinely empty board", async () => {
+  it("edits above the fold seq replay on top of the base (serverSeq order)", async () => {
     const p = new BoardPersistence("b")
     await p.init()
-    // A genuinely empty whole-board fetch is offline-available (nothing to load),
-    // so it writes a base and reports success — the offline marker can flip.
-    expect(await p.writeInitialBase(() => serverBase())).toBe(true)
-    const content = await p.load()
-    expect(content.nodes).toEqual([])
-    p.close()
-  })
-
-  it("writeInitialBase no-ops when a base already exists (drift-safe)", async () => {
-    const p = new BoardPersistence("b")
-    await p.init()
-    await p.writeInitialBase(() => serverBase("s1"))
-    // A later (reconnect drift) snapshot must NOT replace the seeded base.
-    await p.writeInitialBase(() => serverBase("s2", "s3"))
-    const content = await p.load()
-    expect(content.nodes.map((n) => n.id)).toEqual(["s1"])
-    p.close()
-  })
-
-  it("writeInitialBase no-ops once local edits exist (never truncates the outbox)", async () => {
-    const p = new BoardPersistence("b")
-    await p.init()
-    const store = freshStore("c")
-    p.attach(store)
-    addNode(store, "local1")
-    await p.flush() // this.seq > 0 now
-
-    await p.writeInitialBase(() => serverBase("server1")) // must no-op
-
-    const content = await p.load()
-    expect(content.nodes.map((n) => n.id)).toEqual(["local1"]) // base skipped, edit intact
-    p.close()
-  })
-
-  it("edits after the seeded base replay on top of it (serverSeq order)", async () => {
-    const p = new BoardPersistence("b")
-    await p.init()
-    await p.writeInitialBase(() => serverBase("s1"))
+    await p.foldBase(serverBase("s1"), 0) // base at seq 0 → later ops replay on top
     await p.load() // sync the seq cursor to the base
 
     const store = freshStore("c")

@@ -153,44 +153,19 @@ export class BoardPersistence {
 
 
   /**
-   * Fold a captured base (from `capture`) into the snapshot, truncating the oplog
-   * ONLY up to `seq`. Any batch appended after the capture (`seq' > seq` — e.g. an
-   * edit made during the adopt round-trip) is left in the oplog as pending, so
-   * the sync client still ships it to the server on connect. This is what makes
-   * promotion safe against edits during the sync window: the server gets the
-   * captured base via adopt, the window edits via the normal outbox replay.
+   * Write `content` as the snapshot base, truncating the oplog ONLY up to `seq`.
+   * Any batch above `seq` is left in the oplog and replays on top of the base on
+   * the next load. Two callers, both relying on "everything ≤ seq is already in
+   * `content`, so folding it neither loses nor double-applies":
+   *   - local→synced promotion: `content` is a `capture()` at `seq`; edits made
+   *     during the adopt round-trip (seq' > seq) stay pending to ship via outbox.
+   *   - offline materialize: `content` is the server whole-board fetch and `seq`
+   *     is the full oplog height at a quiescent moment, so the whole oplog folds
+   *     away (nothing replays). See `materializeBoardOffline`.
    */
   async foldBase(content: BoardContent, seq: number): Promise<void> {
     await this.writeSnapshot(content, seq)
     if (seq > this.seq) this.seq = seq
-  }
-
-
-  /**
-   * Seed the local base from a server welcome snapshot so a synced board is
-   * readable offline (today the welcome is applied in-memory only and discarded).
-   *
-   * `makeContent` is a thunk: the (non-trivial) graph→content conversion runs
-   * ONLY when we actually write. The caller fires this on every welcome, but a
-   * write happens at most once — deliberately ONLY on a pristine replica: no
-   * snapshot row yet, no oplog, nothing pending or in-flight (we drain the append
-   * queue first so `this.seq` is current). Then `writeSnapshot(content, 0)`
-   * truncates nothing and later local/remote ops replay on top (unacked locals
-   * stay in the outbox).
-   *
-   * On reconnect drift or once edits exist it no-ops: replacing a base mid-session
-   * needs serverSeq-based truncation (a follow-up). `makeContent` must yield the
-   * server-only base (from the authoritative whole-board fetch, not the live
-   * store) so nothing double-applies — a genuinely empty board writes an empty
-   * base (it's trivially offline-available). Returns whether it wrote.
-   */
-  async writeInitialBase(makeContent: () => BoardContent): Promise<boolean> {
-    await this.queue // let any in-flight append settle so `this.seq` is current
-    if (this.seq !== 0 || this.pending.length > 0) return false
-    const engine = this.requireEngine()
-    if (await engine.get<SnapshotRecord>("snapshots", this.boardId)) return false
-    await this.writeSnapshot(makeContent(), 0)
-    return true
   }
 
 
