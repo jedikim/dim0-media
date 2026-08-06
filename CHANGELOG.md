@@ -1,3 +1,10 @@
+## v0.3.68 (2026-08-06)
+
+### Feat
+
+- **board**: whole-board offline materialization for synced boards (PR-1: phases A+B) (#191)
+- **board**: expandable sidebar hierarchy + deep-link routes for local boards (#190)
+
 ## v0.3.67 (2026-08-04)
 
 ### Fix
