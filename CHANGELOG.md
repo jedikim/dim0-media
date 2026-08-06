@@ -1,3 +1,10 @@
+## v0.3.70 (2026-08-06)
+
+### Fix
+
+- **board**: give active topbar buttons the same border as hover (incl. view button) (#197)
+- **board**: offline base for already-synced boards, not only pristine ones (#196)
+
 ## v0.3.69 (2026-08-06)
 
 ### Feat
