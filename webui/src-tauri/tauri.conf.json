@@ -20,10 +20,11 @@
         "center": true,
         "resizable": true,
         "fullscreen": false,
-        "titleBarStyle": "Overlay",
-        "hiddenTitle": true
+        "decorations": false,
+        "transparent": true
       }
     ],
+    "macOSPrivateApi": true,
     "security": {
       "csp": null
     }

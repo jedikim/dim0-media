@@ -13,6 +13,29 @@
   display: none;
 }
 
+/* Standalone desktop (frameless, transparent window): round the app to a window
+   card and let the transparent corner cut-outs show the desktop behind. The app
+   itself stays opaque via #root; `clip-path` (not overflow) rounds fixed overlays
+   too — dialogs, the auth screen, the offline overlay. Square in fullscreen.
+   Scoped to `.tauri`, so the web build is untouched. */
+.tauri,
+.tauri body {
+  background: transparent;
+}
+.tauri #root {
+  min-height: 100vh;
+  background: var(--background);
+}
+.tauri body {
+  clip-path: inset(0 round 12px);
+}
+/* Edge-to-edge (fullscreen OR maximized) → square, so the desktop can't show
+   through rounded corners on a window that fills the screen. */
+.tauri.tauri-fullscreen body,
+.tauri.tauri-maximized body {
+  clip-path: none;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

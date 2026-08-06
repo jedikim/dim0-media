@@ -17,10 +17,10 @@ import { isTauri } from './platform'
 if (!isTauri()) {
   registerSW({ immediate: true })
 } else {
-  // Desktop shell uses an overlay title bar (traffic lights float over content).
-  // This class lets the layout reserve the top-left corner for the traffic lights.
+  // Desktop shell is frameless (decorations: false) with our own title bar +
+  // window controls. This class drives the rounded-window CSS + title-bar chrome.
   document.documentElement.classList.add("tauri")
-  // In fullscreen the traffic lights are hidden, so drop that reserved space.
+  // In fullscreen the title bar is hidden and the window is square.
   void import("./features/desktop/fullscreen-class").then(m => m.initFullscreenClass())
   // WKWebView treats Backspace as "history back"; stop it stealing node deletes.
   void import("./features/desktop/backspace-nav").then(m => m.disableBackspaceNavigation())

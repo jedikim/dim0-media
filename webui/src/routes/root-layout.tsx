@@ -17,6 +17,8 @@ import { getBillingPublicConfig } from '@/features/user-settings/api/billing'
 import { initConnectionState } from '@/features/connection/connection-state'
 import { OfflineOverlay } from '@/features/connection/offline-overlay'
 import { ConnectionIndicator } from '@/features/connection/connection-indicator'
+import { isTauri } from '@/platform'
+import { DesktopBrand, WindowControls } from '@/features/desktop/desktop-chrome'
 import { AuthGraphTexture } from '@/features/signin/components/auth-graph-texture'
 
 export function RootLayout() {
@@ -84,6 +86,9 @@ export function RootLayout() {
     const match = location.pathname.match(/^\/boards\/([^/]+)/)
     return match ? match[1] : null
   }, [location.pathname])
+  // Standalone desktop build: draw our own frameless title bar (brand + custom
+  // window controls) instead of the OS chrome.
+  const isDesktop = isTauri()
   const presentationMode = useBoardAppStore(s => s.presentationMode)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const effectiveSidebarOpen = presentationMode ? false : sidebarOpen
@@ -128,32 +133,83 @@ export function RootLayout() {
     navigate({ to: "/share/$token", params: { token } })
   }, [isAuthed, location.pathname, navigate])
 
+  // Board/content area (same on web + desktop). The board's own header + toolbar
+  // float inside this over the canvas, so the desktop title LINE must live above
+  // it — not overlap it.
+  const outletArea = (
+    <div className="flex flex-1 w-full min-w-0">
+      <div className="relative flex-1 min-w-0">
+        <Outlet />
+      </div>
+      <Toaster position="top-right" closeButton toastOptions={{ style: { borderRadius: 'var(--radius-xl)' } }} />
+    </div>
+  )
+
+  // The left cluster (sidebar toggle + board title) shared by the web floating
+  // header and the desktop title line.
+  const navCluster = !presentationMode && (
+    <>
+      <SidebarTrigger className="-ml-1" />
+      {isDesktop && <DesktopBrand />}
+      <div className="hidden md:block"><SidebarLabel /></div>
+      <div className="md:hidden"><SidebarLabel mobileContextOnly /></div>
+    </>
+  )
+
   return (
     <ThemeProvider>
       <StyleDefaultsProvider>
         {isAuthed && !isLocalRoute && <OfflineOverlay boardId={syncedBoardId} />}
         <main>
           {showShell ? (
-            <SidebarProvider open={effectiveSidebarOpen} onOpenChange={setSidebarOpen}>
-              {!presentationMode && <AppSidebar onLogout={onLogout} />}
-              <SidebarInset className='overflow-hidden'>
-                <header className={`flex h-16 shrink-0 items-center gap-2 p-4 absolute top-0 inset-x-0 z-50 ${effectiveSidebarOpen ? "" : "[.tauri:not(.tauri-fullscreen)_&]:pl-20"}`}>
-                  {!presentationMode && <SidebarTrigger className="-ml-1" />}
-                  {!presentationMode && <div className="hidden md:block"><SidebarLabel /></div>}
-                  {!presentationMode && <div className="md:hidden"><SidebarLabel mobileContextOnly /></div>}
-                  <div className="ml-auto"><ConnectionIndicator /></div>
-                </header>
-
-                <div className="flex flex-1 w-full min-w-0">
-                  <div className="relative flex-1 min-w-0">
-                    <Outlet />
+            <SidebarProvider
+              open={effectiveSidebarOpen}
+              onOpenChange={setSidebarOpen}
+              className={isDesktop ? "flex-col h-svh" : undefined}
+            >
+              {isDesktop ? (
+                <>
+                  {/* Title LINE — its own reserved row above the sidebar + content,
+                      so the board toolbar (which floats below) never overlaps it. */}
+                  <div
+                    data-tauri-drag-region
+                    className="z-50 flex h-11 shrink-0 items-center gap-2 border-b border-border/60 bg-background/80 px-3 backdrop-blur-md [.tauri-fullscreen_&]:hidden"
+                  >
+                    {navCluster}
+                    <div className="ml-auto flex items-center gap-2 self-stretch">
+                      <ConnectionIndicator />
+                      <WindowControls />
+                    </div>
                   </div>
-                  <Toaster position="top-right" closeButton toastOptions={{ style: { borderRadius: 'var(--radius-xl)' } }} />
-                </div>
-              </SidebarInset>
+                  <div className="flex min-h-0 w-full flex-1">
+                    {!presentationMode && <AppSidebar onLogout={onLogout} />}
+                    <SidebarInset className="overflow-hidden">{outletArea}</SidebarInset>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {!presentationMode && <AppSidebar onLogout={onLogout} />}
+                  <SidebarInset className="overflow-hidden">
+                    <header className="flex h-16 shrink-0 items-center gap-2 p-4 absolute top-0 inset-x-0 z-50">
+                      {navCluster}
+                      <div className="ml-auto"><ConnectionIndicator /></div>
+                    </header>
+                    {outletArea}
+                  </SidebarInset>
+                </>
+              )}
             </SidebarProvider>
           ) : (
             <div className="fixed inset-0">
+              {isDesktop && (
+                <div
+                  data-tauri-drag-region
+                  className="absolute top-0 inset-x-0 z-50 flex h-11 items-center gap-2 px-3 [.tauri-fullscreen_&]:hidden"
+                >
+                  <DesktopBrand />
+                  <div className="ml-auto self-stretch"><WindowControls /></div>
+                </div>
+              )}
               <AuthBackground />
               <div className="absolute inset-0 grid place-items-center px-4 overflow-hidden">
                 <Outlet />

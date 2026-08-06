@@ -12,6 +12,7 @@ import {
 import { useInfiniteChats } from '@/features/agent/api/list-chats'
 import { useAppStore } from '@/store'
 import { isSignedIn } from '@/lib/auth'
+import { isTauri } from '@/platform'
 import { SignInCta } from '@/features/desktop/sign-in-cta'
 import { useListBoards } from '@/features/board/api/list-boards'
 import { useLocalBoards } from '@/features/board/local/use-local-boards'
@@ -174,35 +175,40 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
   return (
     <Sidebar variant="sidebar" collapsible="offcanvas">
       <SidebarContent className="w-full h-full flex flex-col overflow-hidden">
-        <SidebarGroup className="shrink-0 [.tauri:not(.tauri-fullscreen)_&]:pt-7">
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <div className="flex items-center gap-2">
-                  <SidebarMenuButton
-                    className="h-auto py-2 min-w-0 flex-1"
-                    onClick={() => navigate({ to: "/" })}
-                  >
-                    <img src="/dim0.svg" alt="Dim0 Home" className="h-7 w-7 shrink-0" />
-                    <span className="font-medium">Dim0</span>
-                  </SidebarMenuButton>
+        {/* On desktop the brand lives in the title line (and "Install app" makes
+            no sense inside the installed app), so this header is web-only. */}
+        {!isTauri() && (
+          <SidebarGroup className="shrink-0">
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <div className="flex items-center gap-2">
+                    <SidebarMenuButton
+                      className="h-auto py-2 min-w-0 flex-1"
+                      onClick={() => navigate({ to: "/" })}
+                    >
+                      <img src="/dim0.svg" alt="Dim0 Home" className="h-7 w-7 shrink-0" />
+                      <span className="font-medium">Dim0</span>
+                    </SidebarMenuButton>
 
-                  <button
-                    type="button"
-                    className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-                    onClick={() => navigate({ to: "/install" })}
-                    aria-label="Install app"
-                    title="Install app"
-                  >
-                    <InstallAppIcon className="size-4" strokeWidth={2} />
-                  </button>
-                </div>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                    <button
+                      type="button"
+                      className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      onClick={() => navigate({ to: "/install" })}
+                      aria-label="Install app"
+                      title="Install app"
+                    >
+                      <InstallAppIcon className="size-4" strokeWidth={2} />
+                    </button>
+                  </div>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
-        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin">
+        {/* Desktop: clear the title line at the sidebar's top (no web-only header). */}
+        <div className="min-h-0 flex-1 overflow-y-auto scrollbar-thin [.tauri:not(.tauri-fullscreen)_&]:pt-11">
           <div className="pb-0">
             <SidebarGroup>
               <SidebarGroupLabel><span>WORKSPACE</span></SidebarGroupLabel>
