@@ -90,8 +90,12 @@ def save_file(
     # escape it via traversal (the write-side mirror of get_file_path's guard).
     data_root = DATADIR.resolve()
     resolved = file_path.resolve()
-    if resolved != data_root and data_root not in resolved.parents:
+    # Strictly inside the data root (rejects the root itself + anything outside).
+    if data_root not in resolved.parents:
         raise ValueError(f"Refusing to write outside the data directory: {filename!r}")
+    # And not onto an existing directory (a category dir) — `open()` would 500.
+    if resolved.is_dir():
+        raise ValueError(f"Refusing to write onto a directory: {filename!r}")
 
     with open(file_path, "wb") as f:
         f.write(file_bytes)
@@ -152,8 +156,12 @@ def get_file_path(
     # ancestor check, so a real-path prefix (not a string prefix) is enforced.
     data_root = DATADIR.resolve()
     resolved = candidate.resolve()
-    if resolved != data_root and data_root not in resolved.parents:
+    # Strictly inside the data root (rejects the root itself + anything outside).
+    if data_root not in resolved.parents:
         raise ValueError(f"Resolved path escapes the data directory: {rep_path!r}")
+    # And an actual file — a directory (e.g. a category dir) would 500 on read.
+    if resolved.is_dir():
+        raise ValueError(f"Resolved path is a directory, not a file: {rep_path!r}")
     return str(resolved)
 
 

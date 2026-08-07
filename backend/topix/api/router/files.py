@@ -35,6 +35,9 @@ async def get_file(
         raise HTTPException(status_code=404, detail="Not found") from exc
     mime_type = detect_mime_type(file_path)
     base64_url = convert_to_base64_url(file_path, mime_type=mime_type)
+    if base64_url is None:
+        # Confined but unreadable (missing / not a file) — 404, not 200 with null.
+        raise HTTPException(status_code=404, detail="Not found")
     return {"base64_url": base64_url}
 
 
