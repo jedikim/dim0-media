@@ -71,18 +71,17 @@ const SHAPE_TOOL_IDS = new Set(SHAPE_TOOLS.map((t) => t.id))
 
 
 // The `border` width sits on EVERY state so toggling a visible border on
-// hover/active doesn't shift the icon — the tray fill (`bg-sidebar`) and the
-// hover fill (`bg-secondary`) are close enough that the fill change alone reads
-// as no hover, so the border carries the affordance. The border COLOR is set
-// per-state (not on the base): these strings are assigned straight to
-// `className` and never pass through tailwind-merge, so a base
-// `border-transparent` would collide with the active `border-…/30` and win by
-// CSS source order — swallowing the active border entirely.
+// hover/active doesn't shift the icon — the border COLOR carries the
+// affordance and is set per-state (not on the base): these strings are
+// assigned straight to `className` and never pass through tailwind-merge, so a
+// base `border-transparent` would collide with the active `border-…/30` and
+// win by CSS source order — swallowing the active border entirely.
+//
+// Hover is a lighter preview (translucent fill + faint border); active is the
+// full-strength fill + border, so the two states read distinctly.
 const baseButtonClass =
   "transition-colors !p-2.5 rounded-lg flex items-center justify-center gap-2 border"
-const inactiveClass = `${baseButtonClass} border-transparent text-card-foreground hover:bg-secondary hover:text-secondary-foreground hover:border-secondary-foreground/30`
-// Active buttons carry the same border color as the hover state, so active +
-// hovered read consistently.
+const inactiveClass = `${baseButtonClass} border-transparent text-card-foreground hover:bg-secondary/50 hover:text-secondary-foreground hover:border-secondary-foreground/20`
 const activeClass = `${baseButtonClass} border-secondary-foreground/30 bg-secondary text-secondary-foreground`
 
 
