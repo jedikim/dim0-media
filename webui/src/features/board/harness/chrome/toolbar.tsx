@@ -70,17 +70,20 @@ const SHAPE_TOOLS: ReadonlyArray<ShapeTool> = [
 const SHAPE_TOOL_IDS = new Set(SHAPE_TOOLS.map((t) => t.id))
 
 
-// A transparent border sits on EVERY state so toggling a visible one on hover
-// doesn't shift the icon — the tray fill (`bg-sidebar`) and the hover fill
-// (`bg-secondary`) are close enough that the fill change alone reads as no hover,
-// so the border carries the affordance.
+// The `border` width sits on EVERY state so toggling a visible border on
+// hover/active doesn't shift the icon — the tray fill (`bg-sidebar`) and the
+// hover fill (`bg-secondary`) are close enough that the fill change alone reads
+// as no hover, so the border carries the affordance. The border COLOR is set
+// per-state (not on the base): these strings are assigned straight to
+// `className` and never pass through tailwind-merge, so a base
+// `border-transparent` would collide with the active `border-…/30` and win by
+// CSS source order — swallowing the active border entirely.
 const baseButtonClass =
-  "transition-colors !p-2.5 rounded-lg flex items-center justify-center gap-2 border border-transparent"
-const inactiveClass = `${baseButtonClass} text-card-foreground hover:bg-secondary hover:text-secondary-foreground hover:border-secondary-foreground/30`
-// Active buttons carry the same border as the hover state (the base's transparent
-// border keeps the box size constant), so active + hovered read consistently —
-// including the always-active view button (board/list/files).
-const activeClass = `${baseButtonClass} bg-secondary text-secondary-foreground border-secondary-foreground/30`
+  "transition-colors !p-2.5 rounded-lg flex items-center justify-center gap-2 border"
+const inactiveClass = `${baseButtonClass} border-transparent text-card-foreground hover:bg-secondary hover:text-secondary-foreground hover:border-secondary-foreground/30`
+// Active buttons carry the same border color as the hover state, so active +
+// hovered read consistently.
+const activeClass = `${baseButtonClass} border-secondary-foreground/30 bg-secondary text-secondary-foreground`
 
 
 /**
@@ -221,6 +224,11 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
   const setSlidesPanelOpen = useBoardAppStore((s) => s.setSlidesPanelOpen)
   const viewMode = useBoardAppStore((s) => s.viewMode)
   const setViewMode = useBoardAppStore((s) => s.setViewMode)
+  // Controlled so the trigger can show hover feedback normally and flip to the
+  // active style only while its menu is open (uncontrolled gives no open signal
+  // for styling, and the nested Tooltip/Dropdown triggers both write
+  // `data-state`, so a `data-[state=open]:` variant would be ambiguous).
+  const [viewMenuOpen, setViewMenuOpen] = useState(false)
 
   const isBoard = viewMode === "board"
   const isPan = tool === "pan"
@@ -238,14 +246,15 @@ export function HarnessToolbar({ local = false }: { local?: boolean } = {}) {
       aria-label="Board toolbar"
       data-coachmark="toolbar"
     >
-      <DropdownMenu>
+      <DropdownMenu open={viewMenuOpen} onOpenChange={setViewMenuOpen}>
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
                 aria-label="Change view"
-                className={activeClass}
+                aria-pressed={viewMenuOpen}
+                className={viewMenuOpen ? activeClass : inactiveClass}
               >
                 <ActiveViewIcon className="size-4 shrink-0" weight="fill" />
                 <span className="sr-only text-[10px] md:not-sr-only">
