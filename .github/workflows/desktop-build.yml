@@ -56,11 +56,10 @@ jobs:
         run: npm ci
         working-directory: webui
 
-      # The frontend build script loads ../.env via dotenv; the desktop app
-      # resolves its server URL at runtime, so the sample values suffice to build.
-      - name: Provide build env
-        run: cp .env.sample .env
-
+      # No .env: this is only the "does it compile on every OS" check (nothing is
+      # distributed). The build's `dotenv -e ../.env` no-ops on the absent file
+      # and Vite falls back to code defaults for the unset VITE_* vars. The
+      # release workflow passes the real VITE_API_URL via the build step's env.
       - name: Build desktop app (installers)
         uses: tauri-apps/tauri-action@v0
         with:

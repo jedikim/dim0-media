@@ -13,9 +13,10 @@ name: Desktop Release
 # this directly), a `push` of a `v*` tag (a manually pushed tag still works), and a
 # manual `workflow_dispatch` to (re)build a specific existing tag.
 #
-# The public server URL is baked in from the `API_ORIGIN` repo variable — the same
-# server-origin var `.env` uses — into VITE_API_URL. Unset ⇒ a local-only build that
-# asks the user to connect a server.
+# The public server URL is baked from the `API_ORIGIN` repo VARIABLE into
+# VITE_API_URL, passed via the build step's env (no .env file is written in CI —
+# see the build step). Unset ⇒ a local-only build that asks the user to connect a
+# server.
 on:
   push:
     tags: ["v*"]
@@ -84,24 +85,20 @@ jobs:
         run: npm ci
         working-directory: webui
 
-      # Bake VITE_API_URL (the server users sign in to) from the API_ORIGIN repo
-      # variable — the same server-origin var `.env` uses. Unset ⇒ drop it entirely
-      # → a local-only build. bash so it runs the same on the Windows runner (git-bash).
-      - name: Prepare build env
-        shell: bash
-        run: |
-          cp .env.sample .env
-          grep -v '^VITE_API_URL=' .env > .env.tmp && mv .env.tmp .env
-          if [ -n "${API_ORIGIN}" ]; then
-            echo "VITE_API_URL=${API_ORIGIN}" >> .env
-          fi
-        env:
-          API_ORIGIN: ${{ vars.API_ORIGIN }}
-
       - name: Build desktop installers
         run: npm run tauri-build
         working-directory: webui
         env:
+          # The one build-time value the desktop app needs: the public server URL
+          # users sign in to, from the API_ORIGIN repo VARIABLE (a public URL, not
+          # a secret). Passed straight into the environment — Vite bakes
+          # process.env.VITE_*, so NO .env file is written in CI (the build's
+          # `dotenv -e ../.env` no-ops on the absent file). We deliberately do NOT
+          # copy the dev `.env.sample` (localhost origins, empty secret
+          # placeholders) into a release. Unset ⇒ VITE_API_URL empty ⇒ local-only
+          # build (falls back in code); mini-app runs single-frontend from the
+          # bundled runtime since no origin is baked.
+          VITE_API_URL: ${{ vars.API_ORIGIN }}
           # Pin the V8 heap: Node auto-sizes to available RAM, so the ~7 GB macOS
           # runner defaults to ~2 GB and OOMs on the main `vite build` (works
           # locally on 16 GB+). 4 GB matches a dev machine and fits every runner.
