@@ -1,5 +1,6 @@
 """Document-related API routes."""
 
+from pathlib import PurePath
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
@@ -33,12 +34,18 @@ async def create_document_from_file(
 ):
     """Create a document by parsing an uploaded file (PDF only)."""
     file_bytes = await file.read()
-    mime_type = detect_mime_type(file.filename)
+    # Strip client path components so the upload can't traverse out of the data
+    # root (basename only); save_file confines the write as a backstop.
+    safe_name = PurePath(file.filename or "").name
+    mime_type = detect_mime_type(safe_name)
 
     if mime_type.startswith("application/pdf"):
         cat = "files"
-        new_filename = f"{gen_uid()}_{file.filename}"
-        saved_path = save_file(filename=new_filename, file_bytes=file_bytes, cat=cat)
+        new_filename = f"{gen_uid()}_{safe_name}"
+        try:
+            saved_path = save_file(filename=new_filename, file_bytes=file_bytes, cat=cat)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Invalid filename") from exc
     else:
         raise HTTPException(
             status_code=400,
