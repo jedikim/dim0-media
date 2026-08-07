@@ -1,3 +1,9 @@
+## v0.3.77 (2026-08-07)
+
+### Fix
+
+- **board**: lighten toolbar hover fill + border vs active state (#209)
+
 ## v0.3.76 (2026-08-07)
 
 ### Feat
