@@ -1,3 +1,9 @@
+## v0.3.78 (2026-08-07)
+
+### Fix
+
+- **desktop**: paint title bar as chrome (sidebar surface + border) (#210)
+
 ## v0.3.77 (2026-08-07)
 
 ### Fix
