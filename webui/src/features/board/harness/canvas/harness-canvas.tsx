@@ -210,7 +210,7 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
   })
   useLocalPresence(store, wrapRef, ready)
 
-  const { handleCreateDrag, handleClick } = useCreateHandlers(store, boardId, rootId, styleMemory)
+  const { handleCreateDrag } = useCreateHandlers(store, boardId, rootId, styleMemory)
   // Recompute every render — NOT memoized on `styleMemory`. The memory
   // object is intentionally identity-stable for its whole lifetime, so a
   // `useMemo([styleMemory])` would compute once at mount and freeze the
@@ -428,7 +428,6 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
             canCollab={!local}
             arrowDefaults={arrowDefaults}
             onCreateDrag={handleCreateDrag}
-            onClick={handleClick}
             onDoubleClick={handleDoubleClick}
             onRenderer={handleRenderer}
           />
@@ -448,7 +447,6 @@ type InnerProps = {
   canCollab: boolean
   arrowDefaults: ArrowToolDefaults
   onCreateDrag: ReturnType<typeof useCreateHandlers>["handleCreateDrag"]
-  onClick: ReturnType<typeof useCreateHandlers>["handleClick"]
   onDoubleClick: (e: CanvasPointerEvent) => void
   onRenderer: (r: Renderer) => void
 }
@@ -462,7 +460,6 @@ function HarnessCanvasInner({
   canCollab,
   arrowDefaults,
   onCreateDrag,
-  onClick,
   onDoubleClick,
   onRenderer,
 }: InnerProps) {
@@ -492,7 +489,6 @@ function HarnessCanvasInner({
             editorAdapter={createHarnessTextareaEditor}
             arrowDefaults={arrowDefaults}
             onCreateDrag={onCreateDrag}
-            onClick={onClick}
             onDoubleClick={onDoubleClick}
             onRenderer={onRenderer}
           />
