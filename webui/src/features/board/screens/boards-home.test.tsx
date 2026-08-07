@@ -2,9 +2,9 @@
 //
 // Mirrors the harness pattern (no @testing-library/react): mount with vanilla
 // `react-dom/client` under `act`, mocking the data hooks + card leaves via
-// hoisted mutable state. We assert the group behaviour — signed-out shows only
-// "On this device"; signed-in adds "Synced" — and that each group renders one
-// card per partitioned board.
+// hoisted mutable state. We assert the group behaviour — signed-out shows the
+// on-device boards plus a sign-in CTA under "Synced"; signed-in fills "Synced"
+// with boards — and that each group renders one card per partitioned board.
 
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
@@ -100,14 +100,16 @@ describe("BoardsHome", () => {
     container.remove()
   })
 
-  it("signed out (root sentinel): renders only the on-device group", () => {
+  it("signed out (root sentinel): on-device boards + a sign-in CTA under Synced", () => {
     state.userId = "root" // the real logged-out value — truthy, so a naive !!userId would leak
     state.localBoards = [local("a"), local("b")]
     render()
-    expect(headings()).toEqual(["On this device"])
+    // Synced group still renders (reveals the feature), but with the CTA — no boards.
+    expect(headings()).toEqual(["On this device", "Synced"])
     expect(count("local-card")).toBe(2)
     expect(count("new-local")).toBe(1)
     expect(count("synced-card")).toBe(0)
+    expect(container.textContent).toContain("Sync & share your boards")
   })
 
   it("signed in: renders both groups, deduped by id", () => {

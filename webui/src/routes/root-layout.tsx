@@ -61,7 +61,9 @@ export function RootLayout() {
     setUserPlan('free')
     setEmailVerificationEnabled(false)
     setEmailVerified(true)
-    navigate({ to: '/signin', replace: true })
+    // Local-first desktop: signing out drops back to the local dashboard, not a
+    // login wall you don't need. Web keeps the sign-in screen.
+    navigate({ to: isTauri() ? '/' : '/signin', replace: true })
   }, [navigate, queryClient, setEmailVerificationEnabled, setEmailVerified, setUserEmail, setUserId, setUserPlan])
 
   const isAuthed = isSignedIn(userId)

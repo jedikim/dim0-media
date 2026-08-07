@@ -3,6 +3,8 @@ import type { ReactNode } from "react"
 import { useNavigate } from "@tanstack/react-router"
 import { ThemedWelcome } from "@/features/agent/components/chat/welcome-message"
 import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { CloudArrowUpIcon } from "@/components/icons"
 import { useAppStore } from "@/store"
 import { isSignedIn } from "@/lib/auth"
 import { useListBoards } from "../api/list-boards"
@@ -88,25 +90,31 @@ export function BoardsHome({
           ))}
         </Section>
 
-        {signedIn && (
-          <Section
-            title="Synced"
-            hint="Backed up, multi-device, shareable"
-            footer={
-              isLoading
+        <Section
+          title="Synced"
+          hint="Backed up, multi-device, shareable"
+          footer={
+            signedIn && !isLoading && synced.length === 0
+              ? "No synced boards yet. Enable sync on a local board to back it up and share it."
+              : signedIn && isLoading
                 ? "Loading…"
-                : synced.length === 0
-                  ? "No synced boards yet. Enable sync on a local board to back it up and share it."
-                  : null
-            }
-          >
-            {synced.map((board) => (
+                : null
+          }
+        >
+          {signedIn ? (
+            synced.map((board) => (
               <CardCell key={board.uid}>
                 <BoardCard board={board} />
               </CardCell>
-            ))}
-          </Section>
-        )}
+            ))
+          ) : (
+            // Signed-out: reveal the feature with a calm, ignorable CTA where the
+            // boards would be — not a modal/nag. Local-first stays the default.
+            <CardCell>
+              <SyncedSignInCta onSignIn={() => void navigate({ to: "/signin" })} />
+            </CardCell>
+          )}
+        </Section>
       </div>
     </div>
   )
@@ -152,5 +160,28 @@ function Section({
 function CardCell({ children }: { children: ReactNode }) {
   return (
     <div className="w-full h-full flex justify-center items-center">{children}</div>
+  )
+}
+
+
+/**
+ * Signed-out placeholder for the Synced group: a calm, value-first card inviting
+ * sign-in to unlock sync/share. Deliberately non-blocking — it sits where boards
+ * would, and ignoring it costs nothing (local-first stays the default).
+ */
+function SyncedSignInCta({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <div className="w-64 h-60 flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border p-6 text-center">
+      <CloudArrowUpIcon className="size-8 text-muted-foreground" strokeWidth={2} />
+      <div className="space-y-1">
+        <p className="text-sm font-medium text-foreground">Sync &amp; share your boards</p>
+        <p className="text-xs text-muted-foreground">
+          Sign in to back them up and open them on any device.
+        </p>
+      </div>
+      <Button variant="secondary" size="sm" onClick={onSignIn}>
+        Sign in
+      </Button>
+    </div>
   )
 }
