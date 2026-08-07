@@ -1,3 +1,9 @@
+## v0.3.74 (2026-08-07)
+
+### Fix
+
+- **backend**: confine GET /files to the data root (F1 — arbitrary file read) (#201)
+
 ## v0.3.73 (2026-08-07)
 
 ## v0.3.72 (2026-08-06)
