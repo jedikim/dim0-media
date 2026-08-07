@@ -1,3 +1,16 @@
+## v0.3.76 (2026-08-07)
+
+### Feat
+
+- **dashboard**: reveal sync/share to signed-out users + desktop logout → dashboard (#205)
+
+### Fix
+
+- **backend**: reject the data root itself in file-path confinement guards (F1 follow-up) (#207)
+- **board**: show active toolbar button border + view-button hover/active states (#208)
+- **board**: require drag-to-size placement, drop single-click node creation (#206)
+- **desktop**: derive app version from Cargo.toml, not a stale tauri.conf.json pin (#204)
+
 ## v0.3.75 (2026-08-07)
 
 ## v0.3.74 (2026-08-07)
