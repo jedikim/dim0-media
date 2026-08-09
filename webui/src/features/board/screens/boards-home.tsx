@@ -4,6 +4,7 @@ import { useNavigate } from "@tanstack/react-router"
 import { ThemedWelcome } from "@/features/agent/components/chat/welcome-message"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { CloudArrowUpIcon } from "@/components/icons"
 import { useAppStore } from "@/store"
 import { isSignedIn } from "@/lib/auth"
@@ -179,9 +180,16 @@ function SyncedSignInCta({ onSignIn }: { onSignIn: () => void }) {
           Sign in to back them up and open them on any device.
         </p>
       </div>
-      <Button variant="secondary" size="sm" onClick={onSignIn}>
-        Sign in
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="secondary" size="sm" onClick={onSignIn}>
+            Sign in
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          Signing up is completely free — no credit card required
+        </TooltipContent>
+      </Tooltip>
     </div>
   )
 }

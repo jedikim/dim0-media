@@ -309,7 +309,7 @@ export function SigninPage() {
 
             <div className="text-center">
               <Link to="/" className="text-sm text-muted-foreground underline underline-offset-2">
-                ← Back to boards
+                ← Back to local boards
               </Link>
             </div>
           </form>
