@@ -1,3 +1,9 @@
+## v0.3.80 (2026-08-09)
+
+### Feat
+
+- **desktop**: app-styled OAuth sign-in result pages (#213)
+
 ## v0.3.79 (2026-08-09)
 
 ### Feat
