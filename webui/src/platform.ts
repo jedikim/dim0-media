@@ -20,3 +20,19 @@ export const isTauri = (): boolean =>
  */
 export const isWebKitWebview = (): boolean =>
   isTauri() && typeof navigator !== "undefined" && !/Chrome\//.test(navigator.userAgent)
+
+
+/**
+ * Open an external URL. On desktop (Tauri) this hands off to the OS default
+ * browser via the `open_external` Rust command so payment/OAuth-style flows run
+ * in a real browser instead of taking over the webview; on web it stays a normal
+ * same-tab navigation, unchanged from the prior behavior.
+ */
+export const openExternalUrl = async (url: string): Promise<void> => {
+  if (isTauri()) {
+    const { invoke } = await import("@tauri-apps/api/core")
+    await invoke("open_external", { url })
+    return
+  }
+  window.location.assign(url)
+}

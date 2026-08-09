@@ -3,6 +3,7 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 mod oauth;
+mod shell;
 mod storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -36,7 +37,8 @@ pub fn run() {
       storage::sql_execute,
       storage::sql_select,
       storage::sql_tx,
-      oauth::google_oauth
+      oauth::google_oauth,
+      shell::open_external
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");
