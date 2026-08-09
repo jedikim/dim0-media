@@ -60,10 +60,12 @@ fn wait_for_code(server: Server, expected_state: &str) -> Result<String, String>
         let (code, state) = parse_code_state(request.url());
         let error = query_param(request.url(), "error");
         let matched = code.is_some() && state.as_deref() == Some(expected_state);
+        // App-styled result pages (self-contained: inline CSS + embedded font),
+        // shown in the user's system browser. See oauth-success/error.html.
         let body = if matched {
-            "<h2>Signed in — you can close this tab and return to Dim0.</h2>"
+            include_str!("oauth-success.html")
         } else {
-            "<h2>Sign-in failed. You can close this tab.</h2>"
+            include_str!("oauth-error.html")
         };
         let header =
             Header::from_bytes(&b"Content-Type"[..], &b"text/html; charset=utf-8"[..]).unwrap();
