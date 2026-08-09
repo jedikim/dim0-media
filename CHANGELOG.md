@@ -1,3 +1,10 @@
+## v0.3.79 (2026-08-09)
+
+### Feat
+
+- **webui**: open stripe billing in os browser on desktop (#211)
+- **webui**: clarify local-boards link + free-signup tooltips on sign-in CTAs (#212)
+
 ## v0.3.78 (2026-08-07)
 
 ### Fix
