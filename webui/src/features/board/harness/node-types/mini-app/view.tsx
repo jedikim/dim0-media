@@ -2,9 +2,11 @@
 //
 // Wraps the host-side MiniAppMount (which owns the sandboxed iframe,
 // state hydration, and RPC routing) with the standard canvas chrome:
-// traffic lights for delete/expand, a label caption below the card,
-// off-screen suspension via useIsInView so the iframe doesn't pin the
-// event loop on boards with many mini-apps.
+// traffic lights for delete/expand, a label caption below the card.
+// Iframe lifecycle is a bounded keep-alive (useMiniAppKeepAlive): in-view
+// nodes plus the most-recently-seen CAP off-screen nodes stay mounted, so
+// scrolling back re-uses the live iframe instead of re-parsing the ~5 MB
+// runtime; nodes beyond that (and never-seen ones) show a placeholder.
 //
 // Mirrors the shape of WidgetView in node-types/widget/view.tsx — the
 // canvas chrome conventions live there.
@@ -26,6 +28,7 @@ import {
   useIsInView,
 } from "../../shared-views"
 import { useBoardAppStore } from "../../store/board-app-store"
+import { useMiniAppKeepAlive } from "./use-keep-alive"
 
 
 // Card chrome (padding + traffic-lights row + title slot). Subtracted
@@ -46,9 +49,10 @@ export interface MiniAppViewProps {
 
 
 /**
- * Canvas view for a mini-app note. Renders the iframe via MiniAppMount
- * when the node is in view; otherwise shows a paused-state placeholder
- * card so the rest of the board stays responsive.
+ * Canvas view for a mini-app note. Renders the iframe via MiniAppMount while the
+ * node should stay mounted (in view, or a recently-seen off-screen node kept
+ * alive by useMiniAppKeepAlive); otherwise shows a paused-state placeholder card
+ * so the rest of the board stays responsive.
  */
 export function MiniAppView({ id }: MiniAppViewProps) {
   const node = useNode(id)
@@ -56,7 +60,13 @@ export function MiniAppView({ id }: MiniAppViewProps) {
   const openNodeSurface = useBoardAppStore((s) => s.openNodeSurface)
   const canEdit = useBoardAppStore((s) => s.canEdit)
   const wrapRef = useRef<HTMLDivElement>(null)
-  const isInView = useIsInView(wrapRef, "200px")
+  // initialInView: false — don't mount every node on first load before the
+  // observer reports which are actually visible (and don't seed the keep-alive
+  // LRU with never-seen nodes).
+  const isInView = useIsInView(wrapRef, "200px", false)
+  // Keep recently-seen iframes mounted (bounded LRU) so scrolling a node back
+  // into view re-uses the live iframe instead of re-parsing the ~5 MB runtime.
+  const shouldMount = useMiniAppKeepAlive(id as unknown as string, isInView)
   // Gate iframe interaction on selection so canvas pan/zoom gestures
   // pass cleanly through unselected mini-apps. Without this, the
   // iframe's `pointer-events-auto` captures the pointer the moment
@@ -76,8 +86,34 @@ export function MiniAppView({ id }: MiniAppViewProps) {
   const pendingHeightRef = useRef<number | null>(null)
   const rafIdRef = useRef<number | null>(null)
   const lastAppliedHRef = useRef<number>(0)
+  const latestWidgetHRef = useRef<number | null>(null)
+  // A kept-alive node can stay mounted off-screen, so gate the store write on
+  // visibility — otherwise an off-screen widget's resize would grow the node
+  // (and broadcast a collab op) with nothing visible to justify it. The latest
+  // reported height is stashed and flushed when the node returns to view.
+  const inViewRef = useRef(isInView)
+  useEffect(() => {
+    inViewRef.current = isInView
+  }, [isInView])
+
+  const applyHeight = useCallback(
+    (widgetH: number) => {
+      const target = Math.min(widgetH + CARD_CHROME_PX, MAX_AUTO_GROW_PX)
+      const current = store.getNode(id)?.h ?? 0
+      // Grow only, and only by a meaningful delta (avoid storms from
+      // sub-pixel oscillation).
+      if (target <= current + 1) return
+      if (target === lastAppliedHRef.current) return
+      lastAppliedHRef.current = target
+      store.updateNode(id, { h: target })
+    },
+    [id, store],
+  )
+
   const onContentHeightChange = useCallback(
     (widgetH: number) => {
+      latestWidgetHRef.current = widgetH
+      if (!inViewRef.current) return
       pendingHeightRef.current = widgetH
       if (rafIdRef.current != null) return
       rafIdRef.current = requestAnimationFrame(() => {
@@ -85,18 +121,16 @@ export function MiniAppView({ id }: MiniAppViewProps) {
         const pending = pendingHeightRef.current
         pendingHeightRef.current = null
         if (pending == null) return
-        const target = Math.min(pending + CARD_CHROME_PX, MAX_AUTO_GROW_PX)
-        const current = store.getNode(id)?.h ?? 0
-        // Grow only, and only by a meaningful delta (avoid storms from
-        // sub-pixel oscillation).
-        if (target <= current + 1) return
-        if (target === lastAppliedHRef.current) return
-        lastAppliedHRef.current = target
-        store.updateNode(id, { h: target })
+        applyHeight(pending)
       })
     },
-    [id, store],
+    [applyHeight],
   )
+
+  // Flush the height reported while off-screen when the node returns to view.
+  useEffect(() => {
+    if (isInView && latestWidgetHRef.current != null) applyHeight(latestWidgetHRef.current)
+  }, [isInView, applyHeight])
 
   useEffect(() => {
     return () => {
@@ -121,7 +155,7 @@ export function MiniAppView({ id }: MiniAppViewProps) {
         )}
       >
         <div className="relative h-full w-full overflow-hidden rounded-xl border border-border/50 bg-background">
-          {source && isInView ? (
+          {source && shouldMount ? (
             <MiniAppMount
               noteId={id as unknown as string}
               source={source}
