@@ -153,11 +153,38 @@ export default defineConfig({
         // Runtime-cache the mini-app runtime (excluded from precache above) so it
         // loads offline. StaleWhileRevalidate: instant from cache, refreshed in
         // the background so a redeploy propagates on the next load.
+        //
+        // Two distinct assets live under /mini-app/: the 5.4 MB `index.html` and
+        // the tiny `theme-bootstrap.js` it loads. They MUST use separate caches —
+        // a single cache with `maxEntries: 1` would make them evict each other,
+        // re-downloading the 5.4 MB doc on every load and breaking offline.
         runtimeCaching: [
           {
+            // The 5.4 MB runtime document. Its src carries `?theme=&mode=` (read
+            // by theme-bootstrap.js for first-paint), but the served bytes are
+            // theme-independent — the same static file. `ignoreSearch` matches
+            // every palette/mode variant to ONE entry (downloaded once, shared,
+            // no cold fetch per theme); `maxEntries: 1` keeps just that single
+            // byte-identical copy. This rule is registered first, so index.html
+            // is handled here and never falls through to the catch-all below.
+            urlPattern: /\/mini-app\/index\.html/,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "mini-app-runtime",
+              matchOptions: { ignoreSearch: true },
+              expiration: { maxEntries: 1 },
+            },
+          },
+          {
+            // Everything else under /mini-app/ (theme-bootstrap.js today, plus any
+            // future sidecar asset) — a separate cache so it can never evict the
+            // runtime document above. Bounded, and offline-safe.
             urlPattern: /\/mini-app\//,
             handler: "StaleWhileRevalidate",
-            options: { cacheName: "mini-app-runtime" },
+            options: {
+              cacheName: "mini-app-assets",
+              expiration: { maxEntries: 16 },
+            },
           },
         ],
       },
