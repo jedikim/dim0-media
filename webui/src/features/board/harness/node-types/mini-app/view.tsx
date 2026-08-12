@@ -18,7 +18,7 @@ import { type NodeId } from "@canvas-harness/core"
 import { useCanvasStore, useNode, useSelection } from "@canvas-harness/react"
 import { removeNodeSubtree } from "@/features/board/harness/graph/subtree"
 
-import { MiniAppMount } from "@/features/mini-app"
+import { MiniAppMount, prefetchMiniAppRuntime } from "@/features/mini-app"
 import { cn } from "@/lib/utils"
 
 import type { NoteNodeData } from "../../convert/note-to-node"
@@ -75,6 +75,13 @@ export function MiniAppView({ id }: MiniAppViewProps) {
   // its inline editor (gated on `editing` instead of selection).
   const selection = useSelection()
   const isSelected = selection.includes(id)
+
+  // A mini-app node exists on this board → warm the runtime cache on idle (once
+  // per session) so the first open isn't a cold ~5 MB fetch, even for nodes that
+  // are still below the fold.
+  useEffect(() => {
+    prefetchMiniAppRuntime()
+  }, [])
 
   // rAF-throttled grow-only resize. The widget posts `mini-app:resize`
   // through MiniAppMount on every content-size change; we batch those

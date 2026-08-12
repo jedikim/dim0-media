@@ -7,4 +7,5 @@
 
 export { MiniAppMount } from "./mount"
 export type { MiniAppMountProps } from "./mount"
+export { prefetchMiniAppRuntime } from "./runtime-target"
 export { fetchMiniAppState, saveMiniAppState } from "./state-client"

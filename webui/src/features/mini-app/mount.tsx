@@ -32,6 +32,13 @@ import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
 
 import { createMessageHandler } from "./dispatch"
+import {
+  EXPECTED_ORIGIN,
+  POST_TARGET,
+  RUNTIME_ORIGIN,
+  RUNTIME_PATH,
+  SANDBOX,
+} from "./runtime-target"
 import { fetchMiniAppState, saveMiniAppState } from "./state-client"
 
 
@@ -40,35 +47,6 @@ import { fetchMiniAppState, saveMiniAppState } from "./state-client"
 // cold sucrase compile but short enough that the user doesn't stare
 // at an empty rectangle wondering if anything's happening.
 const HANDSHAKE_TIMEOUT_MS = 5000
-
-
-// Runtime origin resolution priority:
-//   1. window.__APP_CONFIG__.miniAppOrigin  — set by docker-entrypoint.sh
-//      from VITE_MINI_APP_ORIGIN at container start. Lets one image
-//      ship to dev / staging / prod without rebuilding.
-//   2. import.meta.env.VITE_MINI_APP_ORIGIN — build-time fallback for
-//      vite-dev (no entrypoint runs there).
-//   3. "" — empty string makes the broken state obvious in devtools.
-// See mini-app-archi.md §6.1.
-const RUNTIME_ORIGIN =
-  (typeof window !== "undefined" ? window.__APP_CONFIG__?.miniAppOrigin : undefined) ||
-  import.meta.env.VITE_MINI_APP_ORIGIN ||
-  ""
-
-
-// Single-frontend (default): no separate runtime origin configured, so load the
-// self-contained runtime as a same-origin static asset into an OPAQUE-origin
-// iframe (sandbox WITHOUT allow-same-origin) — isolation without a second origin
-// (best practice for untrusted code; see mini-app-archi.md). Cross-origin mode
-// (with Vite HMR) is opt-in by setting VITE_MINI_APP_ORIGIN.
-const SINGLE_FRONTEND = RUNTIME_ORIGIN === ""
-const RUNTIME_PATH = SINGLE_FRONTEND ? "/mini-app/index.html" : `${RUNTIME_ORIGIN}/index.html`
-// postMessage target: an opaque iframe has no addressable origin → "*". The
-// inbound guard (source === contentWindow) is the real boundary either way.
-const POST_TARGET = SINGLE_FRONTEND ? "*" : RUNTIME_ORIGIN
-// Inbound origin to trust: an opaque-sandbox iframe posts with origin "null".
-const EXPECTED_ORIGIN = SINGLE_FRONTEND ? "null" : RUNTIME_ORIGIN
-const SANDBOX = SINGLE_FRONTEND ? "allow-scripts" : "allow-scripts allow-same-origin"
 
 
 // Deployment safeguard: the iframe is sandboxed with `allow-same-origin`
