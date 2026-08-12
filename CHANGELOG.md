@@ -1,3 +1,10 @@
+## v0.3.81 (2026-08-12)
+
+### Perf
+
+- **webui**: share one mini-app runtime cache entry across themes (#214)
+- **webui**: bounded keep-alive for mini-app iframes on scroll (#215)
+
 ## v0.3.80 (2026-08-09)
 
 ### Feat
