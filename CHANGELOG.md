@@ -1,3 +1,9 @@
+## v0.3.83 (2026-08-12)
+
+### Perf
+
+- **webui**: cache highlightCodeSync output to cut scroll re-tokenizing (#218)
+
 ## v0.3.82 (2026-08-12)
 
 ### Perf
