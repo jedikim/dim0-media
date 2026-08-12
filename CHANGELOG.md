@@ -1,3 +1,10 @@
+## v0.3.82 (2026-08-12)
+
+### Perf
+
+- **webui**: suspend off-screen-but-alive mini-app iframes via content-visibility (#216)
+- **webui**: prefetch mini-app runtime on idle to warm first open (#217)
+
 ## v0.3.81 (2026-08-12)
 
 ### Perf
