@@ -9,6 +9,7 @@ import {
 import { useCanvasStore } from "@canvas-harness/react"
 import type { CanvasStore } from "@canvas-harness/core"
 import { useBoardCameraAtRest } from "../canvas/board-camera-motion"
+import { requestMountSlot } from "./mount-scheduler"
 import { useIsInView } from "./use-is-in-view"
 
 
@@ -20,19 +21,33 @@ export type DeferredMount = {
 }
 
 
+/** Distance from the element's center to the viewport center — mount-order priority. */
+function viewportCenterDistance(ref: RefObject<HTMLElement | null>): number {
+  const el = ref.current
+  if (!el || typeof window === "undefined") return Infinity
+  const r = el.getBoundingClientRect()
+  const dx = r.left + r.width / 2 - window.innerWidth / 2
+  const dy = r.top + r.height / 2 - window.innerHeight / 2
+  return Math.hypot(dx, dy)
+}
+
+
 /**
  * Factory for the "defer heavy on-canvas node mounting until the pan settles"
  * behavior shared by heavy node views (mini-app iframes, sheet editors). Each
- * call creates an INDEPENDENT retention pool (per node type), and the pool is
- * further scoped per board (per CanvasStore) so two boards overlapping during a
- * route transition never evict each other's retained nodes. The returned hook:
- *   - mounts a node only when it's in view AND the board camera is at rest — so
- *     panning/scrolling at any speed boots nothing new — or immediately if it's
- *     kept alive from a recent visit;
- *   - keeps a mounted node while it's in view OR retained, so a genuinely visible
+ * call creates an INDEPENDENT retention pool (per node type), scoped per board
+ * (per CanvasStore) so two boards overlapping during a route transition never
+ * evict each other's retained nodes. The returned hook:
+ *   - a FRESH node mounts only after the camera settles, and then only when the
+ *     shared per-board scheduler grants it a slot (~one per frame, nearest
+ *     viewport center first) — so a settle into a region full of heavy nodes
+ *     trickles in instead of freezing the main thread, and a new pan drops the
+ *     un-granted requests instead of fighting them;
+ *   - a RETAINED node (kept alive from a recent visit) mounts instantly, bypassing
+ *     the scheduler;
+ *   - a mounted node stays while it's in view OR retained, so a genuinely visible
  *     node is never torn down; it unmounts only once off-screen AND evicted;
- *   - retains the most-recently-active `cap` off-screen nodes (bounded LRU) so
- *     panning back re-uses the live instance instead of remounting.
+ *   - retains the most-recently-active `cap` off-screen nodes (bounded LRU).
  */
 export function createDeferredMount({
   cap,
@@ -90,32 +105,42 @@ export function createDeferredMount({
     )
     const isLive = useSyncExternalStore(subscribe, () => getPool(store).live.includes(id))
 
-    // `everMounted` remembers that the node has been mounted so `shouldMount` can
-    // be derived SYNCHRONOUSLY (no one-frame placeholder flash for already-live /
-    // already-mounted nodes) while still keeping a visible node mounted after
-    // eviction. State (not a ref) so `waiting` stays a pure render value.
+    // `everMounted` latches on the scheduler grant so a visible node stays mounted
+    // after eviction. Only a FRESH candidate — in view, not retained, not yet
+    // mounted — waits on the camera + scheduler; everyone else reads constants, so
+    // camera motion doesn't re-render the whole board's heavy views.
     const [everMounted, setEverMounted] = useState(false)
-    // A node only needs to react to camera motion while it's waiting to boot:
-    // in view, not yet live, not yet mounted. Everyone else reads a constant, so
-    // a pan doesn't re-render the whole board's heavy views.
-    const waiting = isInView && !isLive && !everMounted
-    const cameraAtRest = useBoardCameraAtRest(store, waiting)
-    const mountReady = isInView && cameraAtRest
-    const shouldMount = mountReady || isLive || (isInView && everMounted)
+    const wantsMount = isInView && !isLive && !everMounted
+    const cameraAtRest = useBoardCameraAtRest(store, wantsMount)
+    const requesting = wantsMount && cameraAtRest
 
+    // Request a mount slot while waiting-at-rest; withdraw on camera move / leaving
+    // view / unmount. Every visible candidate withdrawing on move is exactly how
+    // "drop all waiting jobs" happens — the scheduler queue drains itself.
+    useEffect(() => {
+      if (!requesting) return
+      return requestMountSlot(store, id, viewportCenterDistance(ref), () =>
+        setEverMounted(true),
+      )
+    }, [requesting, store, id, ref])
+
+    const active = isInView && everMounted
+    const shouldMount = isLive || active
+
+    // Retain most-recently-active nodes: touch on active-enter and active-exit
+    // (keyed on `active`, not pool membership, so eviction can't re-add).
     const wasActive = useRef(false)
     useEffect(() => {
-      if (mountReady) wasActive.current = true
-      // Retain the most-recently-active nodes: touch on active-enter and on
-      // active-exit (was active, just left); never a node that was never active.
-      if (mountReady || wasActive.current) touch(store, id)
-    }, [mountReady, store, id])
+      if (active) wasActive.current = true
+      if (active || wasActive.current) touch(store, id)
+    }, [active, store, id])
     useEffect(() => () => release(store, id), [store, id])
 
+    // Fully gone (off-screen AND evicted) → forget it was mounted, so a later
+    // re-entry goes back through the scheduler.
     useEffect(() => {
-      if (shouldMount) setEverMounted(true)
-      else if (!isInView && !isLive) setEverMounted(false)
-    }, [shouldMount, isInView, isLive])
+      if (!isInView && !isLive) setEverMounted(false)
+    }, [isInView, isLive])
 
     return { shouldMount, isInView }
   }

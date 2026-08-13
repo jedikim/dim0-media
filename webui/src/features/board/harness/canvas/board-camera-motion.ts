@@ -58,6 +58,12 @@ export function useTrackBoardCameraMotion(store: CanvasStore): void {
 }
 
 
+/** Non-reactive read of camera-at-rest for THIS board (for the mount scheduler). */
+export function isBoardCameraAtRest(store: CanvasStore): boolean {
+  return getEntry(store).atRest
+}
+
+
 /**
  * Whether the given board's camera has been at rest for QUIET_MS. Pass
  * `waiting = false` for views that don't currently need to react (already mounted,
