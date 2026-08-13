@@ -12,15 +12,21 @@ import { cn } from "@/lib/utils"
 import type { NoteNodeData } from "../../convert/note-to-node"
 import { computeNodeColorUpdate } from "../../theme/apply-node-colors"
 import {
+  createDeferredMount,
   NodeTitleCaption,
   NodeTrafficLights,
-  useIsInView,
   useStopCanvasGesture,
 } from "../../shared-views"
 import { useBoardAppStore } from "../../store/board-app-store"
 import { SheetColorPicker } from "./sheet-color-picker"
 import { SheetEditorToolbar } from "./sheet-toolbar"
 import { SheetInlineEditor } from "./sheet-inline-editor"
+
+
+// Retention pool for sheet editors — lighter than mini-app iframes (a TipTap
+// instance vs a ~5 MB iframe), so a higher cap. Independent pool: sheets and
+// mini-apps never evict each other (see createDeferredMount).
+const useSheetMount = createDeferredMount({ cap: 12 })
 
 
 export type SheetViewProps = {
@@ -48,10 +54,11 @@ const formatStampDate = (iso: string): string => {
  * double-click flips the card into an editable editor in place; the expand
  * traffic-light still opens the full-screen modal. Editable title sits below.
  *
- * Content only mounts when the card intersects the viewport (`useIsInView`);
- * the lib's LOD-zoom + motion gating already suppresses the React view (and
- * thus any TipTap instance) entirely below the React threshold or while the
- * canvas is moving — so a wall of tiny sheets never mounts editors.
+ * The (heavy) TipTap editor mounts only when the card is in view AND the camera
+ * is at rest (deferred-mount) — so panning/scrolling never mounts editors for
+ * sheets crossed mid-scroll — plus a bounded LRU keeps recently-seen editors so
+ * panning back re-uses them. It always mounts while `editing`. The lib's LOD-zoom
+ * gating additionally suppresses the whole React view below the zoom threshold.
  */
 export function SheetView({ id }: SheetViewProps) {
   const node = useNode(id)
@@ -70,8 +77,9 @@ export function SheetView({ id }: SheetViewProps) {
   const bodyRef = useRef<HTMLDivElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   useStopCanvasGesture(bodyRef)
-  // 200px margin so a pan barely off-screen doesn't blink the preview out.
-  const isInView = useIsInView(wrapRef, "200px")
+  // Defer mounting the TipTap editor until the card is in view AND the camera is
+  // at rest (never mid-scroll); keep recently-seen editors via the bounded LRU.
+  const { shouldMount, isInView } = useSheetMount(id as unknown as string, wrapRef)
 
   const data = (node?.data ?? {}) as Partial<NoteNodeData>
   const boardId = data.graphUid
@@ -179,7 +187,12 @@ export function SheetView({ id }: SheetViewProps) {
           "pointer-events-auto",
           !editing && canEdit ? "cursor-pointer" : "cursor-default",
         )}
-        style={honoredBg ? { backgroundColor: honoredBg } : undefined}
+        style={{
+          ...(honoredBg ? { backgroundColor: honoredBg } : null),
+          // Retained but off-screen: skip rendering the (heavy TipTap) subtree so
+          // the browser stops its layout/paint work while the editor stays mounted.
+          contentVisibility: shouldMount && !isInView ? "hidden" : undefined,
+        }}
         title={!editing && canEdit ? "Double-click to edit" : undefined}
       >
         <div
@@ -200,7 +213,7 @@ export function SheetView({ id }: SheetViewProps) {
               <IconPropertyView icon={iconValue} size={44} />
             </div>
           )}
-          {(body || editing) && isInView ? (
+          {editing || (body && shouldMount) ? (
             <div className={editing ? "pointer-events-auto" : "pointer-events-none"}>
               <SheetInlineEditor
                 markdown={node.content ?? ""}

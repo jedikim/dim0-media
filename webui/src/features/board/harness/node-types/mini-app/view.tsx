@@ -3,10 +3,12 @@
 // Wraps the host-side MiniAppMount (which owns the sandboxed iframe,
 // state hydration, and RPC routing) with the standard canvas chrome:
 // traffic lights for delete/expand, a label caption below the card.
-// Iframe lifecycle is a bounded keep-alive (useMiniAppKeepAlive): in-view
-// nodes plus the most-recently-seen CAP off-screen nodes stay mounted, so
-// scrolling back re-uses the live iframe instead of re-parsing the ~5 MB
-// runtime; nodes beyond that (and never-seen ones) show a placeholder.
+// Iframe lifecycle: the iframe boots only when the node is in view AND the board
+// camera is at rest (useBoardCameraAtRest) — panning/scrolling at any speed mounts
+// nothing new, so nodes crossed mid-scroll aren't booted — or immediately if it's
+// kept alive from a recent visit (bounded LRU, useKeepAlive). Once mounted it stays
+// while in view OR retained, so a visible node is never torn down; nodes not yet
+// mounted / beyond the LRU show a placeholder.
 //
 // Mirrors the shape of WidgetView in node-types/widget/view.tsx — the
 // canvas chrome conventions live there.
@@ -23,12 +25,16 @@ import { cn } from "@/lib/utils"
 
 import type { NoteNodeData } from "../../convert/note-to-node"
 import {
+  createDeferredMount,
   NodeTitleCaption,
   NodeTrafficLights,
-  useIsInView,
 } from "../../shared-views"
 import { useBoardAppStore } from "../../store/board-app-store"
-import { useMiniAppKeepAlive } from "./use-keep-alive"
+
+
+// Retention pool for mini-app iframes — the heaviest node type (~5 MB each), so a
+// small cap. Independent from other node types' pools (see createDeferredMount).
+const useMiniAppMount = createDeferredMount({ cap: 8 })
 
 
 // Card chrome (padding + traffic-lights row + title slot). Subtracted
@@ -50,9 +56,9 @@ export interface MiniAppViewProps {
 
 /**
  * Canvas view for a mini-app note. Renders the iframe via MiniAppMount while the
- * node should stay mounted (in view, or a recently-seen off-screen node kept
- * alive by useMiniAppKeepAlive); otherwise shows a paused-state placeholder card
- * so the rest of the board stays responsive.
+ * node should stay mounted (deferred-mount: in view + camera at rest, or a
+ * recently-retained node); otherwise shows a paused-state placeholder card so the
+ * rest of the board stays responsive.
  */
 export function MiniAppView({ id }: MiniAppViewProps) {
   const node = useNode(id)
@@ -60,13 +66,9 @@ export function MiniAppView({ id }: MiniAppViewProps) {
   const openNodeSurface = useBoardAppStore((s) => s.openNodeSurface)
   const canEdit = useBoardAppStore((s) => s.canEdit)
   const wrapRef = useRef<HTMLDivElement>(null)
-  // initialInView: false — don't mount every node on first load before the
-  // observer reports which are actually visible (and don't seed the keep-alive
-  // LRU with never-seen nodes).
-  const isInView = useIsInView(wrapRef, "200px", false)
-  // Keep recently-seen iframes mounted (bounded LRU) so scrolling a node back
-  // into view re-uses the live iframe instead of re-parsing the ~5 MB runtime.
-  const shouldMount = useMiniAppKeepAlive(id as unknown as string, isInView)
+  // Defer the heavy iframe mount until the node is in view AND the camera is at
+  // rest; keep it while visible or recently-retained. See createDeferredMount.
+  const { shouldMount, isInView } = useMiniAppMount(id as unknown as string, wrapRef)
   // Gate iframe interaction on selection so canvas pan/zoom gestures
   // pass cleanly through unselected mini-apps. Without this, the
   // iframe's `pointer-events-auto` captures the pointer the moment

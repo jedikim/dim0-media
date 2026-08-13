@@ -76,6 +76,7 @@ import { useHistoryBatchIds } from "./use-history-batch-ids"
 import { useSyncEngine } from "./use-sync-engine"
 import { useThumbnailCapture } from "./use-thumbnail-capture"
 import { useViewportPersistence } from "./use-viewport-persistence"
+import { useTrackBoardCameraMotion } from "./board-camera-motion"
 import { useSidebarContentsSync } from "./use-sidebar-contents-sync"
 import { HarnessWrapRefProvider } from "./wrap-ref-provider"
 
@@ -161,6 +162,9 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
   useHistoryBatchIds(store)
   useBoardKeyboard(store)
   useViewportPersistence(store, boardId, rootId, ready)
+  // Tracks camera-at-rest so heavy node views (e.g. mini-app iframes) can defer
+  // mounting until a pan/scroll stops instead of booting for every node crossed.
+  useTrackBoardCameraMotion(store)
   useCenterFromUrl(store, wrapRef, ready)
   const styleMemory = useStyleMemory(store)
   useStampNewEdges(store, boardId, rootId)
