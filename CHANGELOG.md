@@ -1,3 +1,9 @@
+## v0.3.84 (2026-08-13)
+
+### Perf
+
+- **webui**: defer heavy on-canvas node mounts (mini-apps + sheets) until pan settles (#219)
+
 ## v0.3.83 (2026-08-12)
 
 ### Perf
