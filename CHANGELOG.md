@@ -1,3 +1,13 @@
+## v0.3.85 (2026-08-13)
+
+### Fix
+
+- **webui**: scope deferred-mount pool per board + purer, flash-free mount latch (#220)
+
+### Perf
+
+- **webui**: stagger heavy-node mounts via a per-board scheduler (#222)
+
 ## v0.3.84 (2026-08-13)
 
 ### Perf
