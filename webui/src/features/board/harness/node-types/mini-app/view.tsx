@@ -4,9 +4,10 @@
 // state hydration, and RPC routing) with the standard canvas chrome:
 // traffic lights for delete/expand, a label caption below the card.
 // Iframe lifecycle: the iframe boots only when the node is in view AND the board
-// camera is at rest (useBoardCameraAtRest) — panning/scrolling at any speed mounts
-// nothing new, so nodes crossed mid-scroll aren't booted — or immediately if it's
-// kept alive from a recent visit (bounded LRU, useKeepAlive). Once mounted it stays
+// camera is at rest — panning/scrolling at any speed mounts nothing new, so nodes
+// crossed mid-scroll aren't booted — or immediately if it's kept alive from a
+// recent visit (bounded LRU). Both come from useMiniAppMount (createDeferredMount).
+// Once mounted it stays
 // while in view OR retained, so a visible node is never torn down; nodes not yet
 // mounted / beyond the LRU show a placeholder.
 //

@@ -191,7 +191,8 @@ export function SheetView({ id }: SheetViewProps) {
           ...(honoredBg ? { backgroundColor: honoredBg } : null),
           // Retained but off-screen: skip rendering the (heavy TipTap) subtree so
           // the browser stops its layout/paint work while the editor stays mounted.
-          contentVisibility: shouldMount && !isInView ? "hidden" : undefined,
+          // Never while editing — don't stop rendering the editor being typed in.
+          contentVisibility: shouldMount && !isInView && !editing ? "hidden" : undefined,
         }}
         title={!editing && canEdit ? "Double-click to edit" : undefined}
       >
