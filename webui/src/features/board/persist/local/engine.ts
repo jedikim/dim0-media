@@ -22,6 +22,7 @@ export type Collection =
   | "chat_messages"
   | "mini_app_state"
   | "sync_meta"
+  | "snapshot_meta"
   | "documents"
   | "chunks"
 

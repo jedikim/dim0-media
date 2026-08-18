@@ -39,6 +39,7 @@ open and an upgrade converge on the same shape).
 | `boards` | `id` | — | `BoardMeta` |
 | `views` | `boardId` | — | `BoardView` (camera/selection) |
 | `sync_meta` | `boardId` | — | durable `syncedSeq` cursor |
+| `snapshot_meta` | `boardId` | — | device-local `seenSeq` (agent board-snapshot cursor; not synced) |
 | `chats` | `id` | by-board | chat sessions |
 | `chat_messages` | `[chatUid, id]` | — | transcript rows |
 | `documents` | `id` | by-board | ingested doc metadata |
@@ -85,7 +86,9 @@ replay. If the promoted board is the one currently open, the view MUST navigate
 `deleteBoard` removes the board across its stores in one transaction. Cascading
 `sync_meta` is **load-bearing**: a stale `syncedSeq` left behind would make a
 re-created same-id board treat fresh low-seq edits as already-acked
-(`pending()` skips `seq <= cursor`) → silent edit loss. Known gap: `mini_app_state`
+(`pending()` skips `seq <= cursor`) → silent edit loss. `snapshot_meta` (the agent
+snapshot cursor) is cascaded for the same reason: a stale `seenSeq` would omit
+fresh low-seq edits from the snapshot's "recent changes". Known gap: `mini_app_state`
 (keyed by `noteId`, no by-board index) is not cascaded — a storage leak, not data
 loss (roadmap).
 

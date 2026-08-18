@@ -88,11 +88,16 @@ for (const { label, make } of engineCases) describe(`BoardRegistry (${label})`, 
     await reg.createBoard(board)
     await engine.put("sync_meta", { boardId: board.id, syncedSeq: 42 })
     await engine.put("sync_meta", { boardId: "other-board", syncedSeq: 7 })
+    // Same trap for the agent snapshot cursor.
+    await engine.put("snapshot_meta", { boardId: board.id, seenSeq: 42 })
+    await engine.put("snapshot_meta", { boardId: "other-board", seenSeq: 7 })
 
     await reg.deleteBoard(board.id)
 
     expect(await engine.get("sync_meta", board.id)).toBeUndefined()
     expect(await engine.get("sync_meta", "other-board")).toBeDefined() // spared
+    expect(await engine.get("snapshot_meta", board.id)).toBeUndefined()
+    expect(await engine.get("snapshot_meta", "other-board")).toBeDefined() // spared
   })
 
 

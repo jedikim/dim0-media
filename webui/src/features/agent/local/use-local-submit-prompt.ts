@@ -18,6 +18,8 @@ import { getSearchIndexRef } from "@/features/board/search/search-index-ref"
 import { getDocIndexRef } from "@/features/board/search/doc-index-ref"
 import { rebuildDocIndex } from "@/features/board/search/use-doc-index"
 import { getLocalStores } from "@/features/local-stores"
+import type { SnapshotMetaRecord } from "@/features/board/persist/local/idb"
+import { getBoardPersistenceRef } from "@/features/board/persist/local/board-persistence-ref"
 import { makeDocSearchTool } from "@/features/agent/engine/doc-search"
 import { resolveConfirmDecision, useToolConfirm, type ToolConfirmDecision } from "@/features/agent/engine/tool-confirm-store"
 import { useToolTrustStore } from "@/features/agent/settings/tool-trust-store"
@@ -31,9 +33,11 @@ import { useLocalMessagesStore } from "@/features/agent/store/local-messages-sto
 import { putChatTranscript } from "@/features/agent/api/chat-transcript"
 import type { ChatMessage } from "@/features/agent/types/chat"
 import { agentLog } from "@/features/agent/engine/debug"
+import type { CanvasStore } from "@canvas-harness/core"
 import { latestAssistantText, stepsFromEvents } from "./agent-event-to-step"
 import { toLlmHistory } from "./chat-history"
 import { maybeAutoLabelBoard } from "./describe-board"
+import { buildBoardSnapshot, readRecentOps, renderBoardSnapshot } from "./board-snapshot"
 import { wrapWithMessageContext } from "./message-context"
 
 
@@ -50,6 +54,57 @@ const AGENT_TOOLS = [...agentBuildTools, searchNotes, ...skillTools]
 
 let counter = 0
 const mintId = (): string => `local-${Date.now()}-${counter++}`
+
+
+/**
+ * Assemble the deterministic board-snapshot block (no LLM) for the system prompt:
+ * node inventory, folder outline, selection, and changes since you last checked.
+ *
+ * Reads the per-device "seen" cursor (`snapshot_meta`) but does NOT advance it —
+ * that happens at turn end (`advanceBoardSnapshotCursor`), AFTER the agent's own
+ * writes are committed, so the agent's edits this turn are not reported back to it
+ * next turn as user "recent changes". So recent changes span sessions (first open
+ * after being away shows what moved while you were gone) and, mid-session, show
+ * only what the USER touched between turns.
+ */
+const buildBoardBlock = async (store: CanvasStore, rootId: string | null, boardId: string): Promise<string> => {
+  // Auxiliary context — a storage hiccup (transient IDB error, blocked upgrade)
+  // must degrade to an empty block, never abort the turn.
+  try {
+    const { engine, boards } = await getLocalStores()
+    const cursor = await engine.get<SnapshotMetaRecord>("snapshot_meta", boardId)
+    // First time on this device: no baseline yet, so report nothing as "recent"
+    // (the turn-end advance establishes the baseline).
+    const recent = cursor === undefined ? [] : await readRecentOps(engine, boardId, cursor.seenSeq)
+    const meta = await boards.getBoard(boardId)
+    const snapshot = buildBoardSnapshot(store, rootId, recent)
+    return renderBoardSnapshot(snapshot, { title: meta?.title ?? "Untitled board" })
+  } catch (e) {
+    agentLog.error("buildBoardBlock", e)
+    return ""
+  }
+}
+
+
+/**
+ * Advance the per-device snapshot cursor to the current oplog max. Runs at turn
+ * end (awaited, after the agent's writes are flushed), so those writes are marked
+ * "seen" and won't resurface as recent changes next turn.
+ */
+const advanceBoardSnapshotCursor = async (boardId: string): Promise<void> => {
+  // Commit the board's debounced writes (the agent's creates + arrange moves this
+  // turn) to the oplog FIRST — otherwise readRecentOps reads a stale tail and the
+  // cursor lands below the agent's ops, re-reporting them next turn as user changes.
+  await getBoardPersistenceRef()?.flush()
+  const { engine } = await getLocalStores()
+  const cursor = await engine.get<SnapshotMetaRecord>("snapshot_meta", boardId)
+  const from = cursor?.seenSeq ?? 0
+  const ops = await readRecentOps(engine, boardId, from)
+  const maxSeq = ops.reduce((m, r) => Math.max(m, r.seq), from)
+  if (cursor === undefined || maxSeq !== from) {
+    await engine.put<SnapshotMetaRecord>("snapshot_meta", { boardId, seenSeq: maxSeq })
+  }
+}
 
 
 /**
@@ -169,6 +224,9 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
       const gate = createFlushGate()
       try {
         const system = planSystemPrompt(new Date().toLocaleString())
+        // Deterministic board awareness (no LLM), injected as a standing section.
+        const boardBlock = await buildBoardBlock(store, rootId, boardId)
+        const systemWithBoard = boardBlock ? `${system}\n\n## BOARD\n${boardBlock}` : system
         const search = getSearchIndexRef() ?? undefined
         // External services are managed (signed in); include each tool only when
         // resolvable, so a signed-out user isn't offered an unavailable capability.
@@ -198,8 +256,8 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
         // When documents are attached, steer grounding + citation-by-title (titles
         // are unique per board, so a title names exactly one document).
         const systemWithDocs = hasDocs
-          ? `${system}\n\nThis board has uploaded documents. Use \`doc_search(query)\` — full-text over their contents — and for anything they could answer, call it FIRST, before answering from your own knowledge; ground the answer in the returned passages and cite each document by its exact title. (\`search_notes\` covers the board's own notes.)`
-          : system
+          ? `${systemWithBoard}\n\nThis board has uploaded documents. Use \`doc_search(query)\` — full-text over their contents — and for anything they could answer, call it FIRST, before answering from your own knowledge; ground the answer in the returned passages and cite each document by its exact title. (\`search_notes\` covers the board's own notes.)`
+          : systemWithBoard
         const userMessageForAgent = wrapWithMessageContext(prompt, messageContext)
         // Gate off-board tools (network/code) behind a user confirmation, so a
         // prompt-injected tool call can't silently exfiltrate or run code. A
@@ -288,6 +346,12 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
         }
         // Auto-label a still-"Untitled" board from its first turn (fire-and-forget).
         void maybeAutoLabelBoard(boardId, messages, resolveAgentLlm(config, { signedIn, runId, model: llmModel, byokModel }))
+        // Mark everything up to now (incl. the agent's own writes this turn) as
+        // "seen", so next turn's snapshot reports only what the USER changed.
+        // Awaited (not fire-and-forget): the cursor must be committed before this
+        // turn's callback resolves, so a fast back-to-back prompt can't read the
+        // stale cursor and re-report the agent's own writes as user changes.
+        await advanceBoardSnapshotCursor(boardId).catch((e) => agentLog.error("advanceBoardSnapshotCursor", e))
       }
     },
     [asConfig, searchByok, searchEngine, codeByok, llmModel, llmCatalog, signedIn, syncTranscript, setMessages, setChatUid, persist, boardId, navigate],

@@ -37,6 +37,14 @@ export type OplogRecord = { boardId: string; seq: number; batch: OpBatch; server
 export type SyncMetaRecord = { boardId: string; syncedSeq: number }
 
 
+/**
+ * Device-local snapshot cursor per board: the highest oplog seq this device has
+ * already reflected in a board snapshot. Not synced — each device tracks how far
+ * it has "seen" so the agent's snapshot can report changes since you last checked.
+ */
+export type SnapshotMetaRecord = { boardId: string; seenSeq: number }
+
+
 /** An uploaded document's metadata (per board). Its markdown lives in its chunks. */
 export type DocumentRecord = {
   id: string
@@ -72,6 +80,8 @@ interface Dim0DB extends DBSchema {
   mini_app_state: { key: string; value: { noteId: string; state: unknown } }
   // Sync cursor per board (offline outbox — how far the relay has acked).
   sync_meta: { key: string; value: SyncMetaRecord }
+  // Device-local snapshot cursor per board (how far the agent snapshot has "seen").
+  snapshot_meta: { key: string; value: SnapshotMetaRecord }
   // Per-board uploaded documents + their retrieval chunks (document Q&A).
   documents: { key: string; value: DocumentRecord; indexes: { "by-board": string } }
   chunks: { key: string; value: ChunkRecord; indexes: { "by-board": string; "by-doc": string } }
@@ -82,7 +92,7 @@ export type Dim0Database = IDBPDatabase<Dim0DB>
 
 
 const DB_NAME = "dim0"
-const DB_VERSION = 6
+const DB_VERSION = 7
 
 
 // Minimal loose shapes for the upgrade loop (see the cast note in `upgrade`).
