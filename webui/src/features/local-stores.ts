@@ -14,6 +14,7 @@ import { isTauri } from "@/platform"
 import { ChatRepo } from "@/features/agent/store/chat-repo"
 import { MiniAppRepo } from "@/features/mini-app/mini-app-repo"
 import { DocRepo } from "@/features/board/persist/local/doc-repo"
+import { MemoryRepo } from "@/features/board/persist/local/memory-repo"
 
 
 export type LocalStores = {
@@ -22,6 +23,7 @@ export type LocalStores = {
   chats: ChatRepo
   miniApps: MiniAppRepo
   docs: DocRepo
+  memories: MemoryRepo
 }
 
 
@@ -32,6 +34,7 @@ export const createLocalStores = (engine: StorageEngine): LocalStores => ({
   chats: new ChatRepo(engine),
   miniApps: new MiniAppRepo(engine),
   docs: new DocRepo(engine),
+  memories: new MemoryRepo(engine),
 })
 
 

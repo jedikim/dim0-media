@@ -17,6 +17,7 @@ import { WelcomeMessage } from './welcome-message'
 import { StarterPromptPills } from './starter-prompts'
 import { MessageBoardContextChoiceMenu } from './input-settings/message-board-context'
 import { SettingsButton } from '@/features/agent/settings/settings-button'
+import { MemoryButton } from './memory-button'
 import { useIsBoardCreationLimited, FREE_PLAN_BOARD_LIMIT_TOOLTIP } from '@/features/board/lib/board-limit'
 
 // shadcn/ui
@@ -86,6 +87,7 @@ export const InputBar = ({
 }: InputBarProps) => {
   const { local } = useChat()
   const chatId = useActiveChatId()
+  const boardId = useBoardAppStore((s) => s.boardId)
 
   const userPlan = useAppStore((state) => state.userPlan)
 
@@ -241,6 +243,7 @@ export const InputBar = ({
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-1">
           <SettingsButton />
+          {local && boardId && <MemoryButton boardId={boardId} />}
           {!local && enableSelectionContext && <MessageBoardContextChoiceMenu />}
         </div>
 

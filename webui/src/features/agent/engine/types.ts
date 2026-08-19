@@ -9,6 +9,7 @@
 import { z } from "zod"
 import type { CanvasStore } from "@canvas-harness/core"
 import type { BoardRegistry } from "@/features/board/persist/local/board-registry"
+import type { MemoryRepo } from "@/features/board/persist/local/memory-repo"
 import type { LocalSearchIndex } from "@/features/board/search/local-index"
 
 
@@ -87,8 +88,12 @@ export type ToolContext = {
    * than relying on a post-hoc rescope.
    */
   rootId?: string | null
+  /** The board this run acts on — memory tools bind board-scoped writes to it. */
+  boardId?: string
   search?: LocalSearchIndex
   registry?: BoardRegistry
+  /** Durable agent memory (board + global facts); absent in tests/headless. */
+  memory?: MemoryRepo
   /**
    * Optional gate for side-effecting / off-board tools (network egress, code
    * execution). The loop calls it before running such a tool; the decision is

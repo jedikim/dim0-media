@@ -7,6 +7,8 @@ import { setBoardThemeMode } from "@/features/board/harness/theme/theme-mode-ref
 import { LocalSearchIndex } from "@/features/board/search/local-index"
 import type { BoardRegistry } from "@/features/board/persist/local/board-registry"
 import type { ToolContext } from "./types"
+import { InMemoryEngine } from "@/features/board/persist/local/in-memory-engine"
+import { MemoryRepo } from "@/features/board/persist/local/memory-repo"
 import {
   createNote,
   updateNote,
@@ -16,6 +18,10 @@ import {
   editNote,
   searchNotes,
   listBoards,
+  saveMemory,
+  updateMemory,
+  deleteMemory,
+  recallMemory,
 } from "./tools"
 
 
@@ -432,5 +438,102 @@ describe("defineTool argument validation", () => {
   it("rejects a missing required argument", async () => {
     const res = (await linkNotes.run({ sourceId: "a" }, ctx)) as { error?: string }
     expect(res.error).toMatch(/invalid arguments/)
+  })
+})
+
+
+describe("memory tools", () => {
+  let memory: MemoryRepo
+  let ctx: ToolContext
+
+
+  beforeEach(() => {
+    memory = new MemoryRepo(new InMemoryEngine())
+    ctx = { boardId: "board-1", memory } as unknown as ToolContext
+  })
+
+
+  const save = (over: Record<string, unknown> = {}) =>
+    saveMemory.run({ scope: "board", kind: "project", title: "t", summary: "s", body: "a durable fact", ...over }, ctx)
+
+
+  it("saves a board memory bound to the context board (not a model-supplied one)", async () => {
+    const res = (await save({ body: "board fact" })) as { ok: boolean; id: string }
+    expect(res.ok).toBe(true)
+    const list = await memory.list("board", "board-1")
+    expect(list).toHaveLength(1)
+    expect(list[0].boardId).toBe("board-1")
+    expect(list[0].scope).toBe("board")
+  })
+
+
+  it("routes scope 'global' to the global bucket with boardId null", async () => {
+    await save({ scope: "global", body: "global fact" })
+    expect(await memory.list("board", "board-1")).toEqual([])
+    const global = await memory.list("global", null)
+    expect(global).toHaveLength(1)
+    expect(global[0].boardId).toBe(null)
+  })
+
+
+  it("refuses a board-scoped save when there is no board in context", async () => {
+    const noBoard = { memory } as unknown as ToolContext
+    const res = (await saveMemory.run({ scope: "board", kind: "project", title: "t", summary: "s", body: "x" }, noBoard)) as { error?: string }
+    expect(res.error).toMatch(/no board/)
+    expect(await memory.list("board", "board-1")).toEqual([])
+  })
+
+
+  it("surfaces the over-cap retry payload with current entries", async () => {
+    await save({ body: "x".repeat(3990) })
+    const res = (await save({ body: "y".repeat(100) })) as { ok: boolean; reason?: string; entries?: unknown[] }
+    expect(res.ok).toBe(false)
+    expect(res.reason).toBe("over_cap")
+    expect(res.entries).toHaveLength(1)
+  })
+
+
+  it("update and delete act on a saved id", async () => {
+    const { id } = (await save({ body: "first" })) as { id: string }
+    await updateMemory.run({ id, body: "revised" }, ctx)
+    expect((await memory.list("board", "board-1"))[0].body).toBe("revised")
+    await deleteMemory.run({ id }, ctx)
+    expect(await memory.list("board", "board-1")).toEqual([])
+  })
+
+
+  it("recall filters board ∪ global by a case-insensitive query", async () => {
+    await save({ body: "apples are red", title: "fruit" })
+    await save({ scope: "global", body: "bananas are yellow", title: "other" })
+    const res = (await recallMemory.run({ query: "BANANAS" }, ctx)) as { results: { title: string }[] }
+    expect(res.results.map((r) => r.title)).toEqual(["other"])
+  })
+
+
+  it("refuses to update or delete another board's memory via a surfaced id", async () => {
+    // A memory saved on board-2, then a board-1 turn tries to touch it by id.
+    const other = { boardId: "board-2", memory } as unknown as ToolContext
+    const { id } = (await saveMemory.run({ scope: "board", kind: "project", title: "t", summary: "s", body: "foreign" }, other)) as { id: string }
+    const upd = (await updateMemory.run({ id, body: "hijacked" }, ctx)) as { ok: boolean; error?: string }
+    const del = (await deleteMemory.run({ id }, ctx)) as { ok: boolean; error?: string }
+    expect(upd.ok).toBe(false)
+    expect(del.ok).toBe(false)
+    expect((await memory.list("board", "board-2"))[0].body).toBe("foreign") // untouched
+  })
+
+
+  it("still lets a board turn edit global memory (the user's own, cross-board)", async () => {
+    const { id } = (await save({ scope: "global", body: "global pref" })) as { id: string }
+    const res = (await updateMemory.run({ id, body: "revised pref" }, ctx)) as { ok: boolean }
+    expect(res.ok).toBe(true)
+    expect((await memory.list("global", null))[0].body).toBe("revised pref")
+  })
+
+
+  it("reports failure (not success) when updating/deleting an unknown id", async () => {
+    const upd = (await updateMemory.run({ id: "ghost", body: "x" }, ctx)) as { ok: boolean }
+    const del = (await deleteMemory.run({ id: "ghost" }, ctx)) as { ok: boolean }
+    expect(upd.ok).toBe(false)
+    expect(del.ok).toBe(false)
   })
 })

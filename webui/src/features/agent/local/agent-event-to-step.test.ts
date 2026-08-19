@@ -274,6 +274,32 @@ describe("stepsFromEvents", () => {
   })
 
 
+  it("renders a save_memory call as a readable memory step (not raw JSON)", () => {
+    const steps = stepsFromEvents(
+      [
+        { type: "tool_start", toolName: "save_memory", args: { scope: "board", title: "Prefers dark mode" } },
+        { type: "tool_result", toolName: "save_memory", result: { ok: true, id: "m1", title: "Prefers dark mode" } },
+      ],
+      "b",
+    )
+    const step = steps[0]
+    expect(step.type === "tool_call" && step.output).toBe("Saved to memory: Prefers dark mode")
+  })
+
+
+  it("surfaces the over-cap message on a rejected save_memory", () => {
+    const steps = stepsFromEvents(
+      [
+        { type: "tool_start", toolName: "save_memory", args: { title: "x" } },
+        { type: "tool_result", toolName: "save_memory", result: { ok: false, reason: "over_cap", message: "Memory is full for this scope. Delete or merge an entry below, then retry." } },
+      ],
+      "b",
+    )
+    const step = steps[0]
+    expect(step.type === "tool_call" && step.output).toMatch(/Memory is full/)
+  })
+
+
   it("latestAssistantText ignores reasoning (answer body only)", () => {
     expect(
       latestAssistantText([

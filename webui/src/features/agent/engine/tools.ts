@@ -29,8 +29,9 @@ import { createDefaultLinkStyle, createDefaultStyle } from "@/features/board/typ
 import { beneathBorderOrigin } from "@/features/board/harness/agent/beneath-border"
 import { validateMiniAppSource } from "@/features/mini-app/validate"
 import { defineTool } from "./types"
-import type { Tool } from "./types"
+import type { Tool, ToolContext } from "./types"
 import { estimateNoteSize } from "./note-size"
+import type { MemoryKind, MemoryScope } from "@/features/board/persist/local/idb"
 
 
 /**
@@ -403,6 +404,145 @@ export const listBoards = defineTool({
     return { boards: boards.map((b) => ({ id: b.id, title: b.title })) }
   },
 })
+
+
+// ── Memory tools ──────────────────────────────────────────────────────────────
+// Durable facts the agent saves and re-reads across turns/sessions. `scope` +
+// `boardId` are bound from context, NEVER from the model — it passes only scope +
+// content, so a board turn can't write into another board or forge a global fact.
+
+const MEMORY_KIND = z.enum(["user", "feedback", "project", "reference"])
+const MEMORY_SCOPE = z.enum(["board", "global"])
+
+
+/** Resolve the boardId a scoped write targets (null for global, ctx-bound for board). */
+const scopeBoardId = (scope: MemoryScope, ctx: ToolContext): string | null =>
+  scope === "board" ? (ctx.boardId ?? null) : null
+
+
+/** The model-facing over-cap payload: the message + the entries to consolidate. */
+const overCapPayload = (entries: { id: string; title: string; summary: string }[]) => ({
+  ok: false as const,
+  reason: "over_cap" as const,
+  message: "Memory is full for this scope. Delete or merge an entry below, then retry.",
+  entries: entries.map((r) => ({ id: r.id, title: r.title, summary: r.summary })),
+})
+
+
+/** At most this many records come back from a single recall (bounds context cost). */
+const RECALL_MAX = 25
+
+
+/**
+ * Fetch a memory the current turn is allowed to edit/delete: it must exist, be
+ * live, and — if board-scoped — belong to THIS board. Blocks a board turn from
+ * mutating another board's memory via a surfaced/guessed id (global is the user's
+ * own and stays editable from any of their boards).
+ */
+const editableMemory = async (id: string, ctx: ToolContext) => {
+  const rec = await ctx.memory?.get(id)
+  if (!rec || rec.deleted) return { error: "no such memory" as const }
+  if (rec.scope === "board" && rec.boardId !== (ctx.boardId ?? null)) return { error: "that memory belongs to another board" as const }
+  return { rec }
+}
+
+
+export const saveMemory = defineTool({
+  name: "save_memory",
+  description:
+    "Save a durable fact so you remember it in later turns and sessions. Use for stable user" +
+    " preferences, decisions, or what a board is about. SKIP anything derivable from the board," +
+    " trivial, ephemeral, or your own mid-turn scratch work. Scope 'board' = about this board;" +
+    " 'global' = about the user across boards. Over the cap, the save is rejected with current" +
+    " entries — consolidate (update/delete) and retry.",
+  parameters: z.object({
+    scope: MEMORY_SCOPE,
+    kind: MEMORY_KIND.describe("user = who they are; feedback = how to work; project = what this is about; reference = a pointer."),
+    title: z.string().describe("Short slug naming the fact."),
+    summary: z.string().describe("ONE line — the retrieval key shown in the always-on index."),
+    body: z.string().describe("The fact. For feedback/project, add **Why:** and **How to apply:** lines."),
+  }),
+  run: async ({ scope, kind, title, summary, body }, ctx) => {
+    if (!ctx.memory) return { error: "memory unavailable" }
+    if (scope === "board" && !ctx.boardId) return { error: "no board in context for a board-scoped memory" }
+    const res = await ctx.memory.add({
+      scope,
+      boardId: scopeBoardId(scope, ctx),
+      kind: kind as MemoryKind,
+      title,
+      summary,
+      body,
+      id: crypto.randomUUID(),
+      now: Date.now(),
+    })
+    if (!res.ok) return overCapPayload(res.entries)
+    return { ok: true, id: res.record.id, scope, title }
+  },
+})
+
+
+export const updateMemory = defineTool({
+  name: "update_memory",
+  description: "Revise a saved memory by id (from the memory index or a recall). Use to consolidate or correct a fact.",
+  parameters: z.object({
+    id: z.string(),
+    title: z.string().optional(),
+    summary: z.string().optional(),
+    body: z.string().optional(),
+    kind: MEMORY_KIND.optional(),
+  }),
+  run: async ({ id, title, summary, body, kind }, ctx) => {
+    if (!ctx.memory) return { error: "memory unavailable" }
+    const owned = await editableMemory(id, ctx)
+    if ("error" in owned) return { ok: false, error: owned.error }
+    const res = await ctx.memory.update(id, { title, summary, body, kind: kind as MemoryKind | undefined }, Date.now())
+    if (!res.ok) return res.reason === "over_cap" ? overCapPayload(res.entries) : { ok: false, error: "no such memory" }
+    return { ok: true, id }
+  },
+})
+
+
+export const deleteMemory = defineTool({
+  name: "delete_memory",
+  description: "Delete a saved memory by id (from the memory index or a recall). Use to drop a stale or wrong fact.",
+  parameters: z.object({ id: z.string() }),
+  run: async ({ id }, ctx) => {
+    if (!ctx.memory) return { error: "memory unavailable" }
+    const owned = await editableMemory(id, ctx)
+    if ("error" in owned) return { ok: false, error: owned.error }
+    const removed = await ctx.memory.remove(id, Date.now())
+    return removed ? { ok: true, id } : { ok: false, error: "no such memory" }
+  },
+})
+
+
+export const recallMemory = defineTool({
+  name: "recall_memory",
+  description:
+    "Look up saved memories. The board + global index is already in your prompt, so recall is only" +
+    " needed for a targeted lookup or when the set is large. Omit scope to search both.",
+  parameters: z.object({
+    scope: MEMORY_SCOPE.optional(),
+    query: z.string().optional().describe("Case-insensitive substring over title/summary/body; omit to list all."),
+  }),
+  run: async ({ scope, query }, ctx) => {
+    if (!ctx.memory) return { results: [] }
+    const scopes: MemoryScope[] = scope ? [scope] : ["board", "global"]
+    const q = query?.trim().toLowerCase()
+    const records = (
+      await Promise.all(scopes.map((s) => ctx.memory!.list(s, s === "board" ? (ctx.boardId ?? null) : null)))
+    ).flat()
+    const matched = q ? records.filter((r) => `${r.title} ${r.summary} ${r.body}`.toLowerCase().includes(q)) : records
+    const hits = matched.slice(0, RECALL_MAX)
+    return {
+      results: hits.map((r) => ({ id: r.id, scope: r.scope, kind: r.kind, title: r.title, summary: r.summary, body: r.body })),
+      truncated: matched.length > RECALL_MAX,
+    }
+  },
+})
+
+
+export const memoryTools: Tool[] = [saveMemory, updateMemory, deleteMemory, recallMemory]
 
 
 export const localTools: Tool[] = [createNote, updateNote, linkNotes, searchNotes, listBoards]

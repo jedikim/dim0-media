@@ -12,7 +12,7 @@ import { postProcessUrlCitations } from "@/features/agent/utils/citations"
 import { isOverQuotaError } from "@/features/agent/engine/services/run"
 import { createFlushGate } from "@/features/agent/utils/stream/throttle"
 import { useIsSignedIn } from "@/lib/auth"
-import { agentBuildTools, searchNotes } from "@/features/agent/engine/tools"
+import { agentBuildTools, memoryTools, searchNotes } from "@/features/agent/engine/tools"
 import { skillTools } from "@/features/agent/engine/skills"
 import { getSearchIndexRef } from "@/features/board/search/search-index-ref"
 import { getDocIndexRef } from "@/features/board/search/doc-index-ref"
@@ -48,8 +48,8 @@ type LocalSubmitOptions = {
 }
 
 
-// Note-building tools + full-text search + on-demand skill loaders.
-const AGENT_TOOLS = [...agentBuildTools, searchNotes, ...skillTools]
+// Note-building tools + full-text search + durable memory + on-demand skill loaders.
+const AGENT_TOOLS = [...agentBuildTools, searchNotes, ...memoryTools, ...skillTools]
 
 
 let counter = 0
@@ -81,6 +81,32 @@ const buildBoardBlock = async (store: CanvasStore, rootId: string | null, boardI
     return renderBoardSnapshot(snapshot, { title: meta?.title ?? "Untitled board" })
   } catch (e) {
     agentLog.error("buildBoardBlock", e)
+    return ""
+  }
+}
+
+
+/**
+ * Assemble the always-on memory index (board ∪ global) for the system prompt: one
+ * `id · [kind] title — summary` line per saved fact, so the agent recalls durable
+ * context without a tool call. Fenced by the caller as data, not instructions.
+ * Degrades to an empty block on any storage hiccup — never aborts the turn.
+ */
+const buildMemoryBlock = async (boardId: string): Promise<string> => {
+  try {
+    const { memories } = await getLocalStores()
+    const [board, global] = await Promise.all([memories.list("board", boardId), memories.list("global", null)])
+    // Memory text is model-written and could carry a forged `</memory>` to break
+    // the data fence and re-inject as instructions. Neutralize the fence tokens
+    // and flatten newlines so one record stays one line.
+    const clean = (s: string) => s.replace(/<\/?memory>/gi, "").replace(/\s+/g, " ").trim()
+    const line = (r: { id: string; kind: string; title: string; summary: string }) => `- ${r.id} · [${r.kind}] ${clean(r.title)} — ${clean(r.summary)}`
+    const sections: string[] = []
+    if (board.length > 0) sections.push(`Board:\n${board.map(line).join("\n")}`)
+    if (global.length > 0) sections.push(`Global:\n${global.map(line).join("\n")}`)
+    return sections.join("\n\n")
+  } catch (e) {
+    agentLog.error("buildMemoryBlock", e)
     return ""
   }
 }
@@ -227,6 +253,12 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
         // Deterministic board awareness (no LLM), injected as a standing section.
         const boardBlock = await buildBoardBlock(store, rootId, boardId)
         const systemWithBoard = boardBlock ? `${system}\n\n## BOARD\n${boardBlock}` : system
+        // Always-on durable memory (board ∪ global), fenced as data — it holds
+        // model-written text that could carry injected instructions.
+        const memoryBlock = await buildMemoryBlock(boardId)
+        const systemWithMemory = memoryBlock
+          ? `${systemWithBoard}\n\n## MEMORY\n<memory>\n${memoryBlock}\n</memory>`
+          : systemWithBoard
         const search = getSearchIndexRef() ?? undefined
         // External services are managed (signed in); include each tool only when
         // resolvable, so a signed-out user isn't offered an unavailable capability.
@@ -256,8 +288,8 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
         // When documents are attached, steer grounding + citation-by-title (titles
         // are unique per board, so a title names exactly one document).
         const systemWithDocs = hasDocs
-          ? `${systemWithBoard}\n\nThis board has uploaded documents. Use \`doc_search(query)\` — full-text over their contents — and for anything they could answer, call it FIRST, before answering from your own knowledge; ground the answer in the returned passages and cite each document by its exact title. (\`search_notes\` covers the board's own notes.)`
-          : systemWithBoard
+          ? `${systemWithMemory}\n\nThis board has uploaded documents. Use \`doc_search(query)\` — full-text over their contents — and for anything they could answer, call it FIRST, before answering from your own knowledge; ground the answer in the returned passages and cite each document by its exact title. (\`search_notes\` covers the board's own notes.)`
+          : systemWithMemory
         const userMessageForAgent = wrapWithMessageContext(prompt, messageContext)
         // Gate off-board tools (network/code) behind a user confirmation, so a
         // prompt-injected tool call can't silently exfiltrate or run code. A
@@ -270,7 +302,8 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
             useToolTrustStore.getState().isAutoAllowed,
             () => useToolConfirm.getState().request(req),
           )
-        for await (const ev of runAgent({ system: systemWithDocs, userMessage: userMessageForAgent, history, tools, llm, ctx: { store, rootId, search, confirmTool } })) {
+        const memory = (await getLocalStores()).memories
+        for await (const ev of runAgent({ system: systemWithDocs, userMessage: userMessageForAgent, history, tools, llm, ctx: { store, rootId, boardId, search, memory, confirmTool } })) {
           // Streaming yields cumulative assistant_text / reasoning per token —
           // replace the previous snapshot in place instead of appending one event
           // per token. (assistant_text renders live; reasoning is shown at turn-end.)

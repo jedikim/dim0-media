@@ -100,6 +100,15 @@ const toOutput = (name: string, args: unknown, result: unknown, boardId: string)
   if (name.startsWith("learn_generate")) {
     return `Loaded ${name.replace("learn_generate_", "").replace(/_/g, " ")} guidance`
   }
+  if (name === "save_memory" || name === "update_memory" || name === "delete_memory") {
+    // A readable one-liner for the tool card, instead of raw JSON. Over-cap and
+    // unavailable cases surface their own message so the model's retry reads clearly.
+    if (field(result, "reason") === "over_cap") return asStr(field(result, "message")) ?? "Memory is full — consolidate and retry"
+    if (field(result, "error")) return asStr(field(result, "error")) ?? "Memory unavailable"
+    const verb = name === "save_memory" ? "Saved to" : name === "update_memory" ? "Updated" : "Removed from"
+    const title = asStr(field(args, "title"))
+    return `${verb} memory${title ? `: ${title}` : ""}`
+  }
   return JSON.stringify(result)
 }
 

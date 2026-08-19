@@ -25,6 +25,7 @@ export type Collection =
   | "snapshot_meta"
   | "documents"
   | "chunks"
+  | "memories"
 
 
 /** A primary or index key: a scalar, or a compound (array) key. */

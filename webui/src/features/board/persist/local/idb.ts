@@ -66,6 +66,39 @@ export type ChunkRecord = {
 }
 
 
+/** Scope of an agent memory: a fact about one board, or a per-user global fact. */
+export type MemoryScope = "board" | "global"
+
+
+/** Closed taxonomy (from CC/Hermes); `project` ≈ "what this board is about" at board scope. */
+export type MemoryKind = "user" | "feedback" | "project" | "reference"
+
+
+/**
+ * A durable fact the agent saved. `bucket` collapses (scope, boardId) into one
+ * indexable string (`board:<id>` | `global`) so both scopes list via one index.
+ * `hash` (of the normalized body) drives deterministic dedup; `deleted` is a
+ * soft-delete tombstone. `dirty`/`serverRev` are forward-compat for sync (Phase 7,
+ * unused locally).
+ */
+export type MemoryRecord = {
+  id: string
+  scope: MemoryScope
+  boardId: string | null
+  bucket: string
+  kind: MemoryKind
+  title: string
+  summary: string
+  body: string
+  hash: string
+  createdAt: number
+  updatedAt: number
+  deleted?: boolean
+  dirty: boolean
+  serverRev: number | null
+}
+
+
 interface Dim0DB extends DBSchema {
   snapshots: { key: string; value: SnapshotRecord }
   oplog: { key: [string, number]; value: OplogRecord }
@@ -85,6 +118,8 @@ interface Dim0DB extends DBSchema {
   // Per-board uploaded documents + their retrieval chunks (document Q&A).
   documents: { key: string; value: DocumentRecord; indexes: { "by-board": string } }
   chunks: { key: string; value: ChunkRecord; indexes: { "by-board": string; "by-doc": string } }
+  // Agent memory: board + global facts, listed per (scope, boardId) via `bucket`.
+  memories: { key: string; value: MemoryRecord; indexes: { "by-bucket": string } }
 }
 
 
@@ -92,7 +127,7 @@ export type Dim0Database = IDBPDatabase<Dim0DB>
 
 
 const DB_NAME = "dim0"
-const DB_VERSION = 7
+const DB_VERSION = 8
 
 
 // Minimal loose shapes for the upgrade loop (see the cast note in `upgrade`).
