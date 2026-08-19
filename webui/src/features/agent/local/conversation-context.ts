@@ -6,7 +6,8 @@
  */
 import type { LlmClient } from "@/features/agent/engine/types"
 import { getLocalStores } from "@/features/local-stores"
-import type { ChatMessage } from "@/features/agent/types/chat"
+import type { ChatRepo } from "@/features/agent/store/chat-repo"
+import type { ChatMessage, LocalChat } from "@/features/agent/types/chat"
 
 
 /** Run the refresh at least every N turns (secondary floor under the token gate). */
@@ -55,6 +56,43 @@ export const shouldRefreshConversation = (
 
 
 /**
+ * Fold every turn since the last summarized index into the rolling summary and
+ * persist it; returns the summary (or the existing/`null` context when there's
+ * nothing new or the model declines). Shared by the gated refresh and the forced
+ * (compaction) path — both fetch `chat` once and pass it in.
+ */
+const foldInto = async (
+  chats: ChatRepo,
+  chatUid: string,
+  chat: LocalChat,
+  messages: ChatMessage[],
+  llm: LlmClient,
+  turns: number,
+  tokens: number,
+): Promise<string | null> => {
+  // Fold every turn since the last summarized index — nothing between refreshes is
+  // skipped, and the prior summary carries everything before it. Clamp the index: a
+  // mid-thread delete can leave `contextTurnAt` past the current length.
+  const sinceIndex = Math.min(chat.contextTurnAt ?? 0, messages.length)
+  const newTurns = turnsSince(messages, sinceIndex)
+  if (!newTurns) return chat.context ?? null // nothing new to fold (e.g. after a deletion)
+  const input = `Summary so far:\n${chat.context ?? "(none yet)"}\n\nNew turns:\n${newTurns}`
+  const turn = await llm.complete(
+    [
+      { role: "system", content: CONV_CTX_PROMPT },
+      { role: "user", content: input },
+    ],
+    [],
+  )
+  if (turn.kind !== "text") return chat.context ?? null
+  const summary = turn.text.trim()
+  if (!summary) return chat.context ?? null
+  await chats.setChatContext(chatUid, summary, { turnAt: turns, tokenAt: tokens })
+  return summary
+}
+
+
+/**
  * Refresh the chat's rolling summary IF it has grown enough since the last derive.
  * Best-effort: any failure (no chat yet, model error) leaves the last-good context.
  * `llm` is injectable for tests.
@@ -68,29 +106,33 @@ export const maybeRefreshConversationContext = async (
   try {
     const { chats } = await getLocalStores()
     const chat = await chats.getChat(chatUid)
-    if (!chat) return
-    const turns = messages.length
     const tokens = transcriptTokens(messages)
-    if (!shouldRefreshConversation(chat, turns, tokens)) return
-
-    // Fold every turn since the last summarized index — nothing between refreshes
-    // is skipped, and the prior summary carries everything before it. Clamp the
-    // index: a mid-thread delete can leave `contextTurnAt` past the current length.
-    const sinceIndex = Math.min(chat.contextTurnAt ?? 0, messages.length)
-    const newTurns = turnsSince(messages, sinceIndex)
-    if (!newTurns) return // nothing new to fold (e.g. after a deletion)
-    const input = `Summary so far:\n${chat.context ?? "(none yet)"}\n\nNew turns:\n${newTurns}`
-    const turn = await llm.complete(
-      [
-        { role: "system", content: CONV_CTX_PROMPT },
-        { role: "user", content: input },
-      ],
-      [],
-    )
-    if (turn.kind !== "text") return
-    const summary = turn.text.trim()
-    if (summary) await chats.setChatContext(chatUid, summary, { turnAt: turns, tokenAt: tokens })
+    if (!chat || !shouldRefreshConversation(chat, messages.length, tokens)) return
+    await foldInto(chats, chatUid, chat, messages, llm, messages.length, tokens)
   } catch {
     // best-effort — never disrupt the turn
+  }
+}
+
+
+/**
+ * Fold the thread into its rolling summary NOW, gate bypassed — persist and return
+ * it. Used by compaction to ensure the summary covers everything before the tail it
+ * trims (folding any turns since the last refresh; no LLM when already current).
+ * Best-effort: returns the existing/`null` context on failure, never throws.
+ */
+export const summarizeConversation = async (
+  chatUid: string,
+  messages: ChatMessage[],
+  llm: LlmClient | null,
+): Promise<string | null> => {
+  if (!llm || messages.length === 0) return null
+  try {
+    const { chats } = await getLocalStores()
+    const chat = await chats.getChat(chatUid)
+    if (!chat) return null
+    return await foldInto(chats, chatUid, chat, messages, llm, messages.length, transcriptTokens(messages))
+  } catch {
+    return null // best-effort — never disrupt the turn
   }
 }

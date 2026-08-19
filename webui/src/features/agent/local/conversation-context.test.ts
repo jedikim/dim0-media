@@ -8,6 +8,7 @@ import {
   estimateTokens,
   maybeRefreshConversationContext,
   shouldRefreshConversation,
+  summarizeConversation,
   turnsSince,
 } from "./conversation-context"
 
@@ -104,5 +105,46 @@ describe("maybeRefreshConversationContext", () => {
     await seedChat("c1", manyTurns())
     await maybeRefreshConversationContext("c1", manyTurns(), null)
     expect(await contextOf("c1")).toBeUndefined()
+  })
+})
+
+
+describe("summarizeConversation (forced, for compaction)", () => {
+  const seedChat = async (chatUid: string, messages: ChatMessage[]) => {
+    const { chats } = await getLocalStores()
+    await chats.saveTranscript(chatUid, "board-1", messages)
+  }
+
+
+  it("summarizes even a SHORT thread that the gate would skip, and persists it", async () => {
+    await seedChat("c1", [msg("user", "hi"), msg("assistant", "hello")])
+    const llm = new ScriptedLlm([{ kind: "text", text: "User greeted the assistant." }])
+    const summary = await summarizeConversation("c1", [msg("user", "hi"), msg("assistant", "hello")], llm)
+    expect(summary).toBe("User greeted the assistant.")
+    const { chats } = await getLocalStores()
+    expect((await chats.getChat("c1"))?.context).toBe("User greeted the assistant.")
+  })
+
+
+  it("returns null with a null client (best-effort, no throw)", async () => {
+    await seedChat("c1", [msg("user", "hi")])
+    expect(await summarizeConversation("c1", [msg("user", "hi")], null)).toBeNull()
+  })
+
+
+  it("returns null when a never-summarized thread yields no summary (compaction then won't trim)", async () => {
+    await seedChat("c1", [msg("user", "hi"), msg("assistant", "yo")])
+    const llm = new ScriptedLlm([{ kind: "text", text: "   " }]) // whitespace → empty summary
+    expect(await summarizeConversation("c1", [msg("user", "hi"), msg("assistant", "yo")], llm)).toBeNull()
+  })
+
+
+  it("returns the existing summary (non-null) when there's nothing new to fold", async () => {
+    await seedChat("c1", [msg("user", "hi"), msg("assistant", "yo")])
+    const { chats } = await getLocalStores()
+    await chats.setChatContext("c1", "existing summary", { turnAt: 2, tokenAt: 10 })
+    // contextTurnAt (2) == messages.length (2) → no new turns → returns existing, no LLM.
+    const llm = new ScriptedLlm([{ kind: "text", text: "SHOULD NOT RUN" }])
+    expect(await summarizeConversation("c1", [msg("user", "hi"), msg("assistant", "yo")], llm)).toBe("existing summary")
   })
 })
