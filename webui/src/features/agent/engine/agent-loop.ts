@@ -19,6 +19,24 @@ export const DEFAULT_MAX_TURNS = 30
 
 
 /**
+ * Cap on a single tool result fed back to the model within a turn. Large results
+ * (`fetch` / `web_search` / `doc_search` full text) would otherwise ride in
+ * context for every remaining round of the turn. The head is kept (ids, first
+ * results); small results (note-tool `{id}`, failures) are untouched.
+ */
+export const MAX_TOOL_RESULT_CHARS = 8000
+
+
+/** Serialize a tool result for the model, truncating the tail past the cap with a
+ *  marker that tells the model how to get more. Deterministic → byte-stable re-send. */
+const serializeToolResult = (output: unknown): string => {
+  const s = JSON.stringify(output) ?? "null"
+  if (s.length <= MAX_TOOL_RESULT_CHARS) return s
+  return `${s.slice(0, MAX_TOOL_RESULT_CHARS)}\n…[truncated ${s.length - MAX_TOOL_RESULT_CHARS} chars — call the tool again with a narrower query for more]`
+}
+
+
+/**
  * Tools that reach OFF the board — network egress (`fetch`, `web_search`) and
  * code execution (`code_interpreter`). When a confirmer is wired (see `ToolContext.confirmTool`)
  * these require an explicit user OK before running, so a prompt-injected tool
@@ -210,7 +228,7 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
       const output = await executeToolCall(call.name, args, opts.tools, opts.ctx, gate)
       agentLog.tool(call.name, args, output)
       yield { type: "tool_result", toolName: call.name, result: output }
-      messages.push({ role: "tool", toolCallId: call.id, content: JSON.stringify(output) })
+      messages.push({ role: "tool", toolCallId: call.id, content: serializeToolResult(output) })
     }
   }
 
