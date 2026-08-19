@@ -15,6 +15,7 @@ import json
 import os
 import tempfile
 
+from collections.abc import Iterator
 from typing import Annotated, Any, Literal
 
 import litellm
@@ -277,6 +278,32 @@ def _accumulate_tool_call(slots: dict[int, dict[str, Any]], tc: Any) -> None:
         slot["arguments"] += fn.arguments
 
 
+def _delta_lines(delta: Any, slots: dict[int, dict[str, Any]], announced: set[int]) -> Iterator[str]:
+    """Yield the NDJSON line(s) one streamed delta produces (content, reasoning, tool_start).
+
+    A tool_start is emitted the instant a tool's name is first known. Reasoning is
+    read via getattr: LiteLLM normalizes every provider's reasoning into
+    `reasoning_content` (mapping `delta.reasoning` too) but DELETES the attribute
+    when absent, so attribute access would raise on ordinary deltas. Display-only —
+    reasoning is kept out of the assembled answer content.
+    """
+    piece = getattr(delta, "content", None)
+    if piece:
+        yield json.dumps({"type": "delta", "text": piece}) + "\n"
+    reasoning = getattr(delta, "reasoning_content", None)
+    if reasoning:
+        yield json.dumps({"type": "reasoning", "text": reasoning}) + "\n"
+    for tc in getattr(delta, "tool_calls", None) or []:
+        idx = getattr(tc, "index", 0)
+        _accumulate_tool_call(slots, tc)
+        # Announce the tool the instant its name is known — before its (possibly
+        # long) arguments finish — so the client shows it now.
+        slot = slots.get(idx)
+        if slot and slot.get("name") and idx not in announced:
+            announced.add(idx)
+            yield json.dumps({"type": "tool_start", "id": slot["id"], "name": slot["name"]}) + "\n"
+
+
 @router.post("/llm/stream/", include_in_schema=False)
 @router.post("/llm/stream")
 async def ai_llm_stream(
@@ -287,10 +314,10 @@ async def ai_llm_stream(
 ):
     """Stream one model turn as NDJSON lines.
 
-    `{type:"delta",text}` per token, `{type:"tool_start",id,name}` the moment a
-    tool call's name is known (before its args finish), then `{type:"final",
-    message}`. Tier/model resolution (and any 403/503) runs before streaming, so
-    errors are plain HTTP.
+    `{type:"delta",text}` per token, `{type:"reasoning",text}` per reasoning token
+    (thinking models), `{type:"tool_start",id,name}` the moment a tool call's name
+    is known (before its args finish), then `{type:"final",message}`. Tier/model
+    resolution (and any 403/503) runs before streaming, so errors are plain HTTP.
     """
     entitlement = await resolve_entitlement_context(request, user_id)
     allowed_tiers = resolve_allowed_model_tiers(entitlement.plan)
@@ -318,19 +345,9 @@ async def ai_llm_stream(
             delta = choices[0].delta if choices else None
             if delta is None:
                 continue
-            piece = getattr(delta, "content", None)
-            if piece:
-                content += piece
-                yield json.dumps({"type": "delta", "text": piece}) + "\n"
-            for tc in getattr(delta, "tool_calls", None) or []:
-                idx = getattr(tc, "index", 0)
-                _accumulate_tool_call(slots, tc)
-                # Announce the tool the instant its name is known — before its
-                # (possibly long) arguments finish — so the client shows it now.
-                slot = slots.get(idx)
-                if slot and slot.get("name") and idx not in announced:
-                    announced.add(idx)
-                    yield json.dumps({"type": "tool_start", "id": slot["id"], "name": slot["name"]}) + "\n"
+            content += getattr(delta, "content", None) or ""
+            for line in _delta_lines(delta, slots, announced):
+                yield line
 
         message: dict[str, Any] = {"role": "assistant", "content": content or None}
         if slots:

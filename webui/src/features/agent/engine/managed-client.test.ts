@@ -100,6 +100,22 @@ describe("managedLlmClient.completeStream", () => {
     ])
   })
 
+  it("maps NDJSON reasoning lines to reasoning events, kept separate from the answer", async () => {
+    const streamPost = streamOf(
+      { type: "reasoning", text: "Let me " },
+      { type: "reasoning", text: "think." },
+      { type: "delta", text: "Answer" },
+      { type: "final", message: { role: "assistant", content: "Answer", refusal: null } },
+    )
+    const events = await drain(managedLlmClient("auto", { streamPost }).completeStream!(messages, []))
+    expect(events).toEqual([
+      { kind: "reasoning", text: "Let me " },
+      { kind: "reasoning", text: "think." },
+      { kind: "delta", text: "Answer" },
+      { kind: "final", turn: { kind: "text", text: "Answer" } },
+    ])
+  })
+
   it("maps an early tool_start line to a tool_start event", async () => {
     const streamPost = streamOf(
       { type: "tool_start", name: "write_note", id: "c1" },

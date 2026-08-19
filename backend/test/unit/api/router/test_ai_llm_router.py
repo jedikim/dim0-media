@@ -175,6 +175,11 @@ def _delta_chunk(content):
     return SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=content, tool_calls=None))])
 
 
+def _reasoning_chunk(text):
+    """Build a chunk carrying only a reasoning delta (thinking-model output)."""
+    return SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=None, tool_calls=None, reasoning_content=text))])
+
+
 def test_stream_emits_text_deltas_then_final_message(monkeypatch):
     """Streaming yields a delta line per token, then a final assembled message."""
     _install_stream_resolution(monkeypatch)
@@ -196,6 +201,48 @@ def test_stream_emits_text_deltas_then_final_message(monkeypatch):
     assert lines[1] == {"type": "delta", "text": "lo"}
     assert lines[-1]["type"] == "final"
     assert lines[-1]["message"]["content"] == "Hello"
+
+
+def test_stream_emits_reasoning_lines_separate_from_content(monkeypatch):
+    """Reasoning deltas surface as {type:"reasoning"} lines, kept out of the answer body."""
+    _install_stream_resolution(monkeypatch)
+
+    async def _gen():
+        yield _reasoning_chunk("Let me ")
+        yield _reasoning_chunk("think.")
+        yield _delta_chunk("Answer")
+
+    async def _acompletion(**kwargs):
+        return _gen()
+
+    monkeypatch.setattr(ai_module.litellm, "acompletion", _acompletion)
+
+    res = _client().post("/ai/llm/stream", json={"model": "auto", "messages": [{"role": "user", "content": "hi"}]})
+    lines = _lines(res)
+    assert lines[0] == {"type": "reasoning", "text": "Let me "}
+    assert lines[1] == {"type": "reasoning", "text": "think."}
+    assert {"type": "delta", "text": "Answer"} in lines
+    assert lines[-1]["message"]["content"] == "Answer"  # reasoning never folded into content
+
+
+def test_stream_ordinary_delta_emits_no_reasoning_line(monkeypatch):
+    """Guard the getattr read: a reasoning-less delta emits no reasoning line, no crash.
+
+    Mirrors litellm deleting the `reasoning_content` attribute when it is absent.
+    """
+    _install_stream_resolution(monkeypatch)
+
+    async def _gen():
+        yield _delta_chunk("hi")
+
+    async def _acompletion(**kwargs):
+        return _gen()
+
+    monkeypatch.setattr(ai_module.litellm, "acompletion", _acompletion)
+
+    res = _client().post("/ai/llm/stream", json={"model": "auto", "messages": [{"role": "user", "content": "hi"}]})
+    assert res.status_code == 200
+    assert all(line["type"] != "reasoning" for line in _lines(res))
 
 
 def test_stream_assembles_tool_call_fragments(monkeypatch):

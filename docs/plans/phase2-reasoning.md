@@ -89,12 +89,10 @@ bit; the model and UI are free.
 
 ## Phase 2b — Managed reasoning (cross-stack, follow-up)
 
-- `backend/topix/api/router/ai.py` (`/ai/llm/stream`): parse the provider's streamed reasoning delta
-  and emit a new NDJSON line `{ type: "reasoning", text }`.
-- `agent/engine/managed-client.ts`: add `reasoning` to `ManagedStreamLine`; in `completeStream`,
-  yield `{ kind: "reasoning", text }` for it.
-- Reuses 2a's frontend plumbing (types, agent-loop, consumer, stepsFromEvents already done).
-- ~60–100 LoC across Python + TS.
+The managed path forwards reasoning through the `ai.py` proxy, reusing all of 2a's frontend
+plumbing. Full plan (relay-projection insight, the verified litellm `reasoning_content` field + its
+delete-when-absent gotcha, file changes, tests) →
+[`phase2b-managed-reasoning.md`](./phase2b-managed-reasoning.md).
 
 ---
 
