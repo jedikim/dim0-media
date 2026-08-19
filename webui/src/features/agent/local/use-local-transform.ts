@@ -85,6 +85,9 @@ export function useLocalTransform() {
         llm,
         ctx,
       })) {
+        // The build-only transform inspects tool_result and never renders text;
+        // don't accumulate the cumulative reasoning token stream (pure bloat here).
+        if (ev.type === "reasoning") continue
         events.push(ev)
         if (
           ev.type === "tool_result" &&

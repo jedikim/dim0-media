@@ -74,4 +74,31 @@ describe("assembleStreamedTurn", () => {
       { kind: "final", turn: { kind: "text", text: "hi" } },
     ])
   })
+
+  it("captures the reasoning channel — DeepSeek `reasoning_content` and OpenRouter `reasoning`", async () => {
+    const reasoningContentChunk = (t: string) => ({ choices: [{ index: 0, finish_reason: null, delta: { reasoning_content: t } }] })
+    const reasoningChunk = (t: string) => ({ choices: [{ index: 0, finish_reason: null, delta: { reasoning: t } }] })
+    const events = await collect(chunksOf(reasoningContentChunk("Let me "), reasoningChunk("think."), textChunk("Answer")))
+    expect(events).toEqual([
+      { kind: "reasoning", text: "Let me " },
+      { kind: "reasoning", text: "think." },
+      { kind: "delta", text: "Answer" },
+      { kind: "final", turn: { kind: "text", text: "Answer" } },
+    ])
+  })
+
+  it("leaves a stream without a reasoning channel unchanged", async () => {
+    const events = await collect(chunksOf(textChunk("hi")))
+    expect(events.some((e) => e.kind === "reasoning")).toBe(false)
+  })
+
+  it("an empty reasoning_content does not mask a populated reasoning in the same delta", async () => {
+    const bothChunk = { choices: [{ index: 0, finish_reason: null, delta: { reasoning_content: "", reasoning: "real thought" } }] }
+    const events = await collect(chunksOf(bothChunk, textChunk("A")))
+    expect(events).toEqual([
+      { kind: "reasoning", text: "real thought" },
+      { kind: "delta", text: "A" },
+      { kind: "final", turn: { kind: "text", text: "A" } },
+    ])
+  })
 })

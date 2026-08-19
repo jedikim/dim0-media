@@ -154,6 +154,14 @@ export const stepsFromEvents = (events: AgentEvent[], boardId: string): Reasonin
       const last = steps[steps.length - 1]
       if (last && last.type === "reasoning_step") last.message = ev.text
       else steps.push({ type: "reasoning_step", id: `text-${seq++}`, reasoning: "", message: ev.text })
+    } else if (ev.type === "reasoning") {
+      // Reasoning/thinking (cumulative) fills the trailing reasoning_step's
+      // `reasoning` slot — the same step whose `message` holds the answer, so the
+      // UI's "Reasoning" expander sits above the reply. A run of tool calls splits
+      // it into pre-tool and post-tool reasoning steps (chain-of-thought order).
+      const last = steps[steps.length - 1]
+      if (last && last.type === "reasoning_step") last.reasoning = ev.text
+      else steps.push({ type: "reasoning_step", id: `reason-${seq++}`, reasoning: ev.text, message: "" })
     }
   }
   // Match the online path: fold text-like "tool" steps (raw_message / synthesizer

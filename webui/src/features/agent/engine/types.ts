@@ -60,6 +60,7 @@ export type LlmToolDef = {
  *  then the final turn. */
 export type LlmStreamEvent =
   | { kind: "delta"; text: string }
+  | { kind: "reasoning"; text: string }
   | { kind: "tool_start"; name: string; id?: string }
   | { kind: "final"; turn: LlmTurn }
 
@@ -141,4 +142,5 @@ export type AgentEvent =
   | { type: "tool_start"; toolName: string; args: unknown }
   | { type: "tool_result"; toolName: string; result: unknown }
   | { type: "assistant_text"; text: string }
+  | { type: "reasoning"; text: string }
   | { type: "done" }

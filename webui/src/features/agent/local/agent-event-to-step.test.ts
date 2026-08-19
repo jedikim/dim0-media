@@ -246,4 +246,40 @@ describe("stepsFromEvents", () => {
       ]),
     ).toBe("second")
   })
+
+
+  it("reasoning fills the same step whose message holds the answer", () => {
+    const events: AgentEvent[] = [
+      { type: "reasoning", text: "First I consider X." },
+      { type: "assistant_text", text: "The answer is X." },
+    ]
+    expect(stepsFromEvents(events, "b")).toEqual([
+      { type: "reasoning_step", id: expect.any(String), reasoning: "First I consider X.", message: "The answer is X." },
+    ])
+  })
+
+
+  it("splits reasoning around a tool call into pre-tool and post-tool steps", () => {
+    const events: AgentEvent[] = [
+      { type: "reasoning", text: "I should search." },
+      { type: "tool_start", toolName: "search_notes", args: { query: "x" } },
+      { type: "tool_result", toolName: "search_notes", result: { results: [] } },
+      { type: "reasoning", text: "Nothing found, I'll answer." },
+      { type: "assistant_text", text: "No matches." },
+    ]
+    const steps = stepsFromEvents(events, "b")
+    expect(steps.map((s) => s.type)).toEqual(["reasoning_step", "tool_call", "reasoning_step"])
+    expect(steps[0]).toMatchObject({ reasoning: "I should search.", message: "" })
+    expect(steps[2]).toMatchObject({ reasoning: "Nothing found, I'll answer.", message: "No matches." })
+  })
+
+
+  it("latestAssistantText ignores reasoning (answer body only)", () => {
+    expect(
+      latestAssistantText([
+        { type: "reasoning", text: "thinking…" },
+        { type: "assistant_text", text: "the answer" },
+      ]),
+    ).toBe("the answer")
+  })
 })

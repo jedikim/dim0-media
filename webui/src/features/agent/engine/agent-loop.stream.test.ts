@@ -61,4 +61,17 @@ describe("runAgent (streaming)", () => {
     expect(texts(evs).at(-1)).toBe("finished")
     expect(evs.at(-1)).toEqual({ type: "done" })
   })
+
+  it("accumulates reasoning deltas into cumulative reasoning events, separate from the answer", async () => {
+    const llm = streamingClient([[
+      { kind: "reasoning", text: "Let me " },
+      { kind: "reasoning", text: "think." },
+      { kind: "delta", text: "Answer" },
+      { kind: "final", turn: { kind: "text", text: "Answer" } },
+    ]])
+    const evs = await run(llm)
+    const reasoning = evs.flatMap((e) => (e.type === "reasoning" ? [e.text] : []))
+    expect(reasoning).toEqual(["Let me ", "Let me think."]) // cumulative, not per-fragment
+    expect(texts(evs).at(-1)).toBe("Answer") // reasoning never leaks into the answer body
+  })
 })

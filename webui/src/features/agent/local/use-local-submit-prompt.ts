@@ -271,10 +271,11 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
             () => useToolConfirm.getState().request(req),
           )
         for await (const ev of runAgent({ system: systemWithDocs, userMessage: userMessageForAgent, history, tools, llm, ctx: { store, rootId, search, confirmTool } })) {
-          // Streaming yields a cumulative assistant_text per token — replace the
-          // previous snapshot in place instead of appending one event per token.
+          // Streaming yields cumulative assistant_text / reasoning per token —
+          // replace the previous snapshot in place instead of appending one event
+          // per token. (assistant_text renders live; reasoning is shown at turn-end.)
           const prev = events[events.length - 1]
-          if (ev.type === "assistant_text" && prev?.type === "assistant_text") events[events.length - 1] = ev
+          if ((ev.type === "assistant_text" || ev.type === "reasoning") && prev?.type === ev.type) events[events.length - 1] = ev
           else events.push(ev)
           // Track notes CREATED this turn so we can arrange + recenter them. A
           // write_note that rewrote an existing note reports `created: false` —
@@ -288,7 +289,12 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
             createdNodeIds.push(String((ev.result as { id: unknown }).id))
           }
           const now = Date.now()
-          if (gate.shouldFlush(now, { force: ev.type !== "assistant_text" })) {
+          // Token streams (assistant_text AND reasoning) ride the ~10fps throttle;
+          // only structural events (tool start/result) force an immediate repaint.
+          // Forcing on every reasoning token would re-derive stepsFromEvents (O(n))
+          // per token — O(n^2) over a long chain-of-thought.
+          const isTokenStream = ev.type === "assistant_text" || ev.type === "reasoning"
+          if (gate.shouldFlush(now, { force: !isTokenStream })) {
             render(true)
             gate.markFlushed(now)
           }

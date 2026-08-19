@@ -167,11 +167,18 @@ export async function* runAgent(opts: RunAgentOptions): AsyncGenerator<AgentEven
     let result: LlmTurn
     if (opts.llm.completeStream) {
       let acc = ""
+      let reasoningAcc = ""
       let final: LlmTurn | null = null
       for await (const ev of opts.llm.completeStream(messages, defs)) {
         if (ev.kind === "delta") {
           acc += ev.text
           yield { type: "assistant_text", text: acc }
+        } else if (ev.kind === "reasoning") {
+          // Reasoning/thinking streams on its own channel; accumulate + emit
+          // cumulatively (like assistant_text). The chat UI gates the Reasoning
+          // expander on turn-end, so this fills it once the turn completes.
+          reasoningAcc += ev.text
+          yield { type: "reasoning", text: reasoningAcc }
         } else if (ev.kind === "tool_start") {
           // Early signal: show the tool the moment its name is known; args are
           // filled in when the call actually runs below.
