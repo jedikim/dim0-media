@@ -69,7 +69,39 @@ export class ChatRepo {
         id: chatUid,
         boardId,
         label: label ?? prev?.label,
+        // Carry the derived conversation context forward — this put REBUILDS the
+        // record, so any field not copied from `prev` is silently dropped.
+        context: prev?.context,
+        contextTurnAt: prev?.contextTurnAt,
+        contextTokenAt: prev?.contextTokenAt,
         createdAt: prev?.createdAt ?? now,
+        updatedAt: now,
+      })
+    })
+  }
+
+
+  /**
+   * Store the rolling conversation summary + its refresh gate (turn index + approx
+   * token count at derive time). No-op if the chat doesn't exist yet.
+   */
+  async setChatContext(
+    chatUid: string,
+    context: string,
+    gate: { turnAt: number; tokenAt: number },
+    now: number = Date.now(),
+  ): Promise<void> {
+    // Read-modify-write in ONE transaction so it serializes against the concurrent
+    // `saveTranscript` (also a chats RMW) — otherwise a next-turn save could read
+    // `prev` before this write lands and clobber the just-written summary.
+    await this.engine.tx(["chats"], async (t) => {
+      const prev = await t.get<LocalChat>("chats", chatUid)
+      if (!prev) return
+      await t.put<LocalChat>("chats", {
+        ...prev,
+        context,
+        contextTurnAt: gate.turnAt,
+        contextTokenAt: gate.tokenAt,
         updatedAt: now,
       })
     })

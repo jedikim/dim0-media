@@ -52,6 +52,12 @@ export interface LocalChat {
   id: string
   boardId: string
   label?: string
+  // Rolling thread summary (the compaction checkpoint, Phase 6) + its refresh
+  // gate: the turn index and approx token count at the last derive. Absent until
+  // the first refresh; a failed/mid-flight refresh keeps the last-good value.
+  context?: string
+  contextTurnAt?: number
+  contextTokenAt?: number
   createdAt: number
   updatedAt: number
   deletedAt?: number

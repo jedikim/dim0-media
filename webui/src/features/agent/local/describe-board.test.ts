@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest"
+import type { CanvasStore, Node, NodeId } from "@canvas-harness/core"
 import { resetIdb } from "@/test/canvas"
 import { ScriptedLlm } from "@/test/llm"
 import { BoardRegistry, newLocalBoard } from "@/features/board/persist/local/board-registry"
+import { getLocalStores } from "@/features/local-stores"
 import type { ChatMessage } from "@/features/agent/types/chat"
-import { buildLabelInput, cleanTitle, describeBoardTitle, maybeAutoLabelBoard } from "./describe-board"
+import { buildLabelInput, cleanTitle, describeBoardTitle, maybeAutoLabelBoard, maybeDeriveBoardPurpose } from "./describe-board"
 
 
 const msg = (role: "user" | "assistant", text: string): ChatMessage => ({
@@ -87,5 +89,48 @@ describe("maybeAutoLabelBoard", () => {
     const id = await seedBoard("Untitled board")
     await maybeAutoLabelBoard(id, [msg("user", "hi"), msg("assistant", "yo")], null)
     expect(await titleOf(id)).toBe("Untitled board")
+  })
+})
+
+
+describe("maybeDeriveBoardPurpose", () => {
+  const node = (id: string, label: string): Node =>
+    ({ id: id as NodeId, type: "rect", x: 0, y: 0, w: 100, h: 100, angle: 0, z: 0, groups: [], content: "", data: { label: { markdown: label } } }) as unknown as Node
+
+  const fakeStore = (nodes: Node[]): CanvasStore =>
+    ({ getAllNodes: () => nodes, getSelection: () => [] as unknown as NodeId[] }) as unknown as CanvasStore
+
+  const seed = async (title: string): Promise<string> => {
+    const { boards } = await getLocalStores()
+    const meta = newLocalBoard(title, 1000)
+    await boards.createBoard(meta)
+    return meta.id
+  }
+
+
+  it("derives + persists a purpose on a board that has none yet", async () => {
+    const id = await seed("Trip board")
+    const llm = new ScriptedLlm([{ kind: "text", text: "A board for planning a Japan trip." }])
+    await maybeDeriveBoardPurpose(id, fakeStore([node("n1", "Tokyo"), node("n2", "Kyoto")]), null, llm)
+    const meta = await (await getLocalStores()).boards.getBoard(id)
+    expect(meta?.context).toBe("A board for planning a Japan trip.")
+    expect(meta?.contextDerivedAt).toBeGreaterThan(0)
+  })
+
+
+  it("skips (no model call) when a fresh purpose hasn't drifted", async () => {
+    const id = await seed("Trip board")
+    const { boards } = await getLocalStores()
+    await boards.setBoardContext(id, "existing purpose", { derivedAt: Date.now(), deriveSeq: 0 })
+    const llm = new ScriptedLlm([{ kind: "text", text: "SHOULD NOT BE USED" }])
+    await maybeDeriveBoardPurpose(id, fakeStore([node("n1", "x")]), null, llm)
+    expect((await boards.getBoard(id))?.context).toBe("existing purpose")
+  })
+
+
+  it("no-ops with a null client", async () => {
+    const id = await seed("Trip board")
+    await maybeDeriveBoardPurpose(id, fakeStore([node("n1", "x")]), null, null)
+    expect((await (await getLocalStores()).boards.getBoard(id))?.context).toBeUndefined()
   })
 })

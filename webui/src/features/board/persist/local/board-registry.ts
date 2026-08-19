@@ -88,6 +88,28 @@ export class BoardRegistry {
 
 
   /**
+   * Store the derived board purpose + its drift baseline (wall-clock + oplog seq
+   * at derive time). No-op if the board doesn't exist. `updatedAt` is left as-is —
+   * a purpose derive is not a user-facing edit.
+   */
+  async setBoardContext(
+    id: string,
+    context: string,
+    fingerprint: { derivedAt: number; deriveSeq: number },
+  ): Promise<void> {
+    const engine = this.requireEngine()
+    const existing = await engine.get<BoardMeta>("boards", id)
+    if (!existing) return
+    await engine.put("boards", {
+      ...existing,
+      context,
+      contextDerivedAt: fingerprint.derivedAt,
+      contextDeriveSeq: fingerprint.deriveSeq,
+    })
+  }
+
+
+  /**
    * Set which collab client a synced board mounts (`legacy` | `v2`). No-op if
    * the board doesn't exist. Flipped when a board is promoted local → synced.
    */

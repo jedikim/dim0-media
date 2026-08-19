@@ -164,6 +164,13 @@ export type BoardMeta = {
   acl?: Record<Id, BoardRole>
   visibility: "private" | "shared" | "public"
   thumbnail?: string
+  // Derived semantic PURPOSE of the board (what it's about), 1-2 sentences, and
+  // its drift baseline: the wall-clock and the oplog seq at the last derive.
+  // Device-local (the seq is per-device); re-derived at turn end when the board
+  // has drifted enough. Absent until the first derive.
+  context?: string
+  contextDerivedAt?: number
+  contextDeriveSeq?: number
   createdAt: number
   updatedAt: number
   deletedAt?: number

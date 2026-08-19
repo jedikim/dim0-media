@@ -35,6 +35,27 @@ for (const { label, make } of engineCases) describe(`BoardRegistry (${label})`, 
   })
 
 
+  it("setBoardContext stores the purpose + drift baseline, leaving title/kind intact", async () => {
+    const reg = new BoardRegistry({ engine })
+    const board = newLocalBoard("Ideas", 1000)
+    await reg.createBoard(board)
+    await reg.setBoardContext(board.id, "A board about trip planning.", { derivedAt: 5000, deriveSeq: 42 })
+    const meta = await reg.getBoard(board.id)
+    expect(meta?.context).toBe("A board about trip planning.")
+    expect(meta?.contextDerivedAt).toBe(5000)
+    expect(meta?.contextDeriveSeq).toBe(42)
+    expect(meta?.title).toBe("Ideas") // untouched
+    expect(meta?.kind).toBe("local-only")
+  })
+
+
+  it("setBoardContext no-ops for a board that doesn't exist", async () => {
+    const reg = new BoardRegistry({ engine })
+    await reg.setBoardContext("ghost", "x", { derivedAt: 1, deriveSeq: 1 })
+    expect(await reg.getBoard("ghost")).toBeUndefined()
+  })
+
+
   it("deleteBoard cascades: meta + view + content all removed, no orphans", async () => {
     const reg = new BoardRegistry({ engine })
     const board = newLocalBoard("Doomed", 1000)

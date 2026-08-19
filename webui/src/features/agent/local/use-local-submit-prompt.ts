@@ -36,7 +36,8 @@ import { agentLog } from "@/features/agent/engine/debug"
 import type { CanvasStore } from "@canvas-harness/core"
 import { latestAssistantText, stepsFromEvents } from "./agent-event-to-step"
 import { toLlmHistory } from "./chat-history"
-import { maybeAutoLabelBoard } from "./describe-board"
+import { maybeAutoLabelBoard, maybeDeriveBoardPurpose } from "./describe-board"
+import { maybeRefreshConversationContext } from "./conversation-context"
 import { buildBoardSnapshot, readRecentOps, renderBoardSnapshot } from "./board-snapshot"
 import { wrapWithMessageContext } from "./message-context"
 
@@ -78,7 +79,11 @@ const buildBoardBlock = async (store: CanvasStore, rootId: string | null, boardI
     const recent = cursor === undefined ? [] : await readRecentOps(engine, boardId, cursor.seenSeq)
     const meta = await boards.getBoard(boardId)
     const snapshot = buildBoardSnapshot(store, rootId, recent)
-    return renderBoardSnapshot(snapshot, { title: meta?.title ?? "Untitled board" })
+    const rendered = renderBoardSnapshot(snapshot, { title: meta?.title ?? "Untitled board" })
+    // Lead with the derived PURPOSE (model-written → flatten to one line so it
+    // can't inject a fake section). The rest of the block is deterministic.
+    const purpose = meta?.context ? `Purpose: ${meta.context.replace(/\s+/g, " ").trim()}\n` : ""
+    return purpose + rendered
   } catch (e) {
     agentLog.error("buildBoardBlock", e)
     return ""
@@ -107,6 +112,24 @@ const buildMemoryBlock = async (boardId: string): Promise<string> => {
     return sections.join("\n\n")
   } catch (e) {
     agentLog.error("buildMemoryBlock", e)
+    return ""
+  }
+}
+
+
+/**
+ * The rolling conversation summary for this chat (Phase 4), fenced as data — it's
+ * model-written and could carry injected instructions. Empty until the first
+ * refresh. Degrades to an empty block on any storage hiccup.
+ */
+const buildConversationBlock = async (chatUid: string): Promise<string> => {
+  try {
+    const { chats } = await getLocalStores()
+    const chat = await chats.getChat(chatUid)
+    const summary = chat?.context?.replace(/<\/?conversation>/gi, "").trim()
+    return summary ? `## CONVERSATION\n<conversation>\n${summary}\n</conversation>` : ""
+  } catch (e) {
+    agentLog.error("buildConversationBlock", e)
     return ""
   }
 }
@@ -248,6 +271,7 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
       // stream builder). Structural events (tool start/result) force an
       // immediate repaint; the final frame below always flushes.
       const gate = createFlushGate()
+      let turnErrored = false
       try {
         const system = planSystemPrompt(new Date().toLocaleString())
         // Deterministic board awareness (no LLM), injected as a standing section.
@@ -259,6 +283,9 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
         const systemWithMemory = memoryBlock
           ? `${systemWithBoard}\n\n## MEMORY\n<memory>\n${memoryBlock}\n</memory>`
           : systemWithBoard
+        // Rolling thread summary (already self-fenced as `## CONVERSATION`).
+        const conversationBlock = await buildConversationBlock(chatUid)
+        const systemWithConversation = conversationBlock ? `${systemWithMemory}\n\n${conversationBlock}` : systemWithMemory
         const search = getSearchIndexRef() ?? undefined
         // External services are managed (signed in); include each tool only when
         // resolvable, so a signed-out user isn't offered an unavailable capability.
@@ -288,8 +315,8 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
         // When documents are attached, steer grounding + citation-by-title (titles
         // are unique per board, so a title names exactly one document).
         const systemWithDocs = hasDocs
-          ? `${systemWithMemory}\n\nThis board has uploaded documents. Use \`doc_search(query)\` — full-text over their contents — and for anything they could answer, call it FIRST, before answering from your own knowledge; ground the answer in the returned passages and cite each document by its exact title. (\`search_notes\` covers the board's own notes.)`
-          : systemWithMemory
+          ? `${systemWithConversation}\n\nThis board has uploaded documents. Use \`doc_search(query)\` — full-text over their contents — and for anything they could answer, call it FIRST, before answering from your own knowledge; ground the answer in the returned passages and cite each document by its exact title. (\`search_notes\` covers the board's own notes.)`
+          : systemWithConversation
         const userMessageForAgent = wrapWithMessageContext(prompt, messageContext)
         // Gate off-board tools (network/code) behind a user confirmation, so a
         // prompt-injected tool call can't silently exfiltrate or run code. A
@@ -362,6 +389,7 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
           })
         }
       } catch (e) {
+        turnErrored = true
         agentLog.error("runAgent", e)
         // Mark it as an error so it doesn't read like a normal answer. An
         // over-quota rejection (429) gets a friendly upgrade nudge instead of a
@@ -383,14 +411,24 @@ export function useLocalSubmitPrompt(boardId: string, syncTranscript = false) {
             agentLog.error("putChatTranscript", e),
           )
         }
-        // Auto-label a still-"Untitled" board from its first turn (fire-and-forget).
-        void maybeAutoLabelBoard(boardId, messages, resolveAgentLlm(config, { signedIn, runId, model: llmModel, byokModel }))
         // Mark everything up to now (incl. the agent's own writes this turn) as
-        // "seen", so next turn's snapshot reports only what the USER changed.
-        // Awaited (not fire-and-forget): the cursor must be committed before this
-        // turn's callback resolves, so a fast back-to-back prompt can't read the
-        // stale cursor and re-report the agent's own writes as user changes.
+        // "seen", so next turn's snapshot reports only what the USER changed. Runs
+        // FIRST because it flushes the board's debounced writes — the turn-end
+        // derives below then read a fresh oplog (not a stale tail). Awaited: the
+        // cursor must commit before the callback resolves, so a fast back-to-back
+        // prompt can't read the stale cursor and re-report the agent's own writes.
         await advanceBoardSnapshotCursor(boardId).catch((e) => agentLog.error("advanceBoardSnapshotCursor", e))
+        // Turn-end derives (Phase 4), fire-and-forget — never block the reply, each
+        // internally gated + best-effort. Reuse the turn's client (same runId).
+        // Auto-label THEN purpose derive are chained (not parallel): both do a
+        // read-modify-write on the same `boards` row, so running them concurrently
+        // would let one's put clobber the other's field (title vs context).
+        void maybeAutoLabelBoard(boardId, messages, llm)
+          .then(() => maybeDeriveBoardPurpose(boardId, store, rootId, llm))
+          .catch((e) => agentLog.error("boardDerive", e))
+        // Skip the conversation summary on a failed turn — its transcript ends in a
+        // transient error line that must not enter the durable rolling summary.
+        if (savedUid && !turnErrored) void maybeRefreshConversationContext(savedUid, messages, llm)
       }
     },
     [asConfig, searchByok, searchEngine, codeByok, llmModel, llmCatalog, signedIn, syncTranscript, setMessages, setChatUid, persist, boardId, navigate],

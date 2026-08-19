@@ -98,4 +98,33 @@ for (const { label, make } of engineCases) describe(`ChatRepo (${label})`, () =>
   it("getChat returns undefined for an unknown chat", async () => {
     expect(await repo.getChat("ghost")).toBeUndefined()
   })
+
+
+  it("setChatContext stores the rolling summary + its gate stamps", async () => {
+    await repo.saveTranscript("c1", "b1", [msg("m1", "hi")])
+    await repo.setChatContext("c1", "a running summary", { turnAt: 6, tokenAt: 1200 })
+    const chat = await repo.getChat("c1")
+    expect(chat?.context).toBe("a running summary")
+    expect(chat?.contextTurnAt).toBe(6)
+    expect(chat?.contextTokenAt).toBe(1200)
+  })
+
+
+  it("setChatContext no-ops for a chat that doesn't exist yet", async () => {
+    await repo.setChatContext("ghost", "x", { turnAt: 1, tokenAt: 1 })
+    expect(await repo.getChat("ghost")).toBeUndefined()
+  })
+
+
+  it("preserves conversation context across a later saveTranscript (rebuild-drops-fields guard)", async () => {
+    await repo.saveTranscript("c1", "b1", [msg("m1", "hi")])
+    await repo.setChatContext("c1", "keep me", { turnAt: 6, tokenAt: 1200 })
+    // A subsequent transcript save rebuilds the LocalChat record — the context
+    // fields must survive rather than be dropped.
+    await repo.saveTranscript("c1", "b1", [msg("m1", "hi"), msg("m2", "again")])
+    const chat = await repo.getChat("c1")
+    expect(chat?.context).toBe("keep me")
+    expect(chat?.contextTurnAt).toBe(6)
+    expect(chat?.contextTokenAt).toBe(1200)
+  })
 })

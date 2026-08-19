@@ -3,13 +3,22 @@
  * of the backend `DescribeBoard` agent. Runs once (only while the board is still
  * "Untitled board") and is best-effort: any failure leaves the title untouched.
  */
+import type { CanvasStore } from "@canvas-harness/core"
 import type { LlmClient } from "@/features/agent/engine/types"
 import { getLocalStores } from "@/features/local-stores"
 import type { ChatMessage } from "@/features/agent/types/chat"
 import describeBoardPrompt from "@/features/agent/prompts/describe-board.md?raw"
+import { boardDriftSince, shouldDerivePurpose } from "./board-drift"
+import { buildBoardSnapshot, readRecentOps, renderBoardSnapshot } from "./board-snapshot"
 
 
 const UNTITLED = "Untitled board"
+
+
+const BOARD_PURPOSE_PROMPT =
+  "You describe what a visual board is fundamentally about, from a snapshot of its current contents. " +
+  "Return 1-2 sentences naming the board's subject and how it's organized — a standing purpose the " +
+  "assistant can rely on across sessions. Return only the description, no preamble."
 
 
 /** Condense the opening turns into the labeling input. */
@@ -69,5 +78,50 @@ export const maybeAutoLabelBoard = async (
     if (title) await boards.renameBoard(boardId, title)
   } catch {
     // best-effort labeling — never disrupt the turn
+  }
+}
+
+
+/**
+ * Re-derive the board's PURPOSE from its current state IF it has drifted enough
+ * since the last derive (deterministic gate, no LLM until the gate passes). On
+ * success, persists the purpose and resets the drift baseline to the post-turn
+ * oplog seq — so a build turn's own writes don't immediately re-trigger. Runs
+ * fire-and-forget at turn end; any failure leaves the last-good purpose. `llm` is
+ * injectable for tests.
+ */
+export const maybeDeriveBoardPurpose = async (
+  boardId: string,
+  store: CanvasStore,
+  rootId: string | null,
+  llm: LlmClient | null,
+): Promise<void> => {
+  if (!llm) return
+  try {
+    const { boards, engine } = await getLocalStores()
+    const meta = await boards.getBoard(boardId)
+    if (!meta) return
+    const since = meta.contextDeriveSeq ?? 0
+    const recent = await readRecentOps(engine, boardId, since)
+    const now = Date.now()
+    if (!shouldDerivePurpose(meta, boardDriftSince(recent), now)) return
+
+    const state = renderBoardSnapshot(buildBoardSnapshot(store, rootId, []), { title: meta.title })
+    const turn = await llm.complete(
+      [
+        { role: "system", content: BOARD_PURPOSE_PROMPT },
+        { role: "user", content: state },
+      ],
+      [],
+    )
+    if (turn.kind !== "text") return
+    const purpose = turn.text.trim()
+    if (!purpose) return
+    // Baseline = the post-turn max seq (this turn's ops included), so the next
+    // drift is measured from AFTER this turn, not against its own writes.
+    const maxSeq = recent.reduce((m, r) => Math.max(m, r.seq), since)
+    await boards.setBoardContext(boardId, purpose, { derivedAt: now, deriveSeq: maxSeq })
+  } catch {
+    // best-effort — never disrupt the turn
   }
 }
