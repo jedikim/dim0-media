@@ -3,6 +3,7 @@ import { asBatchId, asClientId, asNodeId, type OpBatch } from "@canvas-harness/c
 import type { CanvasStore } from "@canvas-harness/core"
 import { addEdge, addNode, freshStore } from "@/test/canvas"
 import type { DimNodeData } from "@/features/board/model"
+import { labelText } from "@/features/board/model"
 import { MemoryRelay } from "@/test/sync-relay"
 import { InMemoryEngine } from "@/features/board/persist/local/in-memory-engine"
 import { BoardOutbox } from "@/features/board/persist/local/board-outbox"
@@ -89,8 +90,8 @@ const edgeIds = (store: CanvasStore): string[] =>
   store.getAllEdges().map((e) => e.id).sort()
 
 
-const labelOf = (store: CanvasStore, id: string): string | undefined =>
-  (store.getAllNodes().find((n) => n.id === id)?.data as DimNodeData | undefined)?.label
+const labelOf = (store: CanvasStore, id: string): string =>
+  labelText((store.getAllNodes().find((n) => n.id === id)?.data as DimNodeData | undefined)?.label)
 
 
 const xOf = (store: CanvasStore, id: string): number | undefined =>
@@ -640,7 +641,7 @@ describe("E1.5 protocol handlers", () => {
         for (const op of b.ops) {
           if (op.type === "node.add") {
             const data = op.node.data as DimNodeData
-            data.label = `${data.label} (themed)`
+            data.label = { markdown: `${labelText(data.label)} (themed)` }
           }
         }
       },
@@ -654,16 +655,15 @@ describe("E1.5 protocol handlers", () => {
         type: "node.add",
         node: {
           id: asNodeId("n1"), type: "rect", x: 0, y: 0, z: 0, w: 100, h: 50, angle: 0,
-          groups: [], data: { label: "raw", meta: { v: 1, createdAt: 0, updatedAt: 0 } },
+          groups: [], data: { label: { markdown: "raw" }, meta: { v: 1, createdAt: 0, updatedAt: 0 } },
         },
       }],
     }
     c.push({ kind: "peer-op", seq: 1, batch: raw })
     await c.sync.settle()
 
-    const label = (c.store.getAllNodes().find((n) => n.id === "n1")?.data as DimNodeData | undefined)?.label
-    expect(label).toBe("raw (themed)") // store got the normalized copy
-    expect((raw.ops[0] as { node: { data: DimNodeData } }).node.data.label).toBe("raw") // input untouched
+    expect(labelOf(c.store, "n1")).toBe("raw (themed)") // store got the normalized copy
+    expect(labelText((raw.ops[0] as { node: { data: DimNodeData } }).node.data.label)).toBe("raw") // input untouched
     c.sync.detach()
   })
 })

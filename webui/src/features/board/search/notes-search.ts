@@ -5,6 +5,7 @@
  * layer (`parentId`) + folder breadcrumb so a result can jump across layers.
  */
 import type { DimNode } from "@/features/board/model"
+import { labelText } from "@/features/board/model"
 import { buildLayerPath } from "@/features/board/model/layer"
 
 
@@ -22,7 +23,7 @@ export type SearchRow = {
 
 /** A note's display title: its label, else a body snippet, else "Untitled". */
 const titleOf = (node: DimNode): string => {
-  const label = node.data?.label?.trim() ?? ""
+  const label = labelText(node.data?.label).trim()
   if (label) return label
   const body = (node.content ?? "").trim().replace(/\s+/g, " ")
   return body.slice(0, 60) || "Untitled"

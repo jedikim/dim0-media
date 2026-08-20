@@ -1,8 +1,10 @@
 import type { NoteNode } from "../types/flow"
+import { labelText } from "@/features/board/model"
 
 type NoteLike = {
   id?: string
-  label?: { markdown?: string }
+  // Canonical shape is RichText; a legacy local board may hold a bare string.
+  label?: { markdown?: string } | string
   content?: { markdown?: string }
   properties?: { summary?: { text?: string } }
   style?: { type?: string }
@@ -18,7 +20,7 @@ const trimOrEmpty = (value?: string) => (value ?? "").trim()
  */
 const buildPlainNodeText = (node: NoteNode) => {
   const data = node.data as NoteLike | undefined
-  const label = trimOrEmpty(data?.label?.markdown)
+  const label = trimOrEmpty(labelText(data?.label))
   const content = trimOrEmpty(data?.content?.markdown)
   const summary = trimOrEmpty(data?.properties?.summary?.text)
 

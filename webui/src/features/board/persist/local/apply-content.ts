@@ -1,6 +1,7 @@
 import { asBatchId } from "@canvas-harness/core"
 import type { CanvasStore, Node, Op } from "@canvas-harness/core"
 import type { BoardContent } from "@/features/board/model"
+import { asRichLabel } from "@/features/board/model"
 import { filterContentByLayer } from "@/features/board/model/layer"
 import {
   adaptEdgeColors,
@@ -52,7 +53,10 @@ export const applyContentToStore = (
     const stored = storedNodeColorsOf(node as unknown as Node)
     const display = mode === "dark" ? adaptNodeColors(stored, "dark") : stored
     const style = applyColorsToStyle(node.style ?? {}, display)
-    ops.push({ type: "node.add", node: { ...node, style } })
+    // Normalize a legacy bare-string label to RichText so the store invariant
+    // (data.label is RichText) holds — older local boards persisted strings.
+    const data = node.data ? { ...node.data, label: asRichLabel(node.data.label) } : node.data
+    ops.push({ type: "node.add", node: { ...node, style, data } })
   }
 
   for (const edge of scoped.edges) {

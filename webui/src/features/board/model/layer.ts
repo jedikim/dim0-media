@@ -10,6 +10,7 @@
  * drop other layers.
  */
 import type { BoardContent, DimNode } from "."
+import { labelText } from "."
 
 
 /** Normalise a parentId to its layer key (null = root layer). */
@@ -50,7 +51,7 @@ export const buildLayerPath = (nodes: DimNode[], rootId: string | null): LayerCr
     seen.add(current)
     const node = byId.get(current)
     if (!node) break
-    path.push({ id: current, label: node.data?.label?.trim() || "Folder" })
+    path.push({ id: current, label: labelText(node.data?.label).trim() || "Folder" })
     current = node.data?.parentId ?? null
   }
   return path.reverse()

@@ -46,7 +46,7 @@ describe("BoardPersistence", () => {
 
     const content = await p.load()
     expect(content.nodes.map((n) => n.id)).toContain("n1")
-    expect((content.nodes[0]?.data)?.label).toBe("hello")
+    expect((content.nodes[0]?.data)?.label).toEqual({ markdown: "hello" })
     p.close()
   })
 

@@ -23,10 +23,26 @@ import type {
   Edge as ChEdge,
   Node as ChNode,
 } from "@canvas-harness/core"
+import type { RichText } from "@/features/board/types/note"
 
 
 /** App-level id. canvas-harness brands node/edge ids; this is the unbranded form. */
 export type Id = string
+
+
+/**
+ * The string form of a node/edge `label`. The canonical shape is `RichText`
+ * (`{ markdown }`, matching the backend `Resource.label` and the convert layer),
+ * but boards persisted before unification may still hold a bare string — tolerate
+ * both so legacy local boards keep reading. Prefer this over `label.markdown`.
+ */
+export const labelText = (label: { markdown?: string } | string | undefined): string =>
+  typeof label === "string" ? label : (label?.markdown ?? "")
+
+
+/** Coerce a label (possibly a legacy bare string) to the canonical `RichText`. */
+export const asRichLabel = (label: RichText | string | undefined): RichText | undefined =>
+  label === undefined ? undefined : typeof label === "string" ? { markdown: label } : label
 
 
 /**
@@ -71,8 +87,9 @@ export type DataProperty =
  * library reads e.g. `data.src` directly for built-in image/icon nodes.
  */
 export type DimNodeData = {
-  /** Title. The body lives in the native `node.content`. */
-  label?: string
+  /** Title (RichText, matching the backend `Resource.label`). Body → `node.content`.
+   *  Read via `labelText()` — legacy local boards may hold a bare string. */
+  label?: RichText
   /** Containment / subspace parent (recursive boards). */
   parentId?: Id | null
   pinned?: boolean

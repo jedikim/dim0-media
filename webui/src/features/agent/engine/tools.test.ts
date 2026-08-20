@@ -3,6 +3,7 @@ import { asNodeId } from "@canvas-harness/core"
 import type { CanvasStore } from "@canvas-harness/core"
 import { freshStore, resetIdb } from "@/test/canvas"
 import type { DimEdgeData, DimNodeData } from "@/features/board/model"
+import { labelText } from "@/features/board/model"
 import { setBoardThemeMode } from "@/features/board/harness/theme/theme-mode-ref"
 import { LocalSearchIndex } from "@/features/board/search/local-index"
 import type { BoardRegistry } from "@/features/board/persist/local/board-registry"
@@ -36,8 +37,8 @@ const fakeRegistry = (boards: { id: string; title: string }[]): BoardRegistry =>
 
 
 // Read helpers over the real store.
-const label = (store: CanvasStore, id: string): unknown =>
-  (store.getNode(asNodeId(id))?.data as DimNodeData | undefined)?.label
+const label = (store: CanvasStore, id: string): string =>
+  labelText((store.getNode(asNodeId(id))?.data as DimNodeData | undefined)?.label)
 const parentOf = (store: CanvasStore, id: string): unknown =>
   (store.getNode(asNodeId(id))?.data as DimNodeData | undefined)?.parentId
 const body = (store: CanvasStore, id: string): string | undefined => store.getNode(asNodeId(id))?.content
@@ -50,7 +51,7 @@ const seed = (store: CanvasStore, id: string, opts: { label?: string; content?: 
     type: "rect",
     x: 0, y: 0, w: 100, h: 50, angle: 0, groups: [],
     content: opts.content ?? "",
-    data: { label: opts.label ?? "", meta: { v: 1, createdAt: 0, updatedAt: 0 } } satisfies DimNodeData,
+    data: { label: { markdown: opts.label ?? "" }, meta: { v: 1, createdAt: 0, updatedAt: 0 } } satisfies DimNodeData,
   })
 }
 
@@ -313,6 +314,18 @@ describe("getNote", () => {
 
   it("returns an error for a missing note", async () => {
     expect(await getNote.run({ note_id: "ghost" }, ctx)).toEqual({ error: "note not found" })
+  })
+
+  it("returns the label as a plain string for both RichText and legacy-string labels", async () => {
+    // RichText (production shape) — must be unwrapped to a string, not the object.
+    seed(store, "rich", { label: "Rich Title", content: "b" })
+    expect((await getNote.run({ note_id: "rich" }, ctx) as { label: string }).label).toBe("Rich Title")
+    // Legacy bare-string label (older local board) — tolerated by labelText.
+    store.addNode({
+      id: asNodeId("legacy"), type: "rect", x: 0, y: 0, w: 100, h: 50, angle: 0, groups: [],
+      data: { label: "Legacy Title" as unknown as { markdown: string }, meta: { v: 1, createdAt: 0, updatedAt: 0 } },
+    })
+    expect((await getNote.run({ note_id: "legacy" }, ctx) as { label: string }).label).toBe("Legacy Title")
   })
 })
 

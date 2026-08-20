@@ -1,6 +1,7 @@
 import { asGroupId, asNodeId } from "@canvas-harness/core"
 import type { Node } from "@canvas-harness/core"
 import type { Note, NoteProperties, RichText } from "@/features/board/types/note"
+import { asRichLabel } from "@/features/board/model"
 import type { Document } from "@/features/board/types/document"
 import type { NodeType as Dim0NodeType } from "@/features/board/types/style"
 import {
@@ -98,7 +99,7 @@ export const noteToNode = (note: Note | Document): Node => {
     minWidth: note.minWidth,
     minHeight: note.minHeight,
     roughSeed: note.roughSeed,
-    label: note.label,
+    label: asRichLabel(note.label),
     properties: rest,
   }
 

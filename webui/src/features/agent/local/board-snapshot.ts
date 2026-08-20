@@ -13,6 +13,7 @@
  */
 import type { CanvasStore, Node } from "@canvas-harness/core"
 import type { NoteNodeData } from "@/features/board/harness/convert/note-to-node"
+import { labelText } from "@/features/board/model"
 import type { OplogRecord } from "@/features/board/persist/local/idb"
 import type { StorageEngine } from "@/features/board/persist/local/engine"
 
@@ -102,7 +103,9 @@ const truncate = (s: string, max: number): string =>
 /** Title: `data.label` → first non-blank line of content → `"(untitled)"`, truncated. */
 const nodeTitle = (n: Node): string => {
   const data = nodeData(n)
-  const label = data.label?.markdown?.trim()
+  // labelText tolerates a legacy bare-string label — raw oplog ops read here
+  // aren't normalized-on-load the way the live store is.
+  const label = labelText(data.label).trim()
   return truncate(label || firstLine(n.content) || "(untitled)", TITLE_MAX_CHARS)
 }
 

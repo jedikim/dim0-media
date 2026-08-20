@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest"
 import { asNodeId } from "@canvas-harness/core"
 import type { Edge } from "@canvas-harness/core"
 import type { DimNodeData } from "@/features/board/model"
+import { labelText } from "@/features/board/model"
 import { BoardRegistry, newLocalBoard } from "@/features/board/persist/local/board-registry"
 import { LocalSearchIndex } from "@/features/board/search/local-index"
 import { addNode, freshStore, resetIdb } from "@/test/canvas"
@@ -26,7 +27,7 @@ const drain = async (gen: AsyncGenerator<AgentEvent>): Promise<AgentEvent[]> => 
 const endNode = (end: Edge["source"]): string => ("nodeId" in end ? String(end.nodeId) : "free")
 
 
-const titleOf = (data: unknown): string => (data as DimNodeData | undefined)?.label ?? ""
+const titleOf = (data: unknown): string => labelText((data as DimNodeData | undefined)?.label)
 
 
 beforeEach(() => {

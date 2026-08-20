@@ -13,6 +13,8 @@
  */
 import { count, create, getByID, insert, remove, search } from "@orama/orama"
 import type { CanvasStore, Node, NodeId } from "@canvas-harness/core"
+import type { DimNodeData } from "@/features/board/model"
+import { labelText } from "@/features/board/model"
 
 
 const SCHEMA = { title: "string", body: "string" } as const
@@ -26,22 +28,11 @@ const SCHEMA = { title: "string", body: "string" } as const
 const asText = (value: unknown): string => (typeof value === "string" ? value : "")
 
 
-/**
- * A node's title text. Production stores `data.label` as a `RichText` object
- * (`{ markdown }`) — the same shape `board-snapshot` reads — so a naive
- * `asText(label)` indexed EVERY title as empty (titles were unsearchable). Read
- * `.markdown`, tolerating a plain-string label (older/test nodes) too.
- */
-const titleText = (data: unknown): string => {
-  const label = (data as { label?: unknown } | undefined)?.label
-  if (typeof label === "string") return label
-  return asText((label as { markdown?: unknown } | undefined)?.markdown)
-}
-
-
 const docOf = (node: Node) => ({
   id: node.id,
-  title: titleText(node.data),
+  // `data.label` is RichText (`{ markdown }`); `labelText` also tolerates a legacy
+  // bare string. A naive string read indexed every title as empty (unsearchable).
+  title: labelText((node.data as DimNodeData | undefined)?.label),
   body: asText(node.content),
 })
 

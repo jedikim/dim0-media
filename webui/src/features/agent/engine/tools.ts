@@ -12,6 +12,7 @@ import { z } from "zod"
 import { asEdgeId, asNodeId } from "@canvas-harness/core"
 import type { Node } from "@canvas-harness/core"
 import type { DimEdgeData, DimNodeData } from "@/features/board/model"
+import { labelText } from "@/features/board/model"
 import { pickRandomColorOfShade } from "@/features/board/lib/colors/tailwind"
 import { AUTOFIT_DISABLED_TYPES } from "@/features/board/harness/convert/note-to-node"
 import { dim0LinkStyleToCanvas, dim0StyleToCanvas } from "@/features/board/harness/convert/style"
@@ -150,7 +151,7 @@ export const createNote = defineTool({
         groups: [],
         content: body,
         style: canonicalNodeStyle(storedColors),
-        data: { label: title, parentId: ctx.rootId ?? undefined, meta: meta(), _storedColors: storedColors } satisfies DimNodeData,
+        data: { label: { markdown: title }, parentId: ctx.rootId ?? undefined, meta: meta(), _storedColors: storedColors } satisfies DimNodeData,
       })
     })
     return { id: String(nodeId), created: true }
@@ -174,7 +175,7 @@ export const updateNote = defineTool({
     const patch: Partial<Node> = {}
     if (typeof body === "string") patch.content = body
     if (typeof title === "string") {
-      patch.data = { ...(node.data as DimNodeData | undefined), label: title, meta: meta() }
+      patch.data = { ...(node.data as DimNodeData | undefined), label: { markdown: title }, meta: meta() }
     }
     ctx.store.batch(() => ctx.store.updateNode(nid, patch))
     return { id: String(nid) }
@@ -263,7 +264,7 @@ export const writeNote = defineTool({
           ctx.store.updateNode(id, {
             type: nodeType,
             content,
-            data: { ...prev, label: label || prev?.label || "", meta: meta() },
+            data: { ...prev, label: label ? { markdown: label } : (prev?.label ?? { markdown: "" }), meta: meta() },
             ...(autoFitStyle ? { style: { ...(node.style ?? {}), ...autoFitStyle } } : {}),
           }),
         )
@@ -298,7 +299,7 @@ export const writeNote = defineTool({
         groups: [],
         content,
         ...(style ? { style } : {}),
-        data: { label: label ?? "", parentId: ctx.rootId ?? undefined, meta: meta(), _storedColors: storedColors } satisfies DimNodeData,
+        data: { label: { markdown: label ?? "" }, parentId: ctx.rootId ?? undefined, meta: meta(), _storedColors: storedColors } satisfies DimNodeData,
       })
     })
     return { id: String(id), created: true }
@@ -318,7 +319,7 @@ export const getNote = defineTool({
     if (!node) return { error: "note not found" }
     return {
       id: String(id),
-      label: (node.data as DimNodeData | undefined)?.label ?? "",
+      label: labelText((node.data as DimNodeData | undefined)?.label),
       content: node.content ?? "",
       note_type: node.type,
     }
@@ -342,7 +343,7 @@ export const editNote = defineTool({
     if (!node) return { error: "note not found" }
 
     const prev = node.data as DimNodeData | undefined
-    const current = field === "label" ? prev?.label ?? "" : node.content ?? ""
+    const current = field === "label" ? labelText(prev?.label) : node.content ?? ""
 
     const occurrences = old ? current.split(old).length - 1 : 0
     if (occurrences === 0) return { error: "`old` not found in field" }
@@ -353,7 +354,7 @@ export const editNote = defineTool({
 
     ctx.store.batch(() =>
       field === "label"
-        ? ctx.store.updateNode(id, { data: { ...prev, label: updated, meta: meta() } })
+        ? ctx.store.updateNode(id, { data: { ...prev, label: { markdown: updated }, meta: meta() } })
         : ctx.store.updateNode(id, { content: updated }),
     )
     return { id: String(id) }
@@ -385,7 +386,7 @@ export const searchNotes = defineTool({
     const results = ids.map((id) => {
       const node = ctx.store.getNode(asNodeId(id))
       // Title is `data.label`; the body lives in the native `node.content`.
-      const title = asText((node?.data as DimNodeData | undefined)?.label)
+      const title = labelText((node?.data as DimNodeData | undefined)?.label)
       const content = asText(node?.content).slice(0, SEARCH_SNIPPET_CHARS)
       return { id, title, content }
     })

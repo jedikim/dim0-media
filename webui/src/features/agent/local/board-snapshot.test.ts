@@ -147,6 +147,16 @@ describe("recent-changes collapse", () => {
   })
 
 
+  it("renders a recent change's title from a LEGACY bare-string label in the oplog", () => {
+    // Oplog ops aren't normalized-on-load; a pre-upgrade agent add carries a
+    // string label. It must still render the title, not "(untitled)".
+    const legacy = mkNode("a", { label: "A" })
+    ;(legacy.data as { label?: unknown }).label = "Legacy Title"
+    const snap = buildBoardSnapshot(fakeStore([legacy]), null, [opRec(board, 1, [{ type: "node.add", node: legacy }])])
+    expect(snap.recent).toEqual([{ id: "a", op: "add", label: "Legacy Title" }])
+  })
+
+
   it("edit+remove becomes a delete, with the label from the remove op payload", () => {
     const ops: OplogRecord[] = [
       opRec(board, 1, [{ type: "node.update", id: "x" as NodeId, patch: {}, prev: {} }]),

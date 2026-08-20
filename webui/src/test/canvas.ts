@@ -43,7 +43,7 @@ export const addNode = (store: CanvasStore, id: string, label = ""): void => {
     h: 50,
     angle: 0,
     groups: [],
-    data: { label, meta: META } satisfies DimNodeData,
+    data: { label: { markdown: label }, meta: META } satisfies DimNodeData,
   })
 }
 
