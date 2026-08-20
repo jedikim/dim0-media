@@ -1,8 +1,16 @@
 import { describe, expect, it } from "vitest"
 import fc from "fast-check"
 import { asNodeId } from "@canvas-harness/core"
+import type { Node, NodeId } from "@canvas-harness/core"
 import { addNode, freshStore } from "@/test/canvas"
 import { LocalSearchIndex } from "./local-index"
+
+
+const richNode = (id: string, label: string, content = ""): Node =>
+  ({
+    id: id as NodeId, type: "rect", x: 0, y: 0, w: 100, h: 50, angle: 0, z: 0, groups: [],
+    content, data: { label: { markdown: label }, meta: { v: 1, createdAt: 0, updatedAt: 0 } },
+  }) as unknown as Node
 
 
 describe("LocalSearchIndex", () => {
@@ -130,6 +138,16 @@ describe("LocalSearchIndex", () => {
       }),
       { numRuns: 40 },
     )
+  })
+
+
+  it("indexNodes seeds a whole-board node list (all layers) so search spans folders", async () => {
+    // Nodes from DIFFERENT layers — never all present in the layer-scoped store at
+    // once; the agent's per-turn whole-board index is built from a list like this.
+    const index = new LocalSearchIndex()
+    await index.indexNodes([richNode("root", "root note"), richNode("deep", "buried in a folder")])
+    expect(await index.query("root")).toContain("root")
+    expect(await index.query("buried")).toContain("deep") // a note in another folder is findable
   })
 })
 

@@ -1,7 +1,32 @@
 import { useEffect, useRef } from "react"
-import type { CanvasStore } from "@canvas-harness/core"
+import type { CanvasStore, Node } from "@canvas-harness/core"
+import { getLocalStores } from "@/features/local-stores"
+import { BoardPersistence } from "@/features/board/persist/local/board-persistence"
 import { LocalSearchIndex } from "./local-index"
 import { setSearchIndexRef } from "./search-index-ref"
+
+
+/** A whole-board (all layers) search index + an id→node lookup for the agent. */
+export type WholeBoardSearch = { index: LocalSearchIndex; notes: ReadonlyMap<string, Node> }
+
+
+/**
+ * Build a WHOLE-board note search for one agent turn: the board's entire persisted
+ * content (all layers — the live store holds only the current one) OVERLAID with
+ * the live store's nodes (freshest: current-layer edits/creates made this turn,
+ * before the debounced flush), so both a cross-folder note AND a just-created one
+ * are findable + resolvable. Read-only; built fresh per turn.
+ */
+export const buildWholeBoardSearch = async (boardId: string, store: CanvasStore): Promise<WholeBoardSearch> => {
+  const { engine } = await getLocalStores()
+  const persisted = (await new BoardPersistence(boardId, { engine }).load()).nodes as unknown as Node[]
+  const byId = new Map<string, Node>(persisted.map((n) => [String(n.id), n]))
+  for (const n of store.getAllNodes()) byId.set(String(n.id), n) // live current-layer wins
+  const nodes = [...byId.values()]
+  const index = new LocalSearchIndex()
+  await index.indexNodes(nodes)
+  return { index, notes: byId }
+}
 
 
 /**

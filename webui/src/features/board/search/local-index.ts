@@ -42,7 +42,8 @@ export class LocalSearchIndex {
   private queue: Promise<void> = Promise.resolve()
 
 
-  /** Subscribe to store changes, keeping the index in sync. Returns unsubscribe. */
+  /** Subscribe to store changes, keeping the index in sync with the live (current-
+   *  layer) store. Returns unsubscribe. */
   attach(store: CanvasStore): () => void {
     return store.subscribe("change", (batch) => {
       for (const op of batch.ops) {
@@ -51,6 +52,14 @@ export class LocalSearchIndex {
         else if (op.type === "node.remove") this.enqueue(() => this.removeDoc(op.node.id))
       }
     })
+  }
+
+
+  /** Merge a set of nodes (the whole board, across layers) into the index — the
+   *  whole-board build so search spans every folder, not just the current layer. */
+  async indexNodes(nodes: Node[]): Promise<void> {
+    for (const node of nodes) this.enqueue(() => this.upsertNode(node))
+    await this.queue
   }
 
 
@@ -95,11 +104,15 @@ export class LocalSearchIndex {
 
   private async upsert(store: CanvasStore, id: NodeId): Promise<void> {
     const node = store.getNode(id)
-    if (!node) return
+    if (node) await this.upsertNode(node)
+  }
+
+
+  private async upsertNode(node: Node): Promise<void> {
     // remove-then-insert (not Orama `update`): insert preserves the doc's `id`
     // field, whereas `update` reassigns a fresh id — which would break getByID.
-    if (getByID(this.db, id) !== undefined) {
-      await remove(this.db, id)
+    if (getByID(this.db, node.id) !== undefined) {
+      await remove(this.db, node.id)
     }
     await insert(this.db, docOf(node))
   }
