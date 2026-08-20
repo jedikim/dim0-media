@@ -20,6 +20,15 @@ export const isLocalAgentOnSynced = (): boolean => {
 }
 
 
+/**
+ * Whether the browser agent is the active engine for a given board — true on
+ * local-only boards (`local`) OR on synced boards in browser-agent mode. The one
+ * predicate that gates browser-agent-only infra (local search / doc indexes), so
+ * callers don't re-derive `local || isLocalAgentOnSynced()` and drift apart.
+ */
+export const isBrowserAgentActive = (local: boolean): boolean => local || isLocalAgentOnSynced()
+
+
 const set = (on: boolean): void => {
   try {
     if (on) localStorage.setItem(KEY, "1")

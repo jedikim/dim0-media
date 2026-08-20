@@ -13,24 +13,35 @@
  */
 import { count, create, getByID, insert, remove, search } from "@orama/orama"
 import type { CanvasStore, Node, NodeId } from "@canvas-harness/core"
-import type { DimNodeData } from "@/features/board/model"
 
 
 const SCHEMA = { title: "string", body: "string" } as const
 
 
 /**
- * Coerce a value to a plain string for the index. `data.label` / `content` are
- * typed `string`, but the store types `data` as generic and some node types put
- * a non-string there — Orama's `"string"` schema then rejects the whole insert.
- * A non-string just isn't full-text-indexed, which is correct.
+ * Coerce a value to a plain string for the index. `content` is typed `string`,
+ * but the store types `data` as generic; a non-string just isn't full-text
+ * indexed (Orama's `"string"` schema would otherwise reject the whole insert).
  */
 const asText = (value: unknown): string => (typeof value === "string" ? value : "")
 
 
+/**
+ * A node's title text. Production stores `data.label` as a `RichText` object
+ * (`{ markdown }`) — the same shape `board-snapshot` reads — so a naive
+ * `asText(label)` indexed EVERY title as empty (titles were unsearchable). Read
+ * `.markdown`, tolerating a plain-string label (older/test nodes) too.
+ */
+const titleText = (data: unknown): string => {
+  const label = (data as { label?: unknown } | undefined)?.label
+  if (typeof label === "string") return label
+  return asText((label as { markdown?: unknown } | undefined)?.markdown)
+}
+
+
 const docOf = (node: Node) => ({
   id: node.id,
-  title: asText((node.data as DimNodeData | undefined)?.label),
+  title: titleText(node.data),
   body: asText(node.content),
 })
 

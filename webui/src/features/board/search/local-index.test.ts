@@ -19,7 +19,24 @@ describe("LocalSearchIndex", () => {
   })
 
 
-  it("does not crash when a node's label is not a string", async () => {
+  it("indexes the PRODUCTION title shape (data.label is a RichText object)", async () => {
+    // Regression: production stores `data.label` as `{ markdown }`, not a string,
+    // so the index used to read every title as empty — titles were unsearchable.
+    const store = freshStore("c")
+    const index = new LocalSearchIndex()
+    index.attach(store)
+
+    addNode(store, "n1")
+    store.updateNode(asNodeId("n1"), {
+      data: { label: { markdown: "Napoleon" } as unknown as string, meta: { v: 1, createdAt: 0, updatedAt: 0 } },
+    })
+    await index.idle()
+
+    expect(await index.query("Napoleon")).toContain("n1") // title is searchable
+  })
+
+
+  it("does not crash when a node's label is neither string nor RichText", async () => {
     const store = freshStore("c")
     const index = new LocalSearchIndex()
     index.attach(store)
@@ -28,14 +45,14 @@ describe("LocalSearchIndex", () => {
     await index.idle()
     expect(await index.query("ok")).toContain("n1")
 
-    // A node type puts a non-string in data.label — must not reject the insert
-    // (which would otherwise poison the whole update queue).
+    // A stray non-string, non-RichText label must not reject the insert (which
+    // would otherwise poison the whole update queue).
     store.updateNode(asNodeId("n1"), {
-      data: { label: { markdown: "x" } as unknown as string, meta: { v: 1, createdAt: 0, updatedAt: 0 } },
+      data: { label: 42 as unknown as string, meta: { v: 1, createdAt: 0, updatedAt: 0 } },
     })
     await index.idle()
 
-    expect(index.count()).toBe(1) // still indexed, just no title text
+    expect(index.count()).toBe(1) // still indexed, just no usable title text
     expect(await index.query("ok")).toHaveLength(0) // old title dropped on upsert
 
     // The queue still works for later nodes.
