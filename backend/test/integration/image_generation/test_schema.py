@@ -44,6 +44,11 @@ async def _table_names(conn: asyncpg.Connection) -> set[str]:
 async def _restore_original_pr01_checks(conn: asyncpg.Connection) -> None:
     """Recreate the original PR-01 checks to exercise startup upgrade behavior."""
     await conn.execute(
+        "ALTER TABLE image_generation_run DROP CONSTRAINT IF EXISTS image_generation_run_idempotency_unique;"
+        "ALTER TABLE image_generation_run DROP CONSTRAINT IF EXISTS image_generation_run_client_request_uid_check;"
+        "ALTER TABLE image_generation_run DROP CONSTRAINT IF EXISTS image_generation_run_request_fingerprint_check;"
+        "ALTER TABLE image_generation_run DROP COLUMN IF EXISTS client_request_uid;"
+        "ALTER TABLE image_generation_run DROP COLUMN IF EXISTS request_fingerprint;"
         "ALTER TABLE image_asset DROP CONSTRAINT image_asset_storage_key_check;"
         "ALTER TABLE image_asset ADD CONSTRAINT image_asset_storage_key_check CHECK ("
         "storage_key <> '' AND storage_key NOT LIKE '/%' "
@@ -160,6 +165,10 @@ async def test_schema_upgrades_original_pr01_checks_without_data_loss(image_pg_p
     async with image_pg_pool.acquire() as conn:
         asset = await conn.fetchrow("SELECT * FROM image_asset WHERE uid = $1", asset_uid)
         assert asset is not None and asset["storage_key"] == "images/existing.png"
+        run = await conn.fetchrow("SELECT * FROM image_generation_run WHERE uid = $1", generation_uid)
+        assert run is not None
+        assert run["client_request_uid"] == f"legacy:{generation_uid}"
+        assert run["request_fingerprint"] == "0" * 64
         reference_node_nullable = await conn.fetchval(
             "SELECT is_nullable FROM information_schema.columns "
             "WHERE table_schema = current_schema() "
@@ -346,11 +355,14 @@ async def test_audit_foreign_keys_restrict_hard_delete(initialized_image_pg_pool
         await conn.execute("INSERT INTO graphs (uid) VALUES ($1)", board_uid)
         await conn.execute(
             "INSERT INTO image_generation_run ("
-            "uid, user_uid, board_uid, provider, model_id, prompt, status"
-            ") VALUES ($1, $2, $3, 'openrouter', 'test/model', 'prompt', 'started')",
+            "uid, user_uid, board_uid, client_request_uid, request_fingerprint, "
+            "provider, model_id, prompt, status"
+            ") VALUES ($1, $2, $3, $4, $5, 'openrouter', 'test/model', 'prompt', 'started')",
             generation_uid,
             user_uid,
             board_uid,
+            gen_uid(),
+            "a" * 64,
         )
 
         with pytest.raises(asyncpg.ForeignKeyViolationError):

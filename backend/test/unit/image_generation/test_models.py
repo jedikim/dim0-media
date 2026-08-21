@@ -16,8 +16,10 @@ from topix.image_generation.models import (
     GenerationStart,
     ImageAssetCreate,
     ImageAssetSource,
+    ImageGenerationParameters,
     ProviderImageReference,
     ProviderImageRequest,
+    canonical_request_fingerprint,
 )
 
 
@@ -109,6 +111,47 @@ def test_generation_ignores_none_when_checking_duplicate_node_ids() -> None:
                 GenerationReference(ordinal=0, asset_uid="asset-1", reference_node_uid="node-1"),
                 GenerationReference(ordinal=1, asset_uid="asset-2", reference_node_uid="node-1"),
             ),
+        )
+
+
+def test_request_fingerprint_is_canonical_and_reference_order_sensitive() -> None:
+    """Stable JSON produces repeatable hashes while ordered references remain billable input."""
+    parameters = ImageGenerationParameters(aspect_ratio="16:9", resolution="1K")
+    first = canonical_request_fingerprint(
+        model_id="test/model",
+        prompt="Create an image",
+        parameters=parameters,
+        reference_asset_uids=("asset-a", "asset-b"),
+        generator_node_uid=None,
+    )
+    same = canonical_request_fingerprint(
+        model_id="test/model",
+        prompt="Create an image",
+        parameters=parameters.model_copy(),
+        reference_asset_uids=("asset-a", "asset-b"),
+        generator_node_uid=None,
+    )
+    reordered = canonical_request_fingerprint(
+        model_id="test/model",
+        prompt="Create an image",
+        parameters=parameters,
+        reference_asset_uids=("asset-b", "asset-a"),
+        generator_node_uid=None,
+    )
+
+    assert first == same
+    assert first != reordered
+
+
+def test_generation_rejects_client_supplied_mismatched_fingerprint() -> None:
+    """The domain recomputes rather than trusting an arbitrary request hash."""
+    with pytest.raises(ValidationError, match="request_fingerprint"):
+        GenerationStart(
+            user_uid="user-1",
+            board_uid="board-1",
+            model_id="test/model",
+            prompt="Create an image",
+            request_fingerprint="a" * 64,
         )
 
 

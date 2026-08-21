@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from hashlib import sha256
 
@@ -13,6 +15,7 @@ import pytest
 from topix.image_generation.models import (
     GeneratedImagePayload,
     GenerationAttemptStart,
+    GenerationIdempotencyConflictError,
     GenerationReference,
     GenerationStart,
     ImageAssetCreate,
@@ -438,3 +441,157 @@ async def test_cross_board_output_rolls_back_asset_and_transition(
         asset_count = await conn.fetchval("SELECT count(*) FROM image_asset WHERE uid = $1", wrong_board_asset.uid)
     assert status == "started"
     assert asset_count == 0
+
+
+@pytest.mark.asyncio
+async def test_idempotent_start_reuses_same_request_and_rejects_changed_content(
+    initialized_image_pg_pool: asyncpg.Pool,
+) -> None:
+    """PostgreSQL is the durable authority for equal and conflicting request IDs."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    store = ImageGenerationStore()
+    await store.open(initialized_image_pg_pool)
+    client_request_uid = gen_uid()
+    generation = GenerationStart(
+        client_request_uid=client_request_uid,
+        user_uid=user_uid,
+        board_uid=board_uid,
+        model_id="x-ai/grok-imagine-image-2.0",
+        prompt="Create one idempotent image",
+    )
+
+    first = await store.start_generation(generation)
+    repeated = await store.start_generation(
+        GenerationStart(
+            client_request_uid=client_request_uid,
+            user_uid=user_uid,
+            board_uid=board_uid,
+            model_id=generation.model_id,
+            prompt=generation.prompt,
+        )
+    )
+
+    assert first.created is True
+    assert repeated.created is False
+    assert repeated.generation_uid == generation.uid
+    with pytest.raises(GenerationIdempotencyConflictError):
+        await store.start_generation(
+            GenerationStart(
+                client_request_uid=client_request_uid,
+                user_uid=user_uid,
+                board_uid=board_uid,
+                model_id=generation.model_id,
+                prompt="Different billable content",
+            )
+        )
+
+
+@pytest.mark.asyncio
+async def test_concurrent_idempotent_starts_create_one_run_and_attempt(
+    initialized_image_pg_pool: asyncpg.Pool,
+) -> None:
+    """Two concurrent equal starts elect one durable generation and one provider attempt."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    store = ImageGenerationStore()
+    await store.open(initialized_image_pg_pool)
+    client_request_uid = gen_uid()
+    starts = tuple(
+        GenerationStart(
+            client_request_uid=client_request_uid,
+            user_uid=user_uid,
+            board_uid=board_uid,
+            model_id="google/gemini-3-pro-image",
+            prompt="Create one concurrent image",
+        )
+        for _ in range(2)
+    )
+
+    outcomes = await asyncio.gather(*(store.start_generation(start) for start in starts))
+
+    assert sum(outcome.created for outcome in outcomes) == 1
+    assert len({outcome.generation_uid for outcome in outcomes}) == 1
+    async with initialized_image_pg_pool.acquire() as conn:
+        run_count = await conn.fetchval(
+            "SELECT count(*) FROM image_generation_run WHERE user_uid = $1 AND board_uid = $2 AND client_request_uid = $3",
+            user_uid,
+            board_uid,
+            client_request_uid,
+        )
+        attempt_count = await conn.fetchval(
+            "SELECT count(*) FROM image_generation_attempt WHERE generation_uid = $1",
+            outcomes[0].generation_uid,
+        )
+    assert run_count == 1
+    assert attempt_count == 1
+
+
+@pytest.mark.asyncio
+async def test_reconciliation_fails_old_started_and_retryable_runs(
+    initialized_image_pg_pool: asyncpg.Pool,
+) -> None:
+    """Startup reconciliation closes abandoned work without inventing a retry."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    store = ImageGenerationStore()
+    await store.open(initialized_image_pg_pool)
+    started = GenerationStart(
+        user_uid=user_uid,
+        board_uid=board_uid,
+        model_id="x-ai/grok-imagine-image-2.0",
+        prompt="Abandoned started work",
+    )
+    retryable = GenerationStart(
+        user_uid=user_uid,
+        board_uid=board_uid,
+        model_id="microsoft/mai-image-2.5-pro",
+        prompt="Abandoned retryable work",
+    )
+    recent = GenerationStart(
+        user_uid=user_uid,
+        board_uid=board_uid,
+        model_id="x-ai/grok-imagine-image-2.0",
+        prompt="Recent work owned by another live process",
+    )
+    await store.start_generation(started)
+    await store.start_generation(retryable)
+    await store.start_generation(recent)
+    await store.finish_attempt_failed(
+        generation_uid=retryable.uid,
+        attempt_uid=retryable.attempt_uid,
+        error=ImageProviderError("provider_timeout", "The provider timed out"),
+        latency_ms=100,
+    )
+    old = datetime.now(timezone.utc) - timedelta(hours=1)
+    async with initialized_image_pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE image_generation_run SET started_at = $1 WHERE uid = ANY($2::text[])",
+            old,
+            [started.uid, retryable.uid],
+        )
+
+    reconciled = await store.reconcile_incomplete(cutoff=datetime.now(timezone.utc) - timedelta(minutes=30))
+
+    assert reconciled == 2
+    async with initialized_image_pg_pool.acquire() as conn:
+        runs = await conn.fetch(
+            "SELECT uid, status, error_code FROM image_generation_run WHERE uid = ANY($1::text[]) ORDER BY uid",
+            [started.uid, retryable.uid],
+        )
+        started_attempt = await conn.fetchrow(
+            "SELECT status, error_code FROM image_generation_attempt WHERE uid = $1",
+            started.attempt_uid,
+        )
+        retryable_attempt = await conn.fetchrow(
+            "SELECT status, error_code FROM image_generation_attempt WHERE uid = $1",
+            retryable.attempt_uid,
+        )
+        recent_run = await conn.fetchrow(
+            "SELECT status, error_code FROM image_generation_run WHERE uid = $1",
+            recent.uid,
+        )
+    assert {(row["status"], row["error_code"]) for row in runs} == {("failed", "worker_lost")}
+    assert started_attempt is not None and tuple(started_attempt.values()) == ("failed", "worker_lost")
+    assert retryable_attempt is not None and tuple(retryable_attempt.values()) == ("failed", "provider_timeout")
+    assert recent_run is not None and tuple(recent_run.values()) == ("started", None)
