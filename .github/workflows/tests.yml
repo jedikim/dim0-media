@@ -71,12 +71,31 @@ jobs:
         working-directory: webui
 
   backend:
-    name: backend (ruff + unit tests)
+    name: backend (ruff + unit + image DB tests)
     runs-on: ubuntu-latest
     # Backstop so a wedged test (e.g. a collab WebSocket frame-ordering
     # race) can't pin the runner until GitHub's ~6h default. The per-test
     # pytest-timeout is the primary guard; this caps the whole job.
     timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: topix
+          POSTGRES_USER: topix
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U topix -d topix"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
 
     steps:
       - name: Check out repository
@@ -110,6 +129,9 @@ jobs:
 
       - name: Unit tests
         run: make test-backend
+
+      - name: Image generation DB tests
+        run: make test-backend-db
 
   tauri:
     name: desktop (rust — rusqlite storage)

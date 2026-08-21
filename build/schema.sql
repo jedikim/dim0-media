@@ -187,3 +187,144 @@ ALTER TABLE graph_user ADD CONSTRAINT graph_user_role_check
 ALTER TABLE user_billing DROP CONSTRAINT IF EXISTS user_billing_plan_check;
 ALTER TABLE user_billing ADD CONSTRAINT user_billing_plan_check
     CHECK (plan IN ('free', 'basic', 'plus'));
+
+
+-- BEGIN AI IMAGE GENERATION FOUNDATION
+-- Immutable metadata for uploaded, normalized legacy, and generated images.
+CREATE TABLE IF NOT EXISTS image_asset (
+    id BIGSERIAL PRIMARY KEY,
+    uid TEXT NOT NULL UNIQUE,
+    board_uid TEXT NOT NULL REFERENCES graphs(uid) ON DELETE RESTRICT,
+    created_by_user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE RESTRICT,
+    source_kind TEXT NOT NULL CHECK (source_kind IN ('uploaded', 'generated', 'legacy_normalized')),
+    storage_key TEXT NOT NULL UNIQUE CHECK (
+        storage_key <> ''
+        AND storage_key NOT LIKE '/%'
+        AND storage_key NOT LIKE '%://%'
+        AND strpos(storage_key, chr(92)) = 0
+        AND storage_key !~ '(^|/)\.{1,2}(/|$)'
+    ),
+    mime_type TEXT NOT NULL CHECK (mime_type ~ '^image/[a-z0-9.+-]+$'),
+    byte_size BIGINT NOT NULL CHECK (byte_size > 0),
+    width INTEGER NOT NULL CHECK (width > 0),
+    height INTEGER NOT NULL CHECK (height > 0),
+    content_sha256 TEXT NOT NULL CHECK (content_sha256 ~ '^[0-9a-f]{64}$'),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (uid, board_uid)
+);
+CREATE INDEX IF NOT EXISTS idx_image_asset_board_created_at
+    ON image_asset(board_uid, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_image_asset_board_sha256
+    ON image_asset(board_uid, content_sha256);
+
+
+-- One logical generation. Provider attempts are stored separately for retries.
+CREATE TABLE IF NOT EXISTS image_generation_run (
+    id BIGSERIAL PRIMARY KEY,
+    uid TEXT NOT NULL UNIQUE,
+    user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE RESTRICT,
+    board_uid TEXT NOT NULL REFERENCES graphs(uid) ON DELETE RESTRICT,
+    generator_node_uid TEXT,
+    output_node_uid TEXT,
+    provider TEXT NOT NULL,
+    model_id TEXT NOT NULL,
+    prompt TEXT NOT NULL CHECK (length(btrim(prompt)) > 0),
+    parameters JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(parameters) = 'object'),
+    status TEXT NOT NULL CHECK (status IN ('started', 'succeeded', 'failed')),
+    output_asset_uid TEXT UNIQUE,
+    error_code TEXT,
+    error_message TEXT,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
+    UNIQUE (uid, board_uid),
+    FOREIGN KEY (output_asset_uid, board_uid)
+        REFERENCES image_asset(uid, board_uid) ON DELETE RESTRICT,
+    CHECK (
+        (status = 'started'
+            AND output_asset_uid IS NULL
+            AND error_code IS NULL
+            AND error_message IS NULL
+            AND completed_at IS NULL)
+        OR (status = 'succeeded'
+            AND output_asset_uid IS NOT NULL
+            AND error_code IS NULL
+            AND error_message IS NULL
+            AND completed_at IS NOT NULL)
+        OR (status = 'failed'
+            AND output_asset_uid IS NULL
+            AND error_code IS NOT NULL
+            AND error_message IS NOT NULL
+            AND completed_at IS NOT NULL)
+    )
+);
+CREATE INDEX IF NOT EXISTS idx_image_generation_run_board_started_at
+    ON image_generation_run(board_uid, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_image_generation_run_user_started_at
+    ON image_generation_run(user_uid, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_image_generation_run_started_pending
+    ON image_generation_run(started_at) WHERE status = 'started';
+
+
+-- Attempt-level provider audit. The initial attempt is inserted with the run.
+CREATE TABLE IF NOT EXISTS image_generation_attempt (
+    id BIGSERIAL PRIMARY KEY,
+    uid TEXT NOT NULL UNIQUE,
+    generation_uid TEXT NOT NULL REFERENCES image_generation_run(uid) ON DELETE RESTRICT,
+    attempt_number INTEGER NOT NULL CHECK (attempt_number > 0),
+    provider TEXT NOT NULL,
+    model_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('started', 'succeeded', 'failed')),
+    provider_request_id TEXT,
+    usage JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(usage) = 'object'),
+    cost_usd NUMERIC(20, 10) CHECK (cost_usd IS NULL OR cost_usd >= 0),
+    latency_ms BIGINT CHECK (latency_ms IS NULL OR latency_ms >= 0),
+    error_code TEXT,
+    error_message TEXT,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMPTZ,
+    UNIQUE (generation_uid, attempt_number),
+    CHECK (
+        (status = 'started'
+            AND provider_request_id IS NULL
+            AND usage = '{}'::jsonb
+            AND cost_usd IS NULL
+            AND error_code IS NULL
+            AND error_message IS NULL
+            AND latency_ms IS NULL
+            AND completed_at IS NULL)
+        OR (status = 'succeeded'
+            AND error_code IS NULL
+            AND error_message IS NULL
+            AND latency_ms IS NOT NULL
+            AND completed_at IS NOT NULL)
+        OR (status = 'failed'
+            AND error_code IS NOT NULL
+            AND error_message IS NOT NULL
+            AND latency_ms IS NOT NULL
+            AND completed_at IS NOT NULL)
+    )
+);
+CREATE INDEX IF NOT EXISTS idx_image_generation_attempt_provider_request_id
+    ON image_generation_attempt(provider_request_id)
+    WHERE provider_request_id IS NOT NULL;
+
+
+-- Ordered, request-time snapshots survive later node edits or deletion.
+CREATE TABLE IF NOT EXISTS image_generation_reference (
+    generation_uid TEXT NOT NULL,
+    board_uid TEXT NOT NULL,
+    ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
+    reference_node_uid TEXT NOT NULL,
+    asset_uid TEXT NOT NULL,
+    asset_snapshot JSONB NOT NULL CHECK (jsonb_typeof(asset_snapshot) = 'object'),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (generation_uid, ordinal),
+    UNIQUE (generation_uid, reference_node_uid),
+    FOREIGN KEY (generation_uid, board_uid)
+        REFERENCES image_generation_run(uid, board_uid) ON DELETE RESTRICT,
+    FOREIGN KEY (asset_uid, board_uid)
+        REFERENCES image_asset(uid, board_uid) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS idx_image_generation_reference_asset_uid
+    ON image_generation_reference(asset_uid);
+-- END AI IMAGE GENERATION FOUNDATION
