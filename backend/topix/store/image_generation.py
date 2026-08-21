@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+
 import asyncpg
 
 from topix.image_generation.capabilities import get_capability, validate_generation_parameters
 from topix.image_generation.models import (
     GenerationAttemptStart,
     GenerationStart,
+    GenerationStartOutcome,
     ImageAssetCreate,
+    ImageAssetRecord,
+    ImageGenerationRecord,
     ImageProviderError,
     ProviderImageResult,
 )
@@ -17,6 +22,10 @@ from topix.store.postgres.image_generation import (
     finish_image_generation_attempt_failed,
     finish_image_generation_failed,
     finish_image_generation_succeeded,
+    get_image_asset,
+    get_image_assets,
+    get_image_generation,
+    reconcile_image_generations,
     start_image_generation,
     start_image_generation_attempt,
 )
@@ -51,15 +60,35 @@ class ImageGenerationStore:
         async with self._pool().acquire() as conn:
             await create_image_asset(conn, asset)
 
-    async def start_generation(self, generation: GenerationStart) -> None:
-        """Validate capabilities and record a started attempt before provider work."""
+    async def start_generation(self, generation: GenerationStart) -> GenerationStartOutcome:
+        """Validate capabilities and durably win or reuse an idempotent start."""
         validate_generation_parameters(
             generation.model_id,
             generation.parameters,
             reference_count=len(generation.references),
         )
         async with self._pool().acquire() as conn:
-            await start_image_generation(conn, generation)
+            return await start_image_generation(conn, generation)
+
+    async def get_assets(self, *, board_uid: str, asset_uids: tuple[str, ...]) -> tuple[ImageAssetRecord, ...]:
+        """Resolve board-scoped assets in caller-provided order."""
+        async with self._pool().acquire() as conn:
+            return await get_image_assets(conn, board_uid=board_uid, asset_uids=asset_uids)
+
+    async def get_asset(self, *, board_uid: str, asset_uid: str) -> ImageAssetRecord | None:
+        """Return one board-scoped asset for authenticated content delivery."""
+        async with self._pool().acquire() as conn:
+            return await get_image_asset(conn, board_uid=board_uid, asset_uid=asset_uid)
+
+    async def get_generation(self, *, board_uid: str, generation_uid: str) -> ImageGenerationRecord | None:
+        """Return one board-scoped generation for polling."""
+        async with self._pool().acquire() as conn:
+            return await get_image_generation(conn, board_uid=board_uid, generation_uid=generation_uid)
+
+    async def reconcile_incomplete(self, *, cutoff: datetime) -> int:
+        """Fail incomplete generations that predate the current process."""
+        async with self._pool().acquire() as conn:
+            return await reconcile_image_generations(conn, cutoff=cutoff)
 
     async def start_attempt(self, attempt: GenerationAttemptStart) -> None:
         """Open the next audit attempt only while its run is retryable."""
@@ -118,3 +147,5 @@ class ImageGenerationStore:
         """Close only a private pool created by this store."""
         if self._pg_pool is not None and self._owns_pool:
             await self._pg_pool.close()
+        self._pg_pool = None
+        self._owns_pool = False

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date
+import json
+
+from datetime import date, datetime
 from decimal import Decimal
 from enum import StrEnum
 from hashlib import sha256
@@ -14,7 +16,10 @@ from topix.utils.common import gen_uid
 
 MAX_PROVIDER_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_PROVIDER_REQUEST_BYTES = 100 * 1024 * 1024
+MAX_PROVIDER_RESPONSE_BYTES = 30 * 1024 * 1024
+MAX_GENERATED_IMAGE_PIXELS = 40_000_000
 RasterImageMimeType = Literal["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]
+ProviderRasterMimeType = Literal["image/png", "image/jpeg", "image/webp"]
 Sha256Hex = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 
 
@@ -115,6 +120,8 @@ class GenerationStart(FrozenModel):
 
     uid: str = Field(default_factory=gen_uid, min_length=1)
     attempt_uid: str = Field(default_factory=gen_uid, min_length=1)
+    client_request_uid: str = Field(default_factory=gen_uid, min_length=1)
+    request_fingerprint: Sha256Hex | None = None
     user_uid: str = Field(min_length=1)
     board_uid: str = Field(min_length=1)
     generator_node_uid: str | None = None
@@ -135,14 +142,74 @@ class GenerationStart(FrozenModel):
 
     @model_validator(mode="after")
     def validate_reference_order(self) -> "GenerationStart":
-        """Require explicit contiguous ordering without duplicate node IDs."""
+        """Require ordered references and a canonical request fingerprint."""
         ordinals = [reference.ordinal for reference in self.references]
         if ordinals != list(range(len(self.references))):
             raise ValueError("reference ordinals must be contiguous and start at zero")
         node_uids = [reference.reference_node_uid for reference in self.references if reference.reference_node_uid is not None]
         if len(node_uids) != len(set(node_uids)):
             raise ValueError("reference node IDs must be unique")
+        expected_fingerprint = canonical_request_fingerprint(
+            model_id=self.model_id,
+            prompt=self.prompt,
+            parameters=self.parameters,
+            reference_asset_uids=tuple(reference.asset_uid for reference in self.references),
+            generator_node_uid=self.generator_node_uid,
+        )
+        if self.request_fingerprint is not None and self.request_fingerprint != expected_fingerprint:
+            raise ValueError("request_fingerprint does not match the canonical generation request")
+        object.__setattr__(self, "request_fingerprint", expected_fingerprint)
         return self
+
+
+def canonical_request_fingerprint(
+    *,
+    model_id: str,
+    prompt: str,
+    parameters: ImageGenerationParameters,
+    reference_asset_uids: tuple[str, ...],
+    generator_node_uid: str | None,
+) -> str:
+    """Hash the exact billable request contract using stable canonical JSON."""
+    payload = {
+        "generator_node_uid": generator_node_uid,
+        "model_id": model_id,
+        "parameters": parameters.model_dump(mode="json", exclude_none=False),
+        "prompt": prompt,
+        "reference_asset_uids": list(reference_asset_uids),
+    }
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return sha256(encoded).hexdigest()
+
+
+class GenerationStartOutcome(FrozenModel):
+    """Result of a durable idempotent generation start transaction."""
+
+    generation_uid: str = Field(min_length=1)
+    status: GenerationStatus
+    created: bool
+
+
+class ImageAssetRecord(ImageAssetSnapshot):
+    """Board-scoped asset metadata returned from durable storage."""
+
+    board_uid: str = Field(min_length=1)
+    created_by_user_uid: str = Field(min_length=1)
+    created_at: datetime
+
+
+class ImageGenerationRecord(FrozenModel):
+    """Safe board-scoped generation state used by polling responses."""
+
+    uid: str = Field(min_length=1)
+    board_uid: str = Field(min_length=1)
+    model_id: str = Field(min_length=1)
+    status: GenerationStatus
+    output_asset_uid: str | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+    started_at: datetime
+    completed_at: datetime | None = None
 
 
 class GenerationAttemptStart(FrozenModel):
@@ -160,7 +227,7 @@ class ProviderImageReference(FrozenModel):
 
     asset_uid: str = Field(min_length=1)
     ordinal: int = Field(ge=0)
-    mime_type: RasterImageMimeType
+    mime_type: ProviderRasterMimeType
     content_sha256: Sha256Hex
     width: int = Field(gt=0)
     height: int = Field(gt=0)
@@ -212,7 +279,7 @@ class ProviderImageRequest(FrozenModel):
 class GeneratedImagePayload(FrozenModel):
     """Single generated image returned by the initial provider contract."""
 
-    mime_type: RasterImageMimeType
+    mime_type: ProviderRasterMimeType
     content: bytes = Field(min_length=1, max_length=MAX_PROVIDER_IMAGE_BYTES)
     width: int = Field(gt=0)
     height: int = Field(gt=0)
@@ -302,3 +369,15 @@ class InvalidGenerationTransition(RuntimeError):  # noqa: N818 - approved domain
 
 class ImageAssetResolutionError(LookupError):
     """Raised when a reference asset cannot be resolved on the current board."""
+
+
+class GenerationIdempotencyConflictError(RuntimeError):
+    """Raised when one client request UID is reused for different content."""
+
+
+class ImageStorageError(RuntimeError):
+    """Raised for sanitized internal image storage failures."""
+
+
+class ImageContentValidationError(ValueError):
+    """Raised when image bytes contradict trusted raster metadata."""

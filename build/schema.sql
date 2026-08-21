@@ -228,6 +228,8 @@ CREATE TABLE IF NOT EXISTS image_generation_run (
     uid TEXT NOT NULL UNIQUE,
     user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE RESTRICT,
     board_uid TEXT NOT NULL REFERENCES graphs(uid) ON DELETE RESTRICT,
+    client_request_uid TEXT NOT NULL CHECK (length(btrim(client_request_uid)) > 0),
+    request_fingerprint TEXT NOT NULL CHECK (request_fingerprint ~ '^[0-9a-f]{64}$'),
     generator_node_uid TEXT,
     -- Reserved for the PR-05 canvas result node; intentionally nullable in PR-01.
     output_node_uid TEXT,
@@ -243,6 +245,8 @@ CREATE TABLE IF NOT EXISTS image_generation_run (
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     completed_at TIMESTAMPTZ,
     UNIQUE (uid, board_uid),
+    CONSTRAINT image_generation_run_idempotency_unique
+        UNIQUE (user_uid, board_uid, client_request_uid),
     FOREIGN KEY (output_asset_uid, board_uid)
         REFERENCES image_asset(uid, board_uid) ON DELETE RESTRICT,
     CONSTRAINT image_generation_run_lifecycle_check CHECK (
@@ -341,6 +345,50 @@ CREATE INDEX IF NOT EXISTS idx_image_generation_reference_asset_uid
 -- requests. Dropping NOT NULL is additive, safe, and idempotent.
 ALTER TABLE image_generation_reference
     ALTER COLUMN reference_node_uid DROP NOT NULL;
+
+
+-- PR-02 durable idempotency. Existing foundation rows receive a collision-free
+-- legacy request UID; their placeholder fingerprint is never used for a new API
+-- request because the UID is derived from the already-created generation.
+ALTER TABLE image_generation_run
+    ADD COLUMN IF NOT EXISTS client_request_uid TEXT;
+ALTER TABLE image_generation_run
+    ADD COLUMN IF NOT EXISTS request_fingerprint TEXT;
+UPDATE image_generation_run
+SET client_request_uid = 'legacy:' || uid
+WHERE client_request_uid IS NULL;
+UPDATE image_generation_run
+SET request_fingerprint = repeat('0', 64)
+WHERE request_fingerprint IS NULL;
+ALTER TABLE image_generation_run
+    ALTER COLUMN client_request_uid SET NOT NULL;
+ALTER TABLE image_generation_run
+    ALTER COLUMN request_fingerprint SET NOT NULL;
+
+ALTER TABLE image_generation_run
+    DROP CONSTRAINT IF EXISTS image_generation_run_client_request_uid_check;
+ALTER TABLE image_generation_run
+    ADD CONSTRAINT image_generation_run_client_request_uid_check
+    CHECK (length(btrim(client_request_uid)) > 0);
+ALTER TABLE image_generation_run
+    DROP CONSTRAINT IF EXISTS image_generation_run_request_fingerprint_check;
+ALTER TABLE image_generation_run
+    ADD CONSTRAINT image_generation_run_request_fingerprint_check
+    CHECK (request_fingerprint ~ '^[0-9a-f]{64}$');
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'image_generation_run_idempotency_unique'
+          AND conrelid = 'image_generation_run'::regclass
+    ) THEN
+        ALTER TABLE image_generation_run
+            ADD CONSTRAINT image_generation_run_idempotency_unique
+            UNIQUE (user_uid, board_uid, client_request_uid);
+    END IF;
+END
+$$;
 
 
 -- Upgrade databases initialized from the original PR-01 schema. DROP + ADD is
