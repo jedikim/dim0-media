@@ -317,12 +317,13 @@ CREATE INDEX IF NOT EXISTS idx_image_generation_attempt_provider_request_id
     WHERE provider_request_id IS NOT NULL;
 
 
--- Ordered, request-time snapshots survive later node edits or deletion.
+-- Ordered, request-time snapshots survive later node edits or deletion. Node
+-- association is optional until the canvas integration lands in PR-04.
 CREATE TABLE IF NOT EXISTS image_generation_reference (
     generation_uid TEXT NOT NULL,
     board_uid TEXT NOT NULL,
     ordinal INTEGER NOT NULL CHECK (ordinal >= 0),
-    reference_node_uid TEXT NOT NULL,
+    reference_node_uid TEXT,
     asset_uid TEXT NOT NULL,
     asset_snapshot JSONB NOT NULL CHECK (jsonb_typeof(asset_snapshot) = 'object'),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -335,6 +336,11 @@ CREATE TABLE IF NOT EXISTS image_generation_reference (
 );
 CREATE INDEX IF NOT EXISTS idx_image_generation_reference_asset_uid
     ON image_generation_reference(asset_uid);
+
+-- Original PR-01 databases required a canvas node even for asset-only API
+-- requests. Dropping NOT NULL is additive, safe, and idempotent.
+ALTER TABLE image_generation_reference
+    ALTER COLUMN reference_node_uid DROP NOT NULL;
 
 
 -- Upgrade databases initialized from the original PR-01 schema. DROP + ADD is

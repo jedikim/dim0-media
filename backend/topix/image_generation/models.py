@@ -103,10 +103,10 @@ class ImageAssetSnapshot(FrozenModel):
 
 
 class GenerationReference(FrozenModel):
-    """Ordered node-to-asset reference resolved before a provider call."""
+    """Ordered asset reference with an optional board-authorized node association."""
 
     ordinal: int = Field(ge=0)
-    reference_node_uid: str = Field(min_length=1)
+    reference_node_uid: str | None = Field(default=None, min_length=1)
     asset_uid: str = Field(min_length=1)
 
 
@@ -139,7 +139,7 @@ class GenerationStart(FrozenModel):
         ordinals = [reference.ordinal for reference in self.references]
         if ordinals != list(range(len(self.references))):
             raise ValueError("reference ordinals must be contiguous and start at zero")
-        node_uids = [reference.reference_node_uid for reference in self.references]
+        node_uids = [reference.reference_node_uid for reference in self.references if reference.reference_node_uid is not None]
         if len(node_uids) != len(set(node_uids)):
             raise ValueError("reference node IDs must be unique")
         return self

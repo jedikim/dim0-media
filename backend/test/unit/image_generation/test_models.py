@@ -12,6 +12,8 @@ import topix.image_generation.models as image_models
 
 from topix.image_generation.models import (
     MAX_PROVIDER_IMAGE_BYTES,
+    GenerationReference,
+    GenerationStart,
     ImageAssetCreate,
     ImageAssetSource,
     ProviderImageReference,
@@ -65,6 +67,49 @@ def test_asset_rejects_svg_mime_type() -> None:
     """Active image assets are restricted to the raster allowlist."""
     with pytest.raises(ValidationError, match="mime_type"):
         ImageAssetCreate(storage_key="images/x.svg", **(_asset_kwargs() | {"mime_type": "image/svg+xml"}))
+
+
+def test_generation_accepts_asset_only_and_node_associated_references() -> None:
+    """PR-02 may send asset IDs alone while PR-04 may associate authorized nodes."""
+    generation = GenerationStart(
+        user_uid="user-1",
+        board_uid="board-1",
+        model_id="test/model",
+        prompt="test",
+        references=(
+            GenerationReference(ordinal=0, asset_uid="asset-1"),
+            GenerationReference(ordinal=1, asset_uid="asset-2", reference_node_uid="node-2"),
+        ),
+    )
+
+    assert generation.references[0].reference_node_uid is None
+    assert generation.references[1].reference_node_uid == "node-2"
+
+
+def test_generation_ignores_none_when_checking_duplicate_node_ids() -> None:
+    """Only provided node associations participate in uniqueness validation."""
+    GenerationStart(
+        user_uid="user-1",
+        board_uid="board-1",
+        model_id="test/model",
+        prompt="test",
+        references=(
+            GenerationReference(ordinal=0, asset_uid="asset-1"),
+            GenerationReference(ordinal=1, asset_uid="asset-2"),
+        ),
+    )
+
+    with pytest.raises(ValidationError, match="reference node IDs must be unique"):
+        GenerationStart(
+            user_uid="user-1",
+            board_uid="board-1",
+            model_id="test/model",
+            prompt="test",
+            references=(
+                GenerationReference(ordinal=0, asset_uid="asset-1", reference_node_uid="node-1"),
+                GenerationReference(ordinal=1, asset_uid="asset-2", reference_node_uid="node-1"),
+            ),
+        )
 
 
 def _reference(*, content: bytes, ordinal: int = 0) -> ProviderImageReference:

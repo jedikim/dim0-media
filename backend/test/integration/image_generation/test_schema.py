@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import asyncpg
 import pytest
 
@@ -61,6 +63,7 @@ async def _restore_original_pr01_checks(conn: asyncpg.Connection) -> None:
         "AND error_message IS NULL AND completed_at IS NOT NULL) OR "
         "(status = 'failed' AND output_asset_uid IS NULL AND error_code IS NOT NULL "
         "AND error_message IS NOT NULL AND completed_at IS NOT NULL));"
+        "ALTER TABLE image_generation_reference ALTER COLUMN reference_node_uid SET NOT NULL;"
         "DROP INDEX IF EXISTS idx_image_generation_run_retryable;"
     )
 
@@ -157,12 +160,39 @@ async def test_schema_upgrades_original_pr01_checks_without_data_loss(image_pg_p
     async with image_pg_pool.acquire() as conn:
         asset = await conn.fetchrow("SELECT * FROM image_asset WHERE uid = $1", asset_uid)
         assert asset is not None and asset["storage_key"] == "images/existing.png"
+        reference_node_nullable = await conn.fetchval(
+            "SELECT is_nullable FROM information_schema.columns "
+            "WHERE table_schema = current_schema() "
+            "AND table_name = 'image_generation_reference' "
+            "AND column_name = 'reference_node_uid'"
+        )
+        assert reference_node_nullable == "YES"
         assert (
             await conn.execute(
                 "UPDATE image_generation_run SET status = 'retryable' WHERE uid = $1",
                 generation_uid,
             )
             == "UPDATE 1"
+        )
+        await conn.execute(
+            "INSERT INTO image_generation_reference ("
+            "generation_uid, board_uid, ordinal, reference_node_uid, asset_uid, asset_snapshot"
+            ") VALUES ($1, $2, 0, NULL, $3, $4::jsonb)",
+            generation_uid,
+            board_uid,
+            asset_uid,
+            json.dumps(
+                {
+                    "asset_uid": asset_uid,
+                    "source_kind": "uploaded",
+                    "storage_key": "images/existing.png",
+                    "mime_type": "image/png",
+                    "byte_size": 1,
+                    "width": 1,
+                    "height": 1,
+                    "content_sha256": "a" * 64,
+                }
+            ),
         )
         with pytest.raises(asyncpg.CheckViolationError):
             await conn.execute(

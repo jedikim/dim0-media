@@ -112,7 +112,7 @@ async def test_started_generation_preserves_ordered_asset_snapshot(
         references=tuple(
             GenerationReference(
                 ordinal=ordinal,
-                reference_node_uid=f"reference-node-{ordinal + 1}",
+                reference_node_uid=None if ordinal == 0 else f"reference-node-{ordinal + 1}",
                 asset_uid=asset.uid,
             )
             for ordinal, asset in enumerate(reference_assets)
@@ -132,6 +132,7 @@ async def test_started_generation_preserves_ordered_asset_snapshot(
     assert run is not None and run["status"] == "started"
     assert attempt is not None and attempt["status"] == "started"
     assert [reference["ordinal"] for reference in references] == [0, 1]
+    assert [reference["reference_node_uid"] for reference in references] == [None, "reference-node-2"]
     for reference, reference_asset, reference_content in zip(
         references,
         reference_assets,

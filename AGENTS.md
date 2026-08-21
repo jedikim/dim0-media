@@ -49,7 +49,7 @@ Conventions live with the code they govern (loaded on demand when you work in th
 - All model-provider calls must run on the server.
 - Never store API keys in browser state, canvas nodes, logs, or fixtures.
 - Every generation attempt must be recorded before the provider call and finalized as succeeded or failed.
-- Reference node IDs must be authorized against the current board and resolved to internal assets.
+- Reference node IDs, when provided, must be authorized against the current board and resolved to internal assets.
 - Preserve immutable reference snapshots for audit history.
 - Keep image-generation code isolated from Dim0 core to reduce upstream merge conflicts.
 - Do not mix upstream synchronization with feature work.
