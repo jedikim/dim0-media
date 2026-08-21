@@ -1,3 +1,24 @@
+## v0.3.86 (2026-08-21)
+
+### Feat
+
+- **webui**: make note search span all folders, not just the current layer (#235)
+- **agent**: compact history to a recent tail when the prompt is over budget (#232)
+- **agent**: bound tool output intra-run and age it across turns (#231)
+- **agent**: derive board purpose + rolling conversation context (#230)
+- **agent**: durable board + global memory store and tools (#229)
+- **agent**: forward reasoning through the managed transport (#228)
+- **agent**: capture streamed reasoning in the browser engine (BYOK) (#227)
+- **agent**: inject a deterministic board snapshot into the agent context (#226)
+
+### Fix
+
+- **webui**: make browser-agent note search work (build the index; index titles) (#233)
+
+### Refactor
+
+- **webui**: unify node label to RichText, matching backend (#234)
+
 ## v0.3.85 (2026-08-13)
 
 ### Fix
