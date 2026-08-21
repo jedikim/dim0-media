@@ -230,6 +230,8 @@ CREATE TABLE IF NOT EXISTS image_generation_run (
     board_uid TEXT NOT NULL REFERENCES graphs(uid) ON DELETE RESTRICT,
     client_request_uid TEXT NOT NULL CHECK (length(btrim(client_request_uid)) > 0),
     request_fingerprint TEXT NOT NULL CHECK (request_fingerprint ~ '^[0-9a-f]{64}$'),
+    worker_uid TEXT NOT NULL DEFAULT ('legacy:' || gen_random_uuid()::text),
+    lease_expires_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '1 hour'),
     generator_node_uid TEXT,
     -- Reserved for the PR-05 canvas result node; intentionally nullable in PR-01.
     output_node_uid TEXT,
@@ -240,6 +242,15 @@ CREATE TABLE IF NOT EXISTS image_generation_run (
     status TEXT NOT NULL CONSTRAINT image_generation_run_status_check
         CHECK (status IN ('started', 'retryable', 'succeeded', 'failed')),
     output_asset_uid TEXT UNIQUE,
+    pending_output_storage_key TEXT CONSTRAINT image_generation_run_pending_storage_key_check CHECK (
+        pending_output_storage_key IS NULL
+        OR (
+            pending_output_storage_key LIKE 'images/generated/%'
+            AND pending_output_storage_key NOT LIKE '%//%'
+            AND strpos(pending_output_storage_key, chr(92)) = 0
+            AND pending_output_storage_key !~ '(^|/)\.{1,2}(/|$)'
+        )
+    ),
     error_code TEXT,
     error_message TEXT,
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -257,6 +268,7 @@ CREATE TABLE IF NOT EXISTS image_generation_run (
             AND completed_at IS NULL)
         OR (status = 'succeeded'
             AND output_asset_uid IS NOT NULL
+            AND pending_output_storage_key IS NULL
             AND error_code IS NULL
             AND error_message IS NULL
             AND completed_at IS NOT NULL)
@@ -265,6 +277,10 @@ CREATE TABLE IF NOT EXISTS image_generation_run (
             AND error_code IS NOT NULL
             AND error_message IS NOT NULL
             AND completed_at IS NOT NULL)
+    ),
+    CONSTRAINT image_generation_run_ownership_check CHECK (
+        status NOT IN ('started', 'retryable')
+        OR lease_expires_at IS NOT NULL
     )
 );
 CREATE INDEX IF NOT EXISTS idx_image_generation_run_board_started_at
@@ -275,8 +291,6 @@ CREATE INDEX IF NOT EXISTS idx_image_generation_run_started_pending
     ON image_generation_run(started_at) WHERE status = 'started';
 CREATE INDEX IF NOT EXISTS idx_image_generation_run_retryable
     ON image_generation_run(started_at) WHERE status = 'retryable';
-
-
 -- Attempt-level provider audit. The initial attempt is inserted with the run.
 CREATE TABLE IF NOT EXISTS image_generation_attempt (
     id BIGSERIAL PRIMARY KEY,
@@ -354,16 +368,35 @@ ALTER TABLE image_generation_run
     ADD COLUMN IF NOT EXISTS client_request_uid TEXT;
 ALTER TABLE image_generation_run
     ADD COLUMN IF NOT EXISTS request_fingerprint TEXT;
+ALTER TABLE image_generation_run
+    ADD COLUMN IF NOT EXISTS worker_uid TEXT;
+ALTER TABLE image_generation_run
+    ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ;
+ALTER TABLE image_generation_run
+    ADD COLUMN IF NOT EXISTS pending_output_storage_key TEXT;
 UPDATE image_generation_run
 SET client_request_uid = 'legacy:' || uid
 WHERE client_request_uid IS NULL;
 UPDATE image_generation_run
 SET request_fingerprint = repeat('0', 64)
 WHERE request_fingerprint IS NULL;
+UPDATE image_generation_run
+SET worker_uid = 'legacy:' || uid
+WHERE worker_uid IS NULL;
+UPDATE image_generation_run
+SET lease_expires_at = NOW() + INTERVAL '1 hour'
+WHERE status IN ('started', 'retryable')
+  AND lease_expires_at IS NULL;
 ALTER TABLE image_generation_run
     ALTER COLUMN client_request_uid SET NOT NULL;
 ALTER TABLE image_generation_run
     ALTER COLUMN request_fingerprint SET NOT NULL;
+ALTER TABLE image_generation_run
+    ALTER COLUMN worker_uid SET NOT NULL;
+ALTER TABLE image_generation_run
+    ALTER COLUMN worker_uid SET DEFAULT ('legacy:' || gen_random_uuid()::text);
+ALTER TABLE image_generation_run
+    ALTER COLUMN lease_expires_at SET DEFAULT (NOW() + INTERVAL '1 hour');
 
 ALTER TABLE image_generation_run
     DROP CONSTRAINT IF EXISTS image_generation_run_client_request_uid_check;
@@ -424,6 +457,7 @@ ALTER TABLE image_generation_run ADD CONSTRAINT image_generation_run_lifecycle_c
         AND completed_at IS NULL)
     OR (status = 'succeeded'
         AND output_asset_uid IS NOT NULL
+        AND pending_output_storage_key IS NULL
         AND error_code IS NULL
         AND error_message IS NULL
         AND completed_at IS NOT NULL)
@@ -433,4 +467,24 @@ ALTER TABLE image_generation_run ADD CONSTRAINT image_generation_run_lifecycle_c
         AND error_message IS NOT NULL
         AND completed_at IS NOT NULL)
 );
+
+ALTER TABLE image_generation_run DROP CONSTRAINT IF EXISTS image_generation_run_pending_storage_key_check;
+ALTER TABLE image_generation_run ADD CONSTRAINT image_generation_run_pending_storage_key_check CHECK (
+    pending_output_storage_key IS NULL
+    OR (
+        pending_output_storage_key LIKE 'images/generated/%'
+        AND pending_output_storage_key NOT LIKE '%//%'
+        AND strpos(pending_output_storage_key, chr(92)) = 0
+        AND pending_output_storage_key !~ '(^|/)\.{1,2}(/|$)'
+    )
+);
+
+ALTER TABLE image_generation_run DROP CONSTRAINT IF EXISTS image_generation_run_ownership_check;
+ALTER TABLE image_generation_run ADD CONSTRAINT image_generation_run_ownership_check CHECK (
+    status NOT IN ('started', 'retryable')
+    OR lease_expires_at IS NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_image_generation_run_expired_lease
+    ON image_generation_run(lease_expires_at)
+    WHERE status IN ('started', 'retryable');
 -- END AI IMAGE GENERATION FOUNDATION

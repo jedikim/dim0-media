@@ -6,12 +6,11 @@ import asyncio
 import logging
 import time
 
-from datetime import datetime
-
 from topix.image_generation.capabilities import validate_generation_parameters
 from topix.image_generation.models import (
     MAX_GENERATED_IMAGE_PIXELS,
-    MAX_PROVIDER_IMAGE_BYTES,
+    MAX_PROVIDER_ENCODED_REQUEST_BYTES,
+    MAX_PROVIDER_REFERENCE_IMAGE_BYTES,
     MAX_PROVIDER_REQUEST_BYTES,
     GenerationReference,
     GenerationStart,
@@ -27,6 +26,7 @@ from topix.image_generation.models import (
     ImageStorageError,
     ProviderImageReference,
     ProviderImageRequest,
+    estimate_provider_request_bytes,
 )
 from topix.image_generation.providers.base import ImageProviderAdapter
 from topix.image_generation.storage import ImageStorage
@@ -36,6 +36,8 @@ from topix.store.image_generation import ImageGenerationStore
 logger = logging.getLogger(__name__)
 
 _REFERENCE_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
+DEFAULT_IMAGE_GENERATION_LEASE_SECONDS = 120.0
+DEFAULT_IMAGE_GENERATION_HEARTBEAT_SECONDS = 30.0
 
 
 class ImageGenerationService:
@@ -48,12 +50,22 @@ class ImageGenerationService:
         adapter: ImageProviderAdapter,
         storage: ImageStorage,
         tasks: ImageGenerationTaskManager,
+        worker_uid: str,
+        lease_seconds: float = DEFAULT_IMAGE_GENERATION_LEASE_SECONDS,
+        heartbeat_seconds: float = DEFAULT_IMAGE_GENERATION_HEARTBEAT_SECONDS,
     ) -> None:
         """Bind the shared image-generation dependencies."""
+        if not worker_uid:
+            raise ValueError("worker_uid is required")
+        if lease_seconds <= 0 or heartbeat_seconds <= 0 or heartbeat_seconds >= lease_seconds:
+            raise ValueError("Image generation heartbeat must be positive and shorter than its lease")
         self._store = store
         self._adapter = adapter
         self._storage = storage
         self._tasks = tasks
+        self._worker_uid = worker_uid
+        self._lease_seconds = lease_seconds
+        self._heartbeat_seconds = heartbeat_seconds
 
     async def start_generation(
         self,
@@ -70,11 +82,12 @@ class ImageGenerationService:
         """Durably start one idempotent request and schedule only its winner."""
         validate_generation_parameters(model_id, parameters, reference_count=len(reference_asset_uids))
         assets = await self._store.get_assets(board_uid=board_uid, asset_uids=reference_asset_uids)
-        self._validate_reference_metadata(assets)
+        self._validate_reference_metadata(assets, model_id=model_id, prompt=prompt)
         generation = GenerationStart(
             client_request_uid=client_request_uid,
             user_uid=user_uid,
             board_uid=board_uid,
+            worker_uid=self._worker_uid,
             generator_node_uid=generator_node_uid,
             provider=self._adapter.provider_id,
             model_id=model_id,
@@ -82,14 +95,21 @@ class ImageGenerationService:
             parameters=parameters,
             references=tuple(GenerationReference(ordinal=ordinal, asset_uid=asset.asset_uid) for ordinal, asset in enumerate(assets)),
         )
-        outcome = await self._store.start_generation(generation)
+        outcome = await self._store.start_generation(generation, lease_seconds=self._lease_seconds)
         if not outcome.created:
             return outcome
 
         try:
-            scheduled = self._tasks.schedule(
+            self._tasks.schedule(
                 generation.uid,
                 lambda: self._execute_generation(generation=generation, assets=assets),
+                keepalive=lambda: self._store.renew_lease(
+                    generation_uid=generation.uid,
+                    worker_uid=self._worker_uid,
+                    lease_seconds=self._lease_seconds,
+                ),
+                heartbeat_seconds=self._heartbeat_seconds,
+                lease_seconds=self._lease_seconds,
             )
         except RuntimeError:
             await self._finalize_failure(
@@ -98,29 +118,36 @@ class ImageGenerationService:
                 latency_ms=0,
             )
             raise
-        if not scheduled:
-            await self._finalize_failure(
-                generation=generation,
-                error=ImageProviderError("worker_lost", "The image generation worker is unavailable"),
-                latency_ms=0,
-            )
-            raise RuntimeError("New image generation was not scheduled")
         return outcome
 
     @staticmethod
-    def _validate_reference_metadata(assets: tuple[ImageAssetRecord, ...]) -> None:
+    def _validate_reference_metadata(
+        assets: tuple[ImageAssetRecord, ...],
+        *,
+        model_id: str,
+        prompt: str,
+    ) -> None:
         """Reject unsafe reference metadata before reading or provider work."""
         total_bytes = 0
         for asset in assets:
             if asset.mime_type not in _REFERENCE_MIME_TYPES:
                 raise ImageAssetResolutionError("One or more reference assets use an unsupported image format")
-            if asset.byte_size > MAX_PROVIDER_IMAGE_BYTES:
+            if asset.byte_size > MAX_PROVIDER_REFERENCE_IMAGE_BYTES:
                 raise ImageAssetResolutionError("One or more reference assets exceed the byte limit")
             if asset.width * asset.height > MAX_GENERATED_IMAGE_PIXELS:
                 raise ImageAssetResolutionError("One or more reference assets exceed the pixel limit")
             total_bytes += asset.byte_size
         if total_bytes > MAX_PROVIDER_REQUEST_BYTES:
             raise ImageAssetResolutionError("Reference assets exceed the request byte limit")
+        if (
+            estimate_provider_request_bytes(
+                model_id=model_id,
+                prompt=prompt,
+                reference_byte_sizes=tuple(asset.byte_size for asset in assets),
+            )
+            > MAX_PROVIDER_ENCODED_REQUEST_BYTES
+        ):
+            raise ImageAssetResolutionError("Encoded reference request exceeds the memory limit")
 
     async def _execute_generation(  # noqa: C901 - explicit audit mapping for every execution stage
         self,
@@ -161,7 +188,17 @@ class ImageGenerationService:
             )
 
             stage = "persist"
-            storage_key = await self._storage.write_generated(generation.uid, result.image)
+            storage_key = self._storage.generated_storage_key(generation.uid, result.image)
+            pending_recorded = await self._store.set_pending_output(
+                generation_uid=generation.uid,
+                worker_uid=self._worker_uid,
+                storage_key=storage_key,
+            )
+            if not pending_recorded:
+                raise RuntimeError("Image generation ownership was lost before persistence")
+            written_storage_key = await self._storage.write_generated(generation.uid, result.image)
+            if written_storage_key != storage_key:
+                raise RuntimeError("Generated storage key changed during persistence")
             output_asset = ImageAssetCreate(
                 board_uid=generation.board_uid,
                 created_by_user_uid=generation.user_uid,
@@ -176,50 +213,97 @@ class ImageGenerationService:
             await self._store.finish_succeeded(
                 generation_uid=generation.uid,
                 attempt_uid=generation.attempt_uid,
+                worker_uid=self._worker_uid,
                 output_asset=output_asset,
                 result=result,
                 latency_ms=self._latency_ms(started),
             )
         except asyncio.CancelledError:
-            if storage_key is not None:
-                await self._storage.delete_generated(storage_key)
             await asyncio.shield(
-                self._finalize_failure(
+                self._handle_failure(
                     generation=generation,
                     error=ImageProviderError("worker_lost", "The image generation worker stopped before completion"),
                     latency_ms=self._latency_ms(started),
+                    storage_key=storage_key,
                 )
             )
             raise
         except ImageProviderError as error:
-            if storage_key is not None:
-                await self._storage.delete_generated(storage_key)
-            await self._finalize_failure(generation=generation, error=error, latency_ms=self._latency_ms(started))
+            await self._handle_failure(
+                generation=generation,
+                error=error,
+                latency_ms=self._latency_ms(started),
+                storage_key=storage_key,
+            )
         except (ImageStorageError, ImageContentValidationError):
-            if storage_key is not None:
-                await self._storage.delete_generated(storage_key)
             if stage == "reference":
                 code = "reference_content_mismatch"
                 message = "A reference image is unavailable or no longer matches its audit metadata"
             else:
                 code = "result_persist_failed"
                 message = "The generated image could not be safely persisted"
-            await self._finalize_failure(
+            await self._handle_failure(
                 generation=generation,
                 error=ImageProviderError(code, message),
                 latency_ms=self._latency_ms(started),
+                storage_key=storage_key,
             )
         except Exception as exc:  # noqa: BLE001 - audit every unexpected background failure
-            if storage_key is not None:
-                await self._storage.delete_generated(storage_key)
             code = "provider_unavailable" if stage == "provider" else "result_persist_failed"
             message = "The image provider is temporarily unavailable" if stage == "provider" else "The image generation could not be completed"
-            await self._finalize_failure(
+            committed = await self._handle_failure(
                 generation=generation,
                 error=ImageProviderError(code, message),
                 latency_ms=self._latency_ms(started),
+                storage_key=storage_key,
             )
+            if committed:
+                logger.warning("Recovered a committed image generation after an ambiguous persistence response")
+                return
             raise RuntimeError(f"Image generation failed during {stage} ({type(exc).__name__})") from None
+
+    async def _handle_failure(
+        self,
+        *,
+        generation: GenerationStart,
+        error: ImageProviderError,
+        latency_ms: int,
+        storage_key: str | None,
+    ) -> bool:
+        """Compensate persisted bytes, then safely finalize without masking the cause."""
+        compensation = await self._compensate_output(generation=generation, storage_key=storage_key)
+        if compensation == "committed":
+            return True
+        if compensation == "uncertain":
+            return False
+        await self._finalize_failure(generation=generation, error=error, latency_ms=latency_ms)
+        return False
+
+    async def _compensate_output(self, *, generation: GenerationStart, storage_key: str | None) -> str:
+        """Preserve committed output or delete only a proven unreferenced file."""
+        if storage_key is None:
+            return "cleaned"
+        try:
+            state = await self._store.get_storage_state(generation_uid=generation.uid, storage_key=storage_key)
+        except Exception as exc:  # noqa: BLE001 - uncertainty must preserve potentially committed bytes
+            logger.warning("Image output compensation state lookup failed (%s)", type(exc).__name__)
+            return "uncertain"
+        if state is None:
+            logger.warning("Image output compensation found no generation state")
+            return "uncertain"
+        if state.status == "succeeded" and state.output_storage_key == storage_key and state.storage_key_referenced:
+            return "committed"
+        if state.storage_key_referenced:
+            logger.warning("Image output compensation preserved a referenced storage key")
+            return "committed"
+        if not await self._storage.ensure_generated_deleted(storage_key):
+            logger.warning("Image output compensation cleanup failed")
+            return "uncertain"
+        try:
+            await self._store.clear_pending_output(generation_uid=generation.uid, storage_key=storage_key)
+        except Exception as exc:  # noqa: BLE001 - durable pending work remains retryable
+            logger.warning("Image output compensation acknowledgement failed (%s)", type(exc).__name__)
+        return "cleaned"
 
     async def _finalize_failure(
         self,
@@ -228,17 +312,20 @@ class ImageGenerationService:
         error: ImageProviderError,
         latency_ms: int,
     ) -> None:
-        """Preserve the failed attempt, then terminally fail the no-retry run."""
-        await self._store.finish_attempt_failed(
-            generation_uid=generation.uid,
-            attempt_uid=generation.attempt_uid,
-            error=error,
-            latency_ms=latency_ms,
-        )
-        await self._store.finish_failed(
-            generation_uid=generation.uid,
-            attempt_uid=generation.attempt_uid,
-        )
+        """Atomically terminally fail a no-retry run without masking its cause."""
+        try:
+            transitioned = await self._store.finish_terminal_failed(
+                generation_uid=generation.uid,
+                attempt_uid=generation.attempt_uid,
+                worker_uid=self._worker_uid,
+                error=error,
+                latency_ms=latency_ms,
+            )
+        except Exception as exc:  # noqa: BLE001 - compensation must never replace the original failure
+            logger.warning("Image generation failure finalization failed (%s)", type(exc).__name__)
+            return
+        if not transitioned:
+            logger.info("Image generation failure finalization observed a terminal or ownership conflict")
 
     @staticmethod
     def _latency_ms(started: float) -> int:
@@ -257,9 +344,20 @@ class ImageGenerationService:
         content = await self._storage.read_asset(asset)
         return asset, content
 
-    async def reconcile_incomplete(self, *, cutoff: datetime) -> int:
-        """Fail incomplete runs that cannot have a live task in this process."""
-        reconciled = await self._store.reconcile_incomplete(cutoff=cutoff)
+    async def reconcile_incomplete(self) -> int:
+        """Fail expired leases and drain durable unreferenced-file cleanup work."""
+        reconciled = await self._store.reconcile_incomplete()
         if reconciled:
-            logger.warning("Reconciled %d incomplete image generations from an earlier process", reconciled)
+            logger.warning("Reconciled %d expired image generation leases", reconciled)
+        for pending in await self._store.list_pending_outputs():
+            if not await self._storage.ensure_generated_deleted(pending.storage_key):
+                logger.warning("Reconciled image output cleanup failed")
+                continue
+            try:
+                await self._store.clear_pending_output(
+                    generation_uid=pending.generation_uid,
+                    storage_key=pending.storage_key,
+                )
+            except Exception as exc:  # noqa: BLE001 - the durable row remains for a later retry
+                logger.warning("Reconciled image output acknowledgement failed (%s)", type(exc).__name__)
         return reconciled

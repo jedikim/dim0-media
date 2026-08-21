@@ -97,6 +97,8 @@ IMAGE_MODEL_CAPABILITIES: Mapping[str, ImageModelCapability] = MappingProxyType(
     }
 )
 
+MAX_ANY_MODEL_REFERENCES = max(capability.max_reference_images for capability in IMAGE_MODEL_CAPABILITIES.values())
+
 
 def get_capability(model_id: str) -> ImageModelCapability:
     """Return one registered model or raise an explicit validation error."""

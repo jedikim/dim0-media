@@ -25,7 +25,7 @@ from topix.image_generation.models import (
     ProviderImageResult,
     ProviderUsage,
 )
-from topix.image_generation.storage import validate_raster_bytes
+from topix.image_generation.storage import validate_provider_raster_bytes
 
 _MAX_BASE64_IMAGE_CHARS = ((MAX_PROVIDER_IMAGE_BYTES + 2) // 3) * 4
 
@@ -36,6 +36,7 @@ def serialize_openrouter_request(request: ProviderImageRequest) -> dict[str, Any
         "model": request.model_id,
         "prompt": request.prompt,
         "n": request.parameters.output_count,
+        "output_format": "png",
     }
     if request.references:
         payload["input_references"] = [
@@ -61,10 +62,9 @@ def serialize_openrouter_request(request: ProviderImageRequest) -> dict[str, Any
     return payload
 
 
-def _safe_request_id(response: httpx.Response) -> str | None:
-    """Read a bounded OpenRouter generation ID from response headers."""
-    value = response.headers.get("X-Generation-Id")
-    if value is None:
+def _safe_provider_request_id(value: Any) -> str | None:
+    """Accept only a bounded optional provider ID from the parsed response body."""
+    if not isinstance(value, str):
         return None
     value = value.strip()
     return value if value and len(value) <= 512 else None
@@ -72,23 +72,29 @@ def _safe_request_id(response: httpx.Response) -> str | None:
 
 def _status_error(response: httpx.Response) -> ImageProviderError:
     """Map provider status codes without parsing or exposing raw bodies."""
-    request_id = _safe_request_id(response)
+    if response.status_code in (401, 403):
+        return ImageProviderError(
+            "provider_unauthorized",
+            "The image provider rejected the server credential",
+        )
+    if response.status_code == 408:
+        return ImageProviderError(
+            "provider_timeout",
+            "The image provider timed out",
+        )
     if response.status_code == 429:
         return ImageProviderError(
             "provider_rate_limited",
             "The image provider is rate limited",
-            provider_request_id=request_id,
         )
     if response.status_code >= 500:
         return ImageProviderError(
             "provider_unavailable",
             "The image provider is temporarily unavailable",
-            provider_request_id=request_id,
         )
     return ImageProviderError(
         "provider_rejected",
         "The image provider rejected the generation request",
-        provider_request_id=request_id,
     )
 
 
@@ -150,7 +156,7 @@ def _decode_image(item: Any) -> GeneratedImagePayload:
     if claimed_mime is not None and not isinstance(claimed_mime, str):
         raise ImageProviderError("invalid_provider_response", "The image provider returned invalid image metadata")
     try:
-        raster = validate_raster_bytes(content, claimed_mime_type=claimed_mime)
+        raster = validate_provider_raster_bytes(content, claimed_mime_type=claimed_mime)
         return GeneratedImagePayload(
             mime_type=raster.mime_type,
             content=content,
@@ -182,7 +188,6 @@ def _normalize_response(
     body: bytes,
     *,
     request: ProviderImageRequest,
-    provider_request_id: str | None,
 ) -> ProviderImageResult:
     """Validate an OpenRouter response into the provider-neutral result."""
     try:
@@ -202,7 +207,7 @@ def _normalize_response(
 
     return ProviderImageResult(
         image=image,
-        provider_request_id=provider_request_id,
+        provider_request_id=_safe_provider_request_id(payload.get("id")),
         usage=usage,
         cost_usd=cost,
     )
@@ -234,7 +239,6 @@ class OpenRouterImageAdapter:
             ) as response:
                 if response.status_code >= 400:
                     raise _status_error(response)
-                request_id = _safe_request_id(response)
                 body = await _read_bounded_response(response)
         except ImageProviderError:
             raise
@@ -243,4 +247,4 @@ class OpenRouterImageAdapter:
         except httpx.RequestError:
             raise ImageProviderError("provider_unavailable", "The image provider is temporarily unavailable") from None
 
-        return _normalize_response(body, request=request, provider_request_id=request_id)
+        return _normalize_response(body, request=request)

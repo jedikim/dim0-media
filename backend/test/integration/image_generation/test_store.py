@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import json
 
-from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from hashlib import sha256
 
@@ -29,6 +28,15 @@ from topix.image_generation.models import (
 )
 from topix.store.image_generation import ImageGenerationStore
 from topix.utils.common import gen_uid
+
+WORKER_UID = "test-image-worker"
+
+
+def _generation(**kwargs: object) -> GenerationStart:
+    """Build a generation owned by one stable integration-test worker."""
+    kwargs.setdefault("client_request_uid", gen_uid())
+    kwargs.setdefault("worker_uid", WORKER_UID)
+    return GenerationStart(**kwargs)
 
 
 async def _create_user_and_board(conn: asyncpg.Connection) -> tuple[str, str]:
@@ -54,12 +62,13 @@ def _asset(
 ) -> ImageAssetCreate:
     """Build valid immutable metadata for deterministic image bytes."""
     uid = gen_uid()
+    storage_key = f"images/generated/{uid}/output.png" if source is ImageAssetSource.GENERATED else f"images/{uid}.png"
     return ImageAssetCreate(
         uid=uid,
         board_uid=board_uid,
         created_by_user_uid=user_uid,
         source_kind=source,
-        storage_key=f"images/{uid}.png",
+        storage_key=storage_key,
         mime_type="image/png",
         byte_size=len(content),
         width=64,
@@ -106,7 +115,7 @@ async def test_started_generation_preserves_ordered_asset_snapshot(
     )
     for asset in reference_assets:
         await store.add_asset(asset)
-    generation = GenerationStart(
+    generation = _generation(
         user_uid=user_uid,
         board_uid=board_uid,
         generator_node_uid="generator-node-1",
@@ -163,7 +172,7 @@ async def test_success_is_atomic_and_terminal(initialized_image_pg_pool: asyncpg
         user_uid, board_uid = await _create_user_and_board(conn)
     store = ImageGenerationStore()
     await store.open(initialized_image_pg_pool)
-    generation = GenerationStart(
+    generation = _generation(
         user_uid=user_uid,
         board_uid=board_uid,
         model_id="google/gemini-3-pro-image",
@@ -178,9 +187,15 @@ async def test_success_is_atomic_and_terminal(initialized_image_pg_pool: asyncpg
         content=output_content,
         source=ImageAssetSource.GENERATED,
     )
+    assert await store.set_pending_output(
+        generation_uid=generation.uid,
+        worker_uid=WORKER_UID,
+        storage_key=output_asset.storage_key,
+    )
     await store.finish_succeeded(
         generation_uid=generation.uid,
         attempt_uid=generation.attempt_uid,
+        worker_uid=WORKER_UID,
         output_asset=output_asset,
         result=_provider_result(output_content),
         latency_ms=1234,
@@ -190,6 +205,7 @@ async def test_success_is_atomic_and_terminal(initialized_image_pg_pool: asyncpg
         await store.finish_failed(
             generation_uid=generation.uid,
             attempt_uid=generation.attempt_uid,
+            worker_uid=WORKER_UID,
         )
 
     async with initialized_image_pg_pool.acquire() as conn:
@@ -208,6 +224,7 @@ async def test_success_is_atomic_and_terminal(initialized_image_pg_pool: asyncpg
         await store.finish_succeeded(
             generation_uid=generation.uid,
             attempt_uid=generation.attempt_uid,
+            worker_uid=WORKER_UID,
             output_asset=output_asset,
             result=_provider_result(output_content),
             latency_ms=1500,
@@ -223,7 +240,7 @@ async def test_failure_is_atomic_and_rolls_back_late_success_asset(
         user_uid, board_uid = await _create_user_and_board(conn)
     store = ImageGenerationStore()
     await store.open(initialized_image_pg_pool)
-    generation = GenerationStart(
+    generation = _generation(
         user_uid=user_uid,
         board_uid=board_uid,
         model_id="microsoft/mai-image-2.5-pro",
@@ -240,6 +257,7 @@ async def test_failure_is_atomic_and_rolls_back_late_success_asset(
     await store.finish_attempt_failed(
         generation_uid=generation.uid,
         attempt_uid=generation.attempt_uid,
+        worker_uid=WORKER_UID,
         error=error,
         latency_ms=60000,
     )
@@ -255,6 +273,7 @@ async def test_failure_is_atomic_and_rolls_back_late_success_asset(
     await store.finish_failed(
         generation_uid=generation.uid,
         attempt_uid=generation.attempt_uid,
+        worker_uid=WORKER_UID,
     )
 
     late_content = b"late-output"
@@ -268,6 +287,7 @@ async def test_failure_is_atomic_and_rolls_back_late_success_asset(
         await store.finish_succeeded(
             generation_uid=generation.uid,
             attempt_uid=generation.attempt_uid,
+            worker_uid=WORKER_UID,
             output_asset=late_asset,
             result=_provider_result(late_content),
             latency_ms=61000,
@@ -287,6 +307,7 @@ async def test_failure_is_atomic_and_rolls_back_late_success_asset(
         await store.finish_failed(
             generation_uid=generation.uid,
             attempt_uid=generation.attempt_uid,
+            worker_uid=WORKER_UID,
         )
 
 
@@ -299,7 +320,7 @@ async def test_failed_attempt_is_preserved_before_second_attempt_succeeds(
         user_uid, board_uid = await _create_user_and_board(conn)
     store = ImageGenerationStore()
     await store.open(initialized_image_pg_pool)
-    generation = GenerationStart(
+    generation = _generation(
         user_uid=user_uid,
         board_uid=board_uid,
         model_id="google/gemini-3-pro-image",
@@ -309,6 +330,7 @@ async def test_failed_attempt_is_preserved_before_second_attempt_succeeds(
     await store.finish_attempt_failed(
         generation_uid=generation.uid,
         attempt_uid=generation.attempt_uid,
+        worker_uid=WORKER_UID,
         error=ImageProviderError("transient_timeout", "The provider timed out safely"),
         latency_ms=1000,
     )
@@ -317,6 +339,7 @@ async def test_failed_attempt_is_preserved_before_second_attempt_succeeds(
         await store.start_attempt(
             GenerationAttemptStart(
                 generation_uid=generation.uid,
+                worker_uid=WORKER_UID,
                 attempt_number=3,
                 model_id=generation.model_id,
             )
@@ -324,6 +347,7 @@ async def test_failed_attempt_is_preserved_before_second_attempt_succeeds(
 
     retry = GenerationAttemptStart(
         generation_uid=generation.uid,
+        worker_uid=WORKER_UID,
         attempt_number=2,
         provider="openrouter",
         model_id=generation.model_id,
@@ -336,9 +360,15 @@ async def test_failed_attempt_is_preserved_before_second_attempt_succeeds(
         content=output_content,
         source=ImageAssetSource.GENERATED,
     )
+    assert await store.set_pending_output(
+        generation_uid=generation.uid,
+        worker_uid=WORKER_UID,
+        storage_key=output_asset.storage_key,
+    )
     await store.finish_succeeded(
         generation_uid=generation.uid,
         attempt_uid=retry.uid,
+        worker_uid=WORKER_UID,
         output_asset=output_asset,
         result=_provider_result(output_content),
         latency_ms=800,
@@ -361,6 +391,7 @@ async def test_failed_attempt_is_preserved_before_second_attempt_succeeds(
         await store.start_attempt(
             GenerationAttemptStart(
                 generation_uid=generation.uid,
+                worker_uid=WORKER_UID,
                 attempt_number=3,
                 model_id=generation.model_id,
             )
@@ -385,7 +416,7 @@ async def test_cross_board_reference_rolls_back_started_records(
         source=ImageAssetSource.UPLOADED,
     )
     await store.add_asset(foreign_asset)
-    generation = GenerationStart(
+    generation = _generation(
         user_uid=user_uid,
         board_uid=second_board_uid,
         model_id="microsoft/mai-image-2.5-pro",
@@ -412,7 +443,7 @@ async def test_cross_board_output_rolls_back_asset_and_transition(
         await conn.execute("INSERT INTO graphs (uid) VALUES ($1)", second_board_uid)
     store = ImageGenerationStore()
     await store.open(initialized_image_pg_pool)
-    generation = GenerationStart(
+    generation = _generation(
         user_uid=user_uid,
         board_uid=first_board_uid,
         model_id="google/gemini-3-pro-image",
@@ -426,11 +457,17 @@ async def test_cross_board_output_rolls_back_asset_and_transition(
         content=content,
         source=ImageAssetSource.GENERATED,
     )
+    assert await store.set_pending_output(
+        generation_uid=generation.uid,
+        worker_uid=WORKER_UID,
+        storage_key=wrong_board_asset.storage_key,
+    )
 
     with pytest.raises(InvalidGenerationTransition):
         await store.finish_succeeded(
             generation_uid=generation.uid,
             attempt_uid=generation.attempt_uid,
+            worker_uid=WORKER_UID,
             output_asset=wrong_board_asset,
             result=_provider_result(content),
             latency_ms=100,
@@ -453,7 +490,7 @@ async def test_idempotent_start_reuses_same_request_and_rejects_changed_content(
     store = ImageGenerationStore()
     await store.open(initialized_image_pg_pool)
     client_request_uid = gen_uid()
-    generation = GenerationStart(
+    generation = _generation(
         client_request_uid=client_request_uid,
         user_uid=user_uid,
         board_uid=board_uid,
@@ -463,7 +500,7 @@ async def test_idempotent_start_reuses_same_request_and_rejects_changed_content(
 
     first = await store.start_generation(generation)
     repeated = await store.start_generation(
-        GenerationStart(
+        _generation(
             client_request_uid=client_request_uid,
             user_uid=user_uid,
             board_uid=board_uid,
@@ -477,7 +514,7 @@ async def test_idempotent_start_reuses_same_request_and_rejects_changed_content(
     assert repeated.generation_uid == generation.uid
     with pytest.raises(GenerationIdempotencyConflictError):
         await store.start_generation(
-            GenerationStart(
+            _generation(
                 client_request_uid=client_request_uid,
                 user_uid=user_uid,
                 board_uid=board_uid,
@@ -498,7 +535,7 @@ async def test_concurrent_idempotent_starts_create_one_run_and_attempt(
     await store.open(initialized_image_pg_pool)
     client_request_uid = gen_uid()
     starts = tuple(
-        GenerationStart(
+        _generation(
             client_request_uid=client_request_uid,
             user_uid=user_uid,
             board_uid=board_uid,
@@ -536,19 +573,19 @@ async def test_reconciliation_fails_old_started_and_retryable_runs(
         user_uid, board_uid = await _create_user_and_board(conn)
     store = ImageGenerationStore()
     await store.open(initialized_image_pg_pool)
-    started = GenerationStart(
+    started = _generation(
         user_uid=user_uid,
         board_uid=board_uid,
         model_id="x-ai/grok-imagine-image-2.0",
         prompt="Abandoned started work",
     )
-    retryable = GenerationStart(
+    retryable = _generation(
         user_uid=user_uid,
         board_uid=board_uid,
         model_id="microsoft/mai-image-2.5-pro",
         prompt="Abandoned retryable work",
     )
-    recent = GenerationStart(
+    recent = _generation(
         user_uid=user_uid,
         board_uid=board_uid,
         model_id="x-ai/grok-imagine-image-2.0",
@@ -560,18 +597,17 @@ async def test_reconciliation_fails_old_started_and_retryable_runs(
     await store.finish_attempt_failed(
         generation_uid=retryable.uid,
         attempt_uid=retryable.attempt_uid,
+        worker_uid=WORKER_UID,
         error=ImageProviderError("provider_timeout", "The provider timed out"),
         latency_ms=100,
     )
-    old = datetime.now(timezone.utc) - timedelta(hours=1)
     async with initialized_image_pg_pool.acquire() as conn:
         await conn.execute(
-            "UPDATE image_generation_run SET started_at = $1 WHERE uid = ANY($2::text[])",
-            old,
+            "UPDATE image_generation_run SET lease_expires_at = NOW() - INTERVAL '1 minute' WHERE uid = ANY($1::text[])",
             [started.uid, retryable.uid],
         )
 
-    reconciled = await store.reconcile_incomplete(cutoff=datetime.now(timezone.utc) - timedelta(minutes=30))
+    reconciled = await store.reconcile_incomplete()
 
     assert reconciled == 2
     async with initialized_image_pg_pool.acquire() as conn:
@@ -591,7 +627,187 @@ async def test_reconciliation_fails_old_started_and_retryable_runs(
             "SELECT status, error_code FROM image_generation_run WHERE uid = $1",
             recent.uid,
         )
-    assert {(row["status"], row["error_code"]) for row in runs} == {("failed", "worker_lost")}
+    runs_by_uid = {row["uid"]: row for row in runs}
+    assert (runs_by_uid[started.uid]["status"], runs_by_uid[started.uid]["error_code"]) == ("failed", "worker_lost")
+    assert (runs_by_uid[retryable.uid]["status"], runs_by_uid[retryable.uid]["error_code"]) == (
+        "failed",
+        "provider_timeout",
+    )
     assert started_attempt is not None and tuple(started_attempt.values()) == ("failed", "worker_lost")
     assert retryable_attempt is not None and tuple(retryable_attempt.values()) == ("failed", "provider_timeout")
     assert recent_run is not None and tuple(recent_run.values()) == ("started", None)
+
+
+@pytest.mark.asyncio
+async def test_concurrent_reconcilers_finalize_each_expired_run_once(
+    initialized_image_pg_pool: asyncpg.Pool,
+) -> None:
+    """The advisory lock serializes reconcilers across backend workers."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    store = ImageGenerationStore()
+    await store.open(initialized_image_pg_pool)
+    generations = tuple(
+        _generation(
+            user_uid=user_uid,
+            board_uid=board_uid,
+            model_id="x-ai/grok-imagine-image-2.0",
+            prompt=f"Expired work {index}",
+        )
+        for index in range(3)
+    )
+    for generation in generations:
+        await store.start_generation(generation)
+    async with initialized_image_pg_pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE image_generation_run SET lease_expires_at = NOW() - INTERVAL '1 minute' WHERE uid = ANY($1::text[])",
+            [generation.uid for generation in generations],
+        )
+
+    counts = await asyncio.gather(store.reconcile_incomplete(), store.reconcile_incomplete())
+
+    assert sum(counts) == len(generations)
+    async with initialized_image_pg_pool.acquire() as conn:
+        statuses = await conn.fetch(
+            "SELECT run.status, attempt.status AS attempt_status "
+            "FROM image_generation_run AS run JOIN image_generation_attempt AS attempt "
+            "ON attempt.generation_uid = run.uid WHERE run.uid = ANY($1::text[])",
+            [generation.uid for generation in generations],
+        )
+    assert {(row["status"], row["attempt_status"]) for row in statuses} == {("failed", "failed")}
+
+
+@pytest.mark.asyncio
+async def test_worker_ownership_rejects_late_completion_and_renews_only_owner(
+    initialized_image_pg_pool: asyncpg.Pool,
+) -> None:
+    """Only the active worker may extend or complete a live generation lease."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    store = ImageGenerationStore()
+    await store.open(initialized_image_pg_pool)
+    generation = _generation(
+        user_uid=user_uid,
+        board_uid=board_uid,
+        model_id="google/gemini-3-pro-image",
+        prompt="Keep one authoritative owner",
+    )
+    await store.start_generation(generation, lease_seconds=5)
+    assert not await store.renew_lease(
+        generation_uid=generation.uid,
+        worker_uid="foreign-worker",
+        lease_seconds=30,
+    )
+    assert await store.renew_lease(
+        generation_uid=generation.uid,
+        worker_uid=WORKER_UID,
+        lease_seconds=30,
+    )
+
+    output_content = b"late-foreign-output"
+    output_asset = _asset(
+        user_uid=user_uid,
+        board_uid=board_uid,
+        content=output_content,
+        source=ImageAssetSource.GENERATED,
+    )
+    with pytest.raises(InvalidGenerationTransition):
+        await store.finish_succeeded(
+            generation_uid=generation.uid,
+            attempt_uid=generation.attempt_uid,
+            worker_uid="foreign-worker",
+            output_asset=output_asset,
+            result=_provider_result(output_content),
+            latency_ms=10,
+        )
+    async with initialized_image_pg_pool.acquire() as conn:
+        assert await conn.fetchval("SELECT count(*) FROM image_asset WHERE uid = $1", output_asset.uid) == 0
+
+
+@pytest.mark.asyncio
+async def test_terminal_failure_updates_attempt_and_run_once(
+    initialized_image_pg_pool: asyncpg.Pool,
+) -> None:
+    """The no-retry failure path atomically closes both audit records once."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    store = ImageGenerationStore()
+    await store.open(initialized_image_pg_pool)
+    generation = _generation(
+        user_uid=user_uid,
+        board_uid=board_uid,
+        model_id="microsoft/mai-image-2.5-pro",
+        prompt="Fail atomically",
+    )
+    await store.start_generation(generation)
+    error = ImageProviderError("provider_rejected", "The provider rejected the request")
+
+    assert await store.finish_terminal_failed(
+        generation_uid=generation.uid,
+        attempt_uid=generation.attempt_uid,
+        worker_uid=WORKER_UID,
+        error=error,
+        latency_ms=25,
+    )
+    assert not await store.finish_terminal_failed(
+        generation_uid=generation.uid,
+        attempt_uid=generation.attempt_uid,
+        worker_uid=WORKER_UID,
+        error=error,
+        latency_ms=26,
+    )
+    async with initialized_image_pg_pool.acquire() as conn:
+        values = await conn.fetchrow(
+            "SELECT run.status, attempt.status AS attempt_status, run.error_code, attempt.error_code AS attempt_error "
+            "FROM image_generation_run AS run JOIN image_generation_attempt AS attempt "
+            "ON attempt.generation_uid = run.uid WHERE run.uid = $1",
+            generation.uid,
+        )
+    assert values is not None and tuple(values.values()) == (
+        "failed",
+        "failed",
+        "provider_rejected",
+        "provider_rejected",
+    )
+
+
+@pytest.mark.asyncio
+async def test_terminal_failure_rolls_back_attempt_when_run_update_fails(
+    initialized_image_pg_pool: asyncpg.Pool,
+) -> None:
+    """A run-update fault cannot commit only the attempt half of terminal failure."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    store = ImageGenerationStore()
+    await store.open(initialized_image_pg_pool)
+    generation = _generation(
+        user_uid=user_uid,
+        board_uid=board_uid,
+        model_id="x-ai/grok-imagine-image-2.0",
+        prompt="Rollback both failure records",
+    )
+    await store.start_generation(generation)
+    async with initialized_image_pg_pool.acquire() as conn:
+        await conn.execute(
+            "CREATE FUNCTION reject_generation_failure() RETURNS trigger LANGUAGE plpgsql AS $$ "
+            "BEGIN IF NEW.status = 'failed' THEN RAISE EXCEPTION 'injected run failure'; END IF; RETURN NEW; END $$;"
+            "CREATE TRIGGER reject_generation_failure_trigger BEFORE UPDATE OF status ON image_generation_run "
+            "FOR EACH ROW EXECUTE FUNCTION reject_generation_failure();"
+        )
+
+    with pytest.raises(asyncpg.RaiseError):
+        await store.finish_terminal_failed(
+            generation_uid=generation.uid,
+            attempt_uid=generation.attempt_uid,
+            worker_uid=WORKER_UID,
+            error=ImageProviderError("provider_rejected", "The provider rejected the request"),
+            latency_ms=25,
+        )
+    async with initialized_image_pg_pool.acquire() as conn:
+        values = await conn.fetchrow(
+            "SELECT run.status, attempt.status AS attempt_status, run.error_code, attempt.error_code AS attempt_error "
+            "FROM image_generation_run AS run JOIN image_generation_attempt AS attempt "
+            "ON attempt.generation_uid = run.uid WHERE run.uid = $1",
+            generation.uid,
+        )
+    assert values is not None and tuple(values.values()) == ("started", "started", None, None)

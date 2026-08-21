@@ -5,7 +5,6 @@ import logging
 
 from argparse import ArgumentParser
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 
 import httpx
 import uvicorn
@@ -38,7 +37,7 @@ from topix.datatypes.stage import StageEnum
 from topix.image_generation.providers.openrouter import OpenRouterImageAdapter
 from topix.image_generation.service import ImageGenerationService
 from topix.image_generation.storage import ImageStorage
-from topix.image_generation.tasks import IMAGE_GENERATION_RECONCILIATION_GRACE, ImageGenerationTaskManager
+from topix.image_generation.tasks import ImageGenerationTaskManager
 from topix.nlp.pipeline.parsing import ParsingPipeline
 from topix.setup import setup
 from topix.store.chat import ChatStore
@@ -54,14 +53,24 @@ from topix.store.redis.store import RedisStore
 from topix.store.subscription import SubscriptionStore
 from topix.store.user import UserStore
 from topix.store.user_billing import UserBillingStore
+from topix.utils.common import gen_uid
 from topix.utils.logging import logging_config
 
 logging_config()
 logger = logging.getLogger(__name__)
 
 
+async def _reconcile_image_generations(service: ImageGenerationService) -> None:
+    """Run best-effort lease reconciliation without blocking API startup."""
+    try:
+        await service.reconcile_incomplete()
+    except Exception as exc:  # noqa: BLE001 - startup remains available on maintenance failure
+        logger.warning("Image generation reconciliation failed (%s)", type(exc).__name__)
+
+
 def create_app(stage: StageEnum):
     """Create and configure the FastAPI application."""
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Application lifespan context manager."""
@@ -109,9 +118,7 @@ def create_app(stage: StageEnum):
             adapter=OpenRouterImageAdapter(app.image_generation_http_client),
             storage=ImageStorage(),
             tasks=app.image_generation_tasks,
-        )
-        await app.image_generation_service.reconcile_incomplete(
-            cutoff=datetime.now(timezone.utc) - IMAGE_GENERATION_RECONCILIATION_GRACE
+            worker_uid=gen_uid(),
         )
 
         # Initialize Redis
@@ -133,11 +140,21 @@ def create_app(stage: StageEnum):
             oplog=app.collab_oplog,
         )
 
+        # Do not await maintenance on the startup path. An advisory lock makes
+        # concurrent worker starts a single-writer reconciliation operation.
+        app.image_generation_reconciliation_task = asyncio.create_task(
+            _reconcile_image_generations(app.image_generation_service),
+            name="image-generation-reconciliation",
+        )
+
         yield
 
         # Close stores. They no-op the pool close when sharing, then we close
         # the shared pool exactly once at the end.
         await app.image_generation_tasks.close()
+        if not app.image_generation_reconciliation_task.done():
+            app.image_generation_reconciliation_task.cancel()
+        await asyncio.gather(app.image_generation_reconciliation_task, return_exceptions=True)
         await app.image_generation_http_client.aclose()
         await app.image_generation_store.close()
         await app.graph_store.close()

@@ -14,8 +14,11 @@ from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator,
 
 from topix.utils.common import gen_uid
 
+MAX_IMAGE_ASSET_BYTES = 20 * 1024 * 1024
 MAX_PROVIDER_IMAGE_BYTES = 20 * 1024 * 1024
-MAX_PROVIDER_REQUEST_BYTES = 100 * 1024 * 1024
+MAX_PROVIDER_REFERENCE_IMAGE_BYTES = 10 * 1024 * 1024
+MAX_PROVIDER_REQUEST_BYTES = 20 * 1024 * 1024
+MAX_PROVIDER_ENCODED_REQUEST_BYTES = ((MAX_PROVIDER_REQUEST_BYTES + 2) // 3) * 4 + 96 * 1024
 MAX_PROVIDER_RESPONSE_BYTES = 30 * 1024 * 1024
 MAX_GENERATED_IMAGE_PIXELS = 40_000_000
 RasterImageMimeType = Literal["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]
@@ -120,10 +123,11 @@ class GenerationStart(FrozenModel):
 
     uid: str = Field(default_factory=gen_uid, min_length=1)
     attempt_uid: str = Field(default_factory=gen_uid, min_length=1)
-    client_request_uid: str = Field(default_factory=gen_uid, min_length=1)
+    client_request_uid: str = Field(min_length=1)
     request_fingerprint: Sha256Hex | None = None
     user_uid: str = Field(min_length=1)
     board_uid: str = Field(min_length=1)
+    worker_uid: str = Field(min_length=1)
     generator_node_uid: str | None = None
     provider: str = Field(default="openrouter", min_length=1)
     model_id: str = Field(min_length=1)
@@ -212,11 +216,28 @@ class ImageGenerationRecord(FrozenModel):
     completed_at: datetime | None = None
 
 
+class GenerationStorageState(FrozenModel):
+    """Authoritative run and storage-reference state used for safe compensation."""
+
+    status: GenerationStatus
+    output_storage_key: str | None = None
+    pending_output_storage_key: str | None = None
+    storage_key_referenced: bool
+
+
+class PendingOutputCleanup(FrozenModel):
+    """Durable generated-file cleanup work retained after a failed run."""
+
+    generation_uid: str = Field(min_length=1)
+    storage_key: str = Field(min_length=1)
+
+
 class GenerationAttemptStart(FrozenModel):
     """Input for atomically opening a retry attempt on a retryable run."""
 
     uid: str = Field(default_factory=gen_uid, min_length=1)
     generation_uid: str = Field(min_length=1)
+    worker_uid: str = Field(min_length=1)
     attempt_number: int = Field(gt=1)
     provider: str = Field(default="openrouter", min_length=1)
     model_id: str = Field(min_length=1)
@@ -231,7 +252,7 @@ class ProviderImageReference(FrozenModel):
     content_sha256: Sha256Hex
     width: int = Field(gt=0)
     height: int = Field(gt=0)
-    content: bytes = Field(min_length=1, max_length=MAX_PROVIDER_IMAGE_BYTES)
+    content: bytes = Field(min_length=1, max_length=MAX_PROVIDER_REFERENCE_IMAGE_BYTES)
     _verified_content: bytes | None = PrivateAttr(default=None)
     _verified_digest: str | None = PrivateAttr(default=None)
 
@@ -267,13 +288,37 @@ class ProviderImageRequest(FrozenModel):
 
     @model_validator(mode="after")
     def validate_reference_order(self) -> "ProviderImageRequest":
-        """Preserve reference order and enforce a provider-neutral memory cap."""
+        """Preserve order and enforce raw plus encoded request memory caps."""
         ordinals = [reference.ordinal for reference in self.references]
         if ordinals != list(range(len(self.references))):
             raise ValueError("reference ordinals must be contiguous and start at zero")
-        if sum(len(reference.content) for reference in self.references) > MAX_PROVIDER_REQUEST_BYTES:
+        reference_sizes = tuple(len(reference.content) for reference in self.references)
+        if sum(reference_sizes) > MAX_PROVIDER_REQUEST_BYTES:
             raise ValueError("reference content exceeds the provider request byte limit")
+        if (
+            estimate_provider_request_bytes(
+                model_id=self.model_id,
+                prompt=self.prompt,
+                reference_byte_sizes=reference_sizes,
+            )
+            > MAX_PROVIDER_ENCODED_REQUEST_BYTES
+        ):
+            raise ValueError("encoded provider request exceeds the memory limit")
         return self
+
+
+def estimate_provider_request_bytes(
+    *,
+    model_id: str,
+    prompt: str,
+    reference_byte_sizes: tuple[int, ...],
+) -> int:
+    """Conservatively estimate base64 data URLs plus their JSON request copies."""
+    fixed_json_bytes = 4 * 1024
+    per_reference_json_bytes = 128
+    data_url_prefix_bytes = len("data:image/jpeg;base64,")
+    encoded_references = sum(((size + 2) // 3) * 4 + data_url_prefix_bytes + per_reference_json_bytes for size in reference_byte_sizes)
+    return fixed_json_bytes + len(model_id.encode("utf-8")) + len(prompt.encode("utf-8")) + encoded_references
 
 
 class GeneratedImagePayload(FrozenModel):

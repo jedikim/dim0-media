@@ -83,7 +83,7 @@ def test_serialization_preserves_reference_order_and_top_level_options() -> None
     assert payload["quality"] == "medium"
     assert payload["n"] == 1
     assert "image_config" not in payload
-    assert "output_format" not in payload
+    assert payload["output_format"] == "png"
     urls = [item["image_url"]["url"] for item in payload["input_references"]]
     assert urls[0] == f"data:image/png;base64,{base64.b64encode(first).decode('ascii')}"
     assert urls[1] == f"data:image/jpeg;base64,{base64.b64encode(second).decode('ascii')}"
@@ -109,7 +109,7 @@ def test_gemini_4k_is_pinned_to_the_verified_ai_studio_endpoint() -> None:
 
 
 @pytest.mark.asyncio
-async def test_adapter_normalizes_success_usage_cost_and_generation_id() -> None:
+async def test_adapter_normalizes_success_usage_cost_and_documented_body_id() -> None:
     """A valid response becomes one sanitized provider-neutral result."""
     content = _image_bytes("PNG")
     sentinel = f"runtime-{uuid4()}"
@@ -122,8 +122,9 @@ async def test_adapter_normalizes_success_usage_cost_and_generation_id() -> None
         assert sent["model"] == "x-ai/grok-imagine-image-2.0"
         return httpx.Response(
             200,
-            headers={"X-Generation-Id": "provider-generation-1"},
+            headers={"X-Generation-Id": "unverified-header-must-be-ignored"},
             json={
+                "id": "provider-generation-1",
                 "data": [{"b64_json": base64.b64encode(content).decode("ascii"), "media_type": "image/png"}],
                 "usage": {"prompt_tokens": 7, "completion_tokens": 11, "total_tokens": 18, "cost": 0.0125},
             },
@@ -144,9 +145,38 @@ async def test_adapter_normalizes_success_usage_cost_and_generation_id() -> None
 
 
 @pytest.mark.asyncio
+async def test_adapter_leaves_provider_request_id_null_when_body_has_no_bounded_id() -> None:
+    """Undocumented response headers never become durable provider identifiers."""
+    content = _image_bytes("PNG")
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        """Return only an unverified response header."""
+        return httpx.Response(
+            200,
+            headers={"X-Generation-Id": "header-only"},
+            json={
+                "id": "x" * 513,
+                "data": [{"b64_json": base64.b64encode(content).decode("ascii"), "media_type": "image/png"}],
+            },
+        )
+
+    async with httpx.AsyncClient(base_url=f"{OPENROUTER_BASE_URL}/", transport=httpx.MockTransport(handler)) as client:
+        result = await OpenRouterImageAdapter(client, SecretStr(f"runtime-{uuid4()}")).generate(_request())
+
+    assert result.provider_request_id is None
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("status_code", "expected_code"),
-    [(400, "provider_rejected"), (429, "provider_rate_limited"), (503, "provider_unavailable")],
+    [
+        (400, "provider_rejected"),
+        (401, "provider_unauthorized"),
+        (403, "provider_unauthorized"),
+        (408, "provider_timeout"),
+        (429, "provider_rate_limited"),
+        (503, "provider_unavailable"),
+    ],
 )
 async def test_adapter_sanitizes_provider_http_errors(
     status_code: int,

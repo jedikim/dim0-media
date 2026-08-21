@@ -131,6 +131,7 @@ async def _api_context(pool: asyncpg.Pool, root):
         adapter=adapter,
         storage=ImageStorage(root),
         tasks=tasks,
+        worker_uid="test-api-worker",
     )
     graph_store = _FakeGraphStore(
         board_uid=board_uid,
@@ -299,6 +300,7 @@ async def test_polling_and_content_are_board_read_scoped_and_hide_storage(
         assert content.status_code == 200
         assert content.headers["content-type"] == "image/png"
         assert content.headers["x-content-type-options"] == "nosniff"
+        assert content.headers["cache-control"] == "private, no-store"
         assert content.content == _image_bytes()
         assert str(tmp_path) not in content.text
 

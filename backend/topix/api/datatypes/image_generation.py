@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from topix.image_generation.capabilities import MAX_ANY_MODEL_REFERENCES
 from topix.image_generation.models import GenerationStatus, ImageGenerationParameters
 
 
@@ -23,7 +24,7 @@ class ImageGenerationCreateRequest(ImageGenerationAPIModel):
     model_id: str = Field(min_length=1, max_length=200)
     prompt: str = Field(min_length=1, max_length=32_000)
     parameters: ImageGenerationParameters = Field(default_factory=ImageGenerationParameters)
-    reference_asset_uids: tuple[str, ...] = Field(default=(), max_length=14)
+    reference_asset_uids: tuple[str, ...] = Field(default=(), max_length=MAX_ANY_MODEL_REFERENCES)
     generator_node_uid: str | None = Field(default=None, min_length=1, max_length=200)
 
     @field_validator("prompt")

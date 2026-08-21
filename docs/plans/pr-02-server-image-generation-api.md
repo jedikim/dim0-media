@@ -82,9 +82,9 @@ OpenRouter 문서는 `provider.only`와 `provider.allow_fallbacks`를 `/api/v1/i
 - `POST https://openrouter.ai/api/v1/images`
 - `resolution`, `aspect_ratio`, `quality`, `n`은 top-level field
 - references는 `input_references[].image_url.url`의 서버 생성 base64 data URL
-- `output_format`은 세 endpoint metadata에 없으므로 전송하지 않음
+- 응답 형식을 확정하기 위해 공식 Images API의 top-level `output_format="png"`를 전송
 - buffered response는 `data[].b64_json`, 선택적 `media_type`, `usage.cost`를 포함
-- `X-Generation-Id`가 있으면 provider request ID로 저장
+- 문서로 보장되지 않은 `X-Generation-Id` header는 신뢰하지 않음. 응답 body의 bounded string `id`만 있으면 provider request ID로 저장하고 아니면 null 유지
 - timeout은 upstream 처리 여부를 확정할 수 없으므로 자동 재호출하지 않음
 - raw error body는 DB, 로그, API에 전달하지 않음
 
@@ -138,6 +138,8 @@ POST는 최초 생성과 동일 idempotent 재요청 모두 202를 반환한다.
 - `request_fingerprint TEXT`
 - `(user_uid, board_uid, client_request_uid)` unique index
 - fingerprint는 lowercase SHA-256 check
+- process 소유권용 `worker_uid`, 만료 시각 `lease_expires_at`
+- 파일 쓰기 전에 기록하는 `pending_output_storage_key`
 
 기존 PR-01 row에는 `legacy:<generation_uid>`와 고정된 legacy fingerprint를 backfill한 뒤 NOT NULL을 적용한다. 새 run은 store를 통해서만 두 값을 기록한다.
 
@@ -151,14 +153,14 @@ fingerprint canonical JSON에는 exact prompt, model ID, 모든 normalized param
 4. fingerprint가 같으면 기존 generation/status 반환
 5. 다르면 `GenerationIdempotencyConflict`로 409
 
-background task는 `created=true`인 winner만 예약한다. PostgreSQL이 source of truth이고 Redis는 idempotency에 사용하지 않는다.
+background task는 `created=true`인 winner만 예약한다. PostgreSQL이 source of truth이고 Redis는 idempotency에 사용하지 않는다. worker는 queue 대기와 provider 실행 중 모두 lease를 heartbeat하며 소유권을 잃으면 작업을 취소한다.
 
 추가 store query:
 
 - board-scoped ordered asset metadata 조회
 - generation status 조회
 - asset metadata 조회
-- startup 이전의 `started`/`retryable` run reconciliation
+- 만료 lease의 `started`/`retryable` run reconciliation과 durable pending-file cleanup
 
 ## 6. 생성 상태 흐름
 
@@ -169,14 +171,12 @@ POST winner
   -> bounded task
      -> success: file atomic write
         -> output asset + attempt succeeded + run succeeded (transaction)
-     -> failure: attempt failed (preserved)
-        -> run retryable
-        -> automatic retry 없이 즉시 run failed
+     -> failure: attempt failed + run failed (single transaction, preserved)
 ```
 
-provider 호출 중 PostgreSQL transaction을 열지 않는다. timeout도 동일 attempt를 자동 재호출하지 않는다. 명시적 사용자 retry는 후속 PR이다.
+provider 호출 중 PostgreSQL transaction을 열지 않는다. 재사용 가능한 store 계약은 attempt 실패와 retryable run을 분리하지만, PR-02의 no-auto-retry service는 attempt와 run의 terminal failure를 한 transaction으로 기록한다. timeout도 동일 attempt를 자동 재호출하지 않는다. 명시적 사용자 retry는 후속 PR이다.
 
-startup에서 15분 grace보다 오래된 `started`는 started attempt를 `worker_lost`로 실패시키고 run을 terminal failed로 만든다. `retryable`은 기존 failed attempt를 보존하면서 run을 terminal failed로 만든다. grace는 동시에 시작 중인 다른 backend process의 정상 task를 즉시 실패시키지 않기 위한 최소 방어이며 durable lease가 아니다.
+각 backend process는 한 `worker_uid`를 가지며 active run의 lease를 heartbeat한다. startup reconciliation은 API 시작을 막지 않는 background maintenance task이고, cluster-wide PostgreSQL advisory lock 아래에서 만료된 lease만 `FOR UPDATE SKIP LOCKED`로 가져온다. started attempt는 `worker_lost`로 실패시키고, retryable run은 기존 latest failed attempt를 보존하면서 terminal failed로 만든다. 동시에 시작한 다른 process의 정상 lease는 건드리지 않는다.
 
 ## 7. Storage와 이미지 검증
 
@@ -188,11 +188,14 @@ startup에서 15분 grace보다 오래된 `started`는 started attempt를 `worke
 - existing regular file만 읽음
 - 외부 응답과 오류에 storage key/absolute path를 넣지 않음
 
+Asset read/serve 검증은 DB allowlist와 동일한 PNG/JPEG/WebP/GIF/AVIF를 최대 20 MiB까지 지원한다. Provider reference/output 경계는 PNG/JPEG/WebP만 허용한다.
+
 Reference 사전 검증:
 
 - capability reference count
-- 각 DB byte size 20 MiB 이하
-- 총 raw bytes 100 MiB 이하
+- 각 DB byte size 10 MiB 이하
+- 총 raw bytes 20 MiB 이하
+- base64와 JSON overhead를 포함한 encoded request estimate 상한
 - PNG/JPEG/WebP만 허용
 - 같은 board
 
@@ -209,7 +212,7 @@ Provider response 검증:
 - SVG, GIF, AVIF, HTML/XML 및 decompression-bomb성 입력 거부
 - SHA-256 계산
 
-결과 key는 `images/generated/{generation_uid}/{sha256}.{ext}`다. 같은 filesystem의 temporary file에 write/flush/fsync 후 atomic replace한다. 파일 저장 후 DB success transaction이 실패하면 best-effort 삭제하고 run을 안전하게 실패시킨다.
+결과 key는 `images/generated/{generation_uid}/{sha256}.{ext}`다. 파일 쓰기 전에 이 key를 run에 durable pending cleanup work로 기록한다. 같은 filesystem의 temporary file에 write/flush/fsync 후 atomic replace하고 parent directory도 fsync한다. `to_thread` 취소는 worker thread 종료를 기다린 뒤 이 호출이 만든 파일만 보상한다. DB success 응답이 모호하면 authoritative DB state를 다시 조회하여 committed/reference된 파일은 보존하고, 미참조가 확인된 파일만 삭제한다. DB 상태도 불확실하면 파일과 pending key를 보존해 lease reconciliation이 안전하게 정리한다.
 
 ## 8. OpenRouter adapter와 HTTP client
 
@@ -224,6 +227,7 @@ adapter는 `SecretStr` 또는 기존 fail-closed helper로 server key를 얻는�
 
 adapter가 만드는 safe 오류:
 
+- `provider_unauthorized`
 - `provider_timeout`
 - `provider_rate_limited`
 - `provider_unavailable`
@@ -239,9 +243,9 @@ storage/service가 만드는 safe 오류:
 
 ## 9. Background task 안전장치
 
-`ImageGenerationTaskManager`는 process-local semaphore, generation UID set과 강한 task reference set을 가진다. `schedule()`은 같은 process에서 같은 generation을 두 번 예약하지 않는다. done callback은 task를 제거하고 예외를 회수하되 exception 문자열이나 request data를 로그하지 않는다.
+`ImageGenerationTaskManager`는 process-local semaphore, generation UID set과 강한 task reference set을 가진다. `schedule()`은 같은 process에서 같은 generation을 두 번 예약하지 않으며 queue 대기와 실행 중 lease heartbeat를 유지한다. done callback은 task를 제거하고 예외를 회수하되 exception 문자열이나 request data를 로그하지 않는다.
 
-shutdown은 새 예약을 막고 task를 제한 시간 drain한 뒤 남은 task를 cancel/await한다. cancel path는 가능한 경우 `worker_lost` audit을 기록한다. 여러 backend worker에서는 semaphore가 process별이라는 한계를 문서화한다. DB idempotency는 worker 수와 무관하게 generation/task winner를 하나로 제한하지만 전체 동시 provider 호출 수의 cluster-wide 제한은 durable queue 전까지 제공하지 않는다.
+shutdown은 새 예약을 막고 task를 제한 시간 drain한 뒤 남은 task를 cancel/await한다. cancel path는 가능한 경우 `worker_lost` audit을 기록한다. 여러 backend worker에서도 durable lease와 advisory-lock reconciliation이 live ownership을 보호한다. semaphore는 process별이므로 전체 동시 provider 호출 수의 cluster-wide 제한은 durable queue 전까지 제공하지 않는다.
 
 ## 10. 변경 예상 파일
 
@@ -275,13 +279,13 @@ shutdown은 새 예약을 막고 task를 제한 시간 drain한 뒤 남은 task�
 Unit:
 
 - T2I/I2I capability와 3/1/14 limit, no truncation
-- OpenRouter payload shape, reference order/data URL, top-level options, no `output_format`
+- OpenRouter payload shape, reference order/data URL, top-level options, pinned PNG `output_format`
 - Gemini 4K endpoint pinning
 - strict response/base64/MIME/pixel/size 검증
 - timeout/network/429/4xx/5xx/malformed response의 sanitized error
 - secret/header/prompt/base64/raw body 비로깅
-- storage traversal/symlink escape, content mismatch, atomic write/cleanup
-- task dedup, semaphore, callback, shutdown
+- storage traversal/symlink escape, content mismatch, directory fsync failure, `to_thread` cancellation, atomic write/cleanup
+- task dedup, semaphore, queued/running lease heartbeat, ownership loss, callback, shutdown
 - fingerprint order/normalization
 
 PostgreSQL/API integration:
@@ -294,7 +298,8 @@ PostgreSQL/API integration:
 - output asset 및 usage/cost/request ID/latency
 - 동일 idempotency reuse, fingerprint mismatch 409, 실제 concurrent winner 1개
 - file save 및 DB finalize failure cleanup
-- stale started/retryable reconciliation
+- live/expired lease ownership, concurrent advisory-lock reconciliation, stale started/retryable reconciliation
+- commit-response ambiguity 보존, durable pending-file cleanup과 failure finalization 원자성
 - DB/API/log/fixture secret 비노출
 
 Regression:
@@ -315,6 +320,6 @@ PR-03/PR-04/PR-05 후속:
 - PR-03: generator node UI가 optional `generator_node_uid`를 제공
 - PR-04: canvas edge에서 node→asset authorization 및 legacy upload normalization
 - PR-05: output asset으로 canvas node/edge를 생성하고 `output_node_uid` 기록
-- 후속 운영 PR: explicit user retry, cluster-wide concurrency, durable queue, orphan reconciliation/cleanup, 관리자 usage UI
+- 후속 운영 PR: explicit user retry, cluster-wide concurrency, durable queue, 주기적/독립 cleanup worker, 관리자 usage UI
 
 Upstream 충돌 위험은 `app.py`, `build/schema.sql`, `Makefile`, workflow에 집중된다. 새 기능은 `topix/image_generation`과 전용 router에 격리하고 공용 파일 변경은 composition 및 additive DDL로 제한한다.

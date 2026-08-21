@@ -152,7 +152,8 @@ async def get_image_asset_content(
         content=content,
         media_type=asset.mime_type,
         headers={
-            "Cache-Control": "private, max-age=3600",
+            # This authorized raw-byte route intentionally bypasses the API envelope.
+            "Cache-Control": "private, no-store",
             "X-Content-Type-Options": "nosniff",
         },
     )

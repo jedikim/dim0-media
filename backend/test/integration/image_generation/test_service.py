@@ -16,8 +16,10 @@ import pytest
 from PIL import Image
 
 from topix.image_generation.models import (
+    MAX_PROVIDER_REFERENCE_IMAGE_BYTES,
     GeneratedImagePayload,
     ImageAssetCreate,
+    ImageAssetResolutionError,
     ImageAssetSource,
     ImageGenerationParameters,
     ImageProviderError,
@@ -99,7 +101,15 @@ async def _service(
     tasks = ImageGenerationTaskManager(concurrency=1)
     storage = ImageStorage(tmp_path)
     return (
-        ImageGenerationService(store=store, adapter=adapter, storage=storage, tasks=tasks),
+        ImageGenerationService(
+            store=store,
+            adapter=adapter,
+            storage=storage,
+            tasks=tasks,
+            worker_uid="test-service-worker",
+            lease_seconds=5.0,
+            heartbeat_seconds=1.0,
+        ),
         store,
         tasks,
         storage,
@@ -227,6 +237,46 @@ async def test_ordered_i2i_concurrent_idempotency_schedules_one_provider_call(
 
 
 @pytest.mark.asyncio
+async def test_oversized_reference_metadata_is_rejected_before_file_read_or_provider(
+    initialized_image_pg_pool: asyncpg.Pool,
+    tmp_path,
+) -> None:
+    """Database metadata blocks oversized references before memory or provider work."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    adapter = _FakeAdapter(_result(_image_bytes("black")))
+    service, store, tasks, _ = await _service(initialized_image_pg_pool, tmp_path, adapter)
+    asset = ImageAssetCreate(
+        board_uid=board_uid,
+        created_by_user_uid=user_uid,
+        source_kind=ImageAssetSource.UPLOADED,
+        storage_key=f"images/uploads/{gen_uid()}.png",
+        mime_type="image/png",
+        byte_size=MAX_PROVIDER_REFERENCE_IMAGE_BYTES + 1,
+        width=1,
+        height=1,
+        content_sha256="a" * 64,
+    )
+    await store.add_asset(asset)
+
+    with pytest.raises(ImageAssetResolutionError, match="byte limit"):
+        await service.start_generation(
+            user_uid=user_uid,
+            board_uid=board_uid,
+            client_request_uid=gen_uid(),
+            model_id="x-ai/grok-imagine-image-2.0",
+            prompt="Reject before reading",
+            parameters=ImageGenerationParameters(),
+            reference_asset_uids=(asset.uid,),
+            generator_node_uid=None,
+        )
+    assert adapter.requests == []
+    async with initialized_image_pg_pool.acquire() as conn:
+        assert await conn.fetchval("SELECT count(*) FROM image_generation_run") == 0
+    await tasks.close()
+
+
+@pytest.mark.asyncio
 async def test_provider_failure_preserves_attempt_then_terminally_fails_run(
     initialized_image_pg_pool: asyncpg.Pool,
     tmp_path,
@@ -333,4 +383,136 @@ async def test_storage_failure_becomes_sanitized_terminal_failure(
     assert generation is not None and generation.status == "failed"
     assert generation.error_code == "result_persist_failed"
     assert "/local/path" not in (generation.error_message or "")
+    await tasks.close()
+
+
+@pytest.mark.asyncio
+async def test_committed_success_is_preserved_after_ambiguous_database_response(
+    initialized_image_pg_pool: asyncpg.Pool,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """A commit-then-disconnect ambiguity never deletes the authoritative output."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    output = _image_bytes("teal")
+    adapter = _FakeAdapter(_result(output))
+    service, store, tasks, _ = await _service(initialized_image_pg_pool, tmp_path, adapter)
+    real_finish = store.finish_succeeded
+
+    async def commit_then_raise(**kwargs) -> None:
+        """Commit through the real store, then simulate a lost database response."""
+        await real_finish(**kwargs)
+        raise RuntimeError("ambiguous database response")
+
+    monkeypatch.setattr(store, "finish_succeeded", commit_then_raise)
+    outcome = await service.start_generation(
+        user_uid=user_uid,
+        board_uid=board_uid,
+        client_request_uid=gen_uid(),
+        model_id="x-ai/grok-imagine-image-2.0",
+        prompt="Preserve a committed result",
+        parameters=ImageGenerationParameters(),
+        reference_asset_uids=(),
+        generator_node_uid=None,
+    )
+    await tasks.wait()
+
+    generation = await service.get_generation(board_uid=board_uid, generation_uid=outcome.generation_uid)
+    assert generation is not None and generation.status == "succeeded"
+    assert generation.output_asset_uid is not None
+    delivered = await service.get_asset_content(board_uid=board_uid, asset_uid=generation.output_asset_uid)
+    assert delivered is not None and delivered[1] == output
+    assert len(list(tmp_path.glob("images/generated/**/*.png"))) == 1
+    await tasks.close()
+
+
+@pytest.mark.asyncio
+async def test_uncertain_compensation_preserves_pending_file_until_reconciliation(
+    initialized_image_pg_pool: asyncpg.Pool,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """Unknown DB state keeps bytes and durable cleanup work for a later reconciler."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    output = _image_bytes("navy")
+    adapter = _FakeAdapter(_result(output))
+    service, store, tasks, _ = await _service(initialized_image_pg_pool, tmp_path, adapter)
+    monkeypatch.setattr(store, "finish_succeeded", AsyncMock(side_effect=RuntimeError("database unavailable")))
+    monkeypatch.setattr(store, "get_storage_state", AsyncMock(side_effect=RuntimeError("database unavailable")))
+
+    outcome = await service.start_generation(
+        user_uid=user_uid,
+        board_uid=board_uid,
+        client_request_uid=gen_uid(),
+        model_id="x-ai/grok-imagine-image-2.0",
+        prompt="Retain uncertain output",
+        parameters=ImageGenerationParameters(),
+        reference_asset_uids=(),
+        generator_node_uid=None,
+    )
+    await tasks.wait()
+    generated_files = list(tmp_path.glob("images/generated/**/*.png"))
+    assert len(generated_files) == 1
+    async with initialized_image_pg_pool.acquire() as conn:
+        pending = await conn.fetchrow(
+            "SELECT status, pending_output_storage_key FROM image_generation_run WHERE uid = $1",
+            outcome.generation_uid,
+        )
+        assert pending is not None and pending["status"] == "started"
+        assert pending["pending_output_storage_key"] is not None
+        await conn.execute(
+            "UPDATE image_generation_run SET lease_expires_at = NOW() - INTERVAL '1 minute' WHERE uid = $1",
+            outcome.generation_uid,
+        )
+
+    monkeypatch.undo()
+    assert await service.reconcile_incomplete() == 1
+    assert not generated_files[0].exists()
+    async with initialized_image_pg_pool.acquire() as conn:
+        reconciled = await conn.fetchrow(
+            "SELECT status, pending_output_storage_key FROM image_generation_run WHERE uid = $1",
+            outcome.generation_uid,
+        )
+    assert reconciled is not None and tuple(reconciled.values()) == ("failed", None)
+    await tasks.close()
+
+
+@pytest.mark.asyncio
+async def test_failure_finalization_error_is_sanitized_and_reconciliable(
+    initialized_image_pg_pool: asyncpg.Pool,
+    tmp_path,
+    monkeypatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A DB error cannot replace or leak the original provider failure."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    adapter = _FakeAdapter(ImageProviderError("provider_rejected", "The provider rejected the request"))
+    service, store, tasks, _ = await _service(initialized_image_pg_pool, tmp_path, adapter)
+    sentinel = "unsafe-finalization-detail"
+    monkeypatch.setattr(store, "finish_terminal_failed", AsyncMock(side_effect=RuntimeError(sentinel)))
+
+    outcome = await service.start_generation(
+        user_uid=user_uid,
+        board_uid=board_uid,
+        client_request_uid=gen_uid(),
+        model_id="x-ai/grok-imagine-image-2.0",
+        prompt="Keep failure handling safe",
+        parameters=ImageGenerationParameters(),
+        reference_asset_uids=(),
+        generator_node_uid=None,
+    )
+    await tasks.wait()
+    assert "RuntimeError" in caplog.text
+    assert sentinel not in caplog.text
+    async with initialized_image_pg_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT run.status, attempt.status AS attempt_status "
+            "FROM image_generation_run AS run JOIN image_generation_attempt AS attempt "
+            "ON attempt.generation_uid = run.uid WHERE run.uid = $1",
+            outcome.generation_uid,
+        )
+    assert row is not None and tuple(row.values()) == ("started", "started")
     await tasks.close()
