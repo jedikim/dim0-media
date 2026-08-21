@@ -6,17 +6,22 @@ from datetime import date
 from decimal import Decimal
 from enum import StrEnum
 from hashlib import sha256
-from pathlib import PurePosixPath
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
 
 from topix.utils.common import gen_uid
+
+MAX_PROVIDER_IMAGE_BYTES = 20 * 1024 * 1024
+MAX_PROVIDER_REQUEST_BYTES = 100 * 1024 * 1024
+RasterImageMimeType = Literal["image/png", "image/jpeg", "image/webp", "image/gif", "image/avif"]
+Sha256Hex = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 
 
 class FrozenModel(BaseModel):
     """Base immutable model that rejects undeclared fields."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="forbid", revalidate_instances="never")
 
 
 class ImageAssetSource(StrEnum):
@@ -28,7 +33,16 @@ class ImageAssetSource(StrEnum):
 
 
 class GenerationStatus(StrEnum):
-    """Durable lifecycle states for generations and provider attempts."""
+    """Durable lifecycle states for one logical generation."""
+
+    STARTED = "started"
+    RETRYABLE = "retryable"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class GenerationAttemptStatus(StrEnum):
+    """Durable lifecycle states for one immutable provider attempt."""
 
     STARTED = "started"
     SUCCEEDED = "succeeded"
@@ -52,19 +66,19 @@ class ImageAssetCreate(FrozenModel):
     created_by_user_uid: str = Field(min_length=1)
     source_kind: ImageAssetSource
     storage_key: str
-    mime_type: str = Field(pattern=r"^image/[a-z0-9.+-]+$")
+    mime_type: RasterImageMimeType
     byte_size: int = Field(gt=0)
     width: int = Field(gt=0)
     height: int = Field(gt=0)
-    content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    content_sha256: Sha256Hex
 
     @field_validator("storage_key")
     @classmethod
     def validate_storage_key(cls, value: str) -> str:
-        """Reject URLs, absolute paths, traversal segments, and backslashes."""
+        """Reject unsafe raw key syntax before any path normalization."""
         if not value or value.startswith("/") or "://" in value or "\\" in value:
             raise ValueError("storage_key must be an internal relative key")
-        if any(part in {"", ".", ".."} for part in PurePosixPath(value).parts):
+        if any(part in {"", ".", ".."} for part in value.split("/")):
             raise ValueError("storage_key contains an invalid path segment")
         return value
 
@@ -72,28 +86,20 @@ class ImageAssetCreate(FrozenModel):
 class ImageAssetSnapshot(FrozenModel):
     """Request-time copy of immutable asset metadata used for audit history."""
 
-    asset_uid: str
+    asset_uid: str = Field(min_length=1)
     source_kind: ImageAssetSource
     storage_key: str
-    mime_type: str
-    byte_size: int
-    width: int
-    height: int
-    content_sha256: str
+    mime_type: RasterImageMimeType
+    byte_size: int = Field(gt=0)
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+    content_sha256: Sha256Hex
 
+    @field_validator("storage_key")
     @classmethod
-    def from_asset(cls, asset: ImageAssetCreate) -> "ImageAssetSnapshot":
-        """Copy the immutable provider-relevant fields from an asset."""
-        return cls(
-            asset_uid=asset.uid,
-            source_kind=asset.source_kind,
-            storage_key=asset.storage_key,
-            mime_type=asset.mime_type,
-            byte_size=asset.byte_size,
-            width=asset.width,
-            height=asset.height,
-            content_sha256=asset.content_sha256,
-        )
+    def validate_storage_key(cls, value: str) -> str:
+        """Apply the same raw storage-key contract as new asset metadata."""
+        return ImageAssetCreate.validate_storage_key(value)
 
 
 class GenerationReference(FrozenModel):
@@ -139,22 +145,38 @@ class GenerationStart(FrozenModel):
         return self
 
 
+class GenerationAttemptStart(FrozenModel):
+    """Input for atomically opening a retry attempt on a retryable run."""
+
+    uid: str = Field(default_factory=gen_uid, min_length=1)
+    generation_uid: str = Field(min_length=1)
+    attempt_number: int = Field(gt=1)
+    provider: str = Field(default="openrouter", min_length=1)
+    model_id: str = Field(min_length=1)
+
+
 class ProviderImageReference(FrozenModel):
     """Validated image bytes passed to a provider without URL or path fields."""
 
     asset_uid: str = Field(min_length=1)
     ordinal: int = Field(ge=0)
-    mime_type: str = Field(pattern=r"^image/[a-z0-9.+-]+$")
-    content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    mime_type: RasterImageMimeType
+    content_sha256: Sha256Hex
     width: int = Field(gt=0)
     height: int = Field(gt=0)
-    content: bytes = Field(min_length=1)
+    content: bytes = Field(min_length=1, max_length=MAX_PROVIDER_IMAGE_BYTES)
+    _verified_content: bytes | None = PrivateAttr(default=None)
+    _verified_digest: str | None = PrivateAttr(default=None)
 
     @model_validator(mode="after")
     def validate_content_hash(self) -> "ProviderImageReference":
         """Verify reference bytes match their trusted content digest."""
+        if self._verified_content is self.content and self._verified_digest == self.content_sha256:
+            return self
         if sha256(self.content).hexdigest() != self.content_sha256:
             raise ValueError("reference content does not match content_sha256")
+        object.__setattr__(self, "_verified_content", self.content)
+        object.__setattr__(self, "_verified_digest", self.content_sha256)
         return self
 
 
@@ -178,27 +200,35 @@ class ProviderImageRequest(FrozenModel):
 
     @model_validator(mode="after")
     def validate_reference_order(self) -> "ProviderImageRequest":
-        """Preserve one unambiguous contiguous reference order."""
+        """Preserve reference order and enforce a provider-neutral memory cap."""
         ordinals = [reference.ordinal for reference in self.references]
         if ordinals != list(range(len(self.references))):
             raise ValueError("reference ordinals must be contiguous and start at zero")
+        if sum(len(reference.content) for reference in self.references) > MAX_PROVIDER_REQUEST_BYTES:
+            raise ValueError("reference content exceeds the provider request byte limit")
         return self
 
 
 class GeneratedImagePayload(FrozenModel):
     """Single generated image returned by the initial provider contract."""
 
-    mime_type: str = Field(pattern=r"^image/[a-z0-9.+-]+$")
-    content: bytes = Field(min_length=1)
+    mime_type: RasterImageMimeType
+    content: bytes = Field(min_length=1, max_length=MAX_PROVIDER_IMAGE_BYTES)
     width: int = Field(gt=0)
     height: int = Field(gt=0)
-    content_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    content_sha256: Sha256Hex
+    _verified_content: bytes | None = PrivateAttr(default=None)
+    _verified_digest: str | None = PrivateAttr(default=None)
 
     @model_validator(mode="after")
     def validate_content_hash(self) -> "GeneratedImagePayload":
         """Verify generated bytes match the provider-normalized digest."""
+        if self._verified_content is self.content and self._verified_digest == self.content_sha256:
+            return self
         if sha256(self.content).hexdigest() != self.content_sha256:
             raise ValueError("generated content does not match content_sha256")
+        object.__setattr__(self, "_verified_content", self.content)
+        object.__setattr__(self, "_verified_digest", self.content_sha256)
         return self
 
 

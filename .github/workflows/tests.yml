@@ -94,6 +94,7 @@ jobs:
           --health-retries 5
 
     env:
+      DIM0_IMAGE_GENERATION_DB_TEST: 1
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
 

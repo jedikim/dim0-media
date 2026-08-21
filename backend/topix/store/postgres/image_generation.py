@@ -7,6 +7,7 @@ import json
 import asyncpg
 
 from topix.image_generation.models import (
+    GenerationAttemptStart,
     GenerationStart,
     ImageAssetCreate,
     ImageAssetResolutionError,
@@ -67,12 +68,12 @@ async def start_image_generation(conn: asyncpg.Connection, generation: Generatio
             generation.model_id,
         )
 
-        for reference in generation.references:
-            inserted_uid = await conn.fetchval(
+        if generation.references:
+            inserted_rows = await conn.fetch(
                 "INSERT INTO image_generation_reference ("
                 "generation_uid, board_uid, ordinal, reference_node_uid, asset_uid, asset_snapshot"
                 ") "
-                "SELECT $1, $2, $3, $4, asset.uid, "
+                "SELECT $1, $2, reference.ordinal, reference.node_uid, asset.uid, "
                 "jsonb_build_object("
                 "'asset_uid', asset.uid, "
                 "'source_kind', asset.source_kind, "
@@ -83,17 +84,47 @@ async def start_image_generation(conn: asyncpg.Connection, generation: Generatio
                 "'height', asset.height, "
                 "'content_sha256', asset.content_sha256"
                 ") "
-                "FROM image_asset AS asset "
-                "WHERE asset.uid = $5 AND asset.board_uid = $2 "
+                "FROM unnest($3::integer[], $4::text[], $5::text[]) "
+                "AS reference(ordinal, node_uid, asset_uid) "
+                "JOIN image_asset AS asset "
+                "ON asset.uid = reference.asset_uid AND asset.board_uid = $2 "
                 "RETURNING asset_uid",
                 generation.uid,
                 generation.board_uid,
-                reference.ordinal,
-                reference.reference_node_uid,
-                reference.asset_uid,
+                [reference.ordinal for reference in generation.references],
+                [reference.reference_node_uid for reference in generation.references],
+                [reference.asset_uid for reference in generation.references],
             )
-            if inserted_uid is None:
-                raise ImageAssetResolutionError(f"Image asset {reference.asset_uid} is unavailable on board {generation.board_uid}")
+            if len(inserted_rows) != len(generation.references):
+                resolved_uids = {row["asset_uid"] for row in inserted_rows}
+                missing = next(reference.asset_uid for reference in generation.references if reference.asset_uid not in resolved_uids)
+                raise ImageAssetResolutionError(f"Image asset {missing} is unavailable on board {generation.board_uid}")
+
+
+async def start_image_generation_attempt(conn: asyncpg.Connection, attempt: GenerationAttemptStart) -> None:
+    """Atomically reopen a retryable run and insert its next started attempt."""
+    async with conn.transaction():
+        run = await conn.fetchval(
+            "UPDATE image_generation_run SET status = 'started' "
+            "WHERE uid = $1 AND status = 'retryable' "
+            "AND $2 = (SELECT MAX(existing.attempt_number) + 1 "
+            "FROM image_generation_attempt AS existing WHERE existing.generation_uid = $1) "
+            "RETURNING uid",
+            attempt.generation_uid,
+            attempt.attempt_number,
+        )
+        if run is None:
+            raise InvalidGenerationTransition(f"Generation {attempt.generation_uid} is not retryable at attempt {attempt.attempt_number}")
+        await conn.execute(
+            "INSERT INTO image_generation_attempt ("
+            "uid, generation_uid, attempt_number, provider, model_id, status"
+            ") VALUES ($1, $2, $3, $4, $5, 'started')",
+            attempt.uid,
+            attempt.generation_uid,
+            attempt.attempt_number,
+            attempt.provider,
+            attempt.model_id,
+        )
 
 
 def _validate_output_asset(asset: ImageAssetCreate, result: ProviderImageResult) -> None:
@@ -157,7 +188,7 @@ async def finish_image_generation_succeeded(
             raise InvalidGenerationTransition(f"Generation {generation_uid} is not started on the output asset board")
 
 
-async def finish_image_generation_failed(
+async def finish_image_generation_attempt_failed(
     conn: asyncpg.Connection,
     *,
     generation_uid: str,
@@ -165,7 +196,7 @@ async def finish_image_generation_failed(
     error: ImageProviderError,
     latency_ms: int,
 ) -> None:
-    """Atomically finalize a started attempt and run with a safe failure."""
+    """Preserve a failed attempt and leave its logical run retryable."""
     if latency_ms < 0:
         raise ValueError("latency_ms must not be negative")
     usage = json.dumps(error.usage.model_dump(mode="json", exclude_none=True) if error.usage else {})
@@ -191,13 +222,36 @@ async def finish_image_generation_failed(
             raise InvalidGenerationTransition(f"Attempt {attempt_uid} is not a started attempt for generation {generation_uid}")
 
         run = await conn.fetchval(
-            "UPDATE image_generation_run SET "
-            "status = 'failed', error_code = $2, error_message = $3, completed_at = NOW() "
-            "WHERE uid = $1 AND status = 'started' "
-            "RETURNING uid",
+            "UPDATE image_generation_run SET status = 'retryable' WHERE uid = $1 AND status = 'started' RETURNING uid",
             generation_uid,
-            error.code,
-            error.safe_message,
         )
         if run is None:
             raise InvalidGenerationTransition(f"Generation {generation_uid} is not started")
+
+
+async def finish_image_generation_failed(
+    conn: asyncpg.Connection,
+    *,
+    generation_uid: str,
+    attempt_uid: str,
+) -> None:
+    """Finalize a retryable run using one preserved failed attempt."""
+    async with conn.transaction():
+        run = await conn.fetchval(
+            "UPDATE image_generation_run AS run SET "
+            "status = 'failed', error_code = attempt.error_code, "
+            "error_message = attempt.error_message, completed_at = NOW() "
+            "FROM image_generation_attempt AS attempt "
+            "WHERE run.uid = $1 AND run.status = 'retryable' "
+            "AND attempt.uid = $2 AND attempt.generation_uid = run.uid "
+            "AND attempt.status = 'failed' "
+            "AND attempt.attempt_number = ("
+            "SELECT MAX(latest.attempt_number) FROM image_generation_attempt AS latest "
+            "WHERE latest.generation_uid = run.uid"
+            ") "
+            "RETURNING run.uid",
+            generation_uid,
+            attempt_uid,
+        )
+        if run is None:
+            raise InvalidGenerationTransition(f"Generation {generation_uid} is not retryable with failed attempt {attempt_uid}")

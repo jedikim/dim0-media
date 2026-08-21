@@ -5,7 +5,7 @@ import secrets
 
 import pytest
 
-from topix.config.config import OpenRouterConfig
+from topix.config.config import Config, OpenRouterConfig
 from topix.image_generation.config import (
     ImageProviderConfigurationError,
     require_openrouter_api_key,
@@ -36,3 +36,16 @@ def test_missing_openrouter_key_raises_safe_error(monkeypatch) -> None:
         require_openrouter_api_key(config)
 
     assert "Authorization" not in str(exc_info.value)
+
+
+def test_uninitialized_server_config_raises_provider_configuration_error(monkeypatch, caplog) -> None:
+    """The default helper path normalizes an unavailable Config singleton."""
+    sentinel = secrets.token_urlsafe(24)
+    monkeypatch.setenv("OPENROUTER_API_KEY", sentinel)
+    Config.teardown()
+
+    with pytest.raises(ImageProviderConfigurationError, match="not initialized") as exc_info:
+        require_openrouter_api_key()
+
+    assert sentinel not in str(exc_info.value)
+    assert sentinel not in caplog.text

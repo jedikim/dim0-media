@@ -1,6 +1,10 @@
 """Unit tests for the immutable image-model capability registry."""
 
+from types import MappingProxyType
+
 import pytest
+
+import topix.image_generation.capabilities as capabilities
 
 from topix.image_generation.capabilities import (
     IMAGE_MODEL_CAPABILITIES,
@@ -113,4 +117,34 @@ def test_unsupported_output_count_is_rejected() -> None:
             "google/gemini-3-pro-image",
             ImageGenerationParameters(output_count=2),
             reference_count=0,
+        )
+
+
+@pytest.mark.parametrize(
+    ("reference_count", "capability_field", "error"),
+    [
+        (0, "supports_text_to_image", "does not support text-to-image"),
+        (1, "supports_image_to_image", "does not support image-to-image"),
+    ],
+)
+def test_generation_mode_must_be_supported(
+    monkeypatch,
+    reference_count: int,
+    capability_field: str,
+    error: str,
+) -> None:
+    """Prompt-only and referenced requests enforce their respective mode flags."""
+    model_id = "test/mode-limited"
+    capability = get_capability("x-ai/grok-imagine-image-2.0").model_copy(update={"model_id": model_id, capability_field: False})
+    monkeypatch.setattr(
+        capabilities,
+        "IMAGE_MODEL_CAPABILITIES",
+        MappingProxyType({model_id: capability}),
+    )
+
+    with pytest.raises(CapabilityValidationError, match=error):
+        validate_generation_parameters(
+            model_id,
+            ImageGenerationParameters(),
+            reference_count=reference_count,
         )

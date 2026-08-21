@@ -36,7 +36,7 @@ Don't conflate them.
 
 - **Composition root** `backend/topix/api/app.py` — `create_app`/`lifespan` wire ONE shared Postgres pool (per-store pools used to exhaust PG under burst), all stores, the collab `RoomRegistry` (single-worker v1), and `AgentBoardBridge`. `apply_schema` runs idempotently every boot (additive migrations, no manual step). OpenAPI docs are stage-gated to non-prod. CORS is `*` + credentials (worth flagging).
 - **Cross-store split (load-bearing):**
-  - **Postgres** = relational metadata + durable logs: `graphs` (= boards), `graph_user` (membership/roles), chats, users, billing, share links, `board_oplog`, `note_revisions`, `mini_app_state`. Schema: `build/schema.sql`.
+  - **Postgres** = relational metadata + durable logs: `graphs` (= boards), `graph_user` (membership/roles), chats, users, billing, share links, `board_oplog`, `note_revisions`, `mini_app_state`, plus the image foundation tables `image_asset`, `image_generation_run`, `image_generation_attempt`, and `image_generation_reference`. Schema: `build/schema.sql`.
   - **Qdrant** = ALL graph content in one collection (`topix`): notes, links, documents, chunks, chat messages, subscriptions — `type` is a payload field, not separate collections. `backend/topix/store/qdrant/store.py`.
   - **Redis** = ephemeral: WS tickets, the per-board `seq` counter, rate-limit/quota windows.
   - **No transaction spans Postgres + Qdrant.** e.g. adopt creates the PG graph row and separately writes Qdrant content; partial failures can diverge. Chunk cleanup on note delete is fire-and-forget.
@@ -46,6 +46,7 @@ Don't conflate them.
   - `apply_ops.py` persists `node.*`/`edge.*`; `group.*`/`frame.reorder` are relayed to peers but NOT persisted. Wire colors are theme-adapted and ignored — canonical colors come from `data._storedColors`.
   - `agent_bridge.py`: the server agent appears as room client "agent" (`is_system`) without holding a slot; no-ops the broadcast when no room is open (next opener gets it via snapshot).
 - **Model catalog** `backend/topix/config/catalog.py` over `backend/topix/models.yml`: providers + ordered routes per model; resolution picks the first route whose provider key is present (`available_llms` / `resolve_code`). Adding a model = one YAML entry. `backend/topix/services.yml` does the same for non-LLM services. (`llm_models.yml` is dead — see roadmap.)
+- **Image-generation foundation** `backend/topix/image_generation/` defines credential-free provider contracts and a static capability registry; `backend/topix/store/image_generation.py` records logical runs separately from immutable provider attempts. A failed attempt leaves its run retryable until an explicit terminal failure or a new attempt. Ordered references persist request-time asset snapshots. `image_generation_run.output_node_uid` is a nullable reservation for the PR-05 canvas result node and is not written in PR-01.
 - **Metering / tiering** `api/utils/rate_limit/`: `enforce_rate_limit` resolves plan → minute/day/billing-cycle quota windows. When billing is OFF (self-host), the plan resolves to `plus` — everything unlocked.
 - **Mini-app validation** `backend/topix/mini_app/compile.py`: agent JSX is transpile-validated via a sucrase subprocess, **never evaluated server-side** (evaluating would expose Node globals — an RCE surface).
 

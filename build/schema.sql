@@ -197,14 +197,18 @@ CREATE TABLE IF NOT EXISTS image_asset (
     board_uid TEXT NOT NULL REFERENCES graphs(uid) ON DELETE RESTRICT,
     created_by_user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE RESTRICT,
     source_kind TEXT NOT NULL CHECK (source_kind IN ('uploaded', 'generated', 'legacy_normalized')),
-    storage_key TEXT NOT NULL UNIQUE CHECK (
+    storage_key TEXT NOT NULL UNIQUE CONSTRAINT image_asset_storage_key_check CHECK (
         storage_key <> ''
         AND storage_key NOT LIKE '/%'
         AND storage_key NOT LIKE '%://%'
+        AND storage_key NOT LIKE '%//%'
+        AND storage_key NOT LIKE '%/'
         AND strpos(storage_key, chr(92)) = 0
         AND storage_key !~ '(^|/)\.{1,2}(/|$)'
     ),
-    mime_type TEXT NOT NULL CHECK (mime_type ~ '^image/[a-z0-9.+-]+$'),
+    mime_type TEXT NOT NULL CONSTRAINT image_asset_mime_type_check CHECK (
+        mime_type IN ('image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif')
+    ),
     byte_size BIGINT NOT NULL CHECK (byte_size > 0),
     width INTEGER NOT NULL CHECK (width > 0),
     height INTEGER NOT NULL CHECK (height > 0),
@@ -225,12 +229,14 @@ CREATE TABLE IF NOT EXISTS image_generation_run (
     user_uid TEXT NOT NULL REFERENCES users(uid) ON DELETE RESTRICT,
     board_uid TEXT NOT NULL REFERENCES graphs(uid) ON DELETE RESTRICT,
     generator_node_uid TEXT,
+    -- Reserved for the PR-05 canvas result node; intentionally nullable in PR-01.
     output_node_uid TEXT,
     provider TEXT NOT NULL,
     model_id TEXT NOT NULL,
     prompt TEXT NOT NULL CHECK (length(btrim(prompt)) > 0),
     parameters JSONB NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(parameters) = 'object'),
-    status TEXT NOT NULL CHECK (status IN ('started', 'succeeded', 'failed')),
+    status TEXT NOT NULL CONSTRAINT image_generation_run_status_check
+        CHECK (status IN ('started', 'retryable', 'succeeded', 'failed')),
     output_asset_uid TEXT UNIQUE,
     error_code TEXT,
     error_message TEXT,
@@ -239,8 +245,8 @@ CREATE TABLE IF NOT EXISTS image_generation_run (
     UNIQUE (uid, board_uid),
     FOREIGN KEY (output_asset_uid, board_uid)
         REFERENCES image_asset(uid, board_uid) ON DELETE RESTRICT,
-    CHECK (
-        (status = 'started'
+    CONSTRAINT image_generation_run_lifecycle_check CHECK (
+        (status IN ('started', 'retryable')
             AND output_asset_uid IS NULL
             AND error_code IS NULL
             AND error_message IS NULL
@@ -263,6 +269,8 @@ CREATE INDEX IF NOT EXISTS idx_image_generation_run_user_started_at
     ON image_generation_run(user_uid, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_image_generation_run_started_pending
     ON image_generation_run(started_at) WHERE status = 'started';
+CREATE INDEX IF NOT EXISTS idx_image_generation_run_retryable
+    ON image_generation_run(started_at) WHERE status = 'retryable';
 
 
 -- Attempt-level provider audit. The initial attempt is inserted with the run.
@@ -327,4 +335,48 @@ CREATE TABLE IF NOT EXISTS image_generation_reference (
 );
 CREATE INDEX IF NOT EXISTS idx_image_generation_reference_asset_uid
     ON image_generation_reference(asset_uid);
+
+
+-- Upgrade databases initialized from the original PR-01 schema. DROP + ADD is
+-- intentional and idempotent: CREATE TABLE IF NOT EXISTS cannot tighten checks.
+ALTER TABLE image_asset DROP CONSTRAINT IF EXISTS image_asset_storage_key_check;
+ALTER TABLE image_asset ADD CONSTRAINT image_asset_storage_key_check CHECK (
+    storage_key <> ''
+    AND storage_key NOT LIKE '/%'
+    AND storage_key NOT LIKE '%://%'
+    AND storage_key NOT LIKE '%//%'
+    AND storage_key NOT LIKE '%/'
+    AND strpos(storage_key, chr(92)) = 0
+    AND storage_key !~ '(^|/)\.{1,2}(/|$)'
+);
+
+ALTER TABLE image_asset DROP CONSTRAINT IF EXISTS image_asset_mime_type_check;
+ALTER TABLE image_asset ADD CONSTRAINT image_asset_mime_type_check CHECK (
+    mime_type IN ('image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif')
+);
+
+ALTER TABLE image_generation_run DROP CONSTRAINT IF EXISTS image_generation_run_status_check;
+ALTER TABLE image_generation_run ADD CONSTRAINT image_generation_run_status_check
+    CHECK (status IN ('started', 'retryable', 'succeeded', 'failed'));
+
+-- The original unnamed table-level lifecycle check uses this generated name.
+ALTER TABLE image_generation_run DROP CONSTRAINT IF EXISTS image_generation_run_check;
+ALTER TABLE image_generation_run DROP CONSTRAINT IF EXISTS image_generation_run_lifecycle_check;
+ALTER TABLE image_generation_run ADD CONSTRAINT image_generation_run_lifecycle_check CHECK (
+    (status IN ('started', 'retryable')
+        AND output_asset_uid IS NULL
+        AND error_code IS NULL
+        AND error_message IS NULL
+        AND completed_at IS NULL)
+    OR (status = 'succeeded'
+        AND output_asset_uid IS NOT NULL
+        AND error_code IS NULL
+        AND error_message IS NULL
+        AND completed_at IS NOT NULL)
+    OR (status = 'failed'
+        AND output_asset_uid IS NULL
+        AND error_code IS NOT NULL
+        AND error_message IS NOT NULL
+        AND completed_at IS NOT NULL)
+);
 -- END AI IMAGE GENERATION FOUNDATION

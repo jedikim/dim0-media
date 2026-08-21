@@ -122,6 +122,10 @@ def validate_generation_parameters(
         raise CapabilityValidationError("reference_count must not be negative")
 
     capability = get_capability(model_id)
+    if reference_count == 0 and not capability.supports_text_to_image:
+        raise CapabilityValidationError(f"{model_id} does not support text-to-image generation")
+    if reference_count > 0 and not capability.supports_image_to_image:
+        raise CapabilityValidationError(f"{model_id} does not support image-to-image generation")
     if reference_count > capability.max_reference_images:
         raise CapabilityValidationError(
             f"Too many reference images for {model_id}: received {reference_count}, maximum {capability.max_reference_images}"

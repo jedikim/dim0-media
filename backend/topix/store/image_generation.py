@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import asyncpg
 
-from topix.image_generation.capabilities import validate_generation_parameters
+from topix.image_generation.capabilities import get_capability, validate_generation_parameters
 from topix.image_generation.models import (
+    GenerationAttemptStart,
     GenerationStart,
     ImageAssetCreate,
     ImageProviderError,
@@ -13,9 +14,11 @@ from topix.image_generation.models import (
 )
 from topix.store.postgres.image_generation import (
     create_image_asset,
+    finish_image_generation_attempt_failed,
     finish_image_generation_failed,
     finish_image_generation_succeeded,
     start_image_generation,
+    start_image_generation_attempt,
 )
 from topix.store.postgres.pool import create_pool
 
@@ -58,6 +61,12 @@ class ImageGenerationStore:
         async with self._pool().acquire() as conn:
             await start_image_generation(conn, generation)
 
+    async def start_attempt(self, attempt: GenerationAttemptStart) -> None:
+        """Open the next audit attempt only while its run is retryable."""
+        get_capability(attempt.model_id)
+        async with self._pool().acquire() as conn:
+            await start_image_generation_attempt(conn, attempt)
+
     async def finish_succeeded(
         self,
         *,
@@ -78,7 +87,7 @@ class ImageGenerationStore:
                 latency_ms=latency_ms,
             )
 
-    async def finish_failed(
+    async def finish_attempt_failed(
         self,
         *,
         generation_uid: str,
@@ -86,14 +95,23 @@ class ImageGenerationStore:
         error: ImageProviderError,
         latency_ms: int,
     ) -> None:
-        """Atomically finalize a generation with sanitized failure metadata."""
+        """Finalize one failed attempt while preserving a retryable run."""
         async with self._pool().acquire() as conn:
-            await finish_image_generation_failed(
+            await finish_image_generation_attempt_failed(
                 conn,
                 generation_uid=generation_uid,
                 attempt_uid=attempt_uid,
                 error=error,
                 latency_ms=latency_ms,
+            )
+
+    async def finish_failed(self, *, generation_uid: str, attempt_uid: str) -> None:
+        """Make a retryable generation terminal using a preserved failure."""
+        async with self._pool().acquire() as conn:
+            await finish_image_generation_failed(
+                conn,
+                generation_uid=generation_uid,
+                attempt_uid=attempt_uid,
             )
 
     async def close(self) -> None:
