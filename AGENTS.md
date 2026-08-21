@@ -42,3 +42,24 @@ Conventions live with the code they govern (loaded on demand when you work in th
 - Focus on intent and behavior (what it does, key inputs/outputs), not line-by-line implementation details.
 - Keep docstrings concise (1-3 lines by default; expand only for non-obvious logic).
 - Skip trivial/redundant comments when the code is already self-explanatory.
+
+## Project Rules
+
+- This is a collaborative AI image canvas, not a screenplay analyzer or storyboard generator.
+- All model-provider calls must run on the server.
+- Never store API keys in browser state, canvas nodes, logs, or fixtures.
+- Every generation attempt must be recorded before the provider call and finalized as succeeded or failed.
+- Reference node IDs, when provided, must be authorized against the current board and resolved to internal assets.
+- Preserve immutable reference snapshots for audit history.
+- Keep image-generation code isolated from Dim0 core to reduce upstream merge conflicts.
+- Do not mix upstream synchronization with feature work.
+- Do not modify unrelated files or overwrite user changes.
+- Run relevant frontend and backend tests before handoff.
+
+## Code Review Rules
+
+- Flag any browser-side provider call or exposed provider credential.
+- Flag generation paths that can finish without an audit record.
+- Flag references loaded from arbitrary URLs or unauthorized boards.
+- Flag silent truncation of reference images beyond a model's limit.
+- Flag schema changes that can destroy existing generation or asset history.

@@ -166,7 +166,7 @@ test-ui: ## Webui vitest suite (one-shot)
 
 .PHONY: lint-backend
 lint-backend: ## Backend ruff check (runs before backend tests in CI)
-	cd backend && uv run ruff check topix test/unit
+	cd backend && uv run ruff check topix test/unit test/integration/image_generation
 
 .PHONY: setup-mini-app-compiler
 setup-mini-app-compiler: ## Install mini-app compiler node deps (sucrase) for the compile-bridge tests
@@ -182,6 +182,10 @@ setup-mini-app-compiler: ## Install mini-app compiler node deps (sucrase) for th
 .PHONY: test-backend
 test-backend: setup-mini-app-compiler ## Backend unit tests (integration deferred — they need DBs)
 	cd backend && uv run pytest test/unit
+
+.PHONY: test-backend-db
+test-backend-db: ## Image-generation DB tests (requires PostgreSQL 15 and explicit opt-in)
+	cd backend && uv run pytest test/integration/image_generation
 
 .PHONY: test-tauri
 test-tauri: ## Desktop (Tauri) Rust unit tests — the rusqlite storage layer (needs Rust + WebKit/GTK)
