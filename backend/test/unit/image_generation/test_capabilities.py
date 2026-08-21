@@ -9,6 +9,7 @@ import topix.image_generation.capabilities as capabilities
 from topix.image_generation.capabilities import (
     IMAGE_MODEL_CAPABILITIES,
     get_capability,
+    get_resolution_provider_tag,
     validate_generation_parameters,
 )
 from topix.image_generation.models import (
@@ -39,8 +40,14 @@ def test_default_capabilities_match_verified_provider_metadata(
     assert capability.max_output_images == max_outputs
     assert capability.supports_text_to_image is True
     assert capability.supports_image_to_image is True
-    assert capability.verified_at.isoformat() == "2026-08-21"
+    assert capability.verified_at.isoformat() == "2026-08-22"
     assert capability.source_urls
+
+
+def test_gemini_4k_requires_verified_ai_studio_endpoint() -> None:
+    """Only Gemini 4K requires the endpoint that advertises that resolution."""
+    assert get_resolution_provider_tag("google/gemini-3-pro-image", "4K") == "google-ai-studio/global"
+    assert get_resolution_provider_tag("google/gemini-3-pro-image", "2K") is None
 
 
 def test_registry_is_immutable() -> None:

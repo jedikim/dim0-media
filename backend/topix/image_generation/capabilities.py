@@ -10,8 +10,19 @@ from topix.image_generation.models import (
     ImageModelCapability,
 )
 
-_VERIFIED_AT = date(2026, 8, 21)
+_VERIFIED_AT = date(2026, 8, 22)
 _OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/images/models"
+
+IMAGE_MODEL_RESOLUTION_PROVIDER_TAGS: Mapping[tuple[str, str], str] = MappingProxyType(
+    {("google/gemini-3-pro-image", "4K"): "google-ai-studio/global"}
+)
+
+
+def get_resolution_provider_tag(model_id: str, resolution: str | None) -> str | None:
+    """Return a verified endpoint pin required for one model resolution."""
+    if resolution is None:
+        return None
+    return IMAGE_MODEL_RESOLUTION_PROVIDER_TAGS.get((model_id, resolution))
 
 
 IMAGE_MODEL_CAPABILITIES: Mapping[str, ImageModelCapability] = MappingProxyType(
@@ -79,11 +90,14 @@ IMAGE_MODEL_CAPABILITIES: Mapping[str, ImageModelCapability] = MappingProxyType(
             verified_at=_VERIFIED_AT,
             source_urls=(
                 _OPENROUTER_MODELS_URL,
+                "https://openrouter.ai/api/v1/images/models/google/gemini-3-pro-image/endpoints",
                 "https://ai.google.dev/gemini-api/docs/image-generation",
             ),
         ),
     }
 )
+
+MAX_ANY_MODEL_REFERENCES = max(capability.max_reference_images for capability in IMAGE_MODEL_CAPABILITIES.values())
 
 
 def get_capability(model_id: str) -> ImageModelCapability:
