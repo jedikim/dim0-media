@@ -47,18 +47,23 @@ names:
 - `dim0:image-result-node:{generation_uid}`
 - `dim0:image-result-edge:{generation_uid}`
 
-The PostgreSQL transaction advisory-locks the generation before any Qdrant lookup
-or mutation. Existing canonical objects are validated and reused; conflicting
-objects fail closed. The server creates only missing pieces through
-`AgentBoardBridge`, then binds `output_node_uid` only after both node and edge are
-durable.
+Qdrant reconciliation happens before the PostgreSQL writer critical section.
+Existing live canonical objects are validated and reused, tombstones are treated
+as absent only for an explicit recreation, and conflicting live objects fail
+closed. After both pieces are durable, a short advisory-locked PostgreSQL
+transaction appends one deterministic combined `node.add` + `edge.add`
+collaboration batch and binds `output_node_uid` using the same shared-pool
+connection. The batch commit is therefore recoverable and never recursively
+acquires the pool.
 
 Recovery is intentionally idempotent across the non-transactional stores:
 
 - node-only state: create/validate the missing edge;
 - node+edge with missing PostgreSQL binding: validate and bind;
 - response loss: return the same canonical IDs on retry;
-- repeated/concurrent calls: advisory lock serializes one writer;
+- repeated/concurrent calls: advisory lock serializes the final batch/bind writer;
+- Qdrant success with oplog failure: retry validates the same objects and appends
+  the missing deterministic batch without duplicating audits;
 - canonical collision: do not overwrite;
 - `recreate: false` with an already-bound but deleted canvas object: do not revive;
 - explicit `recreate: true`: restore missing canonical objects with the same IDs.
@@ -80,8 +85,9 @@ which sends `recreate: true` without creating a generation, attempt, or asset.
 
 ## Authenticated image loading
 
-`useAuthedImage` retries only `TypeError`, HTTP 408/429, and 5xx responses. It uses
-at most three total attempts with a small exponential delay under 30 seconds.
+`useAuthedImage` retries only timeouts, `TypeError`, HTTP 408/429, and 5xx
+responses. It uses at most three attempts, a ten-second per-attempt deadline, and
+a hard thirty-second total deadline.
 Determinate 4xx responses stop immediately. ID changes/unmount abort the current
 request and timer, stale responses cannot replace the current image, and every
 replaced/unmounted object URL is revoked.
@@ -96,12 +102,19 @@ The custom definition, view registry, inline-editor and style-memory exclusions,
 frontend Note conversion, backend Note-to-wire projection, inbound apply path,
 snapshot/catch-up, clone/paste stamping, and parity tests all recognize
 `generated-image`. Server-created Notes flow through `AgentBoardBridge`, so live
-peers receive ordinary `node.add` and `edge.add` operations and reconnecting peers
-hydrate the same type and association.
+peers receive one ordinary combined `node.add` + `edge.add` batch and reconnecting
+peers recover it from the PostgreSQL oplog. Result batches are durable even when no
+room is open; live delivery happens only after the batch/bind transaction commits.
 
-Same-board clone keeps the immutable asset/generation/generator association under a
-new canvas node ID and performs no upload or generation. Cross-board paste keeps the
-marker only for a safe unavailable placeholder and clears every board-scoped UID.
+Same-board clone and same-board cross-folder paste keep the immutable
+asset/generation/generator association under a new canvas node ID and perform no
+upload or generation. Cross-board paste keeps the marker only for a safe unavailable
+placeholder and clears every board-scoped UID.
+
+The `automaticEnsures` single-flight cache and image-reference target-lock map are
+still module-global. Their operations are now bounded and cleaned up, while moving
+both into an explicit board-scoped lifecycle owner remains a follow-up rather than a
+late redesign of this PR.
 
 ## Generated results as references
 
@@ -124,7 +137,8 @@ concurrency and the module-global lock redesign remain outside this PR.
   cleanup, hard polling deadline, automatic ensure, explicit recreate, viewer/local
   zero-mutation, preview de-duplication, clone/paste, immutable references, and
   snapshot/live hydration.
-- Integration: disposable PostgreSQL and Qdrant only; clean/reapplied schema;
+- Integration: disposable PostgreSQL, Qdrant, and Redis with a one-connection
+  PostgreSQL pool; clean/reapplied schema;
   existing local/dev volumes and retained smoke data are untouched.
 - Full Node 20 UI/backend checks, local-only mocked Playwright E2E, Rust/Tauri CI,
   `git diff --check`, Ruff, and GitHub CI. External provider calls remain zero.
