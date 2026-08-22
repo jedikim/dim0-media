@@ -35,6 +35,14 @@ export const nodeToNote = (node: Node): Note => {
     mimeType: extraProperties.mimeType,
     status: extraProperties.status,
     summary: extraProperties.summary,
+    imagePrompt: extraProperties.imagePrompt
+      ?? (node.type === "image-generator" ? { type: "text", text: "" } : undefined),
+    imageModelId: extraProperties.imageModelId,
+    imageAspectRatio: extraProperties.imageAspectRatio,
+    imageResolution: extraProperties.imageResolution,
+    imageQuality: extraProperties.imageQuality,
+    activeGenerationUid: extraProperties.activeGenerationUid,
+    imagePendingRequest: extraProperties.imagePendingRequest,
   }
 
   return {
@@ -63,7 +71,9 @@ export const nodeToNote = (node: Node): Note => {
       {
         // Prefer the original style.type stashed in data — preserves it
         // across canvas-type overrides (e.g. documents).
-        type: data.styleType ?? canvasTypeToDim0(node.type),
+        type: node.type === "image-generator"
+          ? "rectangle"
+          : data.styleType ?? canvasTypeToDim0(node.type),
         angle: node.angle * RAD_TO_DEG,
         groupIds,
       },

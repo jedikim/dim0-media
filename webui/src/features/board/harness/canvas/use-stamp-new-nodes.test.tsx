@@ -10,7 +10,12 @@ const BOARD_ID = "board-1"
 
 
 // Add a node the way the agent's write_note does: addNode() directly, no style.
-const addNode = (store: CanvasStore, id: string, type: string): void => {
+const addNode = (
+  store: CanvasStore,
+  id: string,
+  type: string,
+  data: Record<string, unknown> = {},
+): void => {
   act(() => {
     store.addNode({
       id: asNodeId(id),
@@ -24,7 +29,7 @@ const addNode = (store: CanvasStore, id: string, type: string): void => {
       content: "a long body that grow-to-fit would expand the node to",
       // graphUid matches scope so the rescope branch doesn't fire — we want to
       // prove autoFit alone triggers the stamp.
-      data: { graphUid: BOARD_ID },
+      data: { graphUid: BOARD_ID, ...data },
     } as unknown as Parameters<CanvasStore["addNode"]>[0])
   })
 }
@@ -77,5 +82,32 @@ describe("useStampNewNodes — autoFit normalization", () => {
     mount(store)
     addNode(store, "r1", "rect")
     expect(autoFitOf(store, "r1")).not.toBe(false)
+  })
+
+
+  it("strips only pending execution data from a pasted image generator", () => {
+    const store = createCanvasStore()
+    mount(store)
+    addNode(store, "g1", "image-generator", {
+      properties: {
+        imagePrompt: { type: "text", text: "a blue bird" },
+        activeGenerationUid: { type: "keyword", value: "gen-existing" },
+        imagePendingRequest: { type: "text", text: '{"clientRequestUid":"old"}' },
+      },
+    })
+
+    const data = store.getNode(asNodeId("g1"))?.data as {
+      properties: Record<string, unknown>
+    }
+    expect(data.properties.imagePrompt).toEqual({ type: "text", text: "a blue bird" })
+    expect(data.properties.activeGenerationUid).toEqual({
+      type: "keyword",
+      value: "gen-existing",
+    })
+    expect(data.properties.imagePendingRequest).toEqual({
+      type: "text",
+      text: "",
+      searchable: false,
+    })
   })
 })

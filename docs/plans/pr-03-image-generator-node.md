@@ -3,24 +3,27 @@
 캔버스 위에서 프롬프트를 쓰고 AI 이미지를 생성하는 first-party 노드를 구현하기 위한 명세.
 
 - **base**: `main` @ `c6e18b9` (PR-01·PR-02 병합 완료)
-- **scope**: frontend + `webui/src/api.ts` 2줄
+- **scope**: frontend + `webui/src/api.ts` blob mode + backend Pydantic contract test
 - **est.**: 신규 7 · 수정 12 · 테스트 6 파일 / ~1,250 LOC
 
 ---
 
 ## 0. 결론 요약
 
-### 버릴 것 — 없음
+### 작업 브랜치
 
-원격에 PR-03 브랜치나 PR이 **존재하지 않는다**. `git ls-remote --heads origin` 결과는 `main`과 이미 병합된 `codex/feat-ai-image-foundation` 뿐이다. `webui/src`에도 image-generation 관련 잔여 코드가 없다 (검색 결과는 전부 무관한 `features/agent`의 기존 `imageGeneration` 서비스 토글). 잘못된 방향으로 갔던 작업은 push되지 않았으므로 **정리할 대상이 없고, 최신 `main`에서 새로 시작한다.**
+승인된 구현 브랜치는 `feat/pr-03-image-generator-node`다. 새 브랜치를 만들지 않고
+이 브랜치에서 구현과 Draft PR을 완료한다.
 
 ### 아키텍처 — C안
 
 host React에서 도는 first-party `image-generator` custom node. mini-app iframe을 쓰지 않는다. 사용자에게는 "캔버스 위의 app"으로 보이되 내부는 일반 React 컴포넌트다. **백엔드·DB 변경 없음.**
 
-### OpenRouter 키 — UI와 병행, 병합 전 필수
+### OpenRouter 키 — 무료 검증과 Draft PR 이후 별도 승인
 
-PR-02는 병합됐지만 실제 provider와 **한 번도 통신한 적이 없다**. 약 **$0.04**짜리 실호출 1회를 *Dim0 API를 통과시키는 경로로* 해서 어댑터·저장·감사·인증 다운로드까지 한 번에 검증한다. UI 구현과 병행해도 되지만 **PR-03 병합 전에는 반드시** 통과해야 한다.
+PR-02는 병합됐지만 실제 provider와 **한 번도 통신한 적이 없다**. 무료 자동
+검증과 Draft PR 생성을 먼저 완료하고, 약 **$0.04**짜리 실호출 1회에 대해 사용자
+승인을 별도로 받는다. 승인 전에는 OpenRouter를 호출하지 않는다.
 
 ---
 
@@ -65,7 +68,7 @@ PR-01과 PR-02가 서버 쪽을 전부 끝내놨다. PR-03은 UI 한 겹만 얹�
 | **`apiFetch`는 envelope를 벗기지 않는다** | `api.ts:243` — `res.json()`을 `TResponse`로 반환 | bare response에 어댑터 **불필요** |
 | **노드 속성은 `extra='allow'`지만 값은 `DataProperty`여야 한다** | `datatypes/resource.py:29` + `__pydantic_extra__: dict[str, DataProperty]` | `TextProperty`/`KeywordProperty`만 쓰면 **백엔드·DB 변경 0** |
 | **노드 id는 생성 시 동기 반환** | `use-add-image.ts:89` — `const id = store.addNode(...)` | `generator_node_uid` 즉시 확보 |
-| `provider_request_id` 위치 | **미확인.** PR-02가 body `id`를 추정 사용 중 | 섹션 4의 실호출로 확정 |
+| `provider_request_id` 위치 | **미확인.** PR-02가 body `id`를 추정 사용 중 | 승인된 smoke test에서 후속 확인 |
 
 ---
 
@@ -96,7 +99,10 @@ PR-01과 PR-02가 서버 쪽을 전부 끝내놨다. PR-03은 UI 한 겹만 얹�
 
 ### 로컬 보드에서는 노드를 만들 수 없어야 한다
 
-Dim0에는 서버에 동기화되지 않는 **로컬 전용 보드**가 있다. `features/board/local/`에 `local-board-screen.tsx`·`use-local-boards.ts`·`use-enable-sync.ts`가 있고, `boards-home.tsx`가 `partitionBoards(localBoards, syncedBoards, userId)`로 나눈다. 로컬 보드도 **같은 custom node 생성 경로를 쓴다.**
+Dim0에는 서버에 동기화되지 않는 **로컬 전용 보드**가 있다. 실제 렌더 경로는
+`LocalBoardScreen`의 `<HarnessCanvas local />`이며, synced board는 기본
+`<HarnessCanvas />`를 사용한다. 이 기존 prop을 작은 React context로 custom view에
+전달한다. 로컬 보드도 **같은 custom node 렌더 경로를 쓴다.**
 
 이미지 API는 서버 board ID와 인증 토큰을 요구하므로, 로컬 보드에서 만든 노드는 404/403으로 죽는다.
 
@@ -106,13 +112,14 @@ Dim0에는 서버에 동기화되지 않는 **로컬 전용 보드**가 있다. 
 - **기존 노드 안내** — import·복제로 로컬 보드에 노드가 들어왔다면 폼 대신 "서버 보드에서만 사용할 수 있습니다"를 렌더한다. 실패하는 요청을 보내지 않는다.
 - **테스트** — Generate 비활성 여부, 안내 렌더 여부.
 
-> **술어를 지어내지 말 것.** 판별자는 단순한 `isLocal` 불리언이 **아니다**. 보드 파티셔닝과 sync 활성화 상태로 갈린다. `use-enable-sync.ts`와 `partitionBoards`를 출발점으로 **실제 술어를 코드에서 찾아 쓴다.**
+> **술어를 지어내지 말 것.** 새 전역 상태나 추정 ID 규칙을 만들지 않고,
+> `HarnessCanvas`가 이미 받는 실제 `local` prop을 source of truth로 쓴다.
 
 ---
 
 ## 4. OpenRouter 키 투입 시점
 
-### 결론: UI와 병행하되, 병합 전에 Dim0 API 경유로 1회 통과시킨다
+### 결론: 무료 검증과 Draft PR 뒤 승인을 받아 Dim0 API 경유로 1회 확인한다
 
 | 항목 | 상태 | 위험 |
 |---|---|---|
@@ -187,7 +194,9 @@ file /tmp/out.png; grep -i 'content-type\|cache-control' /tmp/hdr.txt
 - `/tmp/out.png`가 실제 PNG인가, `Content-Type`이 `image/png`인가
 - DB의 `image_generation_attempt`에 `usage`·`cost_usd`·`latency_ms`가 채워졌는가
 - **`provider_request_id`가 채워졌는가** — 비어 있으면 어댑터가 잘못된 위치를 읽는 것
-- 실패 경로도 1회 — 존재하지 않는 모델 ID로 호출해 `error_code`가 sanitized 상태로 기록되는지
+- sanitized 실패는 mock/integration 테스트로 검증한다. 존재하지 않는 model ID는
+  capability 검증에서 provider 호출 전에 422가 될 수 있으므로 별도 live failure
+  audit 검증으로 간주하지 않으며, 추가 유료 실패 호출은 별도 승인 없이 실행하지 않는다.
 
 ```bash
 psql -c "SELECT status, provider_request_id, cost_usd, latency_ms, usage
@@ -214,7 +223,7 @@ psql -c "SELECT status, provider_request_id, cost_usd, latency_ms, usage
 | `imageResolution` | `KeywordProperty` | 해상도 | 영구 |
 | `imageQuality` | `KeywordProperty` | 품질 | 영구 |
 | `activeGenerationUid` | `KeywordProperty` | 마지막/진행 중 생성 | 영구 (다음 생성 시 교체) |
-| `imagePendingRequest` | `TextProperty` (canonical JSON) | 전송 중 요청 스냅샷 | **202 수신 시 삭제** |
+| `imagePendingRequest` | `TextProperty` (canonical JSON) | 전송 중 요청 스냅샷 | **202 수신 시 빈 sentinel로 clear** |
 
 `phase`(`idle`/`starting`/`running`/`succeeded`/`failed`/**`stalled`**)는 **저장하지 않는다.** 전부 React state다. 특히 `stalled`는 *이 브라우저의 폴링 타이머*가 만들어낸 클라이언트 전용 판단이므로, 저장하면 한 사람의 타이밍이 같은 보드의 모두에게 "멈췄다"로 전파된다. 서버는 그동안 정상 진행 중일 수 있다.
 
@@ -224,23 +233,35 @@ psql -c "SELECT status, provider_request_id, cost_usd, latency_ms, usage
 > imagePendingRequest: {
 >   type: "text",
 >   text: JSON.stringify({
->     version: 1, boardUid, generatorNodeUid,        // 소유권 스탬프 — 아래 참조
+>     version: 1, boardUid, generatorNodeUid, initiatorUserUid, // 소유권 스탬프 — 아래 참조
 >     clientRequestUid, modelId, prompt, parameters,
 >   }),
 > }
 > ```
 
+협업 backend의 property patch는 deep merge이므로 key 삭제나 `undefined`는 기존 값을
+지우지 못한다. pending과 active UID를 clear할 때는 각각 빈 `TextProperty`와 빈
+`KeywordProperty`를 명시적으로 보내고, frontend reader가 빈 값을 `null`로 해석한다.
+이렇게 해야 clear가 JSON wire와 backend Pydantic round-trip을 통과한다.
+
 #### 스냅샷은 자기 소유를 증명해야 한다
 
-스냅샷에 `version` · `boardUid` · `generatorNodeUid`를 **반드시 함께 저장한다.** 이유:
+스냅샷에 `version` · `boardUid` · `generatorNodeUid` · `initiatorUserUid`를 **반드시 함께 저장한다.** 이유:
 
 보드를 통째로 복제하면 `imagePendingRequest`가 그대로 따라온다. 복제본에서 노드가 마운트되면 복구 로직이 발동해 **새 보드로 POST를 보낸다.** 유니크 키가 `(user_uid, board_uid, client_request_uid)`인데 board가 다르므로 충돌도 나지 않는다 — **요청하지도 않은 생성이 조용히 과금된다.** `activeGenerationUid`와 달리 스냅샷은 404로 걸러지지 않는다.
 
-따라서 복구 전에 `version === 1 && boardUid === 현재 보드 && generatorNodeUid === 현재 노드`를 검사하고, **하나라도 어긋나면 네트워크 요청 없이 스냅샷을 폐기한다.**
+따라서 복구 전에 `version === 1 && boardUid === 현재 보드 && generatorNodeUid === 현재 노드 && initiatorUserUid === 현재 사용자`를 검사한다. version/board/node가 어긋나면 **네트워크 요청 없이 스냅샷을 폐기한다.** 사용자가 다르면 원 요청자의 복구 키를 보존하되 현재 사용자는 재전송하거나 clear하지 않는다. 사용자까지 확인해야 공유 보드를 연 다른 사용자가 원 요청자의 idempotency key를 자기 계정으로 재전송하는 일을 막을 수 있다.
 
-이 가드가 **1차 방어선**이다. 복제 경로에서 실행 식별자를 strip하는 것(함정 ⑦)은 2차이고, 복제가 `@canvas-harness/core` 내부라면 애초에 가로채지 못할 수도 있다. 자기 검증하는 스냅샷은 그 경우에도 동작한다.
+이 가드가 **1차 방어선**이다. 실제 paste 경로는 `canvas-harness`가 내보내는 local
+`node.add`를 `useStampNewNodes`가 구독하는 구조이므로, 그 구독자에서
+`imagePendingRequest`만 제거하는 것을 2차 방어선으로 둔다. 자기 검증하는
+스냅샷은 import 등 이 경로를 우회하는 입력에도 동작한다.
 
-`activeGenerationUid`는 복제돼도 POST를 유발하지 않는다 — 원본 결과를 보여줄 뿐이라 **미관 문제**다. 과금 위험은 스냅샷에만 있다.
+`activeGenerationUid`는 같은 보드 복제에서 유지한다. 복제본은 기존 generation과
+결과를 GET으로만 조회하며, 사용자가 Generate를 명시적으로 누르기 전에는 새
+generation을 만들지 않는다. 다른 보드에서는 board-scoped GET이 404일 수 있으며,
+이때 결과 없음 상태로 정리하되 POST로 전환하지 않는다. 과금 위험이 있는 필드는
+복구 POST를 유발할 수 있는 `imagePendingRequest`뿐이다.
 
 ### 설계 결정 1 — `outputAssetUid`를 저장하지 않는다
 
@@ -261,14 +282,15 @@ PR-02의 fingerprint는 `(model_id, prompt, parameters, reference_asset_uids, ge
 | **Generate 클릭** (내용 무관) | **항상 새 UUID 발급** + 스냅샷 교체 |
 | **마운트 복구** — 스냅샷이 이 보드·이 노드 소유이고 `activeGenerationUid` 없음 | 스냅샷을 **그대로 1회 재전송**. 새 UUID를 만들지 않는다 |
 | **마운트 복구** — 스냅샷의 `version`/`boardUid`/`generatorNodeUid`가 어긋남 | **네트워크 요청 없이** 스냅샷 폐기 |
-| **202 수신** | `activeGenerationUid` 저장 후 스냅샷 **삭제** |
-| **409 수신** | **중단하고 충돌을 표시.** 자동 재시도 금지 |
+| **마운트 복구** — `initiatorUserUid`가 현재 사용자와 다름 | 원 사용자의 복구 키를 보존하고 POST·clear 모두 하지 않음 |
+| **202 수신** | `activeGenerationUid` 저장 후 스냅샷을 빈 TextProperty로 **명시적 clear** |
+| **409 수신** | pending snapshot을 유지하고 충돌을 표시. 자동 재시도·새 UUID 발급 금지, 명시적 재개만 같은 snapshot 사용 |
 
 **클릭은 언제나 새 UUID다.** 이미지 생성은 비결정적이므로 같은 프롬프트로 다시 누르는 것은 *새 변형을 요청하는 정당한 행위*다. 내용이 같다고 기존 run을 돌려주면 사용자에게는 버튼이 고장 난 것으로 보인다.
 
 **클라이언트에서 서버 fingerprint를 재구현하지 않는다.** 서버는 `{generator_node_uid, model_id, parameters(exclude_none=False), prompt, reference_asset_uids}`를 정렬해 해싱한다. 클라이언트가 이를 흉내 내면 필드 누락·키 순서·null 처리에서 조용히 어긋나고, 그 드리프트는 과금 오작동으로 나타난다. 스냅샷은 **오직 응답 유실·새로고침 복구용**이며 클릭 중복 제거에는 쓰지 않는다. 같은 세션의 더블클릭은 버튼 disabled로 막는다.
 
-**409는 "일어나면 안 되는" 신호다.** 위 두 규칙을 지키면 복구는 fingerprint가 일치하고 클릭은 충돌이 없으므로 409에 도달할 경로가 사실상 없다. 그런데도 발생했다면 그 키의 run이 **이미 존재하며 과금 중일 수 있다**는 뜻이다. 새 UUID로 자동 재시도하면 정확히 중복 과금이 된다. 중단하고 사용자에게 알린 뒤, 재생성은 사용자가 Generate를 다시 눌렀을 때만 한다.
+**409는 "일어나면 안 되는" 신호다.** 위 두 규칙을 지키면 복구는 fingerprint가 일치하고 클릭은 충돌이 없으므로 409에 도달할 경로가 사실상 없다. 그런데도 발생했다면 그 키의 run이 **이미 존재하며 과금 중일 수 있다**는 뜻이다. 새 UUID로 자동 재시도하면 정확히 중복 과금이 된다. pending을 유지하고 중단한 뒤, 사용자가 요청 재개를 명시한 경우에만 같은 UUID와 snapshot을 다시 보낸다.
 
 ### 저장하지 않는 것
 
@@ -297,7 +319,7 @@ sequenceDiagram
     participant P as OpenRouter
 
     U->>V: Generate 클릭
-    V->>V: 새 UUID 발급 + 소유권 스탬프(version/boardUid/nodeUid)
+    V->>V: 새 UUID 발급 + 소유권 스탬프(version/boardUid/nodeUid/userUid)
     V->>S: updateNode — imagePendingRequest (POST 이전에 먼저)
     V->>A: POST /boards/{id}/image-generations
     A->>B: + Bearer
@@ -359,14 +381,18 @@ stateDiagram-v2
 | `canvas/use-create-handlers.ts` | 수정 | 생성 가능 타입 목록(≈L43) + 라벨 맵(≈L55) |
 | `canvas/use-board-keyboard.ts` | 수정 | 단축키 1글자 배정 (선택) |
 | `chrome/toolbar-more.tsx` | 수정 | `DropdownMenuItem` + `setTool` + `NodeLimitBadge` + **로컬 보드 가드** |
-| 노드 복제 경로 *(위치 조사 선행)* | 수정 | 실행 식별자 strip — 섹션 10 함정 ⑦ |
+| `canvas/use-stamp-new-nodes.ts` | 수정 | local add/paste에서 `imagePendingRequest`만 strip. `activeGenerationUid` 유지 |
 | `board/lib/board-limit.ts` | 수정 | `nodeLimitFor`에 한도 추가 |
-| `board/types/style.ts` | 수정 | `NodeType` 유니온에 `"image-generator"` |
+| `canvas/board-runtime-context.ts` · `board-runtime-provider.tsx` | 신규 | 실제 `HarnessCanvas local` 값을 custom view에 전달 |
 | `board/types/note.ts` | 수정 | `NoteProperties`에 optional 7개 |
 | `webui/src/api.ts` | 수정 | **2줄** — blob 응답 모드 |
 | `canvas/custom-node-types.test.ts` | 수정 | parity 목록 |
 
-건드리지 않는 것: `board-app-store.ts`의 `NodeSurfaceKind`, `use-surface-from-url.tsx`, 라우팅, 백엔드 전부, `build/schema.sql`.
+backend `Style` enum은 바꾸지 않는다. wire에서는 `rectangle`을 유지하고
+`imagePrompt` marker가 있는 Note만 frontend 변환 계층에서 `image-generator` custom
+type으로 projection한다. 건드리지 않는 것은 `board-app-store.ts`의
+`NodeSurfaceKind`, `use-surface-from-url.tsx`, 라우팅, backend production code,
+`build/schema.sql`이다.
 
 ---
 
@@ -588,32 +614,35 @@ export const PENDING_REQUEST_VERSION = 1
 
 /**
  * 전송 중 요청 스냅샷. 응답 유실·새로고침 복구 전용이며 클릭 중복 제거에는 쓰지 않는다.
- * `version`/`boardUid`/`generatorNodeUid`는 소유권 스탬프 — 보드·노드 복제본이
- * 남의 스냅샷을 재생해 과금하는 것을 막는다.
+ * `version`/`boardUid`/`generatorNodeUid`/`initiatorUserUid`는 소유권 스탬프 —
+ * 보드·노드 복제본이나 다른 사용자가 남의 스냅샷을 재생해 과금하는 것을 막는다.
  */
 export type PendingRequest = {
   version: number
   boardUid: string
   generatorNodeUid: string
+  initiatorUserUid: string
   clientRequestUid: string
   modelId: string
   prompt: string
   parameters: GenerationParameters
 }
 
-/** 스냅샷이 이 보드·이 노드의 것인가. 아니면 복제/import된 잔재다. */
+/** 스냅샷이 이 사용자·보드·노드의 것인가. 아니면 공유/복제/import된 잔재다. */
 export function isOwnedBy(
-  snapshot: PendingRequest | null, boardUid: string, nodeId: string,
+  snapshot: PendingRequest | null, boardUid: string, nodeId: string, userUid: string,
 ): snapshot is PendingRequest {
   return !!snapshot
     && snapshot.version === PENDING_REQUEST_VERSION
     && snapshot.boardUid === boardUid
     && snapshot.generatorNodeUid === nodeId
+    && snapshot.initiatorUserUid === userUid
 }
 
 export type UseImageGenerationArgs = {
   graphId: string
   nodeId: string
+  userId: string
   activeGenerationUid: string | null
   pendingRequest: PendingRequest | null
   /** 공유 node data 쓰기. collab로 전파된다. */
@@ -624,7 +653,7 @@ export type UseImageGenerationArgs = {
 }
 
 export function useImageGeneration(args: UseImageGenerationArgs) {
-  const { graphId, nodeId, activeGenerationUid, pendingRequest, persist } = args
+  const { graphId, nodeId, userId, activeGenerationUid, pendingRequest, persist } = args
 
   const [phase, setPhase] = useState<Phase>(activeGenerationUid ? "running" : "idle")
   const [state, setState] = useState<GenerationState | null>(null)
@@ -709,9 +738,9 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
       // 409는 "일어나면 안 되는" 신호다. 그 키의 run이 이미 존재하며 과금 중일 수 있으므로
       // 새 키로 자동 재시도하면 정확히 중복 과금이 된다. 중단하고 사용자에게 알린다.
       if (statusCodeOf(err) === 409) {
-        persistRef.current({ pendingRequest: null })
+        // 응답이 불명확하므로 snapshot을 유지한다. 명시적 재개만 같은 키로 보낸다.
         setPhase("failed")
-        setError("이 요청은 이미 처리된 것으로 보입니다. 다시 생성하려면 Generate를 눌러 주세요.")
+        setError("같은 요청의 처리 여부를 확인할 수 없습니다. 요청을 재개해 주세요.")
         return
       }
       setPhase("failed"); setError(messageForError(err))
@@ -726,7 +755,8 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
     if (recovered.current || !pendingRequest) return
     recovered.current = true
 
-    if (!isOwnedBy(pendingRequest, graphId, nodeId)) {
+    if (pendingRequest.initiatorUserUid !== userId) return // 원 사용자의 복구 키 보존
+    if (!isOwnedBy(pendingRequest, graphId, nodeId, userId)) {
       persistRef.current({ pendingRequest: null })   // (a) POST하지 않는다
       return
     }
@@ -734,7 +764,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
 
     setPhase("starting")
     void send(pendingRequest)                        // (b)
-  }, [graphId, nodeId, activeGenerationUid, pendingRequest, send])
+  }, [graphId, nodeId, userId, activeGenerationUid, pendingRequest, send])
 
   const generate = useCallback(
     async (modelId: string, prompt: string, parameters: GenerationParameters) => {
@@ -748,6 +778,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
         version: PENDING_REQUEST_VERSION,
         boardUid: graphId,
         generatorNodeUid: nodeId,
+        initiatorUserUid: userId,
         clientRequestUid: crypto.randomUUID(),
         modelId, prompt, parameters,
       }
@@ -756,7 +787,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
       persistRef.current({ pendingRequest: snapshot })
       await send(snapshot)
     },
-    [graphId, nodeId, send, stop],
+    [graphId, nodeId, userId, send, stop],
   )
 
   return { phase, state, error, generate }
@@ -808,7 +839,7 @@ import { NodeErrorBoundary, NodeFooter, NodeTitleCaption, NodeTrafficLights,
 import { useBoardAppStore } from "../../store/board-app-store"
 import { useImageGeneration, type PendingRequest } from "./use-image-generation"
 
-const kw = (p: unknown) => (p as { keyword?: string } | undefined)?.keyword ?? null
+const kw = (p: unknown) => (p as { value?: string } | undefined)?.value ?? null
 const tx = (p: unknown) => (p as { text?: string } | undefined)?.text ?? ""
 
 export function ImageGeneratorView({ id }: { id: NodeId }) {
@@ -834,28 +865,33 @@ export function ImageGeneratorView({ id }: { id: NodeId }) {
       const next: Record<string, unknown> = {}
       if ("activeGenerationUid" in p) {
         next.activeGenerationUid = p.activeGenerationUid
-          ? { type: "keyword", keyword: p.activeGenerationUid } : undefined
+          ? { type: "keyword", value: p.activeGenerationUid }
+          : { type: "keyword", value: "" }
       }
       if ("pendingRequest" in p) {
         // 중첩 객체는 DataProperty가 아니다 → TextProperty 안에 JSON 문자열로.
-        next.imagePendingRequest = p.pendingRequest
-          ? { type: "text", text: JSON.stringify(p.pendingRequest) } : undefined
+        next.imagePendingRequest = {
+          type: "text",
+          text: p.pendingRequest ? serializePendingImageRequest(p.pendingRequest) : "",
+          searchable: false,
+        }
       }
       patchProps(next)
     }, [patchProps])
 
-  // 손상된 JSON이 노드를 영구히 망가뜨리지 않도록 파싱 실패는 null로 흡수한다.
+  // 구조와 버전을 검증하고 손상된 JSON은 null로 흡수한다.
   const pendingRequest = useMemo<PendingRequest | null>(() => {
     const raw = tx(props.imagePendingRequest)
-    if (!raw) return null
-    try { return JSON.parse(raw) as PendingRequest } catch { return null }
+    return parsePendingImageRequest(raw)
   }, [props.imagePendingRequest])
 
   const { phase, state, error, generate } = useImageGeneration({
     graphId: graphId ?? "",
     nodeId: String(id),
+    userId,
     activeGenerationUid: kw(props.activeGenerationUid),
     pendingRequest,
+    canStart: canEdit,
     persist,
   })
 
@@ -891,7 +927,7 @@ export function ImageGeneratorView({ id }: { id: NodeId }) {
 
         <div className="flex gap-2">
           <select value={modelId} disabled={!canEdit}
-            onChange={(e) => patchProps({ imageModelId: { type: "keyword", keyword: e.target.value } })}>
+            onChange={(e) => patchProps({ imageModelId: { type: "keyword", value: e.target.value } })}>
             {models.map((m) => <option key={m.model_id} value={m.model_id}>{m.display_name}</option>)}
           </select>
 
@@ -899,7 +935,7 @@ export function ImageGeneratorView({ id }: { id: NodeId }) {
               supported_* 가 null이면 그 셀렉트 자체를 숨긴다 — 서버가 422로 거절한다. */}
           {model?.supported_aspect_ratios && (
             <select value={kw(props.imageAspectRatio) ?? ""} disabled={!canEdit}
-              onChange={(e) => patchProps({ imageAspectRatio: { type: "keyword", keyword: e.target.value } })}>
+              onChange={(e) => patchProps({ imageAspectRatio: { type: "keyword", value: e.target.value } })}>
               {model.supported_aspect_ratios.map((v) => <option key={v} value={v}>{v}</option>)}
             </select>
           )}
@@ -939,12 +975,12 @@ export function ImageGeneratorView({ id }: { id: NodeId }) {
 | API 클라이언트 | `api/image-generation.test.ts` | 요청 body 형태 · 상태코드→문구 매핑 · 모델 캐시 1회 · 실패는 캐시 안 함 |
 | `api.ts` blob 모드 | `api.blob.test.ts` | **401 → refresh → blob 재요청**이 Blob을 반환하는가 |
 | 상태 머신 | `use-image-generation.test.ts` | started→succeeded · **retryable은 폴링 지속** · **5분 뒤 stalled** · 종료 시 스냅샷 삭제 · 404 → idle · 언마운트 정리 |
-| 멱등 스냅샷 | 동일 | **명시적 클릭은 항상 새 UUID** · **마운트 복구 시 스냅샷 그대로 재전송** · **409는 재시도 없이 중단** |
-| 소유권 가드 | 동일 | 다른 `boardUid`/`generatorNodeUid`/`version` 스냅샷은 **요청 없이 폐기** (과금 0) |
+| 멱등 스냅샷 | 동일 | **명시적 클릭은 항상 새 UUID** · **마운트 복구 시 스냅샷 그대로 재전송** · **409는 pending 유지, 자동 재시도 없이 중단** |
+| 소유권 가드 | 동일 | 다른 `boardUid`/`generatorNodeUid`/`version` 스냅샷은 **요청 없이 폐기**. 다른 `initiatorUserUid`는 보존하되 POST하지 않음 (과금 0) |
 | blob 훅 | `use-authed-image.test.ts` | objectURL 생성 · asset 교체 시 revoke · 언마운트 시 revoke |
 | 뷰 | `view.test.tsx` | viewer 비활성 · 빈 프롬프트 비활성 · 생성 중 비활성 · `supported_*` null이면 셀렉트 미렌더 |
 | 로컬 보드 가드 | 동일 | Generate 비활성 · 안내 렌더 · 요청 미발생 |
-| 복제 위생 | `duplicate-sanitize.test.ts` | 복제 노드에 `activeGenerationUid`·`imagePendingRequest`가 없고 prompt/model은 남는가 |
+| 복제 안전 | `use-stamp-new-nodes.test.tsx` + 상태 훅 테스트 | 복제 노드는 `imagePendingRequest`만 제거하고 `activeGenerationUid`를 유지하는가. 기존 generation GET만 수행하고 POST는 0회인가 |
 | 등록 parity | `custom-node-types.test.ts` | 기존 테스트가 자동 강제 — 목록만 갱신 |
 
 ### 가장 중요한 테스트
@@ -981,7 +1017,7 @@ it("5분이 지나면 폴링을 멈추고 stalled로 간다", async () => {
 // --- 멱등 스냅샷: 여기가 유료 중복 호출을 막는 지점이다 ---
 
 const own = (over = {}) => ({
-  version: 1, boardUid: "board-1", generatorNodeUid: "node-1",
+  version: 1, boardUid: "board-1", generatorNodeUid: "node-1", initiatorUserUid: "user-1",
   clientRequestUid: "key-1", modelId: "m", prompt: "p", parameters: {}, ...over,
 })
 
@@ -1016,10 +1052,10 @@ it("409는 자동 재시도하지 않고 중단한다", async () => {
 
   expect(startImageGeneration).toHaveBeenCalledTimes(1)     // 재시도 없음
   expect(result.current.phase).toBe("failed")
-  expect(persist).toHaveBeenCalledWith({ pendingRequest: null })
+  expect(persist).not.toHaveBeenCalledWith({ pendingRequest: null })
 })
 
-// --- 소유권 가드: 보드/노드 복제본이 남의 스냅샷을 재생하지 못하게 한다 ---
+// --- 소유권 가드: 사용자/보드/노드가 다른 클라이언트가 남의 스냅샷을 재생하지 못하게 한다 ---
 
 it.each([
   ["다른 보드", own({ boardUid: "other-board" })],
@@ -1034,6 +1070,17 @@ it.each([
 
   expect(startImageGeneration).not.toHaveBeenCalled()       // 과금 없음
   expect(persist).toHaveBeenCalledWith({ pendingRequest: null })
+})
+
+it("다른 사용자의 복구 키는 POST나 clear 없이 보존한다", async () => {
+  const persist = vi.fn()
+  renderHook(() => useImageGeneration({
+    ...argsWith(null), pendingRequest: own({ initiatorUserUid: "other-user" }), persist,
+  }))
+  await act(() => vi.advanceTimersByTimeAsync(0))
+
+  expect(startImageGeneration).not.toHaveBeenCalled()
+  expect(persist).not.toHaveBeenCalled()
 })
 
 it("종료 시 스냅샷을 지운다", async () => {
@@ -1081,14 +1128,21 @@ nvm use 20 && make check
 
 **⑦ 복제가 남의 스냅샷을 재생해 과금한다.** 노드나 보드를 복제하면 `imagePendingRequest`가 그대로 따라온다. 복제본에서 노드가 마운트되면 복구 로직이 발동해 **POST를 보낸다.** 보드 복제라면 board가 달라 유니크 키 충돌도 나지 않으므로 **요청하지도 않은 생성이 조용히 과금된다.**
 
-`activeGenerationUid`와 혼동하지 말 것 — 그쪽은 board-scoped 조회라 다른 보드에서 404가 나고, POST를 유발하지 않아 **미관 문제**에 그친다. **과금 위험은 스냅샷에만 있다.**
+`activeGenerationUid`와 혼동하지 말 것 — 같은 보드 복제에서는 기존 결과를
+표시하기 위해 유지한다. 다른 보드에서 board-scoped 조회가 404이면 결과 없음으로
+정리하되 POST하지 않는다. **과금 위험은 스냅샷에만 있다.**
 
 방어는 두 겹이고 순서가 중요하다:
 
-1. **1차 — 자기 검증하는 스냅샷** (§5). `version`·`boardUid`·`generatorNodeUid`를 스냅샷에 담고, 복구 전에 현재 컨텍스트와 대조해 어긋나면 **네트워크 요청 없이** 폐기한다. 복제 경로를 가로채지 못해도 동작하므로 이것이 주 방어선이다.
-2. **2차 — 복제 시 strip.** 복제된 노드에는 `imagePrompt`·`imageModelId`·옵션만 남기고 `activeGenerationUid`·`imagePendingRequest`를 비운다. 미관 문제(클론이 원본 결과를 표시)까지 없앤다.
+1. **1차 — 자기 검증하는 스냅샷** (§5). `version`·`boardUid`·`generatorNodeUid`·`initiatorUserUid`를 스냅샷에 담고 복구 전에 현재 컨텍스트와 대조한다. version/board/node가 어긋나면 **네트워크 요청 없이** 폐기하고, 사용자만 다르면 원 사용자의 복구 키를 보존한 채 POST하지 않는다. 복제 경로를 가로채지 못해도 동작하므로 이것이 주 방어선이다.
+2. **2차 — 복제 시 pending만 strip.** `useStampNewNodes`가 local `node.add`를
+   가로채 `imagePendingRequest`만 비운다. `imagePrompt`·모델·옵션과
+   `activeGenerationUid`는 보존한다. 같은 보드 복제본은 기존 generation/result를
+   GET으로 표시할 수 있지만, 명시적 Generate 전까지 POST는 0회다.
 
-> **선행 조사 필요.** `harness/` 안에서 `duplicateNode` 류를 찾지 못했다. 복제가 `@canvas-harness/core`(npm 의존성) 내부이거나 붙여넣기 핸들러일 가능성이 크다. **먼저 복제 경로를 특정하라.** 라이브러리 내부라 가로챌 수 없다면 2차 방어는 포기하고 1차만으로 간다 — 과금 위험은 1차가 이미 막는다.
+실제 경로는 `@canvas-harness/core`가 내보낸 local `node.add`를 앱의
+`useStampNewNodes`가 구독하는 형태다. 따라서 pending strip을 이 구독자에서
+구현하고, import처럼 이 경로를 우회하는 입력은 자기 검증 snapshot으로 막는다.
 
 **⑧ 로컬 보드에서 생성 시도.** 섹션 3 참조. 로컬 보드는 서버 board ID가 없어 API가 404/403으로 죽는다. 툴바 가드 + 기존 노드 안내 + 테스트가 PR-03 범위다.
 
@@ -1110,15 +1164,17 @@ nvm use 20 && make check
 
 ## 12. 실행 순서
 
-1. **복제 경로 조사** — 섹션 10 함정 ⑦. `@canvas-harness/core` 내부인지 앱 코드인지 특정한다. 가로챌 수 없으면 2차 방어(strip)는 포기하고 1차(소유권 스탬프)만으로 간다 — 과금 위험은 1차가 막으므로 이 조사 결과가 구현을 막지는 않는다.
-2. **브랜치 + Draft PR** — `git checkout -b codex/feat-image-generator-node`. 커밋은 `feat(webui): add image generator node` 형식 (scope 필수, 소문자, 마침표 없음).
+1. **복제 경로 확인** — `canvas-harness`의 local `node.add`를 기존
+   `useStampNewNodes`가 가로챈다. 여기서 pending만 strip하고 소유권 스탬프 가드를
+   함께 유지한다.
+2. **기존 브랜치 + Draft PR** — `feat/pr-03-image-generator-node`를 유지한다. 커밋은 `feat(webui): add image generator node` 형식 (scope 필수, 소문자, 마침표 없음).
 3. **`api.ts` blob 모드 + API 클라이언트 + 테스트** — UI 없이 이것만으로 테스트가 통과해야 한다. 응답 타입은 PR-02의 Pydantic 모델에서 그대로 옮기면 되므로 provider 실호출을 기다릴 필요가 없다. **401 → refresh → blob 재요청** 테스트를 여기서 함께 쓴다.
 4. **`useAuthedImage` + 테스트** — revoke 케이스를 먼저 고정한다.
 5. **상태 머신 훅 + 테스트** — 가장 버그가 나기 쉬운 부분. `retryable`·5분 상한·멱등 스냅샷·404·언마운트를 반드시 먼저 쓴다.
 6. **노드 정의 · placeholder · 뷰** — `widget/`의 4파일 구조를 그대로 본뜬다.
-7. **등록 + 가드** — 섹션 7 표 순서대로. 로컬 보드 가드와 복제 strip을 함께 넣는다.
+7. **등록 + 가드** — 섹션 7 표 순서대로. 로컬 보드 가드와 복제 pending strip을 함께 넣는다.
 8. **정적 검증** — `make lint-ui && make test-ui && make test-backend`, `nvm use 20 && make check`.
-9. **OpenRouter 실호출 1회 — 병합 전 필수** — 섹션 4의 절차. **사용자 승인을 먼저 받는다.** 어댑터가 틀렸으면 **PR-03과 분리된 fix PR**로 고치고 PR-03은 그 위에 rebase한다.
+9. **유료 smoke 제안 보고** — 무료 검증과 Draft PR 뒤 모델·옵션·최대 비용·API/DB 확인 항목을 보고하고 멈춘다. **사용자 승인 전에는 호출하지 않는다.**
 10. **Draft PR 유지** — Ready 전환·merge 하지 않는다.
 
 ### 규모

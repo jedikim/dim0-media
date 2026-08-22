@@ -146,6 +146,35 @@ describe("note ↔ node round-trip", () => {
     expect(back.properties.slideName).toEqual(note.properties.slideName)
   })
 
+
+  it("projects a rectangle-backed image generator and preserves its property contract", () => {
+    const note = createDefaultNote({ boardId: BOARD_ID, nodeType: "rectangle" })
+    note.properties.imagePrompt = { type: "text", text: "a blue bird" }
+    note.properties.imageModelId = { type: "keyword", value: "model-1" }
+    note.properties.imageAspectRatio = { type: "keyword", value: "1:1" }
+    note.properties.imageResolution = { type: "keyword", value: "1K" }
+    note.properties.imageQuality = { type: "keyword", value: "low" }
+    note.properties.activeGenerationUid = { type: "keyword", value: "gen-1" }
+    note.properties.imagePendingRequest = {
+      type: "text",
+      text: '{"version":1,"boardUid":"test-board"}',
+      searchable: false,
+    }
+
+    const node = noteToNode(note)
+    expect(node.type).toBe("image-generator")
+    const back = nodeToNote(node)
+
+    expect(back.style.type).toBe("rectangle")
+    expect(back.properties.imagePrompt).toEqual(note.properties.imagePrompt)
+    expect(back.properties.imageModelId).toEqual(note.properties.imageModelId)
+    expect(back.properties.imageAspectRatio).toEqual(note.properties.imageAspectRatio)
+    expect(back.properties.imageResolution).toEqual(note.properties.imageResolution)
+    expect(back.properties.imageQuality).toEqual(note.properties.imageQuality)
+    expect(back.properties.activeGenerationUid).toEqual(note.properties.activeGenerationUid)
+    expect(back.properties.imagePendingRequest).toEqual(note.properties.imagePendingRequest)
+  })
+
   it("round-trips the phosphor icon variant with a hex color", () => {
     const note = createDefaultNote({ boardId: BOARD_ID, nodeType: "sheet" })
     note.properties.iconData = {

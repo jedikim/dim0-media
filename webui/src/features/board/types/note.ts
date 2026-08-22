@@ -26,6 +26,13 @@ export interface NoteProperties {
   mimeType?: TextProperty
   status?: KeywordProperty
   summary?: TextProperty
+  imagePrompt?: TextProperty
+  imageModelId?: KeywordProperty
+  imageAspectRatio?: KeywordProperty
+  imageResolution?: KeywordProperty
+  imageQuality?: KeywordProperty
+  activeGenerationUid?: KeywordProperty
+  imagePendingRequest?: TextProperty
 }
 
 
@@ -115,6 +122,8 @@ export const DEFAULT_WIDGET_HEIGHT = 500
 // user can drag-resize from there.
 export const DEFAULT_MINI_APP_WIDTH = 720
 export const DEFAULT_MINI_APP_HEIGHT = 440
+export const DEFAULT_IMAGE_GENERATOR_WIDTH = 520
+export const DEFAULT_IMAGE_GENERATOR_HEIGHT = 560
 
 
 /**

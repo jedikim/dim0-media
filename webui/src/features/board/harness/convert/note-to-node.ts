@@ -34,6 +34,7 @@ export const AUTOFIT_DISABLED_TYPES = new Set([
   "code-sandbox",
   "widget",
   "mini-app",
+  "image-generator",
   "document",
 ])
 
@@ -112,6 +113,8 @@ export const noteToNode = (note: Note | Document): Node => {
   // own paint dispatch + custom view. Everything else maps by style.type.
   const canvasType = note.type === "document"
     ? "document"
+    : note.properties?.imagePrompt !== undefined
+    ? "image-generator"
     : dim0TypeToCanvas(note.style.type)
 
   const baseStyle = dim0StyleToCanvas(note.style)
