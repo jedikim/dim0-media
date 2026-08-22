@@ -4,6 +4,7 @@ import { getImageGeneration } from "@/features/board/api/image-generation"
 import type { NoteNodeData } from "./convert/note-to-node"
 import {
   IMAGE_REFERENCE_CHANGED_MESSAGE,
+  ImageReferenceMaterializationError,
   ImageReferenceVersionChangedError,
   isImageAssetUid,
   materializeImageNodeAsset,
@@ -211,6 +212,9 @@ export async function resolveReferenceAssetUids(args: {
   } catch (error) {
     if (error instanceof ImageReferenceVersionChangedError) {
       throw new ImageReferenceResolutionError(IMAGE_REFERENCE_CHANGED_MESSAGE)
+    }
+    if (error instanceof ImageReferenceMaterializationError) {
+      throw new ImageReferenceResolutionError(error.message)
     }
     throw error
   }

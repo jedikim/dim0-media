@@ -1,8 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { asNodeId, createCanvasStore, type CanvasStore } from "@canvas-harness/core"
 
-import { resolveReferenceAssetUids } from "./image-reference-resolution"
-import { IMAGE_REFERENCE_CHANGED_MESSAGE } from "./image-reference-assets"
+import {
+  ImageReferenceResolutionError,
+  resolveReferenceAssetUids,
+} from "./image-reference-resolution"
+import {
+  IMAGE_REFERENCE_CHANGED_MESSAGE,
+  IMAGE_REFERENCE_INVALID_RESPONSE_MESSAGE,
+  IMAGE_REFERENCE_UNAVAILABLE_MESSAGE,
+} from "./image-reference-assets"
 
 
 const { getImageGeneration, startImageGeneration } = vi.hoisted(() => ({
@@ -332,6 +339,42 @@ describe("ordered image reference resolution", () => {
       upload,
     })).rejects.toThrow("완료된 이미지")
     expect(upload).not.toHaveBeenCalled()
+    expect(startImageGeneration).not.toHaveBeenCalled()
+  })
+
+
+  it("normalizes only determinate local materialization errors into safe resolution copy", async () => {
+    const store = createCanvasStore()
+    addImage(store, "broken-image", { src: "data:image/png;base64,%%broken%%" })
+    addImage(store, "invalid-response-image")
+    addImage(store, "transport-image")
+
+    const broken = resolveReferenceAssetUids({
+      store,
+      graphId: BOARD_ID,
+      sourceNodeUids: ["broken-image"],
+    })
+    await expect(broken).rejects.toThrow(IMAGE_REFERENCE_UNAVAILABLE_MESSAGE)
+    await expect(broken).rejects.toBeInstanceOf(ImageReferenceResolutionError)
+
+    const invalidResponse = resolveReferenceAssetUids({
+      store,
+      graphId: BOARD_ID,
+      sourceNodeUids: ["invalid-response-image"],
+      upload: vi.fn().mockResolvedValue({ asset_uid: "not-an-asset" }),
+    })
+    await expect(invalidResponse).rejects.toThrow(IMAGE_REFERENCE_INVALID_RESPONSE_MESSAGE)
+    await expect(invalidResponse).rejects.toBeInstanceOf(ImageReferenceResolutionError)
+
+    const rawUploadError = new Error("500 - private upstream response body")
+    const transportFailure = resolveReferenceAssetUids({
+      store,
+      graphId: BOARD_ID,
+      sourceNodeUids: ["transport-image"],
+      upload: vi.fn().mockRejectedValue(rawUploadError),
+    })
+    await expect(transportFailure).rejects.toBe(rawUploadError)
+    await expect(transportFailure).rejects.not.toBeInstanceOf(ImageReferenceResolutionError)
     expect(startImageGeneration).not.toHaveBeenCalled()
   })
 })

@@ -4,6 +4,10 @@ import { asNodeId, createCanvasStore } from "@canvas-harness/core"
 import {
   CLEARED_IMAGE_ASSET_UID,
   IMAGE_REFERENCE_CHANGED_MESSAGE,
+  IMAGE_REFERENCE_INVALID_RESPONSE_MESSAGE,
+  IMAGE_REFERENCE_UNAVAILABLE_MESSAGE,
+  ImageReferenceMaterializationError,
+  ImageReferenceVersionChangedError,
   imageDataUrlToBlob,
   materializeImageNodeAsset,
   readImageAssetUid,
@@ -54,9 +58,18 @@ describe("image reference assets", () => {
 
   it("decodes only bounded supported data URLs", () => {
     expect(imageDataUrlToBlob(PNG_DATA_URL).type).toBe("image/png")
-    expect(() => imageDataUrlToBlob("https://example.test/image.png")).toThrow()
-    expect(() => imageDataUrlToBlob("data:image/gif;base64,R0lGODlh")).toThrow()
-    expect(() => imageDataUrlToBlob("data:image/png,not-base64")).toThrow()
+    const invalidSources = [
+      "https://example.test/image.png",
+      "data:image/gif;base64,R0lGODlh",
+      "data:image/png,not-base64",
+      "data:image/png;base64,%%broken%%",
+      "data:image/png;base64,",
+      `data:image/png;base64,${"A".repeat(13_981_020)}`,
+    ]
+    for (const source of invalidSources) {
+      expect(() => imageDataUrlToBlob(source)).toThrow(IMAGE_REFERENCE_UNAVAILABLE_MESSAGE)
+      expect(() => imageDataUrlToBlob(source)).toThrow(ImageReferenceMaterializationError)
+    }
   })
 
 
@@ -121,8 +134,33 @@ describe("image reference assets", () => {
     })
 
     await expect(materialization).rejects.toThrow(IMAGE_REFERENCE_CHANGED_MESSAGE)
+    await expect(materialization).rejects.toBeInstanceOf(ImageReferenceVersionChangedError)
     expect(data.properties.imageAssetUid).toBeUndefined()
     expect(upload).toHaveBeenCalledTimes(1)
+  })
+
+
+  it("types invalid upload asset IDs without wrapping arbitrary upload failures", async () => {
+    const store = createCanvasStore()
+    store.addNode(imageNode())
+    const invalidResponse = materializeImageNodeAsset({
+      store,
+      graphId: BOARD_ID,
+      nodeId: NODE_ID,
+      upload: vi.fn().mockResolvedValue({ asset_uid: "not-an-asset" }),
+    })
+    await expect(invalidResponse).rejects.toThrow(IMAGE_REFERENCE_INVALID_RESPONSE_MESSAGE)
+    await expect(invalidResponse).rejects.toBeInstanceOf(ImageReferenceMaterializationError)
+
+    const rawUploadError = new Error("500 - private upstream response body")
+    const uploadFailure = materializeImageNodeAsset({
+      store,
+      graphId: BOARD_ID,
+      nodeId: NODE_ID,
+      upload: vi.fn().mockRejectedValue(rawUploadError),
+    })
+    await expect(uploadFailure).rejects.toBe(rawUploadError)
+    await expect(uploadFailure).rejects.not.toBeInstanceOf(ImageReferenceMaterializationError)
   })
 
 

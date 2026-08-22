@@ -264,6 +264,24 @@ describe("ImageGeneratorView", () => {
   })
 
 
+  it("renders the hook's safe reference materialization message", async () => {
+    const safeMessage = "이 이미지 노드는 참조 자산으로 등록할 수 없습니다."
+    mocks.useImageGeneration.mockReturnValue({
+      phase: "failed",
+      state: { output_asset_uid: "asset-existing" },
+      error: safeMessage,
+      generate: mocks.generate,
+      resumePending: mocks.resumePending,
+      checkStatusAgain: mocks.checkStatusAgain,
+      hasPendingRequest: false,
+      canResumePending: false,
+    })
+    await render()
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(safeMessage)
+  })
+
+
   it("loads an existing clone result through the authenticated asset hook only", async () => {
     mocks.useImageGeneration.mockReturnValue({
       phase: "succeeded",

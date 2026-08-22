@@ -385,6 +385,37 @@ describe("useImageGeneration", () => {
   })
 
 
+  it("shows safe materialization copy but never exposes an arbitrary upload body", async () => {
+    const oldState = generationState("succeeded", {
+      generation_uid: "gen-old",
+      output_asset_uid: "asset-old",
+    })
+    apiMocks.getImageGeneration.mockResolvedValue(oldState)
+    const safeMessage = "이 이미지 노드는 참조 자산으로 등록할 수 없습니다."
+    const resolveReferenceAssets = vi.fn()
+      .mockRejectedValueOnce(new ImageReferenceResolutionError(safeMessage))
+      .mockRejectedValueOnce(new Error("500 - private upstream response body"))
+    render({ activeGenerationUid: "gen-old", resolveReferenceAssets })
+    await flush()
+
+    await act(async () => latest?.generate("model-1", "new bird", {}, ["image-1"]))
+    expect(latest?.error).toBe(safeMessage)
+    expect(latest?.state?.output_asset_uid).toBe("asset-old")
+    expect(uuidMocks.uuidv4).not.toHaveBeenCalled()
+    expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
+    expect(persist).not.toHaveBeenCalledWith(expect.objectContaining({
+      pendingRequest: expect.anything(),
+    }))
+
+    await act(async () => latest?.generate("model-1", "new bird", {}, ["image-1"]))
+    expect(latest?.error).toBe("이미지 생성 요청을 확인할 수 없습니다.")
+    expect(latest?.error).not.toContain("private upstream")
+    expect(latest?.state?.output_asset_uid).toBe("asset-old")
+    expect(uuidMocks.uuidv4).not.toHaveBeenCalled()
+    expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
+  })
+
+
   it("aborts in-flight reference resolution on unmount without a generation POST", async () => {
     const signalHolder: { current?: AbortSignal } = {}
     let generation: Promise<void> | undefined

@@ -12,10 +12,16 @@ const MAX_REFERENCE_BASE64_LENGTH = Math.ceil(MAX_REFERENCE_BYTES / 3) * 4
 
 
 export const IMAGE_REFERENCE_CHANGED_MESSAGE = "참조 이미지가 변경되었습니다. 확인 후 다시 생성해 주세요."
+export const IMAGE_REFERENCE_UNAVAILABLE_MESSAGE = "이 이미지 노드는 참조 자산으로 등록할 수 없습니다."
+export const IMAGE_REFERENCE_INVALID_RESPONSE_MESSAGE = "참조 자산 등록 응답을 확인할 수 없습니다."
 
 
 /** Signal that a canvas image no longer matches its captured local version. */
 export class ImageReferenceVersionChangedError extends Error {}
+
+
+/** Signal a determinate local materialization failure with safe UI copy. */
+export class ImageReferenceMaterializationError extends Error {}
 
 
 export type ImageSourceVersion = {
@@ -61,17 +67,17 @@ export function blobToDataUrl(blob: Blob): Promise<string> {
 export function imageDataUrlToBlob(dataUrl: string): Blob {
   const match = DATA_URL_PATTERN.exec(dataUrl)
   if (!match || match[2].length > MAX_REFERENCE_BASE64_LENGTH) {
-    throw new Error("이 이미지 노드는 참조 자산으로 등록할 수 없습니다.")
+    throw new ImageReferenceMaterializationError(IMAGE_REFERENCE_UNAVAILABLE_MESSAGE)
   }
 
   let decoded: string
   try {
     decoded = atob(match[2])
   } catch {
-    throw new Error("이 이미지 노드는 참조 자산으로 등록할 수 없습니다.")
+    throw new ImageReferenceMaterializationError(IMAGE_REFERENCE_UNAVAILABLE_MESSAGE)
   }
   if (decoded.length === 0 || decoded.length > MAX_REFERENCE_BYTES) {
-    throw new Error("이 이미지 노드는 참조 자산으로 등록할 수 없습니다.")
+    throw new ImageReferenceMaterializationError(IMAGE_REFERENCE_UNAVAILABLE_MESSAGE)
   }
   const content = new Uint8Array(decoded.length)
   for (let index = 0; index < decoded.length; index += 1) {
@@ -112,7 +118,9 @@ export async function materializeImageNodeAsset(args: {
     if (expectedVersion) {
       throw new ImageReferenceVersionChangedError(IMAGE_REFERENCE_CHANGED_MESSAGE)
     }
-    throw new Error("참조 이미지 노드를 이 보드에서 사용할 수 없습니다.")
+    throw new ImageReferenceMaterializationError(
+      "참조 이미지 노드를 이 보드에서 사용할 수 없습니다.",
+    )
   }
 
   const existing = readImageAssetUid(data.properties?.imageAssetUid)
@@ -131,7 +139,7 @@ export async function materializeImageNodeAsset(args: {
   }
   if (existing) return existing
   if (sourceVersion.src === null) {
-    throw new Error("이 이미지 노드는 참조 자산으로 등록할 수 없습니다.")
+    throw new ImageReferenceMaterializationError(IMAGE_REFERENCE_UNAVAILABLE_MESSAGE)
   }
 
   const blob = imageDataUrlToBlob(sourceVersion.src)
@@ -142,7 +150,7 @@ export async function materializeImageNodeAsset(args: {
     : "jpg"
   const asset = await upload(graphId, blob, `reference.${extension}`, signal)
   if (!isImageAssetUid(asset.asset_uid)) {
-    throw new Error("참조 자산 등록 응답을 확인할 수 없습니다.")
+    throw new ImageReferenceMaterializationError(IMAGE_REFERENCE_INVALID_RESPONSE_MESSAGE)
   }
   signal?.throwIfAborted()
 
