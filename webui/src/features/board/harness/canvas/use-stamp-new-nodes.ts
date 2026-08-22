@@ -63,16 +63,17 @@ export const useStampNewNodes = (
         const data = (op.node.data ?? {}) as NoteNodeData & Record<string, unknown>
 
         const wantedParentId = rootId ?? undefined
-        const needsRescope =
-          data.graphUid !== boardId || data.parentId !== wantedParentId
+        const boardChanged = data.graphUid !== boardId
+        const parentChanged = data.parentId !== wantedParentId
+        const needsRescope = boardChanged || parentChanged
         const properties = data.properties ?? {}
         const pending = properties.imagePendingRequest?.text
         const needsPendingStrip = op.node.type === "image-generator" && !!pending
         const needsAssetStrip = op.node.type === "image"
-          && needsRescope
+          && boardChanged
           && properties.imageAssetUid !== undefined
         const needsGeneratedAssociationStrip = op.node.type === "generated-image"
-          && needsRescope
+          && boardChanged
           && (
             properties.imageAssetUid !== undefined
             || properties.generatedImageGenerationUid !== undefined

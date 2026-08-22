@@ -441,6 +441,7 @@ function SyncedImageGeneratorCard({
     || generation.phase === "starting"
     || generation.phase === "running"
     || generation.phase === "stalled"
+    || outputNode.recreating
   const inputsLocked = !canEdit || busy || generation.hasPendingRequest
   useImageReferenceTargetLock(id, inputsLocked)
 

@@ -374,6 +374,25 @@ describe("ImageGeneratorView", () => {
   })
 
 
+  it("locks generator inputs while an explicit result recreation is running", async () => {
+    mocks.useOutputNode.mockReturnValue({
+      outputNodeUid: "a".repeat(32),
+      nodePresent: false,
+      selectResult: vi.fn(),
+      recreate: vi.fn(),
+      recreating: true,
+      error: null,
+    })
+    await render()
+
+    expect(container.querySelector<HTMLTextAreaElement>('[aria-label="Image prompt"]')?.disabled)
+      .toBe(true)
+    const generateButton = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "생성 중…")
+    expect(generateButton?.disabled).toBe(true)
+  })
+
+
   it("debounces rapid prompt edits and persists only the trailing value", async () => {
     await render()
     const textarea = container.querySelector<HTMLTextAreaElement>('[aria-label="Image prompt"]')!

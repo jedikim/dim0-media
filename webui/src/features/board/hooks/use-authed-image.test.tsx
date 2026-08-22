@@ -13,7 +13,10 @@ vi.mock("../api/image-generation", () => ({
   },
 }))
 
-import { useAuthedImage } from "./use-authed-image"
+import {
+  AUTHED_IMAGE_TOTAL_DEADLINE_MS,
+  useAuthedImage,
+} from "./use-authed-image"
 
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
@@ -132,6 +135,25 @@ describe("useAuthedImage", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(500) })
 
     expect(fetchImageAssetBlob).toHaveBeenCalledTimes(3)
+    expect(latest).toEqual({ url: null, failed: true })
+  })
+
+
+  it("fails and aborts never-settling blob requests within the total deadline", async () => {
+    vi.useFakeTimers()
+    const signals: AbortSignal[] = []
+    fetchImageAssetBlob.mockImplementation((_graphId, _assetUid, signal) => {
+      signals.push(signal)
+      return new Promise(() => undefined)
+    })
+
+    render("board-1", "asset-hanging")
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(AUTHED_IMAGE_TOTAL_DEADLINE_MS)
+    })
+
+    expect(fetchImageAssetBlob).toHaveBeenCalledTimes(3)
+    expect(signals.every((signal) => signal.aborted)).toBe(true)
     expect(latest).toEqual({ url: null, failed: true })
   })
 

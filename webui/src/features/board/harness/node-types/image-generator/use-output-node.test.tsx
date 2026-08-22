@@ -20,7 +20,10 @@ vi.mock("@/features/board/api/image-generation", () => ({
 }))
 
 import type { GenerationState } from "@/features/board/api/image-generation"
-import { useImageGenerationOutputNode } from "./use-output-node"
+import {
+  AUTOMATIC_ENSURE_DEADLINE_MS,
+  useImageGenerationOutputNode,
+} from "./use-output-node"
 
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
@@ -115,7 +118,12 @@ describe("useImageGenerationOutputNode", () => {
     await render(generation("generation-strict"), { strict: true })
 
     expect(mocks.ensure).toHaveBeenCalledTimes(1)
-    expect(mocks.ensure).toHaveBeenCalledWith(BOARD_ID, "generation-strict", false)
+    expect(mocks.ensure).toHaveBeenCalledWith(
+      BOARD_ID,
+      "generation-strict",
+      false,
+      expect.any(AbortSignal),
+    )
     expect(latest?.outputNodeUid).toBe(OUTPUT_NODE_UID)
     expect(mocks.refresh).toHaveBeenCalledTimes(1)
   })
@@ -128,6 +136,42 @@ describe("useImageGenerationOutputNode", () => {
     await render(generation("generation-bound", { output_node_uid: OUTPUT_NODE_UID }))
     expect(mocks.ensure).not.toHaveBeenCalled()
     expect(latest?.outputNodeUid).toBe(OUTPUT_NODE_UID)
+  })
+
+
+  it("updates result presence only for matching node add/remove batches", async () => {
+    const getNode = vi.spyOn(store, "getNode")
+    await render(generation("generation-presence", { output_node_uid: OUTPUT_NODE_UID }))
+    const baselineReads = getNode.mock.calls.length
+
+    act(() => {
+      store.addNode({
+        id: "unrelated" as Parameters<CanvasStore["getNode"]>[0],
+        type: "rect",
+        x: 0,
+        y: 0,
+        w: 100,
+        h: 100,
+        angle: 0,
+        groups: [],
+      })
+    })
+    expect(getNode.mock.calls.length).toBe(baselineReads)
+
+    act(() => {
+      store.addNode({
+        id: OUTPUT_NODE_UID as Parameters<CanvasStore["getNode"]>[0],
+        type: "generated-image",
+        x: 0,
+        y: 0,
+        w: 100,
+        h: 100,
+        angle: 0,
+        groups: [],
+      })
+    })
+    expect(getNode.mock.calls.length).toBeGreaterThan(baselineReads)
+    expect(latest?.nodePresent).toBe(true)
   })
 
 
@@ -145,9 +189,9 @@ describe("useImageGenerationOutputNode", () => {
 
     expect(mocks.ensure).toHaveBeenCalledTimes(3)
     expect(mocks.ensure.mock.calls).toEqual([
-      [BOARD_ID, "generation-retry", false],
-      [BOARD_ID, "generation-retry", false],
-      [BOARD_ID, "generation-retry", false],
+      [BOARD_ID, "generation-retry", false, expect.any(AbortSignal)],
+      [BOARD_ID, "generation-retry", false, expect.any(AbortSignal)],
+      [BOARD_ID, "generation-retry", false, expect.any(AbortSignal)],
     ])
     expect(latest?.outputNodeUid).toBe(OUTPUT_NODE_UID)
   })
@@ -162,6 +206,29 @@ describe("useImageGenerationOutputNode", () => {
     expect(mocks.ensure).toHaveBeenCalledTimes(1)
     expect(latest?.error).toBe("안전한 결과 노드 오류")
     expect(latest?.error).not.toContain("private server body")
+  })
+
+
+  it("aborts a hanging automatic ensure at the hard deadline and permits remount retry", async () => {
+    const signals: AbortSignal[] = []
+    mocks.ensure.mockImplementation(
+      (_boardId: string, _generationUid: string, _recreate: boolean, signal: AbortSignal) => {
+        signals.push(signal)
+        return new Promise(() => undefined)
+      },
+    )
+
+    await render(generation("generation-hanging"))
+    expect(mocks.ensure).toHaveBeenCalledTimes(1)
+    await act(() => vi.advanceTimersByTimeAsync(AUTOMATIC_ENSURE_DEADLINE_MS))
+
+    expect(signals[0]?.aborted).toBe(true)
+    expect(latest?.error).toBe("안전한 결과 노드 오류")
+
+    act(() => root.unmount())
+    root = createRoot(container)
+    await render(generation("generation-hanging"))
+    expect(mocks.ensure).toHaveBeenCalledTimes(2)
   })
 
 
@@ -189,7 +256,44 @@ describe("useImageGenerationOutputNode", () => {
     })
 
     expect(mocks.ensure).toHaveBeenCalledTimes(1)
-    expect(mocks.ensure).toHaveBeenCalledWith(BOARD_ID, "generation-restore", true)
+    expect(mocks.ensure).toHaveBeenCalledWith(
+      BOARD_ID,
+      "generation-restore",
+      true,
+      expect.any(AbortSignal),
+    )
     expect(mocks.refresh).toHaveBeenCalledTimes(1)
+  })
+
+
+  it("aborts and ignores a late recreate response after generation replacement", async () => {
+    let resolveOld: ((value: ReturnType<typeof successfulOutcome>) => void) | null = null
+    mocks.ensure.mockImplementation(
+      (_boardId: string, generationUid: string, recreate: boolean) => {
+        if (generationUid === "generation-old" && recreate) {
+          return new Promise((resolve) => { resolveOld = resolve })
+        }
+        return Promise.resolve(successfulOutcome(generationUid))
+      },
+    )
+    await render(generation("generation-old", { output_node_uid: OUTPUT_NODE_UID }))
+
+    let pending: Promise<void> | undefined
+    act(() => {
+      pending = latest?.recreate()
+    })
+    await render(generation("generation-new", { output_node_uid: "c".repeat(32) }))
+    const oldSignal = mocks.ensure.mock.calls[0]?.[3] as AbortSignal
+    expect(oldSignal.aborted).toBe(true)
+
+    await act(async () => {
+      resolveOld?.(successfulOutcome("generation-old"))
+      await pending
+    })
+
+    expect(latest?.outputNodeUid).toBe("c".repeat(32))
+    expect(latest?.error).toBeNull()
+    expect(mocks.refresh).not.toHaveBeenCalled()
+    expect(latest?.recreating).toBe(false)
   })
 })
