@@ -84,6 +84,27 @@ const outputNodeError = (code: string): Error => new Error(
 )
 
 
+type OutputNodeProbeProps = {
+  generation: GenerationState | null
+  canEdit: boolean
+  store: CanvasStore
+  onResult: (value: ReturnType<typeof useImageGenerationOutputNode>) => void
+}
+
+
+/** Keep one component identity while tests rerender generation props. */
+function OutputNodeProbe(props: OutputNodeProbeProps): null {
+  props.onResult(useImageGenerationOutputNode({
+    graphId: BOARD_ID,
+    generation: props.generation,
+    canEdit: props.canEdit,
+    store: props.store,
+    refreshStatus: mocks.refresh,
+  }))
+  return null
+}
+
+
 describe("useImageGenerationOutputNode", () => {
   let container: HTMLDivElement
   let root: Root
@@ -118,18 +139,16 @@ describe("useImageGenerationOutputNode", () => {
     state: GenerationState | null,
     { canEdit = true, strict = false }: { canEdit?: boolean; strict?: boolean } = {},
   ): Promise<void> => {
-    const Probe = (): null => {
-      latest = useImageGenerationOutputNode({
-        graphId: BOARD_ID,
-        generation: state,
-        canEdit,
-        store,
-        refreshStatus: mocks.refresh,
-      })
-      return null
-    }
+    const probe = (
+      <OutputNodeProbe
+        generation={state}
+        canEdit={canEdit}
+        store={store}
+        onResult={(value) => { latest = value }}
+      />
+    )
     await act(async () => {
-      root.render(strict ? <StrictMode><Probe /></StrictMode> : <Probe />)
+      root.render(strict ? <StrictMode>{probe}</StrictMode> : probe)
       await Promise.resolve()
       await Promise.resolve()
     })
@@ -295,6 +314,60 @@ describe("useImageGenerationOutputNode", () => {
     expect(latest?.outputNodeUid).toBe(OUTPUT_NODE_UID)
     expect(latest?.error).toBeNull()
   })
+
+
+  it.each(["success", "error"] as const)(
+    "ignores a late old-generation retry %s after an in-place rerender",
+    async (lateResult) => {
+      const oldGenerationUid = `generation-late-old-${lateResult}`
+      const newGenerationUid = `generation-late-new-${lateResult}`
+      let oldAttempts = 0
+      let resolveOld: ((value: ReturnType<typeof successfulOutcome>) => void) | null = null
+      let rejectOld: ((error: Error) => void) | null = null
+      mocks.ensure.mockImplementation(
+        (_boardId: string, generationUid: string, _recreate: boolean, signal: AbortSignal) => {
+          if (generationUid === oldGenerationUid) {
+            oldAttempts += 1
+            if (oldAttempts === 1) {
+              return Promise.reject(outputNodeError("materialization_raced"))
+            }
+            return new Promise((resolve, reject) => {
+              resolveOld = resolve
+              rejectOld = reject
+            })
+          }
+          expect(signal.aborted).toBe(false)
+          return Promise.resolve({
+            ...successfulOutcome(generationUid),
+            output_node_uid: "c".repeat(32),
+          })
+        },
+      )
+
+      await render(generation(oldGenerationUid))
+      await act(() => vi.advanceTimersByTimeAsync(250))
+      expect(mocks.ensure).toHaveBeenCalledTimes(2)
+      const oldSignal = mocks.ensure.mock.calls[1]?.[3] as AbortSignal
+
+      await render(generation(newGenerationUid))
+      await act(() => vi.advanceTimersByTimeAsync(0))
+      expect(oldSignal.aborted).toBe(true)
+      expect(mocks.ensure).toHaveBeenCalledTimes(3)
+
+      await act(async () => {
+        if (lateResult === "success") {
+          resolveOld?.(successfulOutcome(oldGenerationUid))
+        } else {
+          rejectOld?.(outputNodeError("materialization_raced"))
+        }
+        await Promise.resolve()
+      })
+
+      expect(latest?.outputNodeUid).toBe("c".repeat(32))
+      expect(latest?.error).toBeNull()
+      expect(mocks.refresh).toHaveBeenCalledTimes(1)
+    },
+  )
 
 
   it("aborts a scheduled race retry after a real unmount", async () => {
