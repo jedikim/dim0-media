@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Request, Response, UploadFile, status
+from fastapi.params import File
 
 from topix.api.datatypes.image_generation import (
+    ImageAssetUploadResponse,
     ImageGenerationAcceptedResponse,
     ImageGenerationCreateRequest,
     ImageGenerationStatusResponse,
@@ -25,11 +27,89 @@ from topix.image_generation.models import (
     GenerationIdempotencyConflictError,
     ImageAssetResolutionError,
     ImageContentValidationError,
+    ImageReferenceValidationError,
     ImageStorageError,
 )
 from topix.image_generation.service import ImageGenerationService
 
 router = APIRouter(tags=["image-generation"])
+
+
+_REFERENCE_ERROR_STATUSES = {
+    "unsupported_reference_format": status.HTTP_422_UNPROCESSABLE_ENTITY,
+    "reference_too_large": status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+    "reference_pixel_limit_exceeded": status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+    "reference_request_too_large": status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+    "reference_encoded_size_exceeded": status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+}
+
+
+def _reference_error(code: str, message: str) -> HTTPException:
+    """Build one safe FastAPI detail-dict error for reference failures."""
+    return HTTPException(
+        status_code=_REFERENCE_ERROR_STATUSES[code],
+        detail={"code": code, "message": message},
+    )
+
+
+@router.post(
+    "/boards/{graph_id}/image-assets",
+    status_code=status.HTTP_201_CREATED,
+    response_model=ImageAssetUploadResponse,
+)
+async def create_image_asset(
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    user_uid: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_member_can_edit)],
+    __: Annotated[None, Depends(rate_limiter)],
+    file: UploadFile = File(..., description="PNG, JPEG, or WebP image"),
+) -> ImageAssetUploadResponse:
+    """Register one bounded multipart raster as an immutable board asset."""
+    from topix.image_generation.models import MAX_PROVIDER_REFERENCE_IMAGE_BYTES
+
+    content = await file.read(MAX_PROVIDER_REFERENCE_IMAGE_BYTES + 1)
+    if len(content) > MAX_PROVIDER_REFERENCE_IMAGE_BYTES:
+        raise _reference_error(
+            "reference_too_large",
+            "One or more reference images exceed the size limit.",
+        )
+    service: ImageGenerationService = request.app.image_generation_service
+    try:
+        asset = await service.register_uploaded_asset(
+            user_uid=user_uid,
+            board_uid=graph_id,
+            content=content,
+            claimed_mime_type=file.content_type,
+        )
+    except ImageContentValidationError as exc:
+        if exc.reason == "byte_limit":
+            raise _reference_error(
+                "reference_too_large",
+                "One or more reference images exceed the size limit.",
+            ) from None
+        if exc.reason == "pixel_limit":
+            raise _reference_error(
+                "reference_pixel_limit_exceeded",
+                "One or more reference images exceed the pixel limit.",
+            ) from None
+        raise _reference_error(
+            "unsupported_reference_format",
+            "One or more reference images use an unsupported format.",
+        ) from None
+    except (ImageStorageError, RuntimeError):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Image asset storage is temporarily unavailable",
+        ) from None
+    return ImageAssetUploadResponse(
+        asset_uid=asset.uid,
+        mime_type=asset.mime_type,
+        width=asset.width,
+        height=asset.height,
+        byte_size=asset.byte_size,
+        content_sha256=asset.content_sha256,
+    )
 
 
 @router.get("/image-models", response_model=ImageModelListResponse)
@@ -86,9 +166,20 @@ async def create_image_generation(
             generator_node_uid=body.generator_node_uid,
         )
     except CapabilityValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from None
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": exc.code, "message": str(exc)},
+        ) from None
     except ImageAssetResolutionError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="One or more image assets are unavailable") from None
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={
+                "code": "image_reference_unavailable",
+                "message": "One or more reference images are unavailable.",
+            },
+        ) from None
+    except ImageReferenceValidationError as exc:
+        raise _reference_error(exc.code, str(exc)) from None
     except GenerationIdempotencyConflictError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="client_request_uid was already used for different content") from None
     except RuntimeError:

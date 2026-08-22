@@ -19,6 +19,7 @@ export interface NoteProperties {
   listOrder: NumberProperty
   url: URLProperty
   imageUrl: ImageProperty
+  imageAssetUid?: KeywordProperty
   iconData: IconProperty
   slideName?: TextProperty
   slideNumber?: NumberProperty

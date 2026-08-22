@@ -110,4 +110,26 @@ describe("useStampNewNodes — autoFit normalization", () => {
       searchable: false,
     })
   })
+
+
+  it("clears a cross-board image asset UID while preserving same-board clones", () => {
+    const store = createCanvasStore()
+    mount(store)
+    addNode(store, "same", "image", {
+      properties: { imageAssetUid: { type: "keyword", value: "a".repeat(32) } },
+    })
+    addNode(store, "foreign", "image", {
+      graphUid: "other-board",
+      properties: { imageAssetUid: { type: "keyword", value: "b".repeat(32) } },
+    })
+
+    const same = store.getNode(asNodeId("same"))?.data as {
+      properties: { imageAssetUid: { value: string } }
+    }
+    const foreign = store.getNode(asNodeId("foreign"))?.data as {
+      properties: { imageAssetUid: { value: string } }
+    }
+    expect(same.properties.imageAssetUid.value).toBe("a".repeat(32))
+    expect(foreign.properties.imageAssetUid.value).toBe("")
+  })
 })

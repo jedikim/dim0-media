@@ -2,9 +2,12 @@ import { useCallback } from "react"
 import { toast } from "sonner"
 import type { CanvasStore } from "@canvas-harness/core"
 import { uploadImage } from "@/features/board/api/upload-image"
+import { uploadImageAsset } from "@/features/board/api/image-generation"
 import { downscaleImage } from "@/features/board/components/flow/utils/downscale-image"
 import { createDefaultNote } from "@/features/board/types/note"
 import { noteToNode } from "../convert/note-to-node"
+import { blobToDataUrl } from "../image-reference-assets"
+import { useBoardRuntime } from "./board-runtime-context"
 
 
 const IMAGE_NODE_MAX_DIMENSION = 420
@@ -60,6 +63,7 @@ export const useHarnessAddImage = (
   boardId: string | null,
   rootId: string | null,
 ) => {
+  const { local } = useBoardRuntime()
   return useCallback(
     async (file: File, options: AddImageOptions = {}): Promise<boolean> => {
       if (!boardId) return false
@@ -67,7 +71,13 @@ export const useHarnessAddImage = (
         const { blob, width, height, mimeType } = await downscaleImage(file)
         const ext = mimeType === "image/png" ? "png" : "jpg"
         const base = file.name?.replace(/\.[^.]+$/, "") || "image"
-        const { dataUrl } = await uploadImage(blob, `${base}.${ext}`)
+        const filename = `${base}.${ext}`
+        const dataUrl = local
+          ? (await uploadImage(blob, filename)).dataUrl
+          : await blobToDataUrl(blob)
+        const asset = local
+          ? null
+          : await uploadImageAsset(boardId, blob, filename)
         const size = nodeSizeFromImage(width, height)
 
         const center = options.position
@@ -84,6 +94,9 @@ export const useHarnessAddImage = (
         const note = createDefaultNote({ boardId, nodeType: "image" })
         if (rootId) note.parentId = rootId
         note.properties.imageUrl = { type: "image", image: { url: dataUrl } }
+        if (asset) {
+          note.properties.imageAssetUid = { type: "keyword", value: asset.asset_uid }
+        }
         note.properties.nodeSize = { type: "size", size }
         note.properties.nodePosition = { type: "position", position }
 
@@ -96,6 +109,6 @@ export const useHarnessAddImage = (
         return false
       }
     },
-    [store, boardId, rootId],
+    [store, boardId, rootId, local],
   )
 }

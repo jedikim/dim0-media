@@ -147,6 +147,16 @@ describe("note ↔ node round-trip", () => {
   })
 
 
+  it("round-trips an image asset UID through KeywordProperty.value", () => {
+    const note = createDefaultNote({ boardId: BOARD_ID, nodeType: "image" })
+    note.properties.imageAssetUid = { type: "keyword", value: "a".repeat(32) }
+
+    const back = nodeToNote(noteToNode(note))
+
+    expect(back.properties.imageAssetUid).toEqual(note.properties.imageAssetUid)
+  })
+
+
   it("projects a rectangle-backed image generator and preserves its property contract", () => {
     const note = createDefaultNote({ boardId: BOARD_ID, nodeType: "rectangle" })
     note.properties.imagePrompt = { type: "text", text: "a blue bird" }

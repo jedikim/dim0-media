@@ -28,6 +28,7 @@ export const nodeToNote = (node: Node): Note => {
     listOrder: extraProperties.listOrder ?? { type: "number", number: 0 },
     url: extraProperties.url ?? { type: "url" },
     imageUrl: extraProperties.imageUrl ?? { type: "image" },
+    imageAssetUid: extraProperties.imageAssetUid,
     iconData: extraProperties.iconData ?? { type: "icon" },
     slideName: extraProperties.slideName,
     slideNumber: extraProperties.slideNumber,

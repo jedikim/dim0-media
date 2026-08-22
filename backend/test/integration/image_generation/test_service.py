@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from hashlib import sha256
 from io import BytesIO
@@ -19,10 +20,11 @@ from topix.image_generation.models import (
     MAX_PROVIDER_REFERENCE_IMAGE_BYTES,
     GeneratedImagePayload,
     ImageAssetCreate,
-    ImageAssetResolutionError,
+    ImageAssetRecord,
     ImageAssetSource,
     ImageGenerationParameters,
     ImageProviderError,
+    ImageReferenceValidationError,
     ImageStorageError,
     ProviderImageRequest,
     ProviderImageResult,
@@ -259,7 +261,7 @@ async def test_oversized_reference_metadata_is_rejected_before_file_read_or_prov
     )
     await store.add_asset(asset)
 
-    with pytest.raises(ImageAssetResolutionError, match="byte limit"):
+    with pytest.raises(ImageReferenceValidationError) as exc_info:
         await service.start_generation(
             user_uid=user_uid,
             board_uid=board_uid,
@@ -270,10 +272,68 @@ async def test_oversized_reference_metadata_is_rejected_before_file_read_or_prov
             reference_asset_uids=(asset.uid,),
             generator_node_uid=None,
         )
+    assert exc_info.value.code == "reference_too_large"
     assert adapter.requests == []
     async with initialized_image_pg_pool.acquire() as conn:
         assert await conn.fetchval("SELECT count(*) FROM image_generation_run") == 0
     await tasks.close()
+
+
+def test_reference_metadata_limit_failures_have_stable_codes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Format, pixel, aggregate, and encoded guards retain distinct API codes."""
+
+    def asset(*, mime_type: str = "image/png", byte_size: int = 1, width: int = 1, height: int = 1) -> ImageAssetRecord:
+        """Build one immutable metadata-only reference fixture."""
+        return ImageAssetRecord(
+            asset_uid=gen_uid(),
+            board_uid=gen_uid(),
+            created_by_user_uid=gen_uid(),
+            source_kind=ImageAssetSource.UPLOADED,
+            storage_key=f"images/uploads/{gen_uid()}.png",
+            mime_type=mime_type,
+            byte_size=byte_size,
+            width=width,
+            height=height,
+            content_sha256="a" * 64,
+            created_at=datetime.now(UTC),
+        )
+
+    with pytest.raises(ImageReferenceValidationError) as unsupported:
+        ImageGenerationService._validate_reference_metadata(
+            (asset(mime_type="image/gif"),),
+            model_id="x-ai/grok-imagine-image-2.0",
+            prompt="safe",
+        )
+    assert unsupported.value.code == "unsupported_reference_format"
+
+    monkeypatch.setattr("topix.image_generation.service.MAX_GENERATED_IMAGE_PIXELS", 10)
+    with pytest.raises(ImageReferenceValidationError) as pixels:
+        ImageGenerationService._validate_reference_metadata(
+            (asset(width=4, height=4),),
+            model_id="x-ai/grok-imagine-image-2.0",
+            prompt="safe",
+        )
+    assert pixels.value.code == "reference_pixel_limit_exceeded"
+
+    monkeypatch.setattr("topix.image_generation.service.MAX_GENERATED_IMAGE_PIXELS", 40_000_000)
+    monkeypatch.setattr("topix.image_generation.service.MAX_PROVIDER_REQUEST_BYTES", 10)
+    with pytest.raises(ImageReferenceValidationError) as aggregate:
+        ImageGenerationService._validate_reference_metadata(
+            (asset(byte_size=6), asset(byte_size=6)),
+            model_id="x-ai/grok-imagine-image-2.0",
+            prompt="safe",
+        )
+    assert aggregate.value.code == "reference_request_too_large"
+
+    monkeypatch.setattr("topix.image_generation.service.MAX_PROVIDER_REQUEST_BYTES", 20 * 1024 * 1024)
+    monkeypatch.setattr("topix.image_generation.service.MAX_PROVIDER_ENCODED_REQUEST_BYTES", 1)
+    with pytest.raises(ImageReferenceValidationError) as encoded:
+        ImageGenerationService._validate_reference_metadata(
+            (asset(),),
+            model_id="x-ai/grok-imagine-image-2.0",
+            prompt="safe",
+        )
+    assert encoded.value.code == "reference_encoded_size_exceeded"
 
 
 @pytest.mark.asyncio

@@ -123,8 +123,9 @@ def test_asset_validation_accepts_supported_storage_formats(image_format: str, m
 @pytest.mark.parametrize(("image_format", "mime_type"), [("GIF", "image/gif"), ("AVIF", "image/avif")])
 def test_provider_validation_rejects_non_provider_asset_formats(image_format: str, mime_type: str) -> None:
     """GIF and AVIF remain serveable assets but cannot enter provider requests."""
-    with pytest.raises(ImageContentValidationError, match="allowed raster"):
+    with pytest.raises(ImageContentValidationError, match="allowed raster") as exc_info:
         validate_provider_raster_bytes(_image_bytes(image_format), claimed_mime_type=mime_type)
+    assert exc_info.value.reason == "unsupported_format"
 
 
 @pytest.mark.parametrize("content", [b"<svg></svg>", b"<html></html>", b"<?xml version='1.0'?>"])
@@ -137,8 +138,30 @@ def test_raster_validation_rejects_markup(content: bytes) -> None:
 def test_raster_validation_rejects_excessive_pixel_count(monkeypatch) -> None:
     """Valid compressed bytes still fail when decoded dimensions exceed the cap."""
     monkeypatch.setattr(image_storage, "MAX_GENERATED_IMAGE_PIXELS", 50)
-    with pytest.raises(ImageContentValidationError, match="pixel"):
+    with pytest.raises(ImageContentValidationError, match="pixel") as exc_info:
         validate_provider_raster_bytes(_image_bytes(size=(10, 7)))
+    assert exc_info.value.reason == "pixel_limit"
+
+
+@pytest.mark.asyncio
+async def test_uploaded_write_is_content_addressed_and_compensatable(tmp_path) -> None:
+    """Uploaded keys contain verified digests and support exact failed-row cleanup."""
+    content = _image_bytes("WEBP")
+    raster = validate_provider_raster_bytes(content, claimed_mime_type="image/webp")
+    storage = ImageStorage(tmp_path)
+
+    key, created = await storage.write_uploaded(
+        board_uid="board-1",
+        asset_uid="asset-1",
+        content=content,
+        raster=raster,
+    )
+
+    assert created is True
+    assert key == f"images/uploaded/board-1/asset-1/{raster.content_sha256}.webp"
+    assert (tmp_path / key).read_bytes() == content
+    assert await storage.ensure_uploaded_deleted(key) is True
+    assert not (tmp_path / key).exists()
 
 
 @pytest.mark.parametrize(

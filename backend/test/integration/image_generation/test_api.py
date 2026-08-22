@@ -33,10 +33,10 @@ from topix.store.image_generation import ImageGenerationStore
 from topix.utils.common import gen_uid
 
 
-def _image_bytes() -> bytes:
-    """Create one deterministic output image for API integration tests."""
+def _image_bytes(image_format: str = "PNG", *, size: tuple[int, int] = (9, 7)) -> bytes:
+    """Create one deterministic raster for API integration tests."""
     output = BytesIO()
-    Image.new("RGB", (9, 7), color="cyan").save(output, format="PNG")
+    Image.new("RGB", size, color="cyan").save(output, format=image_format)
     return output.getvalue()
 
 
@@ -214,6 +214,116 @@ async def test_generation_post_requires_auth_and_owner_or_member_role(
 
 
 @pytest.mark.asyncio
+async def test_asset_post_uses_graph_acl_and_registers_sniffed_rasters_without_provider_work(
+    initialized_image_pg_pool: asyncpg.Pool,
+    tmp_path,
+) -> None:
+    """Only editors can register PNG/JPEG/WebP assets with safe metadata."""
+    async with _api_context(initialized_image_pg_pool, tmp_path) as context:
+        path = f"/boards/{context.board_uid}/image-assets"
+        assert (await context.client.post(path, files={"file": ("x.png", _image_bytes(), "image/png")})).status_code == 401
+        for denied_uid in (context.viewer_uid, context.stranger_uid):
+            denied = await context.client.post(
+                path,
+                headers={"X-Test-User": denied_uid},
+                files={"file": ("x.png", _image_bytes(), "image/png")},
+            )
+            assert denied.status_code == 404
+
+        for image_format, mime_type, extension in (
+            ("PNG", "image/png", "png"),
+            ("JPEG", "image/jpeg", "jpg"),
+            ("WEBP", "image/webp", "webp"),
+        ):
+            content = _image_bytes(image_format)
+            response = await context.client.post(
+                path,
+                headers={"X-Test-User": context.member_uid},
+                files={"file": (f"safe.{extension}", content, mime_type)},
+            )
+            assert response.status_code == 201
+            payload = response.json()
+            assert set(payload) == {
+                "asset_uid",
+                "mime_type",
+                "width",
+                "height",
+                "byte_size",
+                "content_sha256",
+            }
+            assert payload == {
+                "asset_uid": payload["asset_uid"],
+                "mime_type": mime_type,
+                "width": 9,
+                "height": 7,
+                "byte_size": len(content),
+                "content_sha256": sha256(content).hexdigest(),
+            }
+            asset = await context.store.get_asset(
+                board_uid=context.board_uid,
+                asset_uid=payload["asset_uid"],
+            )
+            assert asset is not None
+            assert asset.source_kind is ImageAssetSource.UPLOADED
+            assert asset.storage_key.endswith(f"/{payload['content_sha256']}.{extension}")
+            assert str(tmp_path) not in response.text
+
+        assert context.adapter.requests == []
+
+
+@pytest.mark.asyncio
+async def test_asset_post_rejects_non_multipart_spoofed_and_unsafe_images_with_typed_details(
+    initialized_image_pg_pool: asyncpg.Pool,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Upload validation returns stable safe codes and never calls a provider."""
+    async with _api_context(initialized_image_pg_pool, tmp_path) as context:
+        path = f"/boards/{context.board_uid}/image-assets"
+        headers = {"X-Test-User": context.owner_uid}
+
+        non_multipart = await context.client.post(path, headers=headers, json={"url": "https://example.test/x.png"})
+        assert non_multipart.status_code == 422
+
+        for filename, content, mime_type in (
+            ("x.gif", _image_bytes("GIF"), "image/gif"),
+            ("spoof.jpg", _image_bytes("PNG"), "image/jpeg"),
+        ):
+            response = await context.client.post(
+                path,
+                headers=headers,
+                files={"file": (filename, content, mime_type)},
+            )
+            assert response.status_code == 422
+            assert response.json() == {
+                "detail": {
+                    "code": "unsupported_reference_format",
+                    "message": "One or more reference images use an unsupported format.",
+                }
+            }
+
+        monkeypatch.setattr("topix.image_generation.models.MAX_PROVIDER_REFERENCE_IMAGE_BYTES", 8)
+        too_large = await context.client.post(
+            path,
+            headers=headers,
+            files={"file": ("large.png", _image_bytes(), "image/png")},
+        )
+        assert too_large.status_code == 413
+        assert too_large.json()["detail"]["code"] == "reference_too_large"
+
+        monkeypatch.setattr("topix.image_generation.models.MAX_PROVIDER_REFERENCE_IMAGE_BYTES", 10 * 1024 * 1024)
+        monkeypatch.setattr("topix.image_generation.storage.MAX_GENERATED_IMAGE_PIXELS", 10)
+        too_many_pixels = await context.client.post(
+            path,
+            headers=headers,
+            files={"file": ("pixels.png", _image_bytes(), "image/png")},
+        )
+        assert too_many_pixels.status_code == 413
+        assert too_many_pixels.json()["detail"]["code"] == "reference_pixel_limit_exceeded"
+        assert context.adapter.requests == []
+
+
+@pytest.mark.asyncio
 async def test_api_enforces_idempotency_assets_capabilities_and_node_board(
     initialized_image_pg_pool: asyncpg.Pool,
     tmp_path,
@@ -238,9 +348,13 @@ async def test_api_enforces_idempotency_assets_capabilities_and_node_board(
         extra = body | {"api_key": "must-not-be-accepted"}
         assert (await context.client.post(path, headers=headers, json=extra)).status_code == 422
         too_many = _request_body() | {"reference_asset_uids": [gen_uid()] * 4}
-        assert (await context.client.post(path, headers=headers, json=too_many)).status_code == 422
+        too_many_response = await context.client.post(path, headers=headers, json=too_many)
+        assert too_many_response.status_code == 422
+        assert too_many_response.json()["detail"]["code"] == "reference_limit_exceeded"
         missing = _request_body() | {"reference_asset_uids": [gen_uid()]}
-        assert (await context.client.post(path, headers=headers, json=missing)).status_code == 404
+        missing_response = await context.client.post(path, headers=headers, json=missing)
+        assert missing_response.status_code == 404
+        assert missing_response.json()["detail"]["code"] == "image_reference_unavailable"
 
         content = _image_bytes()
         foreign_asset = ImageAssetCreate(
@@ -256,7 +370,9 @@ async def test_api_enforces_idempotency_assets_capabilities_and_node_board(
         )
         await context.store.add_asset(foreign_asset)
         cross_board = _request_body() | {"reference_asset_uids": [foreign_asset.uid]}
-        assert (await context.client.post(path, headers=headers, json=cross_board)).status_code == 404
+        cross_board_response = await context.client.post(path, headers=headers, json=cross_board)
+        assert cross_board_response.status_code == 404
+        assert cross_board_response.json()["detail"]["code"] == "image_reference_unavailable"
 
         node_uid = gen_uid()
         context.graph_store.nodes[node_uid] = SimpleNamespace(graph_uid=context.foreign_board_uid)

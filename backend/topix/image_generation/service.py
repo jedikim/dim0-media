@@ -17,21 +17,22 @@ from topix.image_generation.models import (
     GenerationStartOutcome,
     ImageAssetCreate,
     ImageAssetRecord,
-    ImageAssetResolutionError,
     ImageAssetSource,
     ImageContentValidationError,
     ImageGenerationParameters,
     ImageGenerationRecord,
     ImageProviderError,
+    ImageReferenceValidationError,
     ImageStorageError,
     ProviderImageReference,
     ProviderImageRequest,
     estimate_provider_request_bytes,
 )
 from topix.image_generation.providers.base import ImageProviderAdapter
-from topix.image_generation.storage import ImageStorage
+from topix.image_generation.storage import ImageStorage, validate_provider_raster_bytes
 from topix.image_generation.tasks import ImageGenerationTaskManager
 from topix.store.image_generation import ImageGenerationStore
+from topix.utils.common import gen_uid
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,54 @@ class ImageGenerationService:
             raise
         return outcome
 
+    async def register_uploaded_asset(
+        self,
+        *,
+        user_uid: str,
+        board_uid: str,
+        content: bytes,
+        claimed_mime_type: str | None,
+    ) -> ImageAssetCreate:
+        """Validate, atomically store, and register one immutable board image."""
+        raster = validate_provider_raster_bytes(content, claimed_mime_type=claimed_mime_type)
+        asset_uid = gen_uid()
+        storage_key, created = await self._storage.write_uploaded(
+            board_uid=board_uid,
+            asset_uid=asset_uid,
+            content=content,
+            raster=raster,
+        )
+        asset = ImageAssetCreate(
+            uid=asset_uid,
+            board_uid=board_uid,
+            created_by_user_uid=user_uid,
+            source_kind=ImageAssetSource.UPLOADED,
+            storage_key=storage_key,
+            mime_type=raster.mime_type,
+            byte_size=len(content),
+            width=raster.width,
+            height=raster.height,
+            content_sha256=raster.content_sha256,
+        )
+        register_task = asyncio.create_task(self._store.add_asset(asset))
+        try:
+            await asyncio.shield(register_task)
+        except asyncio.CancelledError:
+            registered = False
+            try:
+                await register_task
+                registered = True
+            except Exception as exc:  # noqa: BLE001 - cancellation must retain its identity
+                logger.warning("Cancelled asset registration completed with %s", type(exc).__name__)
+            if created and not registered:
+                await asyncio.shield(self._storage.ensure_uploaded_deleted(storage_key))
+            raise
+        except Exception as exc:  # noqa: BLE001 - persistence failures share one sanitized boundary
+            if created:
+                await self._storage.ensure_uploaded_deleted(storage_key)
+            raise ImageStorageError("Image asset metadata could not be registered") from exc
+        return asset
+
     @staticmethod
     def _validate_reference_metadata(
         assets: tuple[ImageAssetRecord, ...],
@@ -131,14 +180,26 @@ class ImageGenerationService:
         total_bytes = 0
         for asset in assets:
             if asset.mime_type not in _REFERENCE_MIME_TYPES:
-                raise ImageAssetResolutionError("One or more reference assets use an unsupported image format")
+                raise ImageReferenceValidationError(
+                    "unsupported_reference_format",
+                    "One or more reference images use an unsupported format.",
+                )
             if asset.byte_size > MAX_PROVIDER_REFERENCE_IMAGE_BYTES:
-                raise ImageAssetResolutionError("One or more reference assets exceed the byte limit")
+                raise ImageReferenceValidationError(
+                    "reference_too_large",
+                    "One or more reference images exceed the size limit.",
+                )
             if asset.width * asset.height > MAX_GENERATED_IMAGE_PIXELS:
-                raise ImageAssetResolutionError("One or more reference assets exceed the pixel limit")
+                raise ImageReferenceValidationError(
+                    "reference_pixel_limit_exceeded",
+                    "One or more reference images exceed the pixel limit.",
+                )
             total_bytes += asset.byte_size
         if total_bytes > MAX_PROVIDER_REQUEST_BYTES:
-            raise ImageAssetResolutionError("Reference assets exceed the request byte limit")
+            raise ImageReferenceValidationError(
+                "reference_request_too_large",
+                "The combined reference images exceed the request size limit.",
+            )
         if (
             estimate_provider_request_bytes(
                 model_id=model_id,
@@ -147,7 +208,10 @@ class ImageGenerationService:
             )
             > MAX_PROVIDER_ENCODED_REQUEST_BYTES
         ):
-            raise ImageAssetResolutionError("Encoded reference request exceeds the memory limit")
+            raise ImageReferenceValidationError(
+                "reference_encoded_size_exceeded",
+                "The encoded reference images exceed the request memory limit.",
+            )
 
     async def _execute_generation(  # noqa: C901 - explicit audit mapping for every execution stage
         self,

@@ -8,9 +8,11 @@ vi.mock("@/api", () => ({ apiFetch }))
 import {
   fetchImageAssetBlob,
   getImageGeneration,
+  imageGenerationErrorDetail,
   imageGenerationErrorMessage,
   listImageModels,
   startImageGeneration,
+  uploadImageAsset,
 } from "./image-generation"
 
 
@@ -79,6 +81,23 @@ describe("image generation API client", () => {
   })
 
 
+  it("uploads multipart bytes to the exact board asset collection", async () => {
+    apiFetch.mockResolvedValue({ asset_uid: "a".repeat(32) })
+    const blob = new Blob(["png"], { type: "image/png" })
+
+    await uploadImageAsset("board/one", blob, "reference.png")
+
+    expect(apiFetch).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/boards/board%2Fone/image-assets",
+      method: "POST",
+      headers: { Accept: "application/json" },
+      body: expect.any(FormData),
+    }))
+    const body = apiFetch.mock.calls[0][0].body as FormData
+    expect(body.get("file")).toBeInstanceOf(File)
+  })
+
+
   it("caches a successful model catalog", async () => {
     apiFetch.mockResolvedValue({ models: [model] })
 
@@ -98,6 +117,41 @@ describe("image generation API client", () => {
     expect(imageGenerationErrorMessage(new Error(rawSecret))).not.toContain(rawSecret)
     expect(imageGenerationErrorMessage(new Error(`409 Conflict - ${rawSecret}`)))
       .toBe("요청 식별자가 다른 내용에 이미 사용되었습니다. 다시 생성해 주세요.")
+  })
+
+
+  it("parses only a validated FastAPI detail dictionary", () => {
+    const detail = { code: "reference_too_large", message: "Safe server message." }
+    expect(imageGenerationErrorDetail(
+      new Error(`413 Request Entity Too Large - ${JSON.stringify({ detail })}`),
+    )).toEqual(detail)
+    expect(imageGenerationErrorDetail(
+      new Error('422 Unprocessable Entity - {"detail":"plain string"}'),
+    )).toBeNull()
+    expect(imageGenerationErrorDetail(new Error("422 Unprocessable Entity - {broken")))
+      .toBeNull()
+    expect(imageGenerationErrorDetail(new Error("422 Unprocessable Entity"))).toBeNull()
+  })
+
+
+  it("uses fixed copy for known codes and hides unknown server values", () => {
+    const secret = "raw-provider-secret-value"
+    const known = new Error(`413 Too Large - ${JSON.stringify({
+      detail: { code: "reference_too_large", message: secret },
+    })}`)
+    const unknown = new Error(`422 Invalid - ${JSON.stringify({
+      detail: { code: "future_provider_code", message: secret },
+    })}`)
+
+    expect(imageGenerationErrorMessage(known)).toBe(
+      "참조 이미지 한 장의 파일 크기가 제한을 초과했습니다.",
+    )
+    expect(imageGenerationErrorMessage(known)).not.toContain(secret)
+    expect(imageGenerationErrorDetail(unknown)?.code).toBe("future_provider_code")
+    expect(imageGenerationErrorMessage(unknown)).toBe(
+      "선택한 모델이 이 요청을 지원하지 않습니다.",
+    )
+    expect(imageGenerationErrorMessage(unknown)).not.toContain(secret)
   })
 })
 

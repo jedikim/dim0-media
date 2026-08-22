@@ -58,8 +58,9 @@ def test_registry_is_immutable() -> None:
 
 def test_unknown_model_is_rejected() -> None:
     """Unknown model IDs fail explicitly instead of falling through."""
-    with pytest.raises(CapabilityValidationError, match="Unsupported image model"):
+    with pytest.raises(CapabilityValidationError, match="Unsupported image model") as exc_info:
         get_capability("unknown/image-model")
+    assert exc_info.value.code == "unsupported_image_model"
 
 
 @pytest.mark.parametrize(
@@ -80,6 +81,7 @@ def test_reference_overflow_is_rejected_without_truncation(model_id: str, maximu
     message = str(exc_info.value)
     assert f"received {maximum + 1}" in message
     assert f"maximum {maximum}" in message
+    assert exc_info.value.code == "reference_limit_exceeded"
 
 
 def test_supported_options_are_accepted() -> None:
@@ -128,10 +130,10 @@ def test_unsupported_output_count_is_rejected() -> None:
 
 
 @pytest.mark.parametrize(
-    ("reference_count", "capability_field", "error"),
+    ("reference_count", "capability_field", "error", "code"),
     [
-        (0, "supports_text_to_image", "does not support text-to-image"),
-        (1, "supports_image_to_image", "does not support image-to-image"),
+        (0, "supports_text_to_image", "does not support text-to-image", "text_to_image_unsupported"),
+        (1, "supports_image_to_image", "does not support image-to-image", "image_to_image_unsupported"),
     ],
 )
 def test_generation_mode_must_be_supported(
@@ -139,6 +141,7 @@ def test_generation_mode_must_be_supported(
     reference_count: int,
     capability_field: str,
     error: str,
+    code: str,
 ) -> None:
     """Prompt-only and referenced requests enforce their respective mode flags."""
     model_id = "test/mode-limited"
@@ -149,9 +152,10 @@ def test_generation_mode_must_be_supported(
         MappingProxyType({model_id: capability}),
     )
 
-    with pytest.raises(CapabilityValidationError, match=error):
+    with pytest.raises(CapabilityValidationError, match=error) as exc_info:
         validate_generation_parameters(
             model_id,
             ImageGenerationParameters(),
             reference_count=reference_count,
         )
+    assert exc_info.value.code == code

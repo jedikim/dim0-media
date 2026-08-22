@@ -105,7 +105,10 @@ def get_capability(model_id: str) -> ImageModelCapability:
     try:
         return IMAGE_MODEL_CAPABILITIES[model_id]
     except KeyError as exc:
-        raise CapabilityValidationError(f"Unsupported image model: {model_id}") from exc
+        raise CapabilityValidationError(
+            f"Unsupported image model: {model_id}",
+            code="unsupported_image_model",
+        ) from exc
 
 
 def _validate_choice(
@@ -119,10 +122,16 @@ def _validate_choice(
     if value is None:
         return
     if supported is None:
-        raise CapabilityValidationError(f"{model_id} does not advertise a selectable {name}")
+        raise CapabilityValidationError(
+            f"{model_id} does not advertise a selectable {name}",
+            code="unsupported_image_parameter",
+        )
     if value not in supported:
         allowed = ", ".join(supported)
-        raise CapabilityValidationError(f"Unsupported {name} for {model_id}: {value}; allowed: {allowed}")
+        raise CapabilityValidationError(
+            f"Unsupported {name} for {model_id}: {value}; allowed: {allowed}",
+            code="unsupported_image_parameter",
+        )
 
 
 def validate_generation_parameters(
@@ -133,16 +142,26 @@ def validate_generation_parameters(
 ) -> ImageModelCapability:
     """Validate a request without mutating or truncating its references."""
     if reference_count < 0:
-        raise CapabilityValidationError("reference_count must not be negative")
+        raise CapabilityValidationError(
+            "reference_count must not be negative",
+            code="invalid_reference_count",
+        )
 
     capability = get_capability(model_id)
     if reference_count == 0 and not capability.supports_text_to_image:
-        raise CapabilityValidationError(f"{model_id} does not support text-to-image generation")
+        raise CapabilityValidationError(
+            f"{model_id} does not support text-to-image generation",
+            code="text_to_image_unsupported",
+        )
     if reference_count > 0 and not capability.supports_image_to_image:
-        raise CapabilityValidationError(f"{model_id} does not support image-to-image generation")
+        raise CapabilityValidationError(
+            f"{model_id} does not support image-to-image generation",
+            code="image_to_image_unsupported",
+        )
     if reference_count > capability.max_reference_images:
         raise CapabilityValidationError(
-            f"Too many reference images for {model_id}: received {reference_count}, maximum {capability.max_reference_images}"
+            f"Too many reference images for {model_id}: received {reference_count}, maximum {capability.max_reference_images}",
+            code="reference_limit_exceeded",
         )
 
     _validate_choice(
@@ -165,6 +184,7 @@ def validate_generation_parameters(
     )
     if parameters.output_count > capability.max_output_images:
         raise CapabilityValidationError(
-            f"Too many output images for {model_id}: requested {parameters.output_count}, maximum {capability.max_output_images}"
+            f"Too many output images for {model_id}: requested {parameters.output_count}, maximum {capability.max_output_images}",
+            code="output_limit_exceeded",
         )
     return capability
