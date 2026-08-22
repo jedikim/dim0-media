@@ -169,7 +169,7 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
   useTrackBoardCameraMotion(store)
   useCenterFromUrl(store, wrapRef, ready)
   const styleMemory = useStyleMemory(store)
-  useStampNewEdges(store, boardId, rootId)
+  useStampNewEdges(store, boardId, rootId, canEdit, local)
   useStampNewNodes(store, boardId, rootId)
   useSidebarContentsSync(store, boardId)
   // The browser agent's local indexes (note search + doc Q&A) must exist whenever

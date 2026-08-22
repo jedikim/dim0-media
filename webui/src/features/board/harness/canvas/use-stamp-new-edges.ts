@@ -6,6 +6,13 @@ import {
   type StoredEdgeColors,
 } from "../theme/color-adapter"
 import { getBoardThemeMode } from "../theme/theme-mode-ref"
+import {
+  attachedNodeId,
+  isImageReferenceTargetLocked,
+  nextImageReferenceOrdinal,
+  orderedImageReferences,
+  readImageReferenceOrdinal,
+} from "../image-reference-edges"
 
 
 /**
@@ -79,6 +86,8 @@ export const useStampNewEdges = (
   store: CanvasStore,
   boardId: string | null,
   rootId: string | null,
+  canEdit = true,
+  local = false,
 ): void => {
   useEffect(() => {
     if (!boardId) return
@@ -87,6 +96,41 @@ export const useStampNewEdges = (
       for (const op of batch.ops) {
         if (op.type !== "edge.add") continue
         const data = (op.edge.data ?? {}) as Record<string, unknown>
+
+        let referenceData: Record<string, unknown> | null = null
+        const sourceNodeId = attachedNodeId(op.edge.source)
+        const targetNodeId = attachedNodeId(op.edge.target)
+        const sourceNode = sourceNodeId ? store.getNode(sourceNodeId) : null
+        const targetNode = targetNodeId ? store.getNode(targetNodeId) : null
+        const validReference = sourceNode !== null
+          && sourceNode !== undefined
+          && targetNode?.type === "image-generator"
+          && (sourceNode.type === "image" || sourceNode.type === "image-generator")
+        if (canEdit && !local && validReference && sourceNodeId && targetNodeId) {
+          if (isImageReferenceTargetLocked(targetNodeId)) {
+            store.removeEdge(op.edge.id)
+            continue
+          }
+          const duplicate = orderedImageReferences(store, targetNodeId).some(
+            (reference) => reference.edge.id !== op.edge.id
+              && reference.sourceNodeId === sourceNodeId,
+          )
+          if (duplicate) {
+            store.removeEdge(op.edge.id)
+            continue
+          }
+          if (data.imageReference !== true || readImageReferenceOrdinal(data) === null) {
+            referenceData = {
+              imageReference: true,
+              imageReferenceOrdinal: nextImageReferenceOrdinal(store, targetNodeId),
+            }
+          }
+        } else if (data.imageReference === true && !validReference) {
+          referenceData = {
+            imageReference: null,
+            imageReferenceOrdinal: null,
+          }
+        }
 
         const wantedParentId = rootId ?? undefined
         const scopeMismatched =
@@ -105,12 +149,13 @@ export const useStampNewEdges = (
             currentStyle.textColor !== displayColors.textColor
         }
 
-        if (!scopeMismatched && !themeStale) continue
+        if (!scopeMismatched && !themeStale && !referenceData) continue
 
         const nextData: Record<string, unknown> = {
           ...data,
           graphUid: boardId,
           parentId: wantedParentId,
+          ...referenceData,
         }
         const patch: Parameters<typeof store.updateEdge>[1] = { data: nextData }
         if (themeStale && displayColors) {
@@ -120,5 +165,5 @@ export const useStampNewEdges = (
         store.updateEdge(op.edge.id, patch)
       }
     })
-  }, [store, boardId, rootId])
+  }, [store, boardId, rootId, canEdit, local])
 }

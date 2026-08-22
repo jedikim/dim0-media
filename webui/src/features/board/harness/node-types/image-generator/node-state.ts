@@ -2,7 +2,7 @@ import type { KeywordProperty, TextProperty } from "@/features/newsfeed/types/pr
 import type { GenerationParameters } from "@/features/board/api/image-generation"
 
 
-export const PENDING_IMAGE_REQUEST_VERSION = 1
+export const PENDING_IMAGE_REQUEST_VERSION = 2
 
 
 const MAX_PENDING_SNAPSHOT_LENGTH = 64 * 1024
@@ -10,7 +10,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 
 
 export type PendingImageRequest = {
-  version: 1
+  version: 2
   boardUid: string
   generatorNodeUid: string
   initiatorUserUid: string
@@ -18,6 +18,8 @@ export type PendingImageRequest = {
   modelId: string
   prompt: string
   parameters: GenerationParameters
+  referenceSourceNodeUids: string[]
+  referenceAssetUids: string[]
 }
 
 
@@ -69,6 +71,8 @@ export function serializePendingImageRequest(snapshot: PendingImageRequest): str
     modelId: snapshot.modelId,
     prompt: snapshot.prompt,
     parameters: canonicalGenerationParameters(snapshot.parameters),
+    referenceSourceNodeUids: snapshot.referenceSourceNodeUids,
+    referenceAssetUids: snapshot.referenceAssetUids,
   })
 }
 
@@ -97,7 +101,7 @@ export function parsePendingImageRequest(raw: string): PendingImageRequest | nul
   } catch {
     return null
   }
-  if (!isRecord(parsed) || parsed.version !== PENDING_IMAGE_REQUEST_VERSION) return null
+  if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== PENDING_IMAGE_REQUEST_VERSION)) return null
 
   const required = [
     parsed.boardUid,
@@ -127,6 +131,18 @@ export function parsePendingImageRequest(raw: string): PendingImageRequest | nul
     return null
   }
 
+  const referenceSourceNodeUids = parsed.version === 1 ? [] : parsed.referenceSourceNodeUids
+  const referenceAssetUids = parsed.version === 1 ? [] : parsed.referenceAssetUids
+  if (!Array.isArray(referenceSourceNodeUids) || !Array.isArray(referenceAssetUids)) return null
+  if (referenceSourceNodeUids.length !== referenceAssetUids.length) return null
+  if (referenceSourceNodeUids.some(
+    (value) => typeof value !== "string" || value.length === 0 || value.length > 200,
+  )) return null
+  if (new Set(referenceSourceNodeUids).size !== referenceSourceNodeUids.length) return null
+  if (referenceAssetUids.some(
+    (value) => typeof value !== "string" || !/^[0-9a-f]{32}$/i.test(value),
+  )) return null
+
   return {
     version: PENDING_IMAGE_REQUEST_VERSION,
     boardUid: parsed.boardUid as string,
@@ -141,6 +157,8 @@ export function parsePendingImageRequest(raw: string): PendingImageRequest | nul
       ...(quality ? { quality } : {}),
       ...(outputCount !== undefined ? { output_count: Number(outputCount) } : {}),
     }),
+    referenceSourceNodeUids: [...referenceSourceNodeUids] as string[],
+    referenceAssetUids: [...referenceAssetUids] as string[],
   }
 }
 

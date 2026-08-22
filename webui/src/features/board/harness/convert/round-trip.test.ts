@@ -3,6 +3,7 @@ import type { Node } from "@canvas-harness/core"
 import { createDefaultNote } from "@/features/board/types/note"
 import type { Note } from "@/features/board/types/note"
 import { createDefaultLink } from "@/features/board/types/link"
+import { IMAGE_REFERENCE_EDGE_MARKER } from "../image-reference-edges"
 import type { NodeType } from "@/features/board/types/style"
 import { setBoardThemeMode } from "../theme/theme-mode-ref"
 import { edgeToLink } from "./edge-to-link"
@@ -316,6 +317,29 @@ describe("link ↔ edge round-trip", () => {
       position: { x: 100, y: 50 },
       isLocalOffset: true,
     })
+  })
+
+
+  it("round-trips reference marker and stable ordinal in Link properties", () => {
+    const link = createDefaultLink(BOARD_ID, "node-a", "node-b")
+    link.properties.imageReference = {
+      type: "keyword",
+      value: IMAGE_REFERENCE_EDGE_MARKER,
+    }
+    link.properties.imageReferenceOrdinal = { type: "number", number: 2 }
+    const nodes = makeNodes()
+
+    const edge = linkToEdge(link, nodes)
+    const back = edgeToLink(edge, nodes)
+
+    expect(edge.data).toMatchObject({
+      imageReference: true,
+      imageReferenceOrdinal: 2,
+    })
+    expect(back.properties.imageReference).toEqual(link.properties.imageReference)
+    expect(back.properties.imageReferenceOrdinal).toEqual(
+      link.properties.imageReferenceOrdinal,
+    )
   })
 
   it("legacy attached source (world coords) → upgraded to local offset on save", () => {

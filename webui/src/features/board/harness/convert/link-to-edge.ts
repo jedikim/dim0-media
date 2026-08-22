@@ -9,6 +9,7 @@ import {
 } from "../theme/color-adapter"
 import { getBoardThemeMode } from "../theme/theme-mode-ref"
 import { dim0LinkStyleToCanvas } from "./style"
+import { IMAGE_REFERENCE_EDGE_MARKER } from "../image-reference-edges"
 
 
 /** Resolve an EdgeEnd to world coords — used for midpoint→cubic math. */
@@ -47,6 +48,8 @@ export type LinkEdgeData = {
    * holds. See `theme/color-adapter.ts`.
    */
   _storedColors?: StoredEdgeColors
+  imageReference?: true
+  imageReferenceOrdinal?: number
 }
 
 
@@ -152,6 +155,14 @@ export const linkToEdge = (link: Link, nodes: Map<string, Node>): Edge => {
   }
   if (sourceResolved.legacy) data.sourceLegacyOffset = true
   if (targetResolved.legacy) data.targetLegacyOffset = true
+  if (
+    link.properties.imageReference?.value === IMAGE_REFERENCE_EDGE_MARKER
+    && Number.isInteger(link.properties.imageReferenceOrdinal?.number)
+    && Number(link.properties.imageReferenceOrdinal?.number) >= 0
+  ) {
+    data.imageReference = true
+    data.imageReferenceOrdinal = Number(link.properties.imageReferenceOrdinal?.number)
+  }
 
   return {
     id: asEdgeId(link.id),

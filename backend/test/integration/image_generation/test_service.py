@@ -198,7 +198,7 @@ async def test_ordered_i2i_concurrent_idempotency_schedules_one_provider_call(
     initialized_image_pg_pool: asyncpg.Pool,
     tmp_path,
 ) -> None:
-    """Equal concurrent I2I requests preserve order and schedule only the DB winner."""
+    """The three-reference boundary preserves duplicates, order, and one DB winner."""
     async with initialized_image_pg_pool.acquire() as conn:
         user_uid, board_uid = await _create_user_and_board(conn)
     adapter = _FakeAdapter(_result(_image_bytes("purple")))
@@ -216,7 +216,7 @@ async def test_ordered_i2i_concurrent_idempotency_schedules_one_provider_call(
             model_id="x-ai/grok-imagine-image-2.0",
             prompt="Blend these references in their stated order",
             parameters=ImageGenerationParameters(),
-            reference_asset_uids=(second.uid, first.uid),
+            reference_asset_uids=(second.uid, first.uid, second.uid),
             generator_node_uid=None,
         )
 
@@ -225,7 +225,11 @@ async def test_ordered_i2i_concurrent_idempotency_schedules_one_provider_call(
 
     assert len({outcome.generation_uid for outcome in outcomes}) == 1
     assert len(adapter.requests) == 1
-    assert [reference.asset_uid for reference in adapter.requests[0].references] == [second.uid, first.uid]
+    assert [reference.asset_uid for reference in adapter.requests[0].references] == [
+        second.uid,
+        first.uid,
+        second.uid,
+    ]
     async with initialized_image_pg_pool.acquire() as conn:
         rows = await conn.fetch(
             "SELECT ordinal, asset_uid, reference_node_uid FROM image_generation_reference WHERE generation_uid = $1 ORDER BY ordinal",
@@ -234,6 +238,7 @@ async def test_ordered_i2i_concurrent_idempotency_schedules_one_provider_call(
     assert [(row["ordinal"], row["asset_uid"], row["reference_node_uid"]) for row in rows] == [
         (0, second.uid, None),
         (1, first.uid, None),
+        (2, second.uid, None),
     ]
     await tasks.close()
 

@@ -29,7 +29,7 @@ from typing import Any, Literal
 from pydantic import BaseModel
 
 from topix.collab.note_to_wire import _CANVAS_TO_DIM0_TYPE, _camel_to_snake
-from topix.datatypes.note.link import Link
+from topix.datatypes.note.link import IMAGE_REFERENCE_EDGE_MARKER, Link
 from topix.datatypes.note.note import Note
 from topix.store.graph import GraphStore
 
@@ -161,32 +161,44 @@ async def apply_batch(  # noqa: C901 — flat dispatch by op-kind reads better t
 
     # Pass 2 — dispatch each non-empty bucket in dependency order.
     await _dispatch_bucket(
-        results, "node.add", node_adds,
+        results,
+        "node.add",
+        node_adds,
         lambda items: graph_store.add_notes(nodes=[n for _, n in items]),
     )
     await _dispatch_bucket(
-        results, "node.update", node_updates,
+        results,
+        "node.update",
+        node_updates,
         lambda items: graph_store.patch_notes(
             updates=[(node_id, data) for _, node_id, data in items],
             user_uid=user_id,
         ),
     )
     await _dispatch_bucket(
-        results, "edge.add", edge_adds,
+        results,
+        "edge.add",
+        edge_adds,
         lambda items: graph_store.add_links(links=[link for _, link in items]),
     )
     await _dispatch_bucket(
-        results, "edge.update", edge_updates,
+        results,
+        "edge.update",
+        edge_updates,
         lambda items: graph_store.update_links(
             updates=[(link_id, data) for _, link_id, data in items],
         ),
     )
     await _dispatch_bucket(
-        results, "edge.remove", edge_removes,
+        results,
+        "edge.remove",
+        edge_removes,
         lambda items: graph_store.delete_links(link_ids=[link_id for _, link_id in items]),
     )
     await _dispatch_bucket(
-        results, "node.remove", node_removes,
+        results,
+        "node.remove",
+        node_removes,
         lambda items: graph_store.delete_nodes(
             node_ids=[node_id for _, node_id in items],
             user_uid=user_id,
@@ -221,8 +233,6 @@ async def _dispatch_bucket(
         return
     for idx, *_ in items:
         results[idx] = WireOpResult(applied=True, op_type=op_type)
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -512,6 +522,31 @@ def _wire_end_to_endpoint(
     return None, None
 
 
+def _image_reference_properties(
+    data_field: Any,
+    *,
+    clear_invalid: bool = False,
+) -> dict[str, Any]:
+    """Translate a complete reference marker pair into durable Link properties."""
+    if not isinstance(data_field, dict):
+        return {}
+    marker_present = "imageReference" in data_field
+    ordinal_present = "imageReferenceOrdinal" in data_field
+    marker = data_field.get("imageReference")
+    ordinal = data_field.get("imageReferenceOrdinal")
+    if marker is True and isinstance(ordinal, int) and not isinstance(ordinal, bool) and ordinal >= 0:
+        return {
+            "image_reference": {"type": "keyword", "value": IMAGE_REFERENCE_EDGE_MARKER},
+            "image_reference_ordinal": {"type": "number", "number": ordinal},
+        }
+    if clear_invalid and (marker_present or ordinal_present):
+        return {
+            "image_reference": None,
+            "image_reference_ordinal": None,
+        }
+    return {}
+
+
 def _wire_edge_to_link(edge: dict[str, Any], *, board_id: str) -> Link | None:  # noqa: C901 — wide field-by-field translator
     """Construct a `Link` from a wire `Edge` payload (best-effort).
 
@@ -558,6 +593,7 @@ def _wire_edge_to_link(edge: dict[str, Any], *, board_id: str) -> Link | None:  
     midpoint = _extract_midpoint(edge)
     if midpoint is not None:
         properties["edge_control_point"] = midpoint
+    properties.update(_image_reference_properties(data_field))
     if properties:
         link_dict["properties"] = properties
 
@@ -607,13 +643,13 @@ def _edge_patch_to_link_data(patch: dict[str, Any]) -> dict[str, Any]:  # noqa: 
 
     if "content" in patch:
         markdown = patch.get("content")
-        data["label"] = (
-            {"markdown": str(markdown)} if isinstance(markdown, str) and markdown else None
-        )
+        data["label"] = {"markdown": str(markdown)} if isinstance(markdown, str) and markdown else None
 
     midpoint = _extract_midpoint(patch)
     if midpoint is not None:
         properties["edge_control_point"] = midpoint
+    wire_data = patch.get("data")
+    properties.update(_image_reference_properties(wire_data, clear_invalid=True))
     if properties:
         data["properties"] = properties
 
@@ -621,7 +657,6 @@ def _edge_patch_to_link_data(patch: dict[str, Any]) -> dict[str, Any]:  # noqa: 
     # the matching block there. Pasted edges and `useStampNewEdges`
     # rescope updates carry `parentId`/`graphUid` on `data`; surface
     # them so the deep-merge writes `parent_id` / `graph_uid` to the DB.
-    wire_data = patch.get("data")
     if isinstance(wire_data, dict):
         if "parentId" in wire_data:
             data["parent_id"] = wire_data["parentId"]

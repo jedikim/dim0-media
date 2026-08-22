@@ -17,10 +17,16 @@ export const CLEARED_IMAGE_ASSET_UID: KeywordProperty = {
 }
 
 
+/** Validate the internal UID syntax generated for immutable image assets. */
+export function isImageAssetUid(value: unknown): value is string {
+  return typeof value === "string" && ASSET_UID_PATTERN.test(value)
+}
+
+
 /** Read only a generated internal asset UID from a keyword value. */
 export function readImageAssetUid(property: KeywordProperty | undefined): string | null {
   const value = property?.value
-  return typeof value === "string" && ASSET_UID_PATTERN.test(value) ? value : null
+  return isImageAssetUid(value) ? value : null
 }
 
 
@@ -98,7 +104,7 @@ export async function materializeImageNodeAsset(args: {
     ? "webp"
     : "jpg"
   const asset = await upload(graphId, blob, `reference.${extension}`, signal)
-  if (!ASSET_UID_PATTERN.test(asset.asset_uid)) {
+  if (!isImageAssetUid(asset.asset_uid)) {
     throw new Error("참조 자산 등록 응답을 확인할 수 없습니다.")
   }
 

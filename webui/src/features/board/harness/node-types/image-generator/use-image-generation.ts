@@ -15,6 +15,7 @@ import {
   isOwnedPendingImageRequest,
   type PendingImageRequest,
 } from "./node-state"
+import { ImageReferenceResolutionError } from "../../image-reference-resolution"
 
 
 const FIRST_POLL_DELAY_MS = 1_000
@@ -28,6 +29,7 @@ const SAFE_TO_CLEAR_PENDING_STATUSES = new Set([400, 401, 403, 404, 422, 429])
 
 export type ImageGenerationPhase =
   | "idle"
+  | "resolving"
   | "starting"
   | "running"
   | "succeeded"
@@ -49,6 +51,10 @@ export type UseImageGenerationArgs = {
   pendingRequest: PendingImageRequest | null
   canStart: boolean
   persist: (patch: PersistImageGenerationPatch) => void
+  resolveReferenceAssets?: (
+    sourceNodeUids: readonly string[],
+    signal: AbortSignal,
+  ) => Promise<string[]>
 }
 
 
@@ -62,6 +68,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
     pendingRequest,
     canStart,
     persist,
+    resolveReferenceAssets,
   } = args
   const [phase, setPhase] = useState<ImageGenerationPhase>(
     activeGenerationUid ? "running" : "idle",
@@ -75,7 +82,9 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
   const pollControllerRef = useRef<AbortController | null>(null)
   const postControllerRef = useRef<AbortController | null>(null)
   const previewControllerRef = useRef<AbortController | null>(null)
+  const resolvingControllerRef = useRef<AbortController | null>(null)
   const postingRef = useRef(false)
+  const resolvingRef = useRef(false)
   const mountedRef = useRef(true)
   const activeGenerationUidRef = useRef(activeGenerationUid)
   const pendingRef = useRef(pendingRequest)
@@ -107,6 +116,8 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
       postControllerRef.current = null
       previewControllerRef.current?.abort()
       previewControllerRef.current = null
+      resolvingControllerRef.current?.abort()
+      resolvingControllerRef.current = null
     }
   }, [stopPolling])
 
@@ -250,7 +261,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
         modelId: snapshot.modelId,
         prompt: snapshot.prompt,
         parameters: snapshot.parameters,
-        referenceAssetUids: [],
+        referenceAssetUids: snapshot.referenceAssetUids,
         generatorNodeUid: nodeId,
         signal: controller.signal,
       })
@@ -323,11 +334,44 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
     modelId: string,
     prompt: string,
     parameters: GenerationParameters,
+    referenceSourceNodeUids: string[] = [],
   ): Promise<void> => {
-    if (!canStart || postingRef.current || pendingRef.current) return
+    if (!canStart || postingRef.current || resolvingRef.current || pendingRef.current) return
     if (activeGenerationUid && phase !== "succeeded" && phase !== "failed") return
 
     stopPolling()
+    let referenceAssetUids: string[] = []
+    if (referenceSourceNodeUids.length > 0) {
+      resolvingRef.current = true
+      const controller = new AbortController()
+      resolvingControllerRef.current = controller
+      setPhase("resolving")
+      setError(null)
+      try {
+        if (!resolveReferenceAssets) {
+          throw new ImageReferenceResolutionError("참조 이미지를 확인할 수 없습니다.")
+        }
+        referenceAssetUids = await resolveReferenceAssets(referenceSourceNodeUids, controller.signal)
+        if (!mountedRef.current || controller.signal.aborted) return
+        if (referenceAssetUids.length !== referenceSourceNodeUids.length) {
+          throw new ImageReferenceResolutionError("참조 이미지 순서를 확인할 수 없습니다.")
+        }
+      } catch (caught) {
+        if (!mountedRef.current || (caught instanceof Error && caught.name === "AbortError")) return
+        setPhase("failed")
+        setError(
+          caught instanceof ImageReferenceResolutionError
+            ? caught.message
+            : imageGenerationErrorMessage(caught),
+        )
+        void restoreActivePreview()
+        return
+      } finally {
+        if (resolvingControllerRef.current === controller) resolvingControllerRef.current = null
+        resolvingRef.current = false
+      }
+    }
+
     const snapshot: PendingImageRequest = {
       version: PENDING_IMAGE_REQUEST_VERSION,
       boardUid: graphId,
@@ -337,6 +381,8 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
       modelId,
       prompt,
       parameters,
+      referenceSourceNodeUids: [...referenceSourceNodeUids],
+      referenceAssetUids: [...referenceAssetUids],
     }
     recoveredRequestRef.current = snapshot.clientRequestUid
     pendingRef.current = snapshot
@@ -347,7 +393,18 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
     // Only a 202 response is allowed to replace activeGenerationUid.
     persistRef.current({ pendingRequest: snapshot })
     await sendPendingRequest(snapshot)
-  }, [activeGenerationUid, canStart, graphId, nodeId, phase, sendPendingRequest, stopPolling, userId])
+  }, [
+    activeGenerationUid,
+    canStart,
+    graphId,
+    nodeId,
+    phase,
+    resolveReferenceAssets,
+    restoreActivePreview,
+    sendPendingRequest,
+    stopPolling,
+    userId,
+  ])
 
   const resumePending = useCallback(async (): Promise<void> => {
     const snapshot = pendingRef.current
