@@ -62,6 +62,8 @@ export type ApiOptions<TBody = unknown> = {
   body?: TBody extends FormData ? FormData : TBody
   signal?: AbortSignal
   noAuth?: boolean
+  /** Read an authenticated binary response without coercing it to text. */
+  responseType?: "auto" | "blob"
 }
 
 
@@ -236,6 +238,10 @@ export async function apiFetch<TResponse = unknown, TBody = unknown>(
   if (!res.ok) {
     const text = await res.text()
     throw new Error(`${res.status} ${res.statusText} - ${text}`)
+  }
+
+  if (opts.responseType === "blob") {
+    return (await res.blob()) as TResponse
   }
 
   const ct = res.headers.get("content-type") || ""

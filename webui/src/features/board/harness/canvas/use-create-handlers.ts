@@ -8,7 +8,11 @@ import {
   isNodeTypeAtLimit,
   nodeLimitFor,
 } from "@/features/board/lib/board-limit"
-import { createDefaultNote } from "@/features/board/types/note"
+import {
+  createDefaultNote,
+  DEFAULT_IMAGE_GENERATOR_HEIGHT,
+  DEFAULT_IMAGE_GENERATOR_WIDTH,
+} from "@/features/board/types/note"
 import { useAppStore } from "@/store"
 import { canvasTypeToDim0 } from "../convert/node-type"
 import { useBoardAppStore } from "../store/board-app-store"
@@ -43,6 +47,7 @@ const SHAPE_TOOLS = new Set([
   "code-sandbox",
   "widget",   // legacy — agent + paste can still produce these
   "mini-app", // default custom-rendered artifact; toolbar creates this
+  "image-generator",
 ])
 
 
@@ -53,6 +58,7 @@ const isShapeTool = (tool: string): boolean => SHAPE_TOOLS.has(tool)
 const CREATE_LABELS: Record<string, string> = {
   "mini-app": "mini-app",
   "code-sandbox": "code sandbox",
+  "image-generator": "image generator",
   folder: "sub-board",
   document: "document",
 }
@@ -153,17 +159,28 @@ export const useCreateHandlers = (
   const handleCreateDrag = useCallback(
     (e: CanvasCreateDragEvent): void => {
       if (!isShapeTool(e.tool)) return
-      const dim0Type = canvasTypeToDim0(e.tool)
-      if (!guardCreate(dim0Type)) return
+      const imageGenerator = e.tool === "image-generator"
+      // Backend NodeType intentionally stays `rectangle`; the imagePrompt
+      // marker projects this Note to the first-party custom canvas type.
+      const dim0Type = imageGenerator ? "rectangle" : canvasTypeToDim0(e.tool)
+      if (!guardCreate(imageGenerator ? e.tool : dim0Type)) return
       const note = createDefaultNote({ boardId: boardId ?? "", nodeType: dim0Type })
       if (rootId) note.parentId = rootId
+      if (imageGenerator) {
+        note.properties.imagePrompt = { type: "text", text: "" }
+        note.minWidth = DEFAULT_IMAGE_GENERATOR_WIDTH
+        note.minHeight = DEFAULT_IMAGE_GENERATOR_HEIGHT
+      }
       note.properties.nodePosition = {
         type: "position",
         position: { x: e.rect.x, y: e.rect.y },
       }
       note.properties.nodeSize = {
         type: "size",
-        size: { width: e.rect.w, height: e.rect.h },
+        size: {
+          width: imageGenerator ? Math.max(e.rect.w, DEFAULT_IMAGE_GENERATOR_WIDTH) : e.rect.w,
+          height: imageGenerator ? Math.max(e.rect.h, DEFAULT_IMAGE_GENERATOR_HEIGHT) : e.rect.h,
+        },
       }
       // Auto-select the freshly-created node so the user can
       // immediately resize / style / move it without round-tripping

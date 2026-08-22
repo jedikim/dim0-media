@@ -26,6 +26,7 @@ import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store"
 import { useLocalDocUpload, type LocalDocUpload } from "@/features/agent/local/use-local-doc-upload"
 import { useNodeTypeCount } from "../canvas/use-node-type-count"
+import { canUseServerImageGeneration } from "../canvas/board-runtime-context"
 import { useBoardAppStore } from "../store/board-app-store"
 import { DocumentUploadDialog } from "./document-upload-dialog"
 import { IconSearchDialog } from "./icon-search-dialog"
@@ -58,9 +59,11 @@ const NodeLimitBadge = ({ count, limit }: { count: number; limit: number | null 
  * and the always-mounted toolbar never re-renders on canvas changes.
  */
 const MoreMenuItems = ({
+  local,
   localUpload,
   upload,
 }: {
+  local: boolean
   localUpload: boolean
   upload: LocalDocUpload
 }) => {
@@ -73,6 +76,7 @@ const MoreMenuItems = ({
   const documentCount = useNodeTypeCount(store, "document")
   const codeSandboxCount = useNodeTypeCount(store, "code-sandbox")
   const miniAppCount = useNodeTypeCount(store, "mini-app")
+  const imageGeneratorCount = useNodeTypeCount(store, "image-generator")
 
   return (
     <>
@@ -114,6 +118,16 @@ const MoreMenuItems = ({
         <span>Mini-app</span>
         <NodeLimitBadge count={miniAppCount} limit={nodeLimitFor("mini-app", userPlan)} />
       </DropdownMenuItem>
+      {canUseServerImageGeneration(local) && (
+        <DropdownMenuItem onSelect={() => setTool("image-generator")} className="gap-2 text-sm">
+          <ImageStackIcon className="size-4 shrink-0" />
+          <span>Image generator</span>
+          <NodeLimitBadge
+            count={imageGeneratorCount}
+            limit={nodeLimitFor("image-generator", userPlan)}
+          />
+        </DropdownMenuItem>
+      )}
     </>
   )
 }
@@ -163,7 +177,7 @@ export function HarnessToolbarMore({ local = false }: { local?: boolean } = {}) 
           sideOffset={8}
           className="min-w-[190px]"
         >
-          <MoreMenuItems localUpload={localUpload} upload={upload} />
+          <MoreMenuItems local={local} localUpload={localUpload} upload={upload} />
         </DropdownMenuContent>
       </DropdownMenu>
 

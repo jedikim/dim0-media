@@ -34,6 +34,7 @@ export const AUTOFIT_DISABLED_TYPES = new Set([
   "code-sandbox",
   "widget",
   "mini-app",
+  "image-generator",
   "document",
 ])
 
@@ -110,8 +111,14 @@ export const noteToNode = (note: Note | Document): Node => {
 
   // Documents get a distinct canvas type ("document") so they hit their
   // own paint dispatch + custom view. Everything else maps by style.type.
+  // The production backend NodeType remains rectangle in PR-03 to isolate the
+  // feature from the shared wire enum. `imagePrompt` is the reserved projection
+  // marker; once present, the note is intentionally treated as an image
+  // generator rather than silently converted back to a generic rectangle.
   const canvasType = note.type === "document"
     ? "document"
+    : note.properties?.imagePrompt !== undefined
+    ? "image-generator"
     : dim0TypeToCanvas(note.style.type)
 
   const baseStyle = dim0StyleToCanvas(note.style)

@@ -80,6 +80,7 @@ import { useViewportPersistence } from "./use-viewport-persistence"
 import { useTrackBoardCameraMotion } from "./board-camera-motion"
 import { useSidebarContentsSync } from "./use-sidebar-contents-sync"
 import { HarnessWrapRefProvider } from "./wrap-ref-provider"
+import { BoardRuntimeProvider } from "./board-runtime-provider"
 
 
 /**
@@ -426,27 +427,29 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
 
   return (
     <CanvasProvider store={store}>
-      <HarnessWrapRefProvider value={wrapRef}>
-        <div
-          ref={wrapRef}
-          className="absolute inset-0"
-          onDragOver={onDragOver}
-          onDrop={onDrop}
-        >
-          <HarnessCanvasInner
-            theme={theme}
-            tool={tool}
-            ready={ready}
-            viewMode={viewMode}
-            canCollab={!local}
-            arrowDefaults={arrowDefaults}
-            onCreateDrag={handleCreateDrag}
-            onDoubleClick={handleDoubleClick}
-            onRenderer={handleRenderer}
-          />
-          <CanvasContextMenu wrapRef={wrapRef} store={store} rendererRef={rendererRef} />
-        </div>
-      </HarnessWrapRefProvider>
+      <BoardRuntimeProvider local={local}>
+        <HarnessWrapRefProvider value={wrapRef}>
+          <div
+            ref={wrapRef}
+            className="absolute inset-0"
+            onDragOver={onDragOver}
+            onDrop={onDrop}
+          >
+            <HarnessCanvasInner
+              theme={theme}
+              tool={tool}
+              ready={ready}
+              viewMode={viewMode}
+              canCollab={!local}
+              arrowDefaults={arrowDefaults}
+              onCreateDrag={handleCreateDrag}
+              onDoubleClick={handleDoubleClick}
+              onRenderer={handleRenderer}
+            />
+            <CanvasContextMenu wrapRef={wrapRef} store={store} rendererRef={rendererRef} />
+          </div>
+        </HarnessWrapRefProvider>
+      </BoardRuntimeProvider>
     </CanvasProvider>
   )
 }

@@ -1408,6 +1408,83 @@ async def test_homogeneous_node_add_batch_dispatches_as_one_bulk_call():
     assert len(store.add_notes_calls[0]) == 50
 
 
+async def test_image_generator_properties_survive_wire_to_pydantic_round_trip():
+    """Image generator DataProperties survive the server Note boundary."""
+    store = _RecordingGraphStore()
+    pending = '{"version":1,"boardUid":"b1","clientRequestUid":"request-1"}'
+    node = {
+        "id": "image-generator-1",
+        "type": "image-generator",
+        "x": 0,
+        "y": 0,
+        "w": 520,
+        "h": 560,
+        "z": 0,
+        "angle": 0,
+        "data": {
+            "noteType": "note",
+            "styleType": "rectangle",
+            "version": 1,
+            "properties": {
+                "imagePrompt": {"type": "text", "text": "a blue bird"},
+                "imageModelId": {"type": "keyword", "value": "model-1"},
+                "imageAspectRatio": {"type": "keyword", "value": "1:1"},
+                "imageResolution": {"type": "keyword", "value": "1K"},
+                "imageQuality": {"type": "keyword", "value": "low"},
+                "activeGenerationUid": {"type": "keyword", "value": "gen-1"},
+                "imagePendingRequest": {"type": "text", "text": pending, "searchable": False},
+            },
+        },
+    }
+
+    results = await apply_batch(
+        graph_store=store,
+        board_id="b1",
+        user_id="u1",
+        ops=[{"type": "node.add", "node": node}],
+    )
+
+    assert results[0].applied is True
+    note = store.add_notes_calls[0][0]
+    properties = note.properties.model_dump(mode="json")
+    assert note.style.type.value == "rectangle"
+    assert properties["image_prompt"]["type"] == "text"
+    assert properties["image_prompt"]["text"] == "a blue bird"
+    assert properties["image_model_id"]["value"] == "model-1"
+    assert properties["image_aspect_ratio"]["value"] == "1:1"
+    assert properties["image_resolution"]["value"] == "1K"
+    assert properties["image_quality"]["value"] == "low"
+    assert properties["active_generation_uid"]["value"] == "gen-1"
+    assert properties["image_pending_request"]["type"] == "text"
+    assert properties["image_pending_request"]["text"] == pending
+    assert properties["image_pending_request"]["searchable"] is False
+
+
+async def test_image_generator_clear_sentinels_survive_property_patch_lift():
+    """Explicit empty properties clear generation state through deep merge."""
+    store = _RecordingGraphStore()
+    op = {
+        "type": "node.update",
+        "id": "image-generator-1",
+        "patch": {
+            "data": {
+                "properties": {
+                    "activeGenerationUid": {"type": "keyword", "value": ""},
+                    "imagePendingRequest": {"type": "text", "text": "", "searchable": False},
+                }
+            }
+        },
+        "prev": {},
+    }
+
+    await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    assert store.patch_calls[0]["data"]["properties"] == {
+        "active_generation_uid": {"type": "keyword", "value": ""},
+        "image_pending_request": {"type": "text", "text": "", "searchable": False},
+    }
+
+
 async def test_homogeneous_node_update_batch_dispatches_as_one_patch_notes_call():
     """N node.updates collapse to one bulk patch_notes(updates) call."""
     store = _RecordingGraphStore()
