@@ -5,7 +5,9 @@ from __future__ import annotations
 import base64
 import binascii
 import json
+import logging
 
+from collections.abc import Iterable
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -28,6 +30,10 @@ from topix.image_generation.models import (
 from topix.image_generation.storage import validate_provider_raster_bytes
 
 _MAX_BASE64_IMAGE_CHARS = ((MAX_PROVIDER_IMAGE_BYTES + 2) // 3) * 4
+_MAX_DIAGNOSTIC_NAMES = 32
+_MAX_DIAGNOSTIC_NAME_LENGTH = 64
+
+logger = logging.getLogger(__name__)
 
 
 def serialize_openrouter_request(request: ProviderImageRequest) -> dict[str, Any]:
@@ -36,8 +42,8 @@ def serialize_openrouter_request(request: ProviderImageRequest) -> dict[str, Any
         "model": request.model_id,
         "prompt": request.prompt,
         "n": request.parameters.output_count,
-        "output_format": "png",
     }
+    # Output format stays provider-defined until a model capability explicitly advertises and validates it.
     if request.references:
         payload["input_references"] = [
             {
@@ -68,6 +74,32 @@ def _safe_provider_request_id(value: Any) -> str | None:
         return None
     value = value.strip()
     return value if value and len(value) <= 512 else None
+
+
+def _bounded_diagnostic_names(values: Iterable[object]) -> tuple[str, ...]:
+    """Bound and escape provider-controlled names before DEBUG logging."""
+    names: list[str] = []
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        escaped = value.encode("unicode_escape").decode("ascii")
+        names.append(escaped[:_MAX_DIAGNOSTIC_NAME_LENGTH])
+        if len(names) == _MAX_DIAGNOSTIC_NAMES:
+            break
+    return tuple(names)
+
+
+def _log_success_shape(payload: dict[str, Any], response_header_names: tuple[str, ...]) -> None:
+    """Log only bounded success-response key and header names at DEBUG level."""
+    if not logger.isEnabledFor(logging.DEBUG):
+        return
+    logger.debug(
+        "OpenRouter image success response shape: body_key_count=%d body_keys=%s response_header_count=%d response_header_names=%s",
+        len(payload),
+        _bounded_diagnostic_names(payload),
+        len(response_header_names),
+        _bounded_diagnostic_names(response_header_names),
+    )
 
 
 def _status_error(response: httpx.Response) -> ImageProviderError:
@@ -188,6 +220,7 @@ def _normalize_response(
     body: bytes,
     *,
     request: ProviderImageRequest,
+    response_header_names: tuple[str, ...] = (),
 ) -> ProviderImageResult:
     """Validate an OpenRouter response into the provider-neutral result."""
     try:
@@ -204,6 +237,7 @@ def _normalize_response(
 
     image = _decode_image(data[0])
     usage, cost = _normalize_usage(payload, generated_images=len(data))
+    _log_success_shape(payload, response_header_names)
 
     return ProviderImageResult(
         image=image,
@@ -240,6 +274,7 @@ class OpenRouterImageAdapter:
                 if response.status_code >= 400:
                     raise _status_error(response)
                 body = await _read_bounded_response(response)
+                response_header_names = tuple(response.headers.keys())
         except ImageProviderError:
             raise
         except httpx.TimeoutException:
@@ -247,4 +282,4 @@ class OpenRouterImageAdapter:
         except httpx.RequestError:
             raise ImageProviderError("provider_unavailable", "The image provider is temporarily unavailable") from None
 
-        return _normalize_response(body, request=request)
+        return _normalize_response(body, request=request, response_header_names=response_header_names)
