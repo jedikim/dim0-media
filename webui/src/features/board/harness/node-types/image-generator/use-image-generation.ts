@@ -17,6 +17,7 @@ import {
   type PendingImageRequest,
 } from "./node-state"
 import { ImageReferenceResolutionError } from "../../image-reference-resolution"
+import { IMAGE_REFERENCE_CHANGED_MESSAGE } from "../../image-reference-assets"
 
 
 const FIRST_POLL_DELAY_MS = 1_000
@@ -380,9 +381,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
             || currentSourceNodeUids.some((uid, index) => uid !== referenceSourceNodeUids[index])
           )
         ) {
-          throw new ImageReferenceResolutionError(
-            "참조 이미지가 변경되었습니다. 현재 순서를 확인한 뒤 다시 생성해 주세요.",
-          )
+          throw new ImageReferenceResolutionError(IMAGE_REFERENCE_CHANGED_MESSAGE)
         }
       } catch (caught) {
         if (!mountedRef.current || (caught instanceof Error && caught.name === "AbortError")) return

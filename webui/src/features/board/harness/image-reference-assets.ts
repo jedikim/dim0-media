@@ -11,6 +11,19 @@ const MAX_REFERENCE_BYTES = 10 * 1024 * 1024
 const MAX_REFERENCE_BASE64_LENGTH = Math.ceil(MAX_REFERENCE_BYTES / 3) * 4
 
 
+export const IMAGE_REFERENCE_CHANGED_MESSAGE = "참조 이미지가 변경되었습니다. 확인 후 다시 생성해 주세요."
+
+
+/** Signal that a canvas image no longer matches its captured local version. */
+export class ImageReferenceVersionChangedError extends Error {}
+
+
+export type ImageSourceVersion = {
+  src: string | null
+  assetUid: string | null
+}
+
+
 export const CLEARED_IMAGE_ASSET_UID: KeywordProperty = {
   type: "keyword",
   value: "",
@@ -83,21 +96,45 @@ export async function materializeImageNodeAsset(args: {
   nodeId: NodeId
   signal?: AbortSignal
   upload?: UploadImageAsset
+  expectedVersion?: ImageSourceVersion
 }): Promise<string> {
-  const { store, graphId, nodeId, signal, upload = uploadImageAsset } = args
+  const {
+    store,
+    graphId,
+    nodeId,
+    signal,
+    upload = uploadImageAsset,
+    expectedVersion,
+  } = args
   const node = store.getNode(nodeId)
   const data = (node?.data ?? {}) as NoteNodeData & { src?: unknown }
   if (!node || node.type !== "image" || data.graphUid !== graphId) {
+    if (expectedVersion) {
+      throw new ImageReferenceVersionChangedError(IMAGE_REFERENCE_CHANGED_MESSAGE)
+    }
     throw new Error("참조 이미지 노드를 이 보드에서 사용할 수 없습니다.")
   }
 
   const existing = readImageAssetUid(data.properties?.imageAssetUid)
+  const sourceVersion: ImageSourceVersion = {
+    src: typeof data.src === "string" ? data.src : null,
+    assetUid: existing,
+  }
+  if (
+    expectedVersion
+    && (
+      sourceVersion.src !== expectedVersion.src
+      || sourceVersion.assetUid !== expectedVersion.assetUid
+    )
+  ) {
+    throw new ImageReferenceVersionChangedError(IMAGE_REFERENCE_CHANGED_MESSAGE)
+  }
   if (existing) return existing
-  if (typeof data.src !== "string") {
+  if (sourceVersion.src === null) {
     throw new Error("이 이미지 노드는 참조 자산으로 등록할 수 없습니다.")
   }
 
-  const blob = imageDataUrlToBlob(data.src)
+  const blob = imageDataUrlToBlob(sourceVersion.src)
   const extension = blob.type === "image/png"
     ? "png"
     : blob.type === "image/webp"
@@ -107,12 +144,22 @@ export async function materializeImageNodeAsset(args: {
   if (!isImageAssetUid(asset.asset_uid)) {
     throw new Error("참조 자산 등록 응답을 확인할 수 없습니다.")
   }
+  signal?.throwIfAborted()
 
   const current = store.getNode(nodeId)
-  const currentData = (current?.data ?? {}) as NoteNodeData
+  const currentData = (current?.data ?? {}) as NoteNodeData & { src?: unknown }
   if (!current || current.type !== "image" || currentData.graphUid !== graphId) {
-    throw new Error("참조 이미지 노드를 이 보드에서 사용할 수 없습니다.")
+    throw new ImageReferenceVersionChangedError(IMAGE_REFERENCE_CHANGED_MESSAGE)
   }
+  const currentSrc = typeof currentData.src === "string" ? currentData.src : null
+  const currentAssetUid = readImageAssetUid(currentData.properties?.imageAssetUid)
+  if (
+    currentSrc !== sourceVersion.src
+    || (currentAssetUid !== sourceVersion.assetUid && currentAssetUid !== asset.asset_uid)
+  ) {
+    throw new ImageReferenceVersionChangedError(IMAGE_REFERENCE_CHANGED_MESSAGE)
+  }
+  if (currentAssetUid === asset.asset_uid) return asset.asset_uid
   store.updateNode(nodeId, {
     data: {
       ...currentData,

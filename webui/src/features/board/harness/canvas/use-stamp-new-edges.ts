@@ -96,6 +96,12 @@ export const useStampNewEdges = (
     const originalUpdateEdge = store.updateEdge
     const originalRemoveEdge = store.removeEdge
 
+    // CanvasStore has no public pre-mutation hook, so one mounted HarnessCanvas
+    // intercepts these public methods synchronously. Local applyBatch calls can
+    // bypass the wrappers and are compensated by the subscriber below; callers
+    // holding an older method reference can also bypass them, so click-time
+    // reference-version validation remains the final generation safety net.
+
     const validReferenceEndpoints = (
       edge: Pick<Edge, "id" | "source" | "target">,
     ): { sourceNodeId: NodeId; targetNodeId: NodeId } | null => {
@@ -127,7 +133,11 @@ export const useStampNewEdges = (
         && !local
         && endpoints
         && (isImageReferenceTargetLocked(endpoints.targetNodeId) || duplicatesReference(edge))
-      ) return edge.id
+      ) {
+        // Preserve CanvasStore's EdgeId return contract; this does not mean the
+        // rejected edge was stored, and callers must inspect the store if needed.
+        return edge.id
+      }
       return originalAddEdge(edge)
     }
     const guardedUpdateEdge: CanvasStore["updateEdge"] = (edgeId, patch) => {
@@ -165,6 +175,10 @@ export const useStampNewEdges = (
     store.updateEdge = guardedUpdateEdge
     store.removeEdge = guardedRemoveEdge
 
+    // This duplicates the public-method guards intentionally for local batches
+    // that bypass them. Rejected adds are removed, while rejected reconnects
+    // restore op.prev; those corrective batches either have no next edge or no
+    // longer violate the rule, so they terminate without a correction loop.
     const unsubscribe = store.subscribe("change", (batch) => {
       if (batch.origin !== "local") return
       for (const op of batch.ops) {
@@ -273,6 +287,8 @@ export const useStampNewEdges = (
     })
     return () => {
       unsubscribe()
+      // Identity checks avoid clobbering another mount's wrappers during React
+      // StrictMode cleanup or a dependency-driven effect rerun.
       if (store.addEdge === guardedAddEdge) store.addEdge = originalAddEdge
       if (store.updateEdge === guardedUpdateEdge) store.updateEdge = originalUpdateEdge
       if (store.removeEdge === guardedRemoveEdge) store.removeEdge = originalRemoveEdge

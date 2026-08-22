@@ -68,7 +68,7 @@ PR-01과 PR-02가 서버 쪽을 전부 끝내놨다. PR-03은 UI 한 겹만 얹�
 | **`apiFetch`는 envelope를 벗기지 않는다** | `api.ts:243` — `res.json()`을 `TResponse`로 반환 | bare response에 어댑터 **불필요** |
 | **노드 속성은 `extra='allow'`지만 값은 `DataProperty`여야 한다** | `datatypes/resource.py:29` + `__pydantic_extra__: dict[str, DataProperty]` | `TextProperty`/`KeywordProperty`만 쓰면 **백엔드·DB 변경 0** |
 | **노드 id는 생성 시 동기 반환** | `use-add-image.ts:89` — `const id = store.addNode(...)` | `generator_node_uid` 즉시 확보 |
-| `provider_request_id` 위치 | **미확인.** PR-02가 body `id`를 추정 사용 중 | 승인된 smoke test에서 후속 확인 |
+| `provider_request_id` 위치 | T2I body에는 없었고 PR-04 I2I에서 `x-generation-id` header를 확인 | nullable audit field로 body ID 우선·header fallback 사용 |
 
 ---
 
@@ -129,7 +129,7 @@ Dim0에는 서버에 동기화되지 않는 **로컬 전용 보드**가 있다. 
 | `usage.cost` 필드명 | 공식 문서 명시 | 낮음 |
 | 옵션이 top-level인지 | 공식 문서 명시 | 중간. 틀리면 옵션이 조용히 무시됨 |
 | `input_references` 중첩 형태 | 공식 문서 명시 | 중간. 틀리면 I2I 전량 실패 (PR-04에서 발현) |
-| `provider_request_id` 위치 | **미확인** | **높음.** 성공·실패 응답 모두에서 확인 필요 |
+| `provider_request_id` 위치 | T2I body에는 없었고 PR-04 I2I header에서 확인 | nullable이며 body ID 우선·검증된 header fallback 사용 |
 | 에러 응답 형태 | 미확인 | 낮음. 방어적 파싱이라 안전 |
 | 파이프라인 완주 (저장·감사·MIME) | **미검증** | **높음.** 한 번도 끝까지 돌아본 적 없음 |
 
@@ -234,23 +234,17 @@ usage와 `$0.0400000000` cost가 기록됐다. 같은 client request의 generati
 오표기하지 않았다. 제한된 raster bytes를 검사해 실제 형식을 판별하고 올바른 MIME과
 확장자로 저장·서빙했으므로 이 결과는 smoke의 핵심 목적에 대한 검증 성공이다.
 
-**7. PR-02 후속 소형 수정**
+**7. PR-02 후속 소형 수정 결과**
 
-OpenRouter adapter는 현재 capability 검증 없이 `output_format="png"`를 강제 전송한다.
-이 값은 `resolution`, `aspect_ratio`, `quality`와 달리 capability registry와
-`validate_generation_parameters()`를 우회하며, 실제 Grok image endpoint도 지원
-파라미터로 광고하지 않는다. 따라서 PR-03과 분리된 후속 소형 PR에서 제거한다.
-향후 출력 형식 선택이 필요하면 하드코딩하지 않고 `supported_output_formats` 같은 모델
-capability와 기존 `_validate_choice` 계열 검증을 통해서만 노출한다.
+광고되지 않은 `output_format="png"` 강제 전송은 제거됐다. 향후 출력 형식 선택이
+필요하면 하드코딩하지 않고 `supported_output_formats` 같은 모델 capability와 기존
+검증 경로를 통해서만 노출한다.
 
-후속 PR-04 I2I smoke에서 성공 body에는 `id`가 없고 response header에
-`x-generation-id`가 있음을 관측했다. adapter는 기존 bounded body ID 호환을 우선하고,
-body ID가 없을 때만 같은 길이·공백 검증을 거친 case-insensitive header 값을 nullable
-audit field에 저장한다. header 값 자체는 로그나 클라이언트 응답에 노출하지 않는다.
-
-`output_format` 제거 뒤 추가 유료 smoke는 필요하지 않다. 이번 호출에서 그 값은 관측상
-적용되지 않았고, 후속 수정은 이미 성공한 provider 동작을 바꾸는 것이 아니라 광고되지
-않은 요청 키만 제거한다.
+T2I smoke에서는 body ID가 없었고, PR-04 I2I smoke에서는 성공 body의 `created`, `data`,
+`usage`와 response header의 `x-generation-id`를 확인했다. 현재 adapter는 bounded body ID를
+우선하고 없을 때만 같은 길이·공백 검증을 거친 case-insensitive header 값을 사용한다.
+이 값은 감사 필드에만 저장하며 로그나 클라이언트 응답에는 노출하지 않는다. 이 계약
+정리만을 위한 추가 유료 smoke는 수행하지 않는다.
 
 > **테스트 금칙.** PR-03 테스트에서 네트워크를 타는 코드가 하나도 없어야 한다. OpenRouter 실호출은 위 수동 절차에서만 일어난다.
 

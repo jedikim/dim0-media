@@ -147,6 +147,21 @@ For each ordered edge at explicit Generate time:
 Resolution never trusts arbitrary URLs or paths. A source without a reusable asset
 or successful output blocks generation with sanitized UI copy.
 
+Before the first await, resolution captures local-only click-time descriptors for
+the entire ordered list: source UID, board and node type; the exact active generation
+UID for generator sources; and the exact rendered `src` plus asset association
+(including an explicit missing UID) for image sources. Generator GETs use only the
+captured generation UID, registered images use only the captured asset UID, and
+legacy images materialize only the captured data URL. These descriptors never enter
+node state, pending snapshots, collaboration, or the generation API.
+
+After every source resolves, a final synchronous check revalidates edge order, board,
+node type, generator UID, image source and association, and the resolved asset. Any
+change rejects before pending creation and the generation POST, preserves the old
+preview, and requires an explicit new click. There is no await between that check and
+pending creation. If an image changes while its upload is in flight, the immutable
+uploaded asset is retained but is not patched onto the changed node.
+
 ### Local `resolving` lifecycle
 
 `resolving` is a local-only phase entered synchronously before the first await. It
@@ -166,6 +181,11 @@ collaboration reorder/add/remove aborts before pending creation and provider wor
 Source deletion reuses canvas-harness 0.1.27's existing edge-first
 `edge.remove → node.remove` cascade; PR-04 adds regression coverage rather than a
 second cleanup subscriber.
+
+Generator reference thumbnails poll only with authenticated board-scoped GETs. They
+retry transient network, 408, 429, and 5xx failures within the existing bounded
+backoff/ceiling, stop on determinate 4xx responses, and ignore late responses from a
+generation UID that is no longer active.
 
 ### Pending snapshot and idempotency
 
@@ -204,7 +224,9 @@ explicit legacy materialization, error parsing, and provider-call count zero.
 Checkpoint B tests cover image/generator edges, stable order, numbered display,
 removal, exact duplicate rejection, same-asset sources, three-reference order and
 model boundary, resolving locks and synchronous single-flight, partial success,
-generation-POST-zero failures, immutable pending recovery, StrictMode, T2I
+click-time source-version changes at every await boundary, upload non-rollback,
+generation-POST-zero failures, thumbnail transient retry and determinate stop,
+immutable pending recovery, StrictMode, T2I
 regression, viewer/local/mount/clone/paste POST-zero behavior, and PostgreSQL audit
 rows with ordered asset snapshots and `reference_node_uid IS NULL`.
 

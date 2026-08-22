@@ -6,6 +6,7 @@ import { X } from "@phosphor-icons/react"
 import { ImageStackIcon } from "@/components/icons"
 import {
   imageGenerationErrorMessage,
+  imageGenerationStatusCode,
   getImageGeneration,
   listImageModels,
   type GenerationParameters,
@@ -218,6 +219,14 @@ function GeneratorReferenceThumbnail({
     let delay = 0
     let alive = true
 
+    const scheduleNext = (): void => {
+      if (!alive || controller.signal.aborted || Date.now() >= deadline) return
+      delay = delay === 0
+        ? REFERENCE_THUMBNAIL_FIRST_POLL_MS
+        : Math.min(delay * 1.5, REFERENCE_THUMBNAIL_MAX_POLL_MS)
+      timer = setTimeout(() => void poll(), delay)
+    }
+
     const poll = async (): Promise<void> => {
       try {
         const generation = await getImageGeneration(graphId, requestedUid, controller.signal)
@@ -230,13 +239,21 @@ function GeneratorReferenceThumbnail({
           return
         }
         if (generation.status !== "started" && generation.status !== "retryable") return
-        if (Date.now() >= deadline) return
-        delay = delay === 0
-          ? REFERENCE_THUMBNAIL_FIRST_POLL_MS
-          : Math.min(delay * 1.5, REFERENCE_THUMBNAIL_MAX_POLL_MS)
-        timer = setTimeout(() => void poll(), delay)
-      } catch {
-        // A failed/unknown source renders a placeholder and never starts work.
+        scheduleNext()
+      } catch (error) {
+        if (
+          !alive
+          || controller.signal.aborted
+          || (error instanceof Error && error.name === "AbortError")
+        ) return
+        const status = imageGenerationStatusCode(error)
+        if (
+          error instanceof TypeError
+          || status === 408
+          || status === 429
+          || (status !== null && status >= 500)
+        ) scheduleNext()
+        // Determinate client failures keep the source as a placeholder.
       }
     }
 
@@ -303,6 +320,11 @@ function SyncedImageGeneratorCard({
     () => references.map((reference) => String(reference.sourceNodeId)),
     [references],
   )
+  const getCurrentReferenceSourceNodeUids = useCallback(
+    (): string[] => orderedImageReferences(store, id)
+      .map((reference) => String(reference.sourceNodeId)),
+    [id, store],
+  )
   const resolveReferenceAssets = useCallback((
     sourceNodeUids: readonly string[],
     signal: AbortSignal,
@@ -311,12 +333,8 @@ function SyncedImageGeneratorCard({
     graphId,
     sourceNodeUids,
     signal,
-  }), [graphId, store])
-  const getCurrentReferenceSourceNodeUids = useCallback(
-    (): string[] => orderedImageReferences(store, id)
-      .map((reference) => String(reference.sourceNodeId)),
-    [id, store],
-  )
+    getCurrentSourceNodeUids: getCurrentReferenceSourceNodeUids,
+  }), [getCurrentReferenceSourceNodeUids, graphId, store])
 
   const persist = useCallback((patch: PersistImageGenerationPatch): void => {
     const propertyPatch: Partial<NoteProperties> = {}

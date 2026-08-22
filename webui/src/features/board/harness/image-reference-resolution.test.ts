@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest"
 import { asNodeId, createCanvasStore, type CanvasStore } from "@canvas-harness/core"
 
 import { resolveReferenceAssetUids } from "./image-reference-resolution"
+import { IMAGE_REFERENCE_CHANGED_MESSAGE } from "./image-reference-assets"
 
 
 const { getImageGeneration, startImageGeneration } = vi.hoisted(() => ({
@@ -19,7 +20,17 @@ vi.mock("@/features/board/api/image-generation", async (importOriginal) => ({
 
 const BOARD_ID = "board-1"
 const PNG_DATA_URL = "data:image/png;base64,iVBORw0KGgo="
+const OTHER_PNG_DATA_URL = "data:image/png;base64,c2FmZQ=="
 const assetUid = (value: string): string => value.repeat(32).slice(0, 32)
+
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
+}
 
 
 const addImage = (
@@ -79,6 +90,28 @@ const uploaded = (uid: string) => ({
 })
 
 
+const setGeneratorGeneration = (store: CanvasStore, id: string, generationUid: string): void => {
+  const data = store.getNode(asNodeId(id))?.data as {
+    properties: { activeGenerationUid: { type: "keyword"; value: string } }
+  }
+  data.properties.activeGenerationUid = { type: "keyword", value: generationUid }
+}
+
+
+const setImageSource = (store: CanvasStore, id: string, src: string): void => {
+  const data = store.getNode(asNodeId(id))?.data as { src: string }
+  data.src = src
+}
+
+
+const setImageAsset = (store: CanvasStore, id: string, uid: string): void => {
+  const data = store.getNode(asNodeId(id))?.data as {
+    properties: { imageAssetUid?: { type: "keyword"; value: string } }
+  }
+  data.properties.imageAssetUid = { type: "keyword", value: uid }
+}
+
+
 describe("ordered image reference resolution", () => {
   beforeEach(() => {
     getImageGeneration.mockReset()
@@ -102,6 +135,7 @@ describe("ordered image reference resolution", () => {
       store,
       graphId: BOARD_ID,
       sourceNodeUids: ["image-1", "generator-1", "image-2"],
+      getCurrentSourceNodeUids: () => ["image-1", "generator-1", "image-2"],
       upload,
     })).resolves.toEqual([shared, assetUid("b"), shared])
 
@@ -112,6 +146,122 @@ describe("ordered image reference resolution", () => {
     )
     expect(upload).not.toHaveBeenCalled()
     expect(startImageGeneration).not.toHaveBeenCalled()
+  })
+
+
+  it("pins a generator UID before its first GET and rejects A-to-B changes", async () => {
+    const store = createCanvasStore()
+    addGenerator(store, "generator-1", "generation-a")
+    const response = deferred<{ status: string; output_asset_uid: string | null }>()
+    getImageGeneration.mockImplementationOnce(() => response.promise)
+
+    const resolution = resolveReferenceAssetUids({
+      store,
+      graphId: BOARD_ID,
+      sourceNodeUids: ["generator-1"],
+    })
+    await Promise.resolve()
+    setGeneratorGeneration(store, "generator-1", "generation-b")
+    response.resolve({ status: "started", output_asset_uid: null })
+
+    await expect(resolution).rejects.toThrow(IMAGE_REFERENCE_CHANGED_MESSAGE)
+    expect(getImageGeneration).toHaveBeenCalledTimes(1)
+    expect(getImageGeneration.mock.calls[0]?.[1]).toBe("generation-a")
+    expect(startImageGeneration).not.toHaveBeenCalled()
+  })
+
+
+  it("revalidates a generator resolved before a slower image upload", async () => {
+    const store = createCanvasStore()
+    addGenerator(store, "generator-1", "generation-a")
+    addImage(store, "image-1")
+    getImageGeneration.mockResolvedValue({
+      status: "succeeded",
+      output_asset_uid: assetUid("c"),
+    })
+    const uploadResponse = deferred<ReturnType<typeof uploaded>>()
+    const upload = vi.fn(() => uploadResponse.promise)
+
+    const resolution = resolveReferenceAssetUids({
+      store,
+      graphId: BOARD_ID,
+      sourceNodeUids: ["generator-1", "image-1"],
+      upload,
+    })
+    await Promise.resolve()
+    setGeneratorGeneration(store, "generator-1", "generation-b")
+    uploadResponse.resolve(uploaded(assetUid("d")))
+
+    await expect(resolution).rejects.toThrow(IMAGE_REFERENCE_CHANGED_MESSAGE)
+    expect(getImageGeneration.mock.calls.map((call) => call[1])).toEqual(["generation-a"])
+  })
+
+
+  it("does not fetch generator B when it changes during an earlier image upload", async () => {
+    const store = createCanvasStore()
+    addImage(store, "image-1")
+    addGenerator(store, "generator-1", "generation-a")
+    const uploadResponse = deferred<ReturnType<typeof uploaded>>()
+    const upload = vi.fn(() => uploadResponse.promise)
+
+    const resolution = resolveReferenceAssetUids({
+      store,
+      graphId: BOARD_ID,
+      sourceNodeUids: ["image-1", "generator-1"],
+      upload,
+    })
+    await Promise.resolve()
+    setGeneratorGeneration(store, "generator-1", "generation-b")
+    uploadResponse.resolve(uploaded(assetUid("d")))
+
+    await expect(resolution).rejects.toThrow(IMAGE_REFERENCE_CHANGED_MESSAGE)
+    expect(getImageGeneration).not.toHaveBeenCalled()
+  })
+
+
+  it("keeps an uploaded asset immutable but does not patch a changed image source", async () => {
+    const store = createCanvasStore()
+    addImage(store, "image-1")
+    const uploadedUid = assetUid("d")
+    const uploadResponse = deferred<ReturnType<typeof uploaded>>()
+    const upload = vi.fn(() => uploadResponse.promise)
+
+    const resolution = resolveReferenceAssetUids({
+      store,
+      graphId: BOARD_ID,
+      sourceNodeUids: ["image-1"],
+      upload,
+    })
+    await Promise.resolve()
+    setImageSource(store, "image-1", OTHER_PNG_DATA_URL)
+    uploadResponse.resolve(uploaded(uploadedUid))
+
+    await expect(resolution).rejects.toThrow(IMAGE_REFERENCE_CHANGED_MESSAGE)
+    const data = store.getNode(asNodeId("image-1"))?.data as {
+      properties: { imageAssetUid?: unknown }
+    }
+    expect(data.properties.imageAssetUid).toBeUndefined()
+    expect(upload).toHaveBeenCalledTimes(1)
+  })
+
+
+  it("rejects a registered image association change during generator resolution", async () => {
+    const store = createCanvasStore()
+    addGenerator(store, "generator-1", "generation-a")
+    addImage(store, "image-1", { existing: assetUid("a") })
+    const response = deferred<{ status: string; output_asset_uid: string }>()
+    getImageGeneration.mockImplementationOnce(() => response.promise)
+
+    const resolution = resolveReferenceAssetUids({
+      store,
+      graphId: BOARD_ID,
+      sourceNodeUids: ["generator-1", "image-1"],
+    })
+    await Promise.resolve()
+    setImageAsset(store, "image-1", assetUid("b"))
+    response.resolve({ status: "succeeded", output_asset_uid: assetUid("c") })
+
+    await expect(resolution).rejects.toThrow(IMAGE_REFERENCE_CHANGED_MESSAGE)
   })
 
 

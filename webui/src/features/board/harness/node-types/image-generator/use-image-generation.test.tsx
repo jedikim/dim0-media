@@ -17,6 +17,7 @@ vi.mock("uuid", () => ({ v4: uuidMocks.uuidv4 }))
 
 import type { GenerationState } from "@/features/board/api/image-generation"
 import { ImageReferenceResolutionError } from "../../image-reference-resolution"
+import { IMAGE_REFERENCE_CHANGED_MESSAGE } from "../../image-reference-assets"
 import type { PendingImageRequest } from "./node-state"
 import {
   IMAGE_GENERATION_POLL_CEILING_MS,
@@ -316,7 +317,7 @@ describe("useImageGeneration", () => {
     })
 
     expect(latest?.phase).toBe("failed")
-    expect(latest?.error).toContain("참조 이미지가 변경되었습니다")
+    expect(latest?.error).toBe(IMAGE_REFERENCE_CHANGED_MESSAGE)
     expect(latest?.hasPendingRequest).toBe(false)
     expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
     expect(persist).not.toHaveBeenCalledWith(expect.objectContaining({
@@ -362,7 +363,7 @@ describe("useImageGeneration", () => {
     })
     apiMocks.getImageGeneration.mockResolvedValue(oldState)
     const resolveReferenceAssets = vi.fn()
-      .mockRejectedValueOnce(new ImageReferenceResolutionError("참조 자산을 안전하게 확인할 수 없습니다."))
+      .mockRejectedValueOnce(new ImageReferenceResolutionError(IMAGE_REFERENCE_CHANGED_MESSAGE))
       .mockResolvedValueOnce(["d".repeat(32)])
     apiMocks.startImageGeneration.mockResolvedValue({ generation_uid: "gen-new", status: "started" })
     render({ activeGenerationUid: "gen-old", resolveReferenceAssets })
@@ -371,11 +372,12 @@ describe("useImageGeneration", () => {
     await act(async () => latest?.generate("model-1", "new bird", {}, ["image-1"]))
     await flush()
     expect(latest?.phase).toBe("failed")
-    expect(latest?.error).toBe("참조 자산을 안전하게 확인할 수 없습니다.")
+    expect(latest?.error).toBe(IMAGE_REFERENCE_CHANGED_MESSAGE)
     expect(latest?.state?.output_asset_uid).toBe("asset-old")
     expect(latest?.hasPendingRequest).toBe(false)
     expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
     expect(persist).not.toHaveBeenCalledWith(expect.objectContaining({ pendingRequest: expect.anything() }))
+    expect(uuidMocks.uuidv4).not.toHaveBeenCalled()
 
     await act(async () => latest?.generate("model-1", "new bird", {}, ["image-1"]))
     expect(resolveReferenceAssets).toHaveBeenCalledTimes(2)

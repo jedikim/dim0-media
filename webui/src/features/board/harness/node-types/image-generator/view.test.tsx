@@ -53,6 +53,10 @@ vi.mock("@/features/board/api/image-generation", () => ({
   listImageModels: mocks.listImageModels,
   getImageGeneration: mocks.getImageGeneration,
   imageGenerationErrorMessage: () => "모델 목록을 불러올 수 없습니다.",
+  imageGenerationStatusCode: (error: unknown) => {
+    const match = error instanceof Error ? /^(\d{3})\b/.exec(error.message) : null
+    return match ? Number(match[1]) : null
+  },
 }))
 
 vi.mock("@/features/board/hooks/use-authed-image", () => ({
@@ -602,6 +606,64 @@ describe("ImageGeneratorView", () => {
       .toBe("blob:asset-b")
     expect(mocks.getImageGeneration.mock.calls.slice(-3).map((call) => call[1]))
       .toEqual(["generation-b", "generation-b", "generation-b"])
+  })
+
+
+  it("retries a transient generator thumbnail GET and then renders success", async () => {
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, unknown>
+    }).properties
+    properties.imageModelId = { type: "keyword", value: "model-i2i" }
+    mocks.listImageModels.mockResolvedValue([I2I_MODEL])
+    mocks.sourceNodes.set("generator-source", {
+      id: "generator-source",
+      type: "image-generator",
+      data: {
+        graphUid: "board-1",
+        properties: { activeGenerationUid: { type: "keyword", value: "generation-a" } },
+      },
+    })
+    mocks.edges = [referenceEdge("edge-1", "generator-source", 0)]
+    mocks.useAuthedImage.mockImplementation((_graphId: string, assetUid: string | null) => ({
+      url: assetUid ? `blob:${assetUid}` : null,
+      failed: false,
+    }))
+    mocks.getImageGeneration
+      .mockRejectedValueOnce(new TypeError("temporary network failure"))
+      .mockResolvedValueOnce({ status: "succeeded", output_asset_uid: "asset-a" })
+
+    await render()
+    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+    await act(() => vi.advanceTimersByTimeAsync(1_000))
+
+    expect(mocks.getImageGeneration).toHaveBeenCalledTimes(2)
+    expect(container.querySelector<HTMLImageElement>('img[alt="참조 생성 이미지"]')?.src)
+      .toBe("blob:asset-a")
+  })
+
+
+  it.each([403, 404])("stops thumbnail polling after determinate HTTP %s", async (status) => {
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, unknown>
+    }).properties
+    properties.imageModelId = { type: "keyword", value: "model-i2i" }
+    mocks.listImageModels.mockResolvedValue([I2I_MODEL])
+    mocks.sourceNodes.set("generator-source", {
+      id: "generator-source",
+      type: "image-generator",
+      data: {
+        graphUid: "board-1",
+        properties: { activeGenerationUid: { type: "keyword", value: "generation-a" } },
+      },
+    })
+    mocks.edges = [referenceEdge("edge-1", "generator-source", 0)]
+    mocks.getImageGeneration.mockRejectedValue(new Error(`${status} - unavailable`))
+
+    await render()
+    await act(() => vi.advanceTimersByTimeAsync(30_000))
+
+    expect(mocks.getImageGeneration).toHaveBeenCalledTimes(1)
+    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
   })
 
 

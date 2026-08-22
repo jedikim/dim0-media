@@ -3,6 +3,7 @@ import { asNodeId, createCanvasStore } from "@canvas-harness/core"
 
 import {
   CLEARED_IMAGE_ASSET_UID,
+  IMAGE_REFERENCE_CHANGED_MESSAGE,
   imageDataUrlToBlob,
   materializeImageNodeAsset,
   readImageAssetUid,
@@ -13,6 +14,16 @@ const BOARD_ID = "board-1"
 const NODE_ID = asNodeId("image-1")
 const ASSET_UID = "a".repeat(32)
 const PNG_DATA_URL = "data:image/png;base64,iVBORw0KGgo="
+const OTHER_PNG_DATA_URL = "data:image/png;base64,c2FmZQ=="
+
+
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((next) => {
+    resolve = next
+  })
+  return { promise, resolve }
+}
 
 
 const imageNode = (src = PNG_DATA_URL) => ({
@@ -74,6 +85,44 @@ describe("image reference assets", () => {
       properties: { imageAssetUid: { value: string } }
     }
     expect(data.properties.imageAssetUid.value).toBe(ASSET_UID)
+  })
+
+
+  it("preserves the uploaded asset but does not patch a source changed in flight", async () => {
+    const store = createCanvasStore()
+    store.addNode(imageNode())
+    type UploadResponse = {
+      asset_uid: string
+      mime_type: "image/png"
+      width: number
+      height: number
+      byte_size: number
+      content_sha256: string
+    }
+    const response = deferred<UploadResponse>()
+    const upload = vi.fn(() => response.promise)
+    const materialization = materializeImageNodeAsset({
+      store,
+      graphId: BOARD_ID,
+      nodeId: NODE_ID,
+      upload,
+      expectedVersion: { src: PNG_DATA_URL, assetUid: null },
+    })
+    await Promise.resolve()
+    const data = store.getNode(NODE_ID)?.data as { src: string; properties: Record<string, unknown> }
+    data.src = OTHER_PNG_DATA_URL
+    response.resolve({
+      asset_uid: ASSET_UID,
+      mime_type: "image/png",
+      width: 1,
+      height: 1,
+      byte_size: 8,
+      content_sha256: "b".repeat(64),
+    })
+
+    await expect(materialization).rejects.toThrow(IMAGE_REFERENCE_CHANGED_MESSAGE)
+    expect(data.properties.imageAssetUid).toBeUndefined()
+    expect(upload).toHaveBeenCalledTimes(1)
   })
 
 
