@@ -16,7 +16,7 @@ from topix.datatypes.note.style import NodeType, Style
 from topix.datatypes.property import KeywordProperty, NumberProperty, PositionProperty, SizeProperty
 from topix.image_generation.models import GenerationStatus, ImageGenerationOutputRecord
 from topix.store.graph import GraphStore
-from topix.store.image_generation import ImageGenerationStore
+from topix.store.image_generation import ImageGenerationOutputWriterBusyError, ImageGenerationStore
 
 GENERATED_IMAGE_RESULT_NAMESPACE = UUID("2f71a20e-d0f0-5b3f-a638-e8c6f04b0bc1")
 RESULT_NODE_NAME_PREFIX = "dim0:image-result-node:"
@@ -262,100 +262,106 @@ class ImageResultNodeService:
         if record.output_node_uid is not None and not recreate:
             return self._outcome(record, node_uid, created=False, recreated=False)
 
-        async with self._image_store.output_node_writer(
-            board_uid=board_uid,
-            generation_uid=generation_uid,
-        ) as (writer_conn, owned_record):
-            if owned_record is None:
-                raise ImageResultNodeError(
-                    "generation_not_found",
-                    "Image generation not found.",
-                )
-            self._validate_generation(owned_record, node_uid=node_uid)
-            if owned_record.output_node_uid is not None and not recreate:
-                return self._outcome(
-                    owned_record,
-                    node_uid,
-                    created=False,
-                    recreated=False,
-                )
-
-            generator = await self._require_generator(owned_record)
-            await self._prepare_result_objects(
-                record=owned_record,
-                generator=generator,
-                node_uid=node_uid,
-                edge_uid=edge_uid,
-            )
-
-            delivery = None
-            outcome = None
-            async with self._bridge.result_delivery_order(board_id=board_uid) as room:
-                async with self._image_store.output_node_transaction(
+        delivery = None
+        outcome = None
+        async with self._bridge.result_delivery_order(board_id=board_uid) as room:
+            try:
+                async with self._image_store.output_node_writer(
                     board_uid=board_uid,
                     generation_uid=generation_uid,
-                    conn=writer_conn,
-                ) as (conn, locked_record):
-                    if locked_record is None:
+                ) as (writer_conn, owned_record):
+                    if owned_record is None:
                         raise ImageResultNodeError(
                             "generation_not_found",
                             "Image generation not found.",
                         )
-                    self._validate_generation(locked_record, node_uid=node_uid)
-                    if locked_record.output_node_uid is not None and not recreate:
-                        outcome = self._outcome(
-                            locked_record,
+                    self._validate_generation(owned_record, node_uid=node_uid)
+                    if owned_record.output_node_uid is not None and not recreate:
+                        return self._outcome(
+                            owned_record,
                             node_uid,
                             created=False,
                             recreated=False,
                         )
-                    else:
-                        durable_generator = await self._require_generator(locked_record)
-                        durable_node, durable_edge = await self._read_result_objects(
-                            node_uid=node_uid,
-                            edge_uid=edge_uid,
-                        )
-                        self._validate_prepared_result(
-                            durable_node,
-                            durable_edge,
-                            record=locked_record,
-                            generator=durable_generator,
-                            node_uid=node_uid,
-                        )
-                        assert durable_node is not None and durable_edge is not None
-                        batch_uid = canonical_result_batch_uid(
-                            generation_uid,
-                            durable_node.created_at,
-                            durable_edge.created_at,
-                        )
-                        delivery = await self._bridge.ensure_result_batch(
-                            conn,
-                            board_id=board_uid,
-                            batch_id=batch_uid,
-                            note=durable_node,
-                            link=durable_edge,
-                            generator=durable_generator,
-                        )
-                        if not await self._image_store.bind_output_node(
-                            conn,
-                            board_uid=board_uid,
-                            generation_uid=generation_uid,
-                            output_node_uid=node_uid,
-                        ):
+
+                    generator = await self._require_generator(owned_record)
+                    await self._prepare_result_objects(
+                        record=owned_record,
+                        generator=generator,
+                        node_uid=node_uid,
+                        edge_uid=edge_uid,
+                    )
+
+                    async with self._image_store.output_node_transaction(
+                        board_uid=board_uid,
+                        generation_uid=generation_uid,
+                        conn=writer_conn,
+                    ) as (conn, locked_record):
+                        if locked_record is None:
                             raise ImageResultNodeError(
-                                "output_binding_conflict",
-                                "The generated image node could not be linked to its generation.",
+                                "generation_not_found",
+                                "Image generation not found.",
                             )
-                        created = delivery is not None
-                        outcome = self._outcome(
-                            locked_record,
-                            node_uid,
-                            created=created,
-                            recreated=locked_record.output_node_uid is not None and created,
-                        )
-                await self._bridge.deliver_result_batch(room=room, delivery=delivery)
-            assert outcome is not None
-            return outcome
+                        self._validate_generation(locked_record, node_uid=node_uid)
+                        if locked_record.output_node_uid is not None and not recreate:
+                            outcome = self._outcome(
+                                locked_record,
+                                node_uid,
+                                created=False,
+                                recreated=False,
+                            )
+                        else:
+                            durable_generator = await self._require_generator(locked_record)
+                            durable_node, durable_edge = await self._read_result_objects(
+                                node_uid=node_uid,
+                                edge_uid=edge_uid,
+                            )
+                            self._validate_prepared_result(
+                                durable_node,
+                                durable_edge,
+                                record=locked_record,
+                                generator=durable_generator,
+                                node_uid=node_uid,
+                            )
+                            assert durable_node is not None and durable_edge is not None
+                            batch_uid = canonical_result_batch_uid(
+                                generation_uid,
+                                durable_node.created_at,
+                                durable_edge.created_at,
+                            )
+                            delivery = await self._bridge.ensure_result_batch(
+                                conn,
+                                board_id=board_uid,
+                                batch_id=batch_uid,
+                                note=durable_node,
+                                link=durable_edge,
+                                generator=durable_generator,
+                            )
+                            if not await self._image_store.bind_output_node(
+                                conn,
+                                board_uid=board_uid,
+                                generation_uid=generation_uid,
+                                output_node_uid=node_uid,
+                            ):
+                                raise ImageResultNodeError(
+                                    "output_binding_conflict",
+                                    "The generated image node could not be linked to its generation.",
+                                )
+                            created = delivery is not None
+                            outcome = self._outcome(
+                                locked_record,
+                                node_uid,
+                                created=created,
+                                recreated=locked_record.output_node_uid is not None and created,
+                            )
+            except ImageGenerationOutputWriterBusyError as exc:
+                raise ImageResultNodeError(
+                    "materialization_raced",
+                    "The image result changed while it was being prepared. Please retry.",
+                ) from exc
+            await self._bridge.deliver_result_batch(room=room, delivery=delivery)
+        assert outcome is not None
+        return outcome
 
     async def _prepare_result_objects(
         self,

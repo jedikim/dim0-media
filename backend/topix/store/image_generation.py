@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -22,7 +25,6 @@ from topix.image_generation.models import (
     ProviderImageResult,
 )
 from topix.store.postgres.image_generation import (
-    acquire_image_generation_output_writer,
     bind_image_generation_output_node,
     clear_generation_pending_output,
     create_image_asset,
@@ -43,8 +45,51 @@ from topix.store.postgres.image_generation import (
     set_generation_pending_output,
     start_image_generation,
     start_image_generation_attempt,
+    try_acquire_image_generation_output_writer,
 )
 from topix.store.postgres.pool import create_pool
+
+logger = logging.getLogger(__name__)
+
+OUTPUT_NODE_WRITER_WAIT_SECONDS = 0.25
+OUTPUT_NODE_WRITER_RETRY_SECONDS = 0.025
+
+
+class ImageGenerationOutputWriterBusyError(RuntimeError):
+    """Signal bounded contention for one generation's canvas writer."""
+
+
+async def _release_output_writer(
+    conn: asyncpg.Connection,
+    *,
+    generation_uid: str,
+    body_error: BaseException | None,
+) -> None:
+    """Log unlock anomalies without replacing an error from the writer body."""
+    try:
+        released = await release_image_generation_output_writer(
+            conn,
+            generation_uid=generation_uid,
+        )
+    except BaseException as unlock_error:
+        logger.error(
+            "Image generation output writer unlock failed",
+            extra={
+                "generation_uid": generation_uid,
+                "unlock_error_type": type(unlock_error).__name__,
+            },
+        )
+        if body_error is None:
+            raise
+    else:
+        if not released:
+            logger.error(
+                "Image generation output writer lock was not held",
+                extra={
+                    "generation_uid": generation_uid,
+                    "unlock_error_type": "not-held",
+                },
+            )
 
 
 class ImageGenerationStore:
@@ -148,25 +193,48 @@ class ImageGenerationStore:
         generation_uid: str,
     ) -> AsyncIterator[tuple[asyncpg.Connection, ImageGenerationOutputRecord | None]]:
         """Own one generation from Qdrant preparation through final commit."""
-        async with self._pool().acquire() as conn:
-            await acquire_image_generation_output_writer(
-                conn,
-                generation_uid=generation_uid,
-            )
+        pool = self._pool()
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + OUTPUT_NODE_WRITER_WAIT_SECONDS
+        while True:
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise ImageGenerationOutputWriterBusyError("Image generation output writer is busy")
             try:
-                record = await get_image_generation_output(
+                conn = await pool.acquire(timeout=remaining)
+            except TimeoutError as exc:
+                raise ImageGenerationOutputWriterBusyError("Image generation output writer is busy") from exc
+            acquired = False
+            try:
+                acquired = await try_acquire_image_generation_output_writer(
                     conn,
-                    board_uid=board_uid,
                     generation_uid=generation_uid,
                 )
-                yield conn, record
+                if acquired:
+                    body_error: BaseException | None = None
+                    try:
+                        record = await get_image_generation_output(
+                            conn,
+                            board_uid=board_uid,
+                            generation_uid=generation_uid,
+                        )
+                        yield conn, record
+                    except BaseException as exc:
+                        body_error = exc
+                        raise
+                    finally:
+                        await _release_output_writer(
+                            conn,
+                            generation_uid=generation_uid,
+                            body_error=body_error,
+                        )
+                    return
             finally:
-                released = await release_image_generation_output_writer(
-                    conn,
-                    generation_uid=generation_uid,
-                )
-                if not released:
-                    raise RuntimeError("Image generation output writer lock was not held")
+                await pool.release(conn)
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                raise ImageGenerationOutputWriterBusyError("Image generation output writer is busy")
+            await asyncio.sleep(min(OUTPUT_NODE_WRITER_RETRY_SECONDS, remaining))
 
     async def bind_output_node(
         self,

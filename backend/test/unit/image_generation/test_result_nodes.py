@@ -19,6 +19,7 @@ from topix.image_generation.result_nodes import (
     canonical_result_edge_uid,
     canonical_result_node_uid,
 )
+from topix.store.image_generation import ImageGenerationOutputWriterBusyError
 
 BOARD_UID = "b" * 32
 GENERATION_UID = "g" * 32
@@ -60,6 +61,7 @@ class _FakeImageStore:
         self.record = record
         self.bind_calls: list[str] = []
         self.bind_succeeds = True
+        self.writer_error: Exception | None = None
         self.lock = asyncio.Lock()
 
     @asynccontextmanager
@@ -67,6 +69,8 @@ class _FakeImageStore:
         """Serialize fake preparation and finalization for one generation."""
         assert board_uid == BOARD_UID
         assert generation_uid == GENERATION_UID
+        if self.writer_error is not None:
+            raise self.writer_error
         async with self.lock:
             yield object(), self.record
 
@@ -279,6 +283,23 @@ async def test_automatic_ensure_creates_node_edge_then_binds() -> None:
     edge = graph.links[edge_uid]
     assert (edge.source, edge.target) == (GENERATOR_UID, node_uid)
     assert edge.parent_id == graph.nodes[GENERATOR_UID].parent_id
+
+
+@pytest.mark.asyncio
+async def test_writer_contention_is_a_recoverable_materialization_race() -> None:
+    """Translate bounded writer contention into the existing structured retry code."""
+    service, image_store, _graph, _bridge = _service()
+    image_store.writer_error = ImageGenerationOutputWriterBusyError("busy")
+
+    with pytest.raises(ImageResultNodeError) as raced:
+        await service.ensure_output_node(
+            board_uid=BOARD_UID,
+            generation_uid=GENERATION_UID,
+            recreate=False,
+        )
+
+    assert raced.value.code == "materialization_raced"
+    assert str(raced.value) == "The image result changed while it was being prepared. Please retry."
 
 
 @pytest.mark.asyncio

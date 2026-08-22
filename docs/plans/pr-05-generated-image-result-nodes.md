@@ -47,10 +47,15 @@ names:
 - `dim0:image-result-node:{generation_uid}`
 - `dim0:image-result-edge:{generation_uid}`
 
-Qdrant reconciliation runs under a generation-scoped PostgreSQL session advisory
-lock, but outside a database transaction. The shared-pool connection stays owned
-through the short final transaction and releases its session lock in `finally`
-before returning to the pool. Existing live canonical objects are validated and reused. An unbound tombstone is
+When a live room exists, its delivery lock is acquired before any shared-pool
+connection. Qdrant reconciliation then runs under a generation-scoped PostgreSQL
+session advisory lock, but outside a database transaction. Failed
+`pg_try_advisory_lock` attempts return the connection before retrying and stop
+after 250ms as the existing recoverable `materialization_raced` error; three
+frontend attempts plus backoff therefore remain well inside the 30-second client
+deadline. The successful shared-pool connection stays owned through the short
+final transaction and releases its session lock in `finally` before returning to
+the pool. Existing live canonical objects are validated and reused. An unbound tombstone is
 partial state and is prepared by an ordinary `recreate: false` retry; only an
 already-bound deletion requires explicit recreation. Conflicting live objects
 fail closed. After both pieces are durable, a short advisory-locked PostgreSQL
@@ -124,6 +129,8 @@ snapshot/catch-up, clone/paste stamping, and parity tests all recognize
 peers receive one ordinary combined `node.add` + `edge.add` batch and reconnecting
 peers recover it from the PostgreSQL oplog. Result batches are durable even when no
 room is open; live delivery happens only after the batch/bind transaction commits.
+The session writer and pooled connection are already released before `send_text`
+waits, while the room lock still preserves live sequence ordering.
 
 Same-board clone and same-board cross-folder paste keep the immutable
 asset/generation/generator association under a new canvas node ID and perform no
@@ -157,8 +164,8 @@ concurrency and the module-global lock redesign remain outside this PR.
   zero-mutation, preview de-duplication, clone/paste, immutable references, and
   snapshot/live hydration.
 - Integration: disposable PostgreSQL, Qdrant, and Redis with the one-connection
-  recursive-acquire regression plus two-connection cross-worker advisory-lock
-  competition; clean/reapplied schema;
+  live-room lock-order regression plus two-connection cross-worker bounded
+  advisory-lock competition; clean/reapplied schema;
   existing local/dev volumes and retained smoke data are untouched.
 - Full Node 20 UI/backend checks, local-only mocked Playwright E2E, Rust/Tauri CI,
   `git diff --check`, Ruff, and GitHub CI. External provider calls remain zero.

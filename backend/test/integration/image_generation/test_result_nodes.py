@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 
+from contextlib import asynccontextmanager
 from hashlib import sha256
 
 import asyncpg
@@ -15,6 +17,7 @@ import pytest_asyncio
 from qdrant_client import AsyncQdrantClient
 from redis.asyncio import Redis
 
+from topix.api.router.collab import _handle_message
 from topix.collab.agent_bridge import AgentBoardBridge
 from topix.collab.room import RoomRegistry
 from topix.config.config import Config
@@ -35,9 +38,14 @@ from topix.image_generation.result_nodes import (
     canonical_result_edge_uid,
     canonical_result_node_uid,
 )
+from topix.store import image_generation as image_generation_store_module
 from topix.store.collab_oplog import SEQ_KEY_PREFIX, CollabOplogStore
 from topix.store.graph import GraphStore
-from topix.store.image_generation import ImageGenerationStore
+from topix.store.image_generation import ImageGenerationOutputWriterBusyError, ImageGenerationStore
+from topix.store.postgres.image_generation import (
+    release_image_generation_output_writer,
+    try_acquire_image_generation_output_writer,
+)
 from topix.store.qdrant.store import ContentStore
 from topix.store.redis.store import RedisStore
 from topix.utils.common import gen_uid
@@ -62,10 +70,31 @@ class _RecordingSocket:
     def __init__(self) -> None:
         """Initialize an empty outbound frame list."""
         self.frames: list[str] = []
+        self.json_frames: list[dict] = []
 
     async def send_text(self, frame: str) -> None:
         """Record one peer-op frame."""
         self.frames.append(frame)
+
+    async def send_json(self, frame: dict) -> None:
+        """Record one acknowledgement frame from the WebSocket path."""
+        self.json_frames.append(frame)
+
+
+class _BlockingRecordingSocket(_RecordingSocket):
+    """Pause result delivery so tests can inspect released database ownership."""
+
+    def __init__(self) -> None:
+        """Initialize delivery boundary events and frame storage."""
+        super().__init__()
+        self.delivery_started = asyncio.Event()
+        self.release_delivery = asyncio.Event()
+
+    async def send_text(self, frame: str) -> None:
+        """Hold one live delivery until the test releases its room lock."""
+        self.delivery_started.set()
+        await self.release_delivery.wait()
+        await super().send_text(frame)
 
 
 class _FailOnceOplog:
@@ -236,8 +265,26 @@ async def two_connection_result_pool(
 @pytest.mark.asyncio(loop_scope="function")
 async def test_output_writer_lock_releases_and_does_not_serialize_other_generations(
     two_connection_result_pool: asyncpg.Pool,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Session ownership is generation-scoped and released on errors and cancellation."""
+    """Bounded session ownership releases connections, errors, and cancellation."""
+    monkeypatch.setattr(image_generation_store_module, "OUTPUT_NODE_WRITER_WAIT_SECONDS", 0.2)
+    monkeypatch.setattr(image_generation_store_module, "OUTPUT_NODE_WRITER_RETRY_SECONDS", 0.1)
+    real_try_lock = image_generation_store_module.try_acquire_image_generation_output_writer
+    failed_try = asyncio.Event()
+
+    async def observe_try_lock(conn: asyncpg.Connection, *, generation_uid: str) -> bool:
+        """Expose the first failed try after its connection can return to the pool."""
+        acquired = await real_try_lock(conn, generation_uid=generation_uid)
+        if not acquired:
+            failed_try.set()
+        return acquired
+
+    monkeypatch.setattr(
+        image_generation_store_module,
+        "try_acquire_image_generation_output_writer",
+        observe_try_lock,
+    )
     first_store = ImageGenerationStore()
     second_store = ImageGenerationStore()
     await first_store.open(two_connection_result_pool)
@@ -280,11 +327,23 @@ async def test_output_writer_lock_releases_and_does_not_serialize_other_generati
     first_task = asyncio.create_task(hold_first())
     same_task = asyncio.create_task(enter_same_generation())
     await first_entered.wait()
-    await asyncio.sleep(0.05)
+    await asyncio.wait_for(failed_try.wait(), timeout=1)
     assert not same_generation_entered.is_set()
+    async with two_connection_result_pool.acquire(timeout=0.05) as available_conn:
+        assert await available_conn.fetchval("SELECT 1") == 1
     same_task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await same_task
+
+    failed_try.clear()
+    started_at = asyncio.get_running_loop().time()
+    with pytest.raises(ImageGenerationOutputWriterBusyError):
+        async with second_store.output_node_writer(
+            board_uid=board_uid,
+            generation_uid=generation_uid,
+        ):
+            pytest.fail("contended writer unexpectedly acquired ownership")
+    assert asyncio.get_running_loop().time() - started_at < 0.5
 
     other_task = asyncio.create_task(enter_other_generation())
     await asyncio.wait_for(other_generation_entered.wait(), timeout=1)
@@ -312,6 +371,262 @@ async def test_output_writer_lock_releases_and_does_not_serialize_other_generati
             generation_uid=generation_uid,
         ):
             pass
+
+
+@pytest.mark.parametrize("anomaly", ["false", "error"])
+@pytest.mark.asyncio(loop_scope="function")
+async def test_output_writer_unlock_anomaly_preserves_body_error_and_pool_reentry(
+    anomaly: str,
+    initialized_image_pg_pool: asyncpg.Pool,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Cleanup anomalies keep the domain error while pool reset clears session locks."""
+    store = ImageGenerationStore()
+    await store.open(initialized_image_pg_pool)
+    generation_uid = gen_uid()
+    original = ImageResultNodeError(
+        "materialization_raced",
+        "The image result changed while it was being prepared. Please retry.",
+    )
+    real_release = image_generation_store_module.release_image_generation_output_writer
+
+    async def anomalous_release(_conn: asyncpg.Connection, *, generation_uid: str) -> bool:
+        """Leave cleanup to asyncpg reset while simulating one unlock anomaly."""
+        assert generation_uid
+        if anomaly == "error":
+            raise RuntimeError("synthetic unlock failure")
+        return False
+
+    monkeypatch.setattr(
+        image_generation_store_module,
+        "release_image_generation_output_writer",
+        anomalous_release,
+    )
+    with caplog.at_level(logging.ERROR), pytest.raises(ImageResultNodeError) as propagated:
+        async with store.output_node_writer(
+            board_uid=gen_uid(),
+            generation_uid=generation_uid,
+        ):
+            raise original
+
+    assert propagated.value is original
+    assert propagated.value.code == "materialization_raced"
+    assert "Please retry" not in caplog.text
+    assert any(
+        record.getMessage()
+        in {
+            "Image generation output writer lock was not held",
+            "Image generation output writer unlock failed",
+        }
+        and getattr(record, "generation_uid", None) == generation_uid
+        for record in caplog.records
+    )
+
+    monkeypatch.setattr(
+        image_generation_store_module,
+        "release_image_generation_output_writer",
+        real_release,
+    )
+    async with asyncio.timeout(1):
+        async with store.output_node_writer(
+            board_uid=gen_uid(),
+            generation_uid=generation_uid,
+        ):
+            pass
+
+
+@pytest.mark.parametrize("starter", ["websocket", "output"])
+@pytest.mark.asyncio(loop_scope="function")
+async def test_live_room_and_single_connection_pool_follow_one_lock_order(
+    starter: str,
+    initialized_image_pg_pool: asyncpg.Pool,
+    isolated_result_content_store: ContentStore,
+    isolated_result_redis: RedisStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Room-first collaboration and result writes finish without a pool cycle."""
+    user_uid = gen_uid()
+    board_uid = gen_uid()
+    generator_uid = gen_uid()
+    async with initialized_image_pg_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO users (uid, email, username) VALUES ($1, $2, $3)",
+            user_uid,
+            f"{user_uid}@example.test",
+            user_uid,
+        )
+        await conn.execute("INSERT INTO graphs (uid) VALUES ($1)", board_uid)
+
+    image_store = ImageGenerationStore()
+    await image_store.open(initialized_image_pg_pool)
+    monkeypatch.setattr(
+        ContentStore,
+        "from_config",
+        classmethod(lambda _cls: isolated_result_content_store),
+    )
+    graph_store = GraphStore()
+    await graph_store.open(initialized_image_pg_pool)
+    await graph_store.add_notes(
+        [
+            Note(
+                id=generator_uid,
+                graph_uid=board_uid,
+                properties=NoteProperties(image_prompt=TextProperty(text="lock order result")),
+            )
+        ]
+    )
+    generation, _asset = await _create_succeeded_generation(
+        image_store,
+        user_uid=user_uid,
+        board_uid=board_uid,
+        generator_uid=generator_uid,
+        worker_uid=f"lock-order-{starter}",
+    )
+    oplog = CollabOplogStore(isolated_result_redis)
+    await oplog.open(initialized_image_pg_pool)
+    registry = RoomRegistry()
+    socket = _BlockingRecordingSocket()
+    room, client = await registry.join(
+        board_uid,
+        socket,  # type: ignore[arg-type]
+        user_uid,
+    )
+    assert room is not None and client is not None
+    bridge = AgentBoardBridge(graph_store=graph_store, registry=registry, oplog=oplog)
+    service = ImageResultNodeService(
+        image_store=image_store,
+        graph_store=graph_store,
+        bridge=bridge,
+    )
+    writer_entered = asyncio.Event()
+    real_writer = image_store.output_node_writer
+
+    @asynccontextmanager
+    async def observe_writer(*, board_uid: str, generation_uid: str):
+        """Expose entry only after the room-first service reaches DB ownership."""
+        writer_entered.set()
+        async with real_writer(
+            board_uid=board_uid,
+            generation_uid=generation_uid,
+        ) as owned:
+            yield owned
+
+    monkeypatch.setattr(image_store, "output_node_writer", observe_writer)
+    ws_before_db = asyncio.Event()
+    release_ws = asyncio.Event()
+    real_seq_for_batch = oplog.seq_for_batch
+
+    async def gate_ws_before_db(board_id: str, batch_id: str, *, conn=None):
+        """Hold a WebSocket operation after room acquisition but before its DB read."""
+        ws_before_db.set()
+        await release_ws.wait()
+        return await real_seq_for_batch(board_id, batch_id, conn=conn)
+
+    if starter == "websocket":
+        monkeypatch.setattr(oplog, "seq_for_batch", gate_ws_before_db)
+    ws_raw = json.dumps(
+        {
+            "kind": "op",
+            "client_seq": 1,
+            "batch": {"id": f"ws-lock-order-{starter}", "ops": []},
+        }
+    )
+
+    async def run_ws_operation() -> None:
+        """Run one real room-locked WebSocket collaboration operation."""
+        await _handle_message(
+            websocket=socket,  # type: ignore[arg-type]
+            raw=ws_raw,
+            graph_store=graph_store,
+            oplog=oplog,
+            room=room,
+            client=client,
+            board_id=board_uid,
+            user_id=user_uid,
+        )
+
+    ws_task: asyncio.Task[None] | None = None
+    result_task: asyncio.Task | None = None
+    try:
+        if starter == "websocket":
+            ws_task = asyncio.create_task(run_ws_operation())
+            await asyncio.wait_for(ws_before_db.wait(), timeout=1)
+            result_task = asyncio.create_task(
+                service.ensure_output_node(
+                    board_uid=board_uid,
+                    generation_uid=generation.uid,
+                    recreate=False,
+                )
+            )
+            await asyncio.sleep(0.05)
+            assert not writer_entered.is_set()
+            async with initialized_image_pg_pool.acquire(timeout=0.1) as available_conn:
+                assert await available_conn.fetchval("SELECT 1") == 1
+            release_ws.set()
+            await asyncio.wait_for(ws_task, timeout=1)
+        else:
+            result_task = asyncio.create_task(
+                service.ensure_output_node(
+                    board_uid=board_uid,
+                    generation_uid=generation.uid,
+                    recreate=False,
+                )
+            )
+
+        assert result_task is not None
+        await asyncio.wait_for(writer_entered.wait(), timeout=1)
+        await asyncio.wait_for(socket.delivery_started.wait(), timeout=1)
+        if ws_task is None:
+            ws_task = asyncio.create_task(run_ws_operation())
+            await asyncio.sleep(0.05)
+            assert not ws_task.done()
+
+        async with initialized_image_pg_pool.acquire(timeout=0.1) as available_conn:
+            assert await try_acquire_image_generation_output_writer(
+                available_conn,
+                generation_uid=generation.uid,
+            )
+            assert await release_image_generation_output_writer(
+                available_conn,
+                generation_uid=generation.uid,
+            )
+        socket.release_delivery.set()
+        outcome, _ = await asyncio.wait_for(
+            asyncio.gather(result_task, ws_task),
+            timeout=2,
+        )
+    finally:
+        release_ws.set()
+        socket.release_delivery.set()
+        for task in (result_task, ws_task):
+            if task is not None and not task.done():
+                task.cancel()
+        await asyncio.gather(
+            *(task for task in (result_task, ws_task) if task is not None),
+            return_exceptions=True,
+        )
+
+    node_uid = canonical_result_node_uid(generation.uid)
+    edge_uid = canonical_result_edge_uid(generation.uid)
+    assert outcome.created is True and outcome.recreated is False
+    assert len(await graph_store.get_nodes([node_uid])) == 1
+    assert len(await graph_store.get_links([edge_uid])) == 1
+    batches = await oplog.batches_since(board_uid, 0)
+    assert len(batches) == 2
+    assert {batch["id"] for _seq, batch in batches} == {
+        f"ws-lock-order-{starter}",
+        canonical_result_batch_uid(
+            generation.uid,
+            (await graph_store.get_nodes([node_uid]))[0].created_at,
+            (await graph_store.get_links([edge_uid]))[0].created_at,
+        ),
+    }
+    assert len(socket.frames) == 1
+    assert len(socket.json_frames) == 1
+    assert registry.get(board_uid) is room and client.client_id in room.clients
+    await oplog.close()
+    await graph_store.close()
 
 
 @pytest.mark.parametrize("deleted_scope", ["edge", "pair"])
@@ -413,7 +728,8 @@ async def test_cross_worker_explicit_recreate_serializes_adverse_interleaving(
 
     first_persisted = asyncio.Event()
     first_delivered = asyncio.Event()
-    release_first_writer = asyncio.Event()
+    release_first_delivery = asyncio.Event()
+    second_prepared = asyncio.Event()
     second_prepare_calls: list[tuple[Note | None, Link | None]] = []
     original_first_persist = first_bridge.persist_result_objects
     original_first_delivery = first_bridge.deliver_result_batch
@@ -425,15 +741,16 @@ async def test_cross_worker_explicit_recreate_serializes_adverse_interleaving(
         first_persisted.set()
 
     async def hold_after_first_delivery(*, room, delivery) -> None:
-        """Keep ownership after commit while a user moves the restored node."""
+        """Block live delivery only after database writer ownership has ended."""
         await original_first_delivery(room=room, delivery=delivery)
         first_delivered.set()
-        await release_first_writer.wait()
+        await release_first_delivery.wait()
 
     async def record_second_persist(*, board_id: str, note: Note | None, link: Link | None) -> None:
         """Prove the late writer never carries a stale object upsert."""
         second_prepare_calls.append((note, link))
         await original_second_persist(board_id=board_id, note=note, link=link)
+        second_prepared.set()
 
     monkeypatch.setattr(first_bridge, "persist_result_objects", record_first_persist)
     monkeypatch.setattr(first_bridge, "deliver_result_batch", hold_after_first_delivery)
@@ -455,8 +772,9 @@ async def test_cross_worker_explicit_recreate_serializes_adverse_interleaving(
         )
     )
     await asyncio.wait_for(first_delivered.wait(), timeout=1)
-    await asyncio.sleep(0.05)
-    assert second_prepare_calls == []
+    await asyncio.wait_for(second_prepared.wait(), timeout=1)
+    second = await asyncio.wait_for(asyncio.shield(second_task), timeout=1)
+    assert second_prepare_calls == [(None, None)]
 
     restored_node = (await graph_store.get_nodes([node_uid]))[0]
     moved_position = restored_node.properties.node_position.model_copy(
@@ -484,15 +802,11 @@ async def test_cross_worker_explicit_recreate_serializes_adverse_interleaving(
             ).model_dump(exclude_none=False)
         ]
     )
-    release_first_writer.set()
-    first, second = await asyncio.wait_for(
-        asyncio.gather(first_task, second_task),
-        timeout=2,
-    )
+    release_first_delivery.set()
+    first = await asyncio.wait_for(first_task, timeout=1)
 
     assert sum(outcome.created for outcome in (first, second)) == 1
     assert sum(outcome.recreated for outcome in (first, second)) == 1
-    assert second_prepare_calls == [(None, None)]
     final_nodes = await graph_store.get_nodes([node_uid])
     final_edges = await graph_store.get_links([edge_uid])
     assert len(final_nodes) == len(final_edges) == 1
