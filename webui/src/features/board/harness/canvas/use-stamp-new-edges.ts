@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import type { CanvasStore } from "@canvas-harness/core"
+import type { CanvasStore, Edge, NodeId } from "@canvas-harness/core"
 import {
   adaptEdgeColors,
   applyColorsToEdgeStyle,
@@ -91,45 +91,151 @@ export const useStampNewEdges = (
 ): void => {
   useEffect(() => {
     if (!boardId) return
-    return store.subscribe("change", (batch) => {
+
+    const originalAddEdge = store.addEdge
+    const originalUpdateEdge = store.updateEdge
+    const originalRemoveEdge = store.removeEdge
+
+    const validReferenceEndpoints = (
+      edge: Pick<Edge, "id" | "source" | "target">,
+    ): { sourceNodeId: NodeId; targetNodeId: NodeId } | null => {
+      const sourceNodeId = attachedNodeId(edge.source)
+      const targetNodeId = attachedNodeId(edge.target)
+      if (!sourceNodeId || !targetNodeId) return null
+      const sourceNode = store.getNode(sourceNodeId)
+      const targetNode = store.getNode(targetNodeId)
+      if (
+        targetNode?.type !== "image-generator"
+        || (sourceNode?.type !== "image" && sourceNode?.type !== "image-generator")
+      ) return null
+      return { sourceNodeId, targetNodeId }
+    }
+
+    const duplicatesReference = (edge: Pick<Edge, "id" | "source" | "target">): boolean => {
+      const endpoints = validReferenceEndpoints(edge)
+      if (!endpoints) return false
+      return orderedImageReferences(store, endpoints.targetNodeId).some(
+        (reference) => reference.edge.id !== edge.id
+          && reference.sourceNodeId === endpoints.sourceNodeId,
+      )
+    }
+
+    const guardedAddEdge: CanvasStore["addEdge"] = (edge) => {
+      const endpoints = validReferenceEndpoints(edge)
+      if (
+        canEdit
+        && !local
+        && endpoints
+        && (isImageReferenceTargetLocked(endpoints.targetNodeId) || duplicatesReference(edge))
+      ) return edge.id
+      return originalAddEdge(edge)
+    }
+    const guardedUpdateEdge: CanvasStore["updateEdge"] = (edgeId, patch) => {
+      const current = store.getEdge(edgeId)
+      if (canEdit && !local && current) {
+        const oldTargetNodeId = attachedNodeId(current.target)
+        const oldData = (current.data ?? {}) as Record<string, unknown>
+        const next = { ...current, ...patch } as Edge
+        const nextEndpoints = validReferenceEndpoints(next)
+        if (
+          (oldData.imageReference === true
+            && oldTargetNodeId
+            && isImageReferenceTargetLocked(oldTargetNodeId))
+          || (nextEndpoints && isImageReferenceTargetLocked(nextEndpoints.targetNodeId))
+          || duplicatesReference(next)
+        ) return
+      }
+      originalUpdateEdge(edgeId, patch)
+    }
+    const guardedRemoveEdge: CanvasStore["removeEdge"] = (edgeId) => {
+      const current = store.getEdge(edgeId)
+      const targetNodeId = current ? attachedNodeId(current.target) : null
+      const data = (current?.data ?? {}) as Record<string, unknown>
+      if (
+        canEdit
+        && !local
+        && data.imageReference === true
+        && targetNodeId
+        && isImageReferenceTargetLocked(targetNodeId)
+      ) return
+      originalRemoveEdge(edgeId)
+    }
+
+    store.addEdge = guardedAddEdge
+    store.updateEdge = guardedUpdateEdge
+    store.removeEdge = guardedRemoveEdge
+
+    const unsubscribe = store.subscribe("change", (batch) => {
       if (batch.origin !== "local") return
       for (const op of batch.ops) {
-        if (op.type !== "edge.add") continue
-        const data = (op.edge.data ?? {}) as Record<string, unknown>
+        if (op.type !== "edge.add" && op.type !== "edge.update" && op.type !== "edge.remove") {
+          continue
+        }
+        const edgeId = op.type === "edge.update" ? op.id : op.edge.id
 
-        let referenceData: Record<string, unknown> | null = null
-        const sourceNodeId = attachedNodeId(op.edge.source)
-        const targetNodeId = attachedNodeId(op.edge.target)
+        const currentEdge = op.type === "edge.remove" ? null : store.getEdge(edgeId)
+        const oldEdge = op.type === "edge.add"
+          ? null
+          : op.type === "edge.remove"
+          ? op.edge
+          : currentEdge
+            ? { ...currentEdge, ...op.prev } as Edge
+            : null
+        const nextEdge = currentEdge
+        const oldTargetNodeId = oldEdge ? attachedNodeId(oldEdge.target) : null
+        if (!nextEdge) continue
+
+        const data = (nextEdge.data ?? {}) as Record<string, unknown>
+        const sourceNodeId = attachedNodeId(nextEdge.source)
+        const targetNodeId = attachedNodeId(nextEdge.target)
         const sourceNode = sourceNodeId ? store.getNode(sourceNodeId) : null
         const targetNode = targetNodeId ? store.getNode(targetNodeId) : null
         const validReference = sourceNode !== null
           && sourceNode !== undefined
           && targetNode?.type === "image-generator"
           && (sourceNode.type === "image" || sourceNode.type === "image-generator")
+
+        let referenceData: Record<string, unknown> | null = null
         if (canEdit && !local && validReference && sourceNodeId && targetNodeId) {
-          if (isImageReferenceTargetLocked(targetNodeId)) {
-            store.removeEdge(op.edge.id)
-            continue
-          }
           const duplicate = orderedImageReferences(store, targetNodeId).some(
-            (reference) => reference.edge.id !== op.edge.id
+            (reference) => reference.edge.id !== edgeId
               && reference.sourceNodeId === sourceNodeId,
           )
           if (duplicate) {
-            store.removeEdge(op.edge.id)
+            if (op.type === "edge.add") {
+              store.removeEdge(edgeId)
+            } else if (op.type === "edge.update") {
+              store.updateEdge(edgeId, op.prev)
+            }
             continue
           }
-          if (data.imageReference !== true || readImageReferenceOrdinal(data) === null) {
+          const targetChanged = op.type === "edge.update" && oldTargetNodeId !== targetNodeId
+          if (
+            targetChanged
+            || data.imageReference !== true
+            || readImageReferenceOrdinal(data) === null
+          ) {
             referenceData = {
               imageReference: true,
-              imageReferenceOrdinal: nextImageReferenceOrdinal(store, targetNodeId),
+              imageReferenceOrdinal: nextImageReferenceOrdinal(store, targetNodeId, edgeId),
             }
           }
-        } else if (data.imageReference === true && !validReference) {
+        } else if (canEdit && !local && data.imageReference === true && !validReference) {
           referenceData = {
             imageReference: null,
             imageReferenceOrdinal: null,
           }
+        }
+
+        if (op.type === "edge.update") {
+          if (!referenceData) continue
+          store.updateEdge(edgeId, {
+            data: {
+              ...data,
+              ...referenceData,
+            },
+          })
+          continue
         }
 
         const wantedParentId = rootId ?? undefined
@@ -137,7 +243,7 @@ export const useStampNewEdges = (
           data.graphUid !== boardId || data.parentId !== wantedParentId
 
         const existingStored = data._storedColors as StoredEdgeColors | undefined
-        const currentStyle = op.edge.style ?? {}
+        const currentStyle = nextEdge.style ?? {}
         let displayColors: StoredEdgeColors | undefined
         let themeStale = false
         if (existingStored) {
@@ -162,8 +268,14 @@ export const useStampNewEdges = (
           patch.style = applyColorsToEdgeStyle(currentStyle, displayColors)
         }
 
-        store.updateEdge(op.edge.id, patch)
+        store.updateEdge(edgeId, patch)
       }
     })
+    return () => {
+      unsubscribe()
+      if (store.addEdge === guardedAddEdge) store.addEdge = originalAddEdge
+      if (store.updateEdge === guardedUpdateEdge) store.updateEdge = originalUpdateEdge
+      if (store.removeEdge === guardedRemoveEdge) store.removeEdge = originalRemoveEdge
+    }
   }, [store, boardId, rootId, canEdit, local])
 }

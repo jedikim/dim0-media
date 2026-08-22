@@ -5,7 +5,7 @@
 // resolver helper and the subscriber's paste-preservation path.
 import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   asEdgeId,
   asNodeId,
@@ -21,8 +21,10 @@ import {
 import { type StoredEdgeColors } from "../theme/color-adapter"
 import { setBoardThemeMode } from "../theme/theme-mode-ref"
 import {
+  attachedNodeId,
   orderedImageReferences,
   useImageReferenceTargetLock,
+  useOrderedImageReferences,
 } from "../image-reference-edges"
 
 
@@ -93,7 +95,7 @@ describe("useStampNewEdges — paste preservation", () => {
   const addNode = (
     store: CanvasStore,
     id: string,
-    type: "image" | "image-generator",
+    type: "image" | "image-generator" | "text",
   ): void => {
     store.addNode({
       id: asNodeId(id),
@@ -115,8 +117,9 @@ describe("useStampNewEdges — paste preservation", () => {
     source: string,
     target: string,
     data: Record<string, unknown> = {},
+    providedId?: EdgeId,
   ): EdgeId => {
-    const id = asEdgeId(store.generateId())
+    const id = providedId ?? asEdgeId(store.generateId())
     store.addEdge({
       id,
       source: { nodeId: asNodeId(source), localOffset: { x: 50, y: 50 } },
@@ -124,12 +127,12 @@ describe("useStampNewEdges — paste preservation", () => {
       pathStyle: "bezier",
       z: 0,
       groups: [],
-        data: {
-          version: 1,
-          createdAt: new Date().toISOString(),
-          graphUid: BOARD_ID,
-          ...data,
-        },
+      data: {
+        version: 1,
+        createdAt: new Date().toISOString(),
+        graphUid: BOARD_ID,
+        ...data,
+      },
     })
     return id
   }
@@ -227,12 +230,18 @@ describe("useStampNewEdges — paste preservation", () => {
     mountStamp(store, { targetLocked: true })
     addNode(store, "image-1", "image")
     addNode(store, "generator-target", "image-generator")
+    const batches: string[][] = []
+    const unsubscribe = store.subscribe("change", (batch) => {
+      batches.push(batch.ops.map((op) => op.type))
+    })
 
     act(() => {
       addAttachedEdge(store, "image-1", "generator-target")
     })
+    unsubscribe()
 
     expect(store.getAllEdges()).toEqual([])
+    expect(batches).toEqual([])
   })
 
 
@@ -254,5 +263,224 @@ describe("useStampNewEdges — paste preservation", () => {
       imageReference: null,
       imageReferenceOrdinal: null,
     }))
+  })
+
+
+  it("classifies a valid reconnect and clears metadata after an invalid reconnect", () => {
+    const store = createCanvasStore()
+    mountStamp(store)
+    addNode(store, "image-1", "image")
+    addNode(store, "text-1", "text")
+    addNode(store, "text-2", "text")
+    addNode(store, "generator-target", "image-generator")
+    const edgeId = addAttachedEdge(store, "text-1", "text-2")
+
+    act(() => store.updateEdge(edgeId, {
+      source: { nodeId: asNodeId("image-1"), localOffset: { x: 0, y: 0 } },
+      target: { nodeId: asNodeId("generator-target"), localOffset: { x: 0, y: 0 } },
+    }))
+    expect(orderedImageReferences(store, asNodeId("generator-target")))
+      .toEqual([expect.objectContaining({ sourceNodeId: asNodeId("image-1"), ordinal: 0 })])
+
+    act(() => store.updateEdge(edgeId, {
+      source: { nodeId: asNodeId("text-1"), localOffset: { x: 0, y: 0 } },
+    }))
+    expect(orderedImageReferences(store, asNodeId("generator-target"))).toEqual([])
+    expect(store.getEdge(edgeId)?.data).toEqual(expect.objectContaining({
+      imageReference: null,
+      imageReferenceOrdinal: null,
+    }))
+  })
+
+
+  it("assigns a new target ordinal when a marked edge moves generators", () => {
+    const store = createCanvasStore()
+    mountStamp(store)
+    addNode(store, "image-1", "image")
+    addNode(store, "image-2", "image")
+    addNode(store, "generator-target", "image-generator")
+    addNode(store, "generator-other", "image-generator")
+    let moving: EdgeId
+    act(() => {
+      moving = addAttachedEdge(store, "image-1", "generator-target")
+      addAttachedEdge(store, "image-2", "generator-other")
+    })
+
+    act(() => store.updateEdge(moving!, {
+      target: { nodeId: asNodeId("generator-other"), localOffset: { x: 0, y: 0 } },
+    }))
+
+    expect(orderedImageReferences(store, asNodeId("generator-target"))).toEqual([])
+    expect(orderedImageReferences(store, asNodeId("generator-other")).map((reference) => [
+      String(reference.sourceNodeId),
+      reference.ordinal,
+    ])).toEqual([
+      ["image-2", 0],
+      ["image-1", 1],
+    ])
+  })
+
+
+  it("removes an unlocked reference edge and refreshes the ordered list", () => {
+    const store = createCanvasStore()
+    mountStamp(store)
+    addNode(store, "image-1", "image")
+    addNode(store, "generator-target", "image-generator")
+    const edgeId = addAttachedEdge(store, "image-1", "generator-target")
+    const batches: string[][] = []
+    const unsubscribe = store.subscribe("change", (batch) => {
+      batches.push(batch.ops.map((op) => op.type))
+    })
+
+    act(() => store.removeEdge(edgeId))
+    unsubscribe()
+
+    expect(store.getEdge(edgeId)).toBeUndefined()
+    expect(orderedImageReferences(store, asNodeId("generator-target"))).toEqual([])
+    expect(batches).toEqual([["edge.remove"]])
+  })
+
+
+  it("reverts a local reconnect and direct delete while the reference target is locked", () => {
+    const store = createCanvasStore()
+    mountStamp(store)
+    addNode(store, "image-1", "image")
+    addNode(store, "text-1", "text")
+    addNode(store, "generator-target", "image-generator")
+    let edgeId: EdgeId
+    act(() => {
+      edgeId = addAttachedEdge(store, "image-1", "generator-target")
+    })
+    mountStamp(store, { targetLocked: true })
+    const batches: string[][] = []
+    const unsubscribe = store.subscribe("change", (batch) => {
+      batches.push(batch.ops.map((op) => op.type))
+    })
+
+    act(() => store.updateEdge(edgeId!, {
+      target: { nodeId: asNodeId("text-1"), localOffset: { x: 0, y: 0 } },
+    }))
+    expect(attachedNodeId(store.getEdge(edgeId!)!.target)).toBe(asNodeId("generator-target"))
+    expect(orderedImageReferences(store, asNodeId("generator-target"))).toHaveLength(1)
+
+    act(() => store.removeEdge(edgeId!))
+    unsubscribe()
+    expect(store.getEdge(edgeId!)).toBeDefined()
+    expect(orderedImageReferences(store, asNodeId("generator-target"))).toHaveLength(1)
+    expect(batches).toEqual([])
+  })
+
+
+  it("does not pretend a local lock can reject a remote reconnect", () => {
+    const store = createCanvasStore()
+    mountStamp(store)
+    addNode(store, "image-1", "image")
+    addNode(store, "text-1", "text")
+    addNode(store, "generator-target", "image-generator")
+    let edgeId: EdgeId
+    act(() => {
+      edgeId = addAttachedEdge(store, "image-1", "generator-target")
+    })
+    mountStamp(store, { targetLocked: true })
+
+    act(() => store.applyOp({
+      type: "edge.update",
+      id: edgeId!,
+      patch: {
+        target: { nodeId: asNodeId("text-1"), localOffset: { x: 0, y: 0 } },
+      },
+      prev: {
+        target: { nodeId: asNodeId("generator-target"), localOffset: { x: 50, y: 50 } },
+      },
+    }, { origin: "remote" }))
+
+    expect(attachedNodeId(store.getEdge(edgeId!)!.target)).toBe(asNodeId("text-1"))
+    expect(orderedImageReferences(store, asNodeId("generator-target"))).toEqual([])
+  })
+
+
+  it("performs no viewer reference metadata mutation", () => {
+    const store = createCanvasStore()
+    mountStamp(store, { canEdit: false })
+    addNode(store, "image-1", "image")
+    addNode(store, "image-2", "image")
+    const batches: string[][] = []
+    const unsubscribe = store.subscribe("change", (batch) => {
+      batches.push(batch.ops.map((op) => op.type))
+    })
+
+    let edgeId: EdgeId
+    act(() => {
+      edgeId = addAttachedEdge(store, "image-1", "image-2", {
+        imageReference: true,
+        imageReferenceOrdinal: 4,
+      })
+    })
+    unsubscribe()
+
+    expect(batches).toEqual([["edge.add"]])
+    expect(store.getEdge(edgeId!)?.data).toEqual(expect.objectContaining({
+      imageReference: true,
+      imageReferenceOrdinal: 4,
+    }))
+  })
+
+
+  it("uses the core edge-first node removal cascade and never restores the reference", () => {
+    const store = createCanvasStore()
+    mountStamp(store)
+    addNode(store, "image-1", "image")
+    addNode(store, "generator-target", "image-generator")
+    let edgeId: EdgeId
+    act(() => {
+      edgeId = addAttachedEdge(store, "image-1", "generator-target")
+    })
+    mountStamp(store, { targetLocked: true })
+    const removalBatches: Parameters<CanvasStore["applyBatch"]>[0][] = []
+    const unsubscribe = store.subscribe("change", (batch) => {
+      if (batch.ops.some((op) => op.type === "node.remove")) removalBatches.push(batch)
+    })
+
+    act(() => store.removeNode(asNodeId("image-1")))
+    unsubscribe()
+
+    const [removalBatch] = removalBatches
+    expect(removalBatch?.ops.map((op) => op.type)).toEqual(["edge.remove", "node.remove"])
+    expect(store.getAllEdges()).toEqual([])
+    expect(orderedImageReferences(store, asNodeId("generator-target"))).toEqual([])
+
+    const reloaded = createCanvasStore()
+    addNode(reloaded, "image-1", "image")
+    addNode(reloaded, "generator-target", "image-generator")
+    addAttachedEdge(reloaded, "image-1", "generator-target", {
+      imageReference: true,
+      imageReferenceOrdinal: 0,
+    }, edgeId!)
+    reloaded.applyBatch({ ...removalBatch!, origin: "remote" })
+    expect(reloaded.getAllEdges()).toEqual([])
+    expect(orderedImageReferences(reloaded, asNodeId("generator-target"))).toEqual([])
+  })
+
+
+  it("rescans ordered references only for edge operation batches", () => {
+    const store = createCanvasStore()
+    addNode(store, "image-1", "image")
+    addNode(store, "generator-target", "image-generator")
+    const getAllEdges = vi.spyOn(store, "getAllEdges")
+    const Probe = (): null => {
+      useOrderedImageReferences(store, asNodeId("generator-target"))
+      return null
+    }
+    act(() => root.render(<Probe />))
+    getAllEdges.mockClear()
+
+    act(() => store.updateNode(asNodeId("image-1"), { x: 10 }))
+    expect(getAllEdges).not.toHaveBeenCalled()
+
+    act(() => addAttachedEdge(store, "image-1", "generator-target", {
+      imageReference: true,
+      imageReferenceOrdinal: 0,
+    }))
+    expect(getAllEdges).toHaveBeenCalledTimes(1)
   })
 })

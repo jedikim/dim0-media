@@ -19,6 +19,7 @@ import { useAppStore } from "@/store"
 import { useBoardRuntime } from "../../canvas/board-runtime-context"
 import type { NoteNodeData } from "../../convert/note-to-node"
 import {
+  orderedImageReferences,
   useImageReferenceTargetLock,
   useOrderedImageReferences,
 } from "../../image-reference-edges"
@@ -55,6 +56,9 @@ const INPUT_CLASS =
 
 
 export const IMAGE_PROMPT_DEBOUNCE_MS = 400
+const REFERENCE_THUMBNAIL_FIRST_POLL_MS = 1_000
+const REFERENCE_THUMBNAIL_MAX_POLL_MS = 5_000
+const REFERENCE_THUMBNAIL_POLL_CEILING_MS = 5 * 60 * 1_000
 
 
 const isSupportedChoice = (value: string | null, choices: string[] | null): value is string =>
@@ -196,24 +200,54 @@ function GeneratorReferenceThumbnail({
   graphId: string
   generationUid: string | null
 }) {
-  const [assetUid, setAssetUid] = useState<string | null>(null)
+  const [resolved, setResolved] = useState<{
+    generationUid: string
+    assetUid: string
+  } | null>(null)
+  const generationUidRef = useRef(generationUid)
+  generationUidRef.current = generationUid
   useEffect(() => {
+    setResolved(null)
     if (!generationUid) {
-      setAssetUid(null)
       return
     }
     const controller = new AbortController()
-    void getImageGeneration(graphId, generationUid, controller.signal)
-      .then((generation) => {
-        if (!controller.signal.aborted && generation.status === "succeeded") {
-          setAssetUid(generation.output_asset_uid)
+    const requestedUid = generationUid
+    const deadline = Date.now() + REFERENCE_THUMBNAIL_POLL_CEILING_MS
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let delay = 0
+    let alive = true
+
+    const poll = async (): Promise<void> => {
+      try {
+        const generation = await getImageGeneration(graphId, requestedUid, controller.signal)
+        if (!alive || controller.signal.aborted || generationUidRef.current !== requestedUid) return
+        if (generation.status === "succeeded" && generation.output_asset_uid) {
+          setResolved({
+            generationUid: requestedUid,
+            assetUid: generation.output_asset_uid,
+          })
+          return
         }
-      })
-      .catch(() => {
-        if (!controller.signal.aborted) setAssetUid(null)
-      })
-    return () => controller.abort()
+        if (generation.status !== "started" && generation.status !== "retryable") return
+        if (Date.now() >= deadline) return
+        delay = delay === 0
+          ? REFERENCE_THUMBNAIL_FIRST_POLL_MS
+          : Math.min(delay * 1.5, REFERENCE_THUMBNAIL_MAX_POLL_MS)
+        timer = setTimeout(() => void poll(), delay)
+      } catch {
+        // A failed/unknown source renders a placeholder and never starts work.
+      }
+    }
+
+    void poll()
+    return () => {
+      alive = false
+      controller.abort()
+      if (timer) clearTimeout(timer)
+    }
   }, [generationUid, graphId])
+  const assetUid = resolved?.generationUid === generationUid ? resolved.assetUid : null
   const { url } = useAuthedImage(graphId, assetUid)
   return url
     ? <img className="size-full object-cover" src={url} alt="참조 생성 이미지" />
@@ -278,6 +312,11 @@ function SyncedImageGeneratorCard({
     sourceNodeUids,
     signal,
   }), [graphId, store])
+  const getCurrentReferenceSourceNodeUids = useCallback(
+    (): string[] => orderedImageReferences(store, id)
+      .map((reference) => String(reference.sourceNodeId)),
+    [id, store],
+  )
 
   const persist = useCallback((patch: PersistImageGenerationPatch): void => {
     const propertyPatch: Partial<NoteProperties> = {}
@@ -309,6 +348,7 @@ function SyncedImageGeneratorCard({
     canStart: canEdit,
     persist,
     resolveReferenceAssets,
+    getCurrentReferenceSourceNodeUids,
   })
 
   const [models, setModels] = useState<ImageModel[]>([])

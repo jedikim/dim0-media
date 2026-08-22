@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from "uuid"
 import {
   NON_TERMINAL_IMAGE_STATUSES,
   getImageGeneration,
+  imageGenerationErrorDetail,
   imageGenerationErrorMessage,
   imageGenerationStatusCode,
   startImageGeneration,
@@ -25,6 +26,12 @@ export const IMAGE_GENERATION_POLL_CEILING_MS = 5 * 60 * 1_000
 
 
 const SAFE_TO_CLEAR_PENDING_STATUSES = new Set([400, 401, 403, 404, 422, 429])
+const DETERMINATE_REFERENCE_REJECTION_CODES = new Set([
+  "reference_too_large",
+  "reference_pixel_limit_exceeded",
+  "reference_request_too_large",
+  "reference_encoded_size_exceeded",
+])
 
 
 export type ImageGenerationPhase =
@@ -55,6 +62,7 @@ export type UseImageGenerationArgs = {
     sourceNodeUids: readonly string[],
     signal: AbortSignal,
   ) => Promise<string[]>
+  getCurrentReferenceSourceNodeUids?: () => string[]
 }
 
 
@@ -69,6 +77,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
     canStart,
     persist,
     resolveReferenceAssets,
+    getCurrentReferenceSourceNodeUids,
   } = args
   const [phase, setPhase] = useState<ImageGenerationPhase>(
     activeGenerationUid ? "running" : "idle",
@@ -287,7 +296,14 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
         void restoreActivePreview()
         return
       }
-      if (status !== null && SAFE_TO_CLEAR_PENDING_STATUSES.has(status)) {
+      const detail = imageGenerationErrorDetail(caught)
+      const determinateReferenceRejection = status === 413
+        && detail !== null
+        && DETERMINATE_REFERENCE_REJECTION_CODES.has(detail.code)
+      if (
+        determinateReferenceRejection
+        || (status !== null && SAFE_TO_CLEAR_PENDING_STATUSES.has(status))
+      ) {
         pendingRef.current = null
         setHasPendingRequest(false)
         persistRef.current({ pendingRequest: null })
@@ -356,6 +372,18 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
         if (referenceAssetUids.length !== referenceSourceNodeUids.length) {
           throw new ImageReferenceResolutionError("참조 이미지 순서를 확인할 수 없습니다.")
         }
+        const currentSourceNodeUids = getCurrentReferenceSourceNodeUids?.()
+        if (
+          currentSourceNodeUids
+          && (
+            currentSourceNodeUids.length !== referenceSourceNodeUids.length
+            || currentSourceNodeUids.some((uid, index) => uid !== referenceSourceNodeUids[index])
+          )
+        ) {
+          throw new ImageReferenceResolutionError(
+            "참조 이미지가 변경되었습니다. 현재 순서를 확인한 뒤 다시 생성해 주세요.",
+          )
+        }
       } catch (caught) {
         if (!mountedRef.current || (caught instanceof Error && caught.name === "AbortError")) return
         setPhase("failed")
@@ -397,6 +425,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
     activeGenerationUid,
     canStart,
     graphId,
+    getCurrentReferenceSourceNodeUids,
     nodeId,
     phase,
     resolveReferenceAssets,

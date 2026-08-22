@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   removeEdge: vi.fn(),
   updateNode: vi.fn(),
   listImageModels: vi.fn(),
+  getImageGeneration: vi.fn(),
   useImageGeneration: vi.fn(),
   useAuthedImage: vi.fn(),
   generate: vi.fn(),
@@ -50,6 +51,7 @@ vi.mock("@/features/board/harness/graph/subtree", () => ({ removeNodeSubtree: vi
 
 vi.mock("@/features/board/api/image-generation", () => ({
   listImageModels: mocks.listImageModels,
+  getImageGeneration: mocks.getImageGeneration,
   imageGenerationErrorMessage: () => "모델 목록을 불러올 수 없습니다.",
 }))
 
@@ -125,6 +127,7 @@ describe("ImageGeneratorView", () => {
     mocks.resumePending.mockReset()
     mocks.checkStatusAgain.mockReset()
     mocks.listImageModels.mockReset().mockResolvedValue([MODEL])
+    mocks.getImageGeneration.mockReset()
     mocks.useAuthedImage.mockReset().mockReturnValue({ url: null, failed: false })
     mocks.useImageGeneration.mockReset().mockReturnValue({
       phase: "idle",
@@ -556,6 +559,87 @@ describe("ImageGeneratorView", () => {
       {},
       ["image-first", "image-second", "image-third"],
     )
+  })
+
+
+  it("clears a stale generator thumbnail and polls retryable source B to success", async () => {
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, unknown>
+    }).properties
+    properties.imageModelId = { type: "keyword", value: "model-i2i" }
+    mocks.listImageModels.mockResolvedValue([I2I_MODEL])
+    const sourceProperties: Record<string, unknown> = {
+      activeGenerationUid: { type: "keyword", value: "generation-a" },
+    }
+    mocks.sourceNodes.set("generator-source", {
+      id: "generator-source",
+      type: "image-generator",
+      data: { graphUid: "board-1", properties: sourceProperties },
+    })
+    mocks.edges = [referenceEdge("edge-1", "generator-source", 0)]
+    mocks.useAuthedImage.mockImplementation((_graphId: string, assetUid: string | null) => ({
+      url: assetUid ? `blob:${assetUid}` : null,
+      failed: false,
+    }))
+    mocks.getImageGeneration.mockResolvedValueOnce({
+      status: "succeeded",
+      output_asset_uid: "asset-a",
+    })
+    await render()
+    expect(container.querySelector<HTMLImageElement>('img[alt="참조 생성 이미지"]')?.src)
+      .toBe("blob:asset-a")
+
+    sourceProperties.activeGenerationUid = { type: "keyword", value: "generation-b" }
+    mocks.getImageGeneration
+      .mockResolvedValueOnce({ status: "started", output_asset_uid: null })
+      .mockResolvedValueOnce({ status: "retryable", output_asset_uid: null })
+      .mockResolvedValueOnce({ status: "succeeded", output_asset_uid: "asset-b" })
+    await render()
+    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+
+    await act(() => vi.advanceTimersByTimeAsync(3_000))
+    expect(container.querySelector<HTMLImageElement>('img[alt="참조 생성 이미지"]')?.src)
+      .toBe("blob:asset-b")
+    expect(mocks.getImageGeneration.mock.calls.slice(-3).map((call) => call[1]))
+      .toEqual(["generation-b", "generation-b", "generation-b"])
+  })
+
+
+  it("never restores A after B fails or a late A response arrives", async () => {
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, unknown>
+    }).properties
+    properties.imageModelId = { type: "keyword", value: "model-i2i" }
+    mocks.listImageModels.mockResolvedValue([I2I_MODEL])
+    const sourceProperties: Record<string, unknown> = {
+      activeGenerationUid: { type: "keyword", value: "generation-a" },
+    }
+    mocks.sourceNodes.set("generator-source", {
+      id: "generator-source",
+      type: "image-generator",
+      data: { graphUid: "board-1", properties: sourceProperties },
+    })
+    mocks.edges = [referenceEdge("edge-1", "generator-source", 0)]
+    mocks.useAuthedImage.mockImplementation((_graphId: string, assetUid: string | null) => ({
+      url: assetUid ? `blob:${assetUid}` : null,
+      failed: false,
+    }))
+    let resolveA: ((value: { status: string; output_asset_uid: string }) => void) | null = null
+    mocks.getImageGeneration.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveA = resolve
+    }))
+    await render()
+
+    sourceProperties.activeGenerationUid = { type: "keyword", value: "generation-b" }
+    mocks.getImageGeneration.mockResolvedValueOnce({ status: "failed", output_asset_uid: null })
+    await render()
+    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+
+    await act(async () => {
+      resolveA?.({ status: "succeeded", output_asset_uid: "asset-a" })
+      await Promise.resolve()
+    })
+    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
   })
 
 

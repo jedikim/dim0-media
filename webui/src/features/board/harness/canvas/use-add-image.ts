@@ -2,11 +2,16 @@ import { useCallback } from "react"
 import { toast } from "sonner"
 import type { CanvasStore } from "@canvas-harness/core"
 import { uploadImage } from "@/features/board/api/upload-image"
-import { uploadImageAsset } from "@/features/board/api/image-generation"
+import {
+  imageGenerationStatusCode,
+  uploadImageAsset,
+  type ImageAssetUpload,
+} from "@/features/board/api/image-generation"
 import { downscaleImage } from "@/features/board/components/flow/utils/downscale-image"
 import { createDefaultNote } from "@/features/board/types/note"
 import { noteToNode } from "../convert/note-to-node"
 import { blobToDataUrl } from "../image-reference-assets"
+import { useBoardAppStore } from "../store/board-app-store"
 import { useBoardRuntime } from "./board-runtime-context"
 
 
@@ -51,12 +56,18 @@ export type AddImageOptions = {
 }
 
 
+/** Return whether a synced asset upload may safely fall back to lazy registration. */
+export function isTransientImageAssetUploadError(error: unknown): boolean {
+  if (error instanceof Error && error.name === "AbortError") return false
+  const status = imageGenerationStatusCode(error)
+  if (status !== null) return status === 429 || status >= 500
+  return error instanceof TypeError
+}
+
+
 /**
- * Harness-native image insertion: downscale the file client-side,
- * upload via the existing image API, build a Note carrying the
- * resulting data URL, convert + add to the canvas store. Mirrors
- * prod's `useAddImageFromFile` but bypasses the legacy graph-store so
- * the dropped image actually lands on the harness canvas.
+ * Add a downscaled image node, eagerly registering synced assets when possible.
+ * Transient synced upload failures retain a data URL for lazy registration.
  */
 export const useHarnessAddImage = (
   store: CanvasStore,
@@ -64,9 +75,10 @@ export const useHarnessAddImage = (
   rootId: string | null,
 ) => {
   const { local } = useBoardRuntime()
+  const canEdit = useBoardAppStore((state) => state.canEdit)
   return useCallback(
     async (file: File, options: AddImageOptions = {}): Promise<boolean> => {
-      if (!boardId) return false
+      if (!boardId || !canEdit) return false
       try {
         const { blob, width, height, mimeType } = await downscaleImage(file)
         const ext = mimeType === "image/png" ? "png" : "jpg"
@@ -75,9 +87,14 @@ export const useHarnessAddImage = (
         const dataUrl = local
           ? (await uploadImage(blob, filename)).dataUrl
           : await blobToDataUrl(blob)
-        const asset = local
-          ? null
-          : await uploadImageAsset(boardId, blob, filename)
+        let asset: ImageAssetUpload | null = null
+        if (!local) {
+          try {
+            asset = await uploadImageAsset(boardId, blob, filename)
+          } catch (error) {
+            if (!isTransientImageAssetUploadError(error)) throw error
+          }
+        }
         const size = nodeSizeFromImage(width, height)
 
         const center = options.position
@@ -103,12 +120,12 @@ export const useHarnessAddImage = (
         const id = store.addNode(noteToNode(note))
         store.setSelection([id])
         return true
-      } catch (err) {
-        console.error("[useHarnessAddImage] failed", err)
+      } catch {
+        console.error("[useHarnessAddImage] failed")
         toast.error(`Failed to add "${file.name}"`)
         return false
       }
     },
-    [store, boardId, rootId, local],
+    [store, boardId, rootId, local, canEdit],
   )
 }

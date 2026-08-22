@@ -452,6 +452,150 @@ async def test_storage_failure_becomes_sanitized_terminal_failure(
 
 
 @pytest.mark.asyncio
+async def test_uploaded_asset_commit_then_raise_preserves_row_and_file(
+    initialized_image_pg_pool: asyncpg.Pool,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """A committed upload is returned successfully after its INSERT response is lost."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    service, store, tasks, _ = await _service(
+        initialized_image_pg_pool,
+        tmp_path,
+        _FakeAdapter(_result(_image_bytes("white"))),
+    )
+    real_add = store.add_asset
+
+    async def commit_then_raise(asset: ImageAssetCreate) -> None:
+        """Commit the real row before simulating a lost response."""
+        await real_add(asset)
+        raise RuntimeError("ambiguous upload insert")
+
+    monkeypatch.setattr(store, "add_asset", commit_then_raise)
+    asset = await service.register_uploaded_asset(
+        user_uid=user_uid,
+        board_uid=board_uid,
+        content=_image_bytes("orange"),
+        claimed_mime_type="image/png",
+    )
+
+    stored = await store.get_asset(board_uid=board_uid, asset_uid=asset.uid)
+    assert stored is not None and stored.content_sha256 == asset.content_sha256
+    assert len(list(tmp_path.glob("images/uploaded/**/*.png"))) == 1
+    await tasks.close()
+
+
+@pytest.mark.asyncio
+async def test_uploaded_asset_confirmed_insert_failure_cleans_new_file(
+    initialized_image_pg_pool: asyncpg.Pool,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """A definitely absent upload row permits cleanup of only its newly written file."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    service, store, tasks, _ = await _service(
+        initialized_image_pg_pool,
+        tmp_path,
+        _FakeAdapter(_result(_image_bytes("white"))),
+    )
+    monkeypatch.setattr(store, "add_asset", AsyncMock(side_effect=RuntimeError("insert failed")))
+
+    with pytest.raises(ImageStorageError, match="metadata could not be registered"):
+        await service.register_uploaded_asset(
+            user_uid=user_uid,
+            board_uid=board_uid,
+            content=_image_bytes("pink"),
+            claimed_mime_type="image/png",
+        )
+
+    assert list(tmp_path.glob("images/uploaded/**/*.png")) == []
+    await tasks.close()
+
+
+@pytest.mark.asyncio
+async def test_uploaded_asset_unknown_database_state_preserves_file(
+    initialized_image_pg_pool: asyncpg.Pool,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """An unavailable authoritative lookup never deletes possibly committed bytes."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    service, store, tasks, _ = await _service(
+        initialized_image_pg_pool,
+        tmp_path,
+        _FakeAdapter(_result(_image_bytes("white"))),
+    )
+    monkeypatch.setattr(store, "add_asset", AsyncMock(side_effect=RuntimeError("insert response lost")))
+    monkeypatch.setattr(store, "get_asset", AsyncMock(side_effect=RuntimeError("database unavailable")))
+
+    with pytest.raises(ImageStorageError, match="metadata could not be registered"):
+        await service.register_uploaded_asset(
+            user_uid=user_uid,
+            board_uid=board_uid,
+            content=_image_bytes("brown"),
+            claimed_mime_type="image/png",
+        )
+
+    assert len(list(tmp_path.glob("images/uploaded/**/*.png"))) == 1
+    await tasks.close()
+
+
+@pytest.mark.asyncio
+async def test_uploaded_asset_cancellation_preserves_ambiguous_committed_file(
+    initialized_image_pg_pool: asyncpg.Pool,
+    tmp_path,
+    monkeypatch,
+) -> None:
+    """Cancellation retains bytes when the shielded INSERT may have committed."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    service, store, tasks, _ = await _service(
+        initialized_image_pg_pool,
+        tmp_path,
+        _FakeAdapter(_result(_image_bytes("white"))),
+    )
+    real_add = store.add_asset
+    committed = asyncio.Event()
+    release = asyncio.Event()
+
+    async def commit_wait_then_raise(asset: ImageAssetCreate) -> None:
+        """Hold a committed INSERT until the caller cancellation is observable."""
+        await real_add(asset)
+        committed.set()
+        await release.wait()
+        raise RuntimeError("response lost after commit")
+
+    monkeypatch.setattr(store, "add_asset", commit_wait_then_raise)
+    registration = asyncio.create_task(
+        service.register_uploaded_asset(
+            user_uid=user_uid,
+            board_uid=board_uid,
+            content=_image_bytes("cyan"),
+            claimed_mime_type="image/png",
+        )
+    )
+    await committed.wait()
+    registration.cancel()
+    release.set()
+
+    with pytest.raises(asyncio.CancelledError):
+        await registration
+    assert len(list(tmp_path.glob("images/uploaded/**/*.png"))) == 1
+    async with initialized_image_pg_pool.acquire() as conn:
+        assert (
+            await conn.fetchval(
+                "SELECT COUNT(*) FROM image_asset WHERE board_uid = $1",
+                board_uid,
+            )
+            == 1
+        )
+    await tasks.close()
+
+
+@pytest.mark.asyncio
 async def test_committed_success_is_preserved_after_ambiguous_database_response(
     initialized_image_pg_pool: asyncpg.Pool,
     tmp_path,

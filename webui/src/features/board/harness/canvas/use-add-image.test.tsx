@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createCanvasStore, type CanvasStore } from "@canvas-harness/core"
 
 import { BoardRuntimeProvider } from "./board-runtime-provider"
+import { materializeImageNodeAsset } from "../image-reference-assets"
+import { useBoardAppStore } from "../store/board-app-store"
 import { useHarnessAddImage } from "./use-add-image"
 
 
@@ -58,6 +60,7 @@ describe("useHarnessAddImage asset registration", () => {
       byte_size: blob.size,
       content_sha256: "b".repeat(64),
     })
+    useBoardAppStore.setState({ canEdit: true })
   })
 
 
@@ -110,4 +113,104 @@ describe("useHarnessAddImage asset registration", () => {
     const data = node.data as { properties: { imageAssetUid?: unknown } }
     expect(data.properties.imageAssetUid).toBeUndefined()
   })
+
+
+  it("fails closed for a viewer before downscale, upload, or store mutation", async () => {
+    useBoardAppStore.setState({ canEdit: false })
+    mount(false)
+
+    let added: boolean | undefined
+    await act(async () => {
+      added = await addImage?.(new File(["source"], "source.png", { type: "image/png" }))
+    })
+
+    expect(added).toBe(false)
+    expect(downscaleImage).not.toHaveBeenCalled()
+    expect(uploadImageAsset).not.toHaveBeenCalled()
+    expect(uploadImage).not.toHaveBeenCalled()
+    expect(store.getAllNodes()).toEqual([])
+  })
+
+
+  it("falls back only for transient synced upload failures and lazily registers once", async () => {
+    uploadImageAsset.mockRejectedValueOnce(new TypeError("network unavailable"))
+    mount(false)
+
+    await act(async () => {
+      await addImage?.(new File(["source"], "source.png", { type: "image/png" }))
+    })
+
+    const [node] = store.getAllNodes()
+    const fallbackData = node.data as { properties: { imageAssetUid?: unknown } }
+    expect(fallbackData.properties.imageAssetUid).toBeUndefined()
+    expect(uploadImageAsset).toHaveBeenCalledTimes(1)
+
+    const lazyUpload = vi.fn().mockResolvedValue({
+      asset_uid: ASSET_UID,
+      mime_type: "image/png",
+      width: 40,
+      height: 20,
+      byte_size: 8,
+      content_sha256: "b".repeat(64),
+    })
+    await act(async () => {
+      await materializeImageNodeAsset({
+        store,
+        graphId: BOARD_ID,
+        nodeId: node.id,
+        upload: lazyUpload,
+      })
+    })
+
+    expect(lazyUpload).toHaveBeenCalledTimes(1)
+    const materialized = store.getNode(node.id)?.data as {
+      properties: { imageAssetUid: { value: string } }
+    }
+    expect(materialized.properties.imageAssetUid.value).toBe(ASSET_UID)
+  })
+
+
+  it.each([401, 403, 413, 422])(
+    "does not create a fallback node for determinate HTTP %s",
+    async (status) => {
+      uploadImageAsset.mockRejectedValue(new Error(`${status} rejected - {}`))
+      mount(false)
+
+      await act(async () => {
+        await addImage?.(new File(["source"], "source.png", { type: "image/png" }))
+      })
+
+      expect(store.getAllNodes()).toEqual([])
+      expect(uploadImageAsset).toHaveBeenCalledTimes(1)
+    },
+  )
+
+
+  it("does not hide an unclassified upload implementation failure", async () => {
+    uploadImageAsset.mockRejectedValue(new Error("unexpected parser failure"))
+    mount(false)
+
+    await act(async () => {
+      await addImage?.(new File(["source"], "source.png", { type: "image/png" }))
+    })
+
+    expect(store.getAllNodes()).toEqual([])
+  })
+
+
+  it.each([429, 500, 503])(
+    "creates an unregistered fallback node for transient HTTP %s",
+    async (status) => {
+      uploadImageAsset.mockRejectedValue(new Error(`${status} unavailable - {}`))
+      mount(false)
+
+      await act(async () => {
+        await addImage?.(new File(["source"], "source.png", { type: "image/png" }))
+      })
+
+      expect(store.getAllNodes()).toHaveLength(1)
+      const data = store.getAllNodes()[0].data as { properties: { imageAssetUid?: unknown } }
+      expect(data.properties.imageAssetUid).toBeUndefined()
+    },
+  )
 })

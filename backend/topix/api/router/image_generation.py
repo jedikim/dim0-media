@@ -23,6 +23,7 @@ from topix.api.utils.security import (
 )
 from topix.image_generation.capabilities import IMAGE_MODEL_CAPABILITIES
 from topix.image_generation.models import (
+    MAX_PROVIDER_REFERENCE_IMAGE_BYTES,
     CapabilityValidationError,
     GenerationIdempotencyConflictError,
     ImageAssetResolutionError,
@@ -66,8 +67,6 @@ async def create_image_asset(
     file: UploadFile = File(..., description="PNG, JPEG, or WebP image"),
 ) -> ImageAssetUploadResponse:
     """Register one bounded multipart raster as an immutable board asset."""
-    from topix.image_generation.models import MAX_PROVIDER_REFERENCE_IMAGE_BYTES
-
     content = await file.read(MAX_PROVIDER_REFERENCE_IMAGE_BYTES + 1)
     if len(content) > MAX_PROVIDER_REFERENCE_IMAGE_BYTES:
         raise _reference_error(

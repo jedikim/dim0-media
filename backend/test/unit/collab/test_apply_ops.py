@@ -6,7 +6,11 @@ without Postgres/Qdrant.
 
 import math
 
+from unittest.mock import AsyncMock
+
 from topix.collab.apply_ops import RAD_TO_DEG, apply_batch
+from topix.datatypes.note.link import Link
+from topix.store.graph import GraphStore
 
 
 class _RecordingGraphStore:
@@ -1501,6 +1505,28 @@ async def test_op_handler_exception_is_caught_per_bucket():
     assert results[1].applied is False
     assert results[1].reason and "db down" in results[1].reason
     assert results[2].applied is True
+
+
+async def test_invalid_merged_link_patch_is_not_saved_and_reports_not_applied():
+    """GraphStore validation failure fails the edge bucket before any content write."""
+    store = GraphStore.__new__(GraphStore)
+    store._content_store = AsyncMock()
+    store.get_links = AsyncMock(
+        return_value=[
+            Link(source="source-1", target="target-1", graph_uid="b1"),
+        ]
+    )
+    op = {
+        "type": "edge.update",
+        "id": store.get_links.return_value[0].id,
+        "patch": {"pathStyle": "not-a-path-style"},
+        "prev": {},
+    }
+
+    results = await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    assert results[0].applied is False
+    store._content_store.update.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------

@@ -154,20 +154,48 @@ class ImageGenerationService:
         try:
             await asyncio.shield(register_task)
         except asyncio.CancelledError:
-            registered = False
             try:
                 await register_task
-                registered = True
             except Exception as exc:  # noqa: BLE001 - cancellation must retain its identity
                 logger.warning("Cancelled asset registration completed with %s", type(exc).__name__)
-            if created and not registered:
-                await asyncio.shield(self._storage.ensure_uploaded_deleted(storage_key))
+                if created and await self._uploaded_asset_state(asset) == "absent":
+                    await asyncio.shield(self._storage.ensure_uploaded_deleted(storage_key))
             raise
         except Exception as exc:  # noqa: BLE001 - persistence failures share one sanitized boundary
-            if created:
-                await self._storage.ensure_uploaded_deleted(storage_key)
+            state = await self._uploaded_asset_state(asset)
+            if state == "confirmed":
+                return asset
+            if created and state == "absent":
+                await asyncio.shield(self._storage.ensure_uploaded_deleted(storage_key))
             raise ImageStorageError("Image asset metadata could not be registered") from exc
         return asset
+
+    async def _uploaded_asset_state(self, asset: ImageAssetCreate) -> str:
+        """Classify an ambiguous upload INSERT without risking committed bytes."""
+        try:
+            stored = await self._store.get_asset(
+                board_uid=asset.board_uid,
+                asset_uid=asset.uid,
+            )
+        except Exception as exc:  # noqa: BLE001 - unknown state must preserve bytes
+            logger.warning("Uploaded asset state check failed with %s", type(exc).__name__)
+            return "unknown"
+        if stored is None:
+            return "absent"
+        expected = {
+            "asset_uid": asset.uid,
+            "board_uid": asset.board_uid,
+            "created_by_user_uid": asset.created_by_user_uid,
+            "source_kind": asset.source_kind,
+            "storage_key": asset.storage_key,
+            "mime_type": asset.mime_type,
+            "byte_size": asset.byte_size,
+            "width": asset.width,
+            "height": asset.height,
+            "content_sha256": asset.content_sha256,
+        }
+        actual = stored.model_dump(exclude={"created_at"})
+        return "confirmed" if actual == expected else "unknown"
 
     @staticmethod
     def _validate_reference_metadata(

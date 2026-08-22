@@ -217,7 +217,7 @@ async def test_adapter_debug_logs_only_bounded_success_shape_names(caplog: pytes
         """Return safe success metadata with values that must never reach logs."""
         return httpx.Response(
             200,
-            headers={"X-Trace-Shape": header_value},
+            headers={"X-Trace-Shape": "shape-present", "X-Generation-Id": header_value},
             json={
                 "data": [{"b64_json": encoded_image, "media_type": "image/jpeg"}],
                 "usage": {"cost": 0.04},
@@ -259,8 +259,8 @@ async def test_adapter_emits_no_shape_diagnostic_when_debug_is_disabled(caplog: 
 
 
 @pytest.mark.asyncio
-async def test_adapter_leaves_provider_request_id_null_when_body_has_no_bounded_id() -> None:
-    """Undocumented response headers never become durable provider identifiers."""
+async def test_adapter_uses_generation_header_when_body_id_is_missing_or_invalid() -> None:
+    """The observed generation header fills audit metadata only when body ID cannot."""
     content = _image_bytes("PNG")
 
     def handler(_: httpx.Request) -> httpx.Response:
@@ -270,6 +270,28 @@ async def test_adapter_leaves_provider_request_id_null_when_body_has_no_bounded_
             headers={"X-Generation-Id": "header-only"},
             json={
                 "id": "x" * 513,
+                "data": [{"b64_json": base64.b64encode(content).decode("ascii"), "media_type": "image/png"}],
+            },
+        )
+
+    async with httpx.AsyncClient(base_url=f"{OPENROUTER_BASE_URL}/", transport=httpx.MockTransport(handler)) as client:
+        result = await OpenRouterImageAdapter(client, SecretStr(f"runtime-{uuid4()}")).generate(_request())
+
+    assert result.provider_request_id == "header-only"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("header_value", ["", "x" * 513])
+async def test_adapter_rejects_blank_or_overlong_generation_header(header_value: str) -> None:
+    """Unbounded or empty generation headers remain absent from durable audit."""
+    content = _image_bytes("PNG")
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        """Return one invalid optional request identifier."""
+        return httpx.Response(
+            200,
+            headers={"X-Generation-Id": header_value},
+            json={
                 "data": [{"b64_json": base64.b64encode(content).decode("ascii"), "media_type": "image/png"}],
             },
         )

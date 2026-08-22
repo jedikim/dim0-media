@@ -59,8 +59,9 @@ GIF, AVIF, SVG, spoofed MIME, invalid raster data, URLs, and paths are rejected.
 Storage uses the existing `ImageStorage` confinement and atomic writer with an
 uploaded content-addressed key. Database registration uses `ImageGenerationStore`
 and the existing `image_asset` table with `source_kind=uploaded`. A failed database
-insert compensates only a file newly created by that request; an already-existing
-immutable content object is never deleted blindly.
+insert compensates only a file newly created by that request and only after an
+authoritative board/asset lookup confirms that no row exists. A matching row after
+a lost INSERT response is success; unknown database state preserves the file.
 
 The response contains `asset_uid`, `mime_type`, `width`, `height`, `byte_size`, and
 `content_sha256`. It does not contain a storage path or provider data. This endpoint
@@ -74,8 +75,11 @@ empty, malformed, or non-string values mean “not registered.” The property r
 inside existing `NoteProperties`, so normal note↔node conversion, deep-merge,
 serialization, collaboration, and same-board cloning preserve it.
 
-Synced-board uploads register the downscaled raster through the new asset endpoint,
-store the returned UID immediately, and keep the existing data URL for rendering.
+Synced-board uploads normally register the downscaled raster through the new asset
+endpoint, store the returned UID immediately, and keep the existing data URL for
+rendering. Network, 429, and 5xx failures may create the ordinary data-URL node
+without a UID for later lazy materialization; 401/403 and 413/422 fail closed.
+Viewer image import/search is blocked both in chrome and at the common add-image hook.
 Legacy image nodes are not migrated on mount. Only explicit reference resolution
 turns a data URL into a Blob, uploads it, and patches the source node immediately.
 Successful partial materializations are durable and reused on retry. Mount, viewer
@@ -115,7 +119,10 @@ target. Synced edge metadata marks it and records a non-negative creation ordina
 Those reference edges are the only source of truth; no separate ordered node list is
 stored on the target.
 
-Fresh valid connections receive the next ordinal for that target. Rendering sorts
+Fresh valid connections and valid reconnects receive the next ordinal for that
+target. `edge.update` reclassifies changed endpoints and `edge.remove` updates the
+live ordered list; local add/reconnect/delete is compensated while the target is
+locked. Rendering sorts
 by ordinal with the stable edge creation identity as a tie-breaker. Removing and
 reconnecting therefore moves a source to the end; drag reorder is out of scope.
 The UI shows numbered thumbnails and supports removal. Exact source→target duplicate
@@ -154,6 +161,12 @@ failure performs zero generation POSTs, preserves the previous preview, clears t
 local busy phase, and leaves already-created immutable assets in place. Retrying
 reuses those assets and resolves only remaining sources.
 
+After asset resolution the hook rereads the current ordered canvas source IDs. Any
+collaboration reorder/add/remove aborts before pending creation and provider work.
+Source deletion reuses canvas-harness 0.1.27's existing edge-first
+`edge.remove → node.remove` cascade; PR-04 adds regression coverage rather than a
+second cleanup subscriber.
+
 ### Pending snapshot and idempotency
 
 The canonical pending snapshot contains ordered source node UIDs and ordered asset
@@ -167,11 +180,19 @@ The generation POST sends exactly the stored asset UID array. Pending state lock
 inputs and references. A changed reference set starts with a new client request UID;
 ambiguous recovery reuses the original UID and payload. Clone and paste strip pending
 state. Mount, reload, viewer, and local-board paths perform zero generation POSTs.
+The four typed reference-size 413 responses are determinate pre-run rejections: they
+clear pending, preserve the previous active preview, and require an explicit new
+Generate/new UUID. Transport and 5xx ambiguity still retain the exact snapshot.
 
 Model support and maximum reference count come from `/image-models`; no UI-only
 maximum is introduced. T2I requires `supports_text_to_image`; a non-empty reference
 set requires `supports_image_to_image`. Over-limit references are rejected without
 truncation.
+
+The live provider response exposed no body `id` but did expose `x-generation-id`.
+The adapter keeps bounded body-ID compatibility and uses a bounded, case-insensitive
+header fallback only when the body ID is absent. Invalid or missing values remain
+`NULL`, and no header value is logged or returned to the client.
 
 ## Verification
 

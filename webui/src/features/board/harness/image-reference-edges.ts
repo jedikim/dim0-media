@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import type { CanvasStore, Edge, EdgeEnd, NodeId } from "@canvas-harness/core"
+import type { CanvasStore, Edge, EdgeEnd, EdgeId, NodeId } from "@canvas-harness/core"
 
 
 export const IMAGE_REFERENCE_EDGE_MARKER = "image-generator-reference"
@@ -83,8 +83,14 @@ export function orderedImageReferences(
 
 
 /** Return the next append-only ordinal for one generator's reference edges. */
-export function nextImageReferenceOrdinal(store: CanvasStore, targetNodeId: NodeId): number {
-  const ordinals = orderedImageReferences(store, targetNodeId).map((reference) => reference.ordinal)
+export function nextImageReferenceOrdinal(
+  store: CanvasStore,
+  targetNodeId: NodeId,
+  excludeEdgeId?: EdgeId,
+): number {
+  const ordinals = orderedImageReferences(store, targetNodeId)
+    .filter((reference) => reference.edge.id !== excludeEdgeId)
+    .map((reference) => reference.ordinal)
   return ordinals.length === 0 ? 0 : Math.max(...ordinals) + 1
 }
 
@@ -95,7 +101,12 @@ export function useOrderedImageReferences(
   targetNodeId: NodeId,
 ): OrderedImageReference[] {
   const [references, setReferences] = useState(() => orderedImageReferences(store, targetNodeId))
-  useEffect(() => store.subscribe("change", () => {
+  useEffect(() => store.subscribe("change", (batch) => {
+    if (!batch.ops.some((op) => (
+      op.type === "edge.add"
+      || op.type === "edge.update"
+      || op.type === "edge.remove"
+    ))) return
     const next = orderedImageReferences(store, targetNodeId)
     setReferences((current) => {
       const currentSignature = current.map(({ edge, sourceNodeId, ordinal }) => `${edge.id}:${sourceNodeId}:${ordinal}`).join("|")

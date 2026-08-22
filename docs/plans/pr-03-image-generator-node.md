@@ -243,9 +243,10 @@ OpenRouter adapter는 현재 capability 검증 없이 `output_format="png"`를 �
 향후 출력 형식 선택이 필요하면 하드코딩하지 않고 `supported_output_formats` 같은 모델
 capability와 기존 `_validate_choice` 계열 검증을 통해서만 노출한다.
 
-실제 `provider_request_id` 위치는 아직 확인되지 않았다. 새 위치를 추측해 저장하지 않고,
-다음 PR-04 I2I smoke에서 성공 응답의 bounded top-level key 이름과 response header 이름만
-DEBUG 수준으로 확인한 뒤 공식 자료와 함께 별도 매핑 여부를 결정한다.
+후속 PR-04 I2I smoke에서 성공 body에는 `id`가 없고 response header에
+`x-generation-id`가 있음을 관측했다. adapter는 기존 bounded body ID 호환을 우선하고,
+body ID가 없을 때만 같은 길이·공백 검증을 거친 case-insensitive header 값을 nullable
+audit field에 저장한다. header 값 자체는 로그나 클라이언트 응답에 노출하지 않는다.
 
 `output_format` 제거 뒤 추가 유료 smoke는 필요하지 않다. 이번 호출에서 그 값은 관측상
 적용되지 않았고, 후속 수정은 이미 성공한 provider 동작을 바꾸는 것이 아니라 광고되지
@@ -333,6 +334,7 @@ PR-02의 fingerprint는 `(model_id, prompt, parameters, reference_asset_uids, ge
 | **마운트 복구** — `initiatorUserUid`가 현재 사용자와 다름 | 원 사용자의 복구 키를 보존하고 POST·clear 모두 하지 않음 |
 | **202 수신** | `activeGenerationUid` 저장 후 스냅샷을 빈 TextProperty로 **명시적 clear** |
 | **400/401/403/404/422/429 수신** | run 생성 전 확정 거부이므로 pending만 clear하고 이전 active는 유지 |
+| **typed reference-size 413 수신** | PR-04의 확정 거부 코드이면 pending만 clear하고 이전 active를 유지. 수정 후 명시적 Generate가 새 UUID 사용 |
 | **transport/5xx** | 결과가 불명확하므로 active와 pending을 모두 유지. 명시적 재개는 같은 snapshot/UUID 사용 |
 | **409 수신** | 같은 UUID가 다른 fingerprint에 묶인 확정 충돌. pending을 clear하고 안전한 충돌을 표시하며 자동 POST하지 않음 |
 
@@ -1226,8 +1228,8 @@ nvm use 20 && make check
 
 | 후속 | PR-03이 남기는 것 | PR-04/05가 채우는 것 |
 |---|---|---|
-| PR-04 · 참조 이미지 | `startImageGeneration`의 `referenceAssetUids?: string[]`. PR-03은 항상 `[]` | incoming edge → asset ID 배열 변환 함수 하나. 순서는 edge 순서. API·스키마 변경 0 |
-| PR-04 · 권한 검사 | 없음. 서버가 이미 board-scoped로 검증 | `reference_node_uid`가 실제로 전달되기 시작하므로 **node 소유 board 검증을 반드시 추가** |
+| PR-04 · 참조 이미지 | `startImageGeneration`의 `referenceAssetUids?: string[]`. PR-03은 항상 `[]` | incoming edge를 ordered immutable asset UID 배열로 해석. generation API에는 이 배열만 전달하며 순서를 보존 |
+| PR-04 · provenance | 없음. 서버가 asset의 board 범위만 검증 | 검증 가능한 node↔asset association이 없으므로 `reference_node_uid`는 `NULL` 유지. canvas source UID는 UI/pending 복구용이며 server audit provenance로 신뢰하지 않음 |
 | PR-04 · legacy 정규화 | 없음. `file://`·data URL을 asset으로 승격하지 않는다 | 업로드 경로에서 `filePath`를 살리고 asset 레코드를 만드는 별도 작업 |
 | PR-05 · 결과 노드 | `generatorNodeUid`를 이미 요청에 실어 보냄 | `output_asset_uid` → 새 image node 생성 + `output_node_uid` 기록 |
 | PR-05 · 실시간 | node data 기반 간접 공유 | collab 이벤트로 상태 전파. 함정 ①도 함께 해소 |

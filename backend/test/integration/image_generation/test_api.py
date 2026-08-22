@@ -302,7 +302,7 @@ async def test_asset_post_rejects_non_multipart_spoofed_and_unsafe_images_with_t
                 }
             }
 
-        monkeypatch.setattr("topix.image_generation.models.MAX_PROVIDER_REFERENCE_IMAGE_BYTES", 8)
+        monkeypatch.setattr("topix.api.router.image_generation.MAX_PROVIDER_REFERENCE_IMAGE_BYTES", 8)
         too_large = await context.client.post(
             path,
             headers=headers,
@@ -311,7 +311,10 @@ async def test_asset_post_rejects_non_multipart_spoofed_and_unsafe_images_with_t
         assert too_large.status_code == 413
         assert too_large.json()["detail"]["code"] == "reference_too_large"
 
-        monkeypatch.setattr("topix.image_generation.models.MAX_PROVIDER_REFERENCE_IMAGE_BYTES", 10 * 1024 * 1024)
+        monkeypatch.setattr(
+            "topix.api.router.image_generation.MAX_PROVIDER_REFERENCE_IMAGE_BYTES",
+            10 * 1024 * 1024,
+        )
         monkeypatch.setattr("topix.image_generation.storage.MAX_GENERATED_IMAGE_PIXELS", 10)
         too_many_pixels = await context.client.post(
             path,
