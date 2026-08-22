@@ -33,6 +33,7 @@ from topix.store.postgres.image_generation import (
     get_image_asset,
     get_image_assets,
     get_image_generation,
+    get_image_generation_output,
     list_generation_pending_outputs,
     lock_image_generation_output,
     reconcile_image_generations,
@@ -96,6 +97,20 @@ class ImageGenerationStore:
         """Return one board-scoped generation for polling."""
         async with self._pool().acquire() as conn:
             return await get_image_generation(conn, board_uid=board_uid, generation_uid=generation_uid)
+
+    async def get_output_record(
+        self,
+        *,
+        board_uid: str,
+        generation_uid: str,
+    ) -> ImageGenerationOutputRecord | None:
+        """Read one output-node association before cross-store reconciliation."""
+        async with self._pool().acquire() as conn:
+            return await get_image_generation_output(
+                conn,
+                board_uid=board_uid,
+                generation_uid=generation_uid,
+            )
 
     @asynccontextmanager
     async def output_node_transaction(

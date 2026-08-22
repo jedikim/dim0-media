@@ -104,6 +104,7 @@ class _FakeBridge:
         self.graph_store = graph_store
         self.note_calls = 0
         self.link_calls = 0
+        self.batch_ids: set[str] = set()
 
     async def add_notes(self, *, board_id: str, notes: list[Note]) -> None:
         """Store canonical notes as the production bridge would."""
@@ -116,6 +117,46 @@ class _FakeBridge:
         self.link_calls += 1
         assert all(link.graph_uid == board_id for link in links)
         self.graph_store.links.update({link.id: link for link in links})
+
+    async def persist_result_objects(
+        self,
+        *,
+        board_id: str,
+        note: Note | None,
+        link: Link | None,
+    ) -> None:
+        """Persist only missing canonical objects for result reconciliation."""
+        if note is not None:
+            await self.add_notes(board_id=board_id, notes=[note])
+        if link is not None:
+            await self.add_links(board_id=board_id, links=[link])
+
+    @asynccontextmanager
+    async def result_delivery_order(self, *, board_id: str):
+        """Yield no live room while preserving the production call shape."""
+        assert board_id == self.graph_store.board_uid
+        yield None
+
+    async def ensure_result_batch(
+        self,
+        _conn,
+        *,
+        board_id: str,
+        batch_id: str,
+        note: Note,
+        link: Link,
+        generator: Note,
+    ):
+        """Record deterministic batch identity without external Redis."""
+        assert board_id == self.graph_store.board_uid
+        assert link.source == generator.id and link.target == note.id
+        if batch_id in self.batch_ids:
+            return None
+        self.batch_ids.add(batch_id)
+        return object()
+
+    async def deliver_result_batch(self, *, room, delivery) -> None:
+        """No-op because API contract tests do not create live peers."""
 
 
 @dataclass

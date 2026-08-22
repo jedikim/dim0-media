@@ -145,6 +145,28 @@ async def lock_image_generation_output(
     return ImageGenerationOutputRecord.model_validate(dict(row)) if row is not None else None
 
 
+async def get_image_generation_output(
+    conn: asyncpg.Connection,
+    *,
+    board_uid: str,
+    generation_uid: str,
+) -> ImageGenerationOutputRecord | None:
+    """Read one generation output association without taking the writer lock."""
+    row = await conn.fetchrow(
+        "SELECT run.uid AS generation_uid, run.board_uid, run.status, "
+        "run.generator_node_uid, run.output_node_uid, run.output_asset_uid, "
+        "asset.mime_type AS output_mime_type, asset.width AS output_width, "
+        "asset.height AS output_height "
+        "FROM image_generation_run AS run "
+        "LEFT JOIN image_asset AS asset ON asset.uid = run.output_asset_uid "
+        "AND asset.board_uid = run.board_uid "
+        "WHERE run.uid = $1 AND run.board_uid = $2",
+        generation_uid,
+        board_uid,
+    )
+    return ImageGenerationOutputRecord.model_validate(dict(row)) if row is not None else None
+
+
 async def bind_image_generation_output_node(
     conn: asyncpg.Connection,
     *,

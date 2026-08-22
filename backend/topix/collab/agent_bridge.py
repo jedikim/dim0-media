@@ -18,14 +18,19 @@ import json
 import logging
 import time
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from typing import Any
+
+import asyncpg
 
 from topix.collab.note_to_wire import (
     link_to_wire_edge,
     note_to_wire_node,
     patch_data_to_wire_patch,
 )
-from topix.collab.room import RoomRegistry
+from topix.collab.room import Room, RoomRegistry
 from topix.datatypes.note.link import Link
 from topix.datatypes.note.note import Note
 from topix.store.collab_oplog import CollabOplogStore
@@ -35,6 +40,14 @@ logger = logging.getLogger(__name__)
 
 
 AGENT_CLIENT_ID = "agent"
+
+
+@dataclass(frozen=True)
+class DurableAgentBatch:
+    """Carry one committed system batch to the live-room delivery step."""
+
+    seq: int
+    batch: dict[str, Any]
 
 
 class AgentBoardBridge:
@@ -132,6 +145,101 @@ class AgentBoardBridge:
             for link in links
         ]
         await self._broadcast(board_id=board_id, ops=ops)
+
+    async def persist_result_objects(
+        self,
+        *,
+        board_id: str,
+        note: Note | None,
+        link: Link | None,
+    ) -> None:
+        """Persist missing deterministic result objects without broadcasting early."""
+        if note is not None:
+            if note.graph_uid is None:
+                note.graph_uid = board_id
+            await self._graph_store.add_notes(nodes=[note])
+        if link is not None:
+            if link.graph_uid is None:
+                link.graph_uid = board_id
+            await self._graph_store.add_links(links=[link])
+
+    @asynccontextmanager
+    async def result_delivery_order(
+        self,
+        *,
+        board_id: str,
+    ) -> AsyncIterator[Room | None]:
+        """Serialize durable result sequencing with a live room when present."""
+        room = self._registry.get(board_id)
+        if room is None:
+            yield None
+            return
+        async with room.lock:
+            yield room
+
+    async def ensure_result_batch(
+        self,
+        conn: asyncpg.Connection,
+        *,
+        board_id: str,
+        batch_id: str,
+        note: Note,
+        link: Link,
+        generator: Note,
+    ) -> DurableAgentBatch | None:
+        """Append one deterministic node-and-edge batch using the caller's transaction."""
+        if await self._oplog.seq_for_batch(board_id, batch_id, conn=conn) is not None:
+            return None
+        seq = await self._oplog.next_seq(board_id, conn=conn)
+        node_sizes = self._note_sizes(note, generator)
+        batch = {
+            "id": batch_id,
+            "clientId": AGENT_CLIENT_ID,
+            "ts": int(time.time() * 1000),
+            "origin": "remote",
+            "ops": [
+                {"type": "node.add", "node": note_to_wire_node(note)},
+                {"type": "edge.add", "edge": link_to_wire_edge(link, node_sizes=node_sizes)},
+            ],
+            "is_system": True,
+        }
+        if not await self._oplog.append(board_id, seq, batch, conn=conn):
+            raise RuntimeError("generated-image collab sequence already exists")
+        return DurableAgentBatch(seq=seq, batch=batch)
+
+    async def deliver_result_batch(
+        self,
+        *,
+        room: Room | None,
+        delivery: DurableAgentBatch | None,
+    ) -> None:
+        """Publish one committed durable result batch to currently connected peers."""
+        if room is None or delivery is None:
+            return
+        room.seq = max(room.seq, delivery.seq)
+        room.remember_batch_unlocked(delivery.seq, delivery.batch)
+        peer_op = json.dumps(
+            {
+                "kind": "peer-op",
+                "seq": delivery.seq,
+                "batch": delivery.batch,
+            }
+        )
+        for client in list(room.clients.values()):
+            try:
+                await client.socket.send_text(peer_op)
+            except Exception:
+                logger.debug("agent result peer-op send failed", exc_info=True)
+
+    @staticmethod
+    def _note_sizes(*notes: Note) -> dict[str, tuple[float, float]]:
+        """Return available node sizes without another GraphStore lookup."""
+        result: dict[str, tuple[float, float]] = {}
+        for note in notes:
+            size = getattr(note.properties.node_size, "size", None)
+            if size is not None:
+                result[note.id] = (float(size.width), float(size.height))
+        return result
 
     async def _resolve_node_sizes(
         self, node_ids: set[str],

@@ -15,6 +15,7 @@ from topix.image_generation.models import GenerationStatus, ImageGenerationOutpu
 from topix.image_generation.result_nodes import (
     ImageResultNodeError,
     ImageResultNodeService,
+    canonical_result_batch_uid,
     canonical_result_edge_uid,
     canonical_result_node_uid,
 )
@@ -69,6 +70,17 @@ class _FakeImageStore:
         async with self.lock:
             yield object(), self.record
 
+    async def get_output_record(
+        self,
+        *,
+        board_uid: str,
+        generation_uid: str,
+    ) -> ImageGenerationOutputRecord | None:
+        """Return the configured record without taking the writer lock."""
+        assert board_uid == BOARD_UID
+        assert generation_uid == GENERATION_UID
+        return self.record
+
     async def bind_output_node(
         self,
         _conn,
@@ -94,6 +106,7 @@ class _FakeGraphStore:
         generator = _generator()
         self.nodes = {generator.id: generator}
         self.links: dict[str, Link] = {}
+        self.lock = asyncio.Lock()
 
     async def get_nodes(self, node_ids: list[str]) -> list[Note]:
         """Return requested Notes in input order."""
@@ -113,6 +126,10 @@ class _FakeBridge:
         self.note_calls = 0
         self.link_calls = 0
         self.fail_links = False
+        self.fail_oplog = False
+        self.batch_ids: set[str] = set()
+        self.batch_calls: list[tuple[str, Note, Link]] = []
+        self.delivery_calls = 0
 
     async def add_notes(self, *, board_id: str, notes: list[Note]) -> None:
         """Store Notes exactly as AgentBoardBridge would before broadcast."""
@@ -127,6 +144,52 @@ class _FakeBridge:
         if self.fail_links:
             raise RuntimeError("synthetic link failure")
         self.graph.links.update({link.id: link for link in links})
+
+    async def persist_result_objects(
+        self,
+        *,
+        board_id: str,
+        note: Note | None,
+        link: Link | None,
+    ) -> None:
+        """Persist only missing result objects without an early broadcast."""
+        if note is not None:
+            await self.add_notes(board_id=board_id, notes=[note])
+        if link is not None:
+            await self.add_links(board_id=board_id, links=[link])
+
+    @asynccontextmanager
+    async def result_delivery_order(self, *, board_id: str):
+        """Serialize fake finalization like one live room lock."""
+        assert board_id == BOARD_UID
+        async with self.graph.lock:
+            yield None
+
+    async def ensure_result_batch(
+        self,
+        _conn,
+        *,
+        board_id: str,
+        batch_id: str,
+        note: Note,
+        link: Link,
+        generator: Note,
+    ):
+        """Record one deterministic combined result batch."""
+        assert board_id == BOARD_UID
+        assert generator.id == GENERATOR_UID
+        if self.fail_oplog:
+            raise RuntimeError("synthetic oplog failure")
+        if batch_id in self.batch_ids:
+            return None
+        self.batch_ids.add(batch_id)
+        self.batch_calls.append((batch_id, note, link))
+        return object()
+
+    async def deliver_result_batch(self, *, room, delivery) -> None:
+        """Count committed fake deliveries only."""
+        if delivery is not None:
+            self.delivery_calls += 1
 
 
 def _service(record: ImageGenerationOutputRecord | None = None):
@@ -155,6 +218,12 @@ def test_canonical_ids_are_stable_distinct_lowercase_hex() -> None:
     int(node_uid, 16)
     int(edge_uid, 16)
     assert canonical_result_node_uid("other") != node_uid
+    batch_uid = canonical_result_batch_uid(GENERATION_UID, "2026-08-22T00:00:00")
+    assert batch_uid == canonical_result_batch_uid(
+        GENERATION_UID,
+        "2026-08-22T00:00:00",
+    )
+    assert batch_uid not in {node_uid, edge_uid}
 
 
 @pytest.mark.asyncio
@@ -176,6 +245,11 @@ async def test_automatic_ensure_creates_node_edge_then_binds() -> None:
     assert outcome.recreated is False
     assert image_store.bind_calls == [node_uid]
     assert bridge.note_calls == bridge.link_calls == 1
+    assert bridge.delivery_calls == 1
+    assert len(bridge.batch_calls) == 1
+    _, batch_node, batch_edge = bridge.batch_calls[0]
+    assert batch_node.id == node_uid
+    assert batch_edge.id == edge_uid
     node = graph.nodes[node_uid]
     assert node.properties.image_asset_uid.value == ASSET_UID
     assert node.properties.generated_image_generation_uid.value == GENERATION_UID
@@ -269,6 +343,37 @@ async def test_bind_failure_recovers_existing_canvas_objects_without_duplicates(
 
 
 @pytest.mark.asyncio
+async def test_oplog_failure_leaves_qdrant_recoverable_without_binding() -> None:
+    """A durable-batch failure is retried after deterministic Qdrant writes."""
+    service, image_store, graph, bridge = _service()
+    bridge.fail_oplog = True
+
+    with pytest.raises(RuntimeError, match="synthetic oplog failure"):
+        await service.ensure_output_node(
+            board_uid=BOARD_UID,
+            generation_uid=GENERATION_UID,
+            recreate=False,
+        )
+
+    assert canonical_result_node_uid(GENERATION_UID) in graph.nodes
+    assert canonical_result_edge_uid(GENERATION_UID) in graph.links
+    assert image_store.bind_calls == []
+    assert bridge.delivery_calls == 0
+
+    bridge.fail_oplog = False
+    outcome = await service.ensure_output_node(
+        board_uid=BOARD_UID,
+        generation_uid=GENERATION_UID,
+        recreate=False,
+    )
+
+    assert outcome.created is False
+    assert image_store.bind_calls == [canonical_result_node_uid(GENERATION_UID)]
+    assert len(bridge.batch_calls) == 1
+    assert bridge.delivery_calls == 1
+
+
+@pytest.mark.asyncio
 async def test_bound_deleted_result_requires_explicit_recreate() -> None:
     """Automatic checks do not revive deletion; explicit recovery uses same IDs."""
     node_uid = canonical_result_node_uid(GENERATION_UID)
@@ -293,6 +398,42 @@ async def test_bound_deleted_result_requires_explicit_recreate() -> None:
     assert explicit.recreated is True
     assert node_uid in graph.nodes
     assert canonical_result_edge_uid(GENERATION_UID) in graph.links
+
+
+@pytest.mark.asyncio
+async def test_tombstoned_result_objects_are_absent_only_for_explicit_recreate() -> None:
+    """Tombstones do not collide and are revived only through recreate intent."""
+    node_uid = canonical_result_node_uid(GENERATION_UID)
+    edge_uid = canonical_result_edge_uid(GENERATION_UID)
+    service, image_store, graph, bridge = _service()
+    await service.ensure_output_node(
+        board_uid=BOARD_UID,
+        generation_uid=GENERATION_UID,
+        recreate=False,
+    )
+    graph.nodes[node_uid] = graph.nodes[node_uid].model_copy(
+        update={"deleted_at": "2026-08-22T00:00:00"},
+    )
+    graph.links[edge_uid] = graph.links[edge_uid].model_copy(
+        update={"deleted_at": "2026-08-22T00:00:00"},
+    )
+
+    automatic = await service.ensure_output_node(
+        board_uid=BOARD_UID,
+        generation_uid=GENERATION_UID,
+        recreate=False,
+    )
+    assert automatic.created is False
+    assert graph.nodes[node_uid].deleted_at is not None
+
+    explicit = await service.ensure_output_node(
+        board_uid=BOARD_UID,
+        generation_uid=GENERATION_UID,
+        recreate=True,
+    )
+    assert explicit.recreated is True
+    assert graph.nodes[node_uid].deleted_at is None
+    assert graph.links[edge_uid].deleted_at is None
 
 
 @pytest.mark.asyncio

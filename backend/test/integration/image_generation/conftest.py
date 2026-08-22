@@ -44,7 +44,7 @@ async def image_pg_pool(config: Config) -> AsyncIterator[asyncpg.Pool]:
         pool = await asyncpg.create_pool(
             dsn,
             min_size=1,
-            max_size=3,
+            max_size=1,
             setup=initialize_connection,
         )
         yield pool

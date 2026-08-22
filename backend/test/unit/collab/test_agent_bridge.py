@@ -77,16 +77,27 @@ class _FakeOplog:
         """Init per-board seq counters + captured appends."""
         self._seq: dict[str, int] = {}
         self.appended: list[tuple[str, int, dict]] = []
+        self.connections: list[object | None] = []
 
-    async def next_seq(self, board_id: str) -> int:
+    async def next_seq(self, board_id: str, *, conn=None) -> int:
         """Return a monotonic per-board seq starting at 1."""
+        self.connections.append(conn)
         self._seq[board_id] = self._seq.get(board_id, 0) + 1
         return self._seq[board_id]
 
-    async def append(self, board_id: str, seq: int, batch: dict) -> bool:
+    async def append(self, board_id: str, seq: int, batch: dict, *, conn=None) -> bool:
         """Capture the appended batch."""
+        self.connections.append(conn)
         self.appended.append((board_id, seq, batch))
         return True
+
+    async def seq_for_batch(self, board_id: str, batch_id: str, *, conn=None):
+        """Return an existing deterministic batch sequence when present."""
+        self.connections.append(conn)
+        for existing_board, seq, batch in self.appended:
+            if existing_board == board_id and batch["id"] == batch_id:
+                return seq
+        return None
 
 
 def _make_note(note_id: str = "n1", *, w: float | None = None, h: float | None = None) -> Note:
@@ -174,6 +185,53 @@ async def test_generated_result_node_and_edge_use_durable_peer_ops():
     assert edge_op["edge"]["source"]["nodeId"] == generator.id
     assert edge_op["edge"]["target"]["nodeId"] == result.id
     assert "imageReference" not in edge_op["edge"]["data"]
+
+
+async def test_result_batch_is_combined_durable_and_uses_caller_connection():
+    """Result finalization logs node and edge once through the supplied PG connection."""
+    registry = RoomRegistry()
+    store = _RecordingGraphStore()
+    oplog = _FakeOplog()
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=oplog)
+    socket = _FakeSocket()
+    room, _ = await registry.join("b1", socket, "u1")
+    generator = _make_note("generator", w=300, h=200)
+    result = _make_note("result", w=420, h=280)
+    link = Link(id="edge", source=generator.id, target=result.id, graph_uid="b1")
+    connection = object()
+
+    async with bridge.result_delivery_order(board_id="b1") as ordered_room:
+        delivery = await bridge.ensure_result_batch(
+            connection,  # type: ignore[arg-type]
+            board_id="b1",
+            batch_id="stable-batch",
+            note=result,
+            link=link,
+            generator=generator,
+        )
+        await bridge.deliver_result_batch(room=ordered_room, delivery=delivery)
+
+    assert ordered_room is room
+    assert oplog.connections == [connection, connection, connection]
+    assert len(oplog.appended) == 1
+    ops = oplog.appended[0][2]["ops"]
+    assert [op["type"] for op in ops] == ["node.add", "edge.add"]
+    assert len(socket.sent) == 1
+
+    async with bridge.result_delivery_order(board_id="b1") as ordered_room:
+        replay = await bridge.ensure_result_batch(
+            connection,  # type: ignore[arg-type]
+            board_id="b1",
+            batch_id="stable-batch",
+            note=result,
+            link=link,
+            generator=generator,
+        )
+        await bridge.deliver_result_batch(room=ordered_room, delivery=replay)
+
+    assert replay is None
+    assert len(oplog.appended) == 1
+    assert len(socket.sent) == 1
 
 
 async def test_no_broadcast_when_no_room_exists():

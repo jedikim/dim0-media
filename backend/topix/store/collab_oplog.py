@@ -48,10 +48,19 @@ class CollabOplogStore:
         """Detach the pool. The pool itself is owned/closed by the app."""
         self._pool = None
 
-    async def append(self, board_id: str, seq: int, batch: dict) -> bool:
+    async def append(
+        self,
+        board_id: str,
+        seq: int,
+        batch: dict,
+        *,
+        conn: asyncpg.Connection | None = None,
+    ) -> bool:
         """Append a batch to the durable log. Idempotent (returns False on replay)."""
-        async with self._require_pool().acquire() as conn:
+        if conn is not None:
             return await insert_oplog_entry(conn, board_id, seq, batch)
+        async with self._require_pool().acquire() as acquired:
+            return await insert_oplog_entry(acquired, board_id, seq, batch)
 
     async def batches_since(
         self,
@@ -64,17 +73,37 @@ class CollabOplogStore:
         async with self._require_pool().acquire() as conn:
             return await fetch_batches_since(conn, board_id, since_seq, limit)
 
-    async def max_seq(self, board_id: str) -> int:
+    async def max_seq(
+        self,
+        board_id: str,
+        *,
+        conn: asyncpg.Connection | None = None,
+    ) -> int:
         """Highest durable seq for a board (0 when empty)."""
-        async with self._require_pool().acquire() as conn:
+        if conn is not None:
             return await fetch_max_seq(conn, board_id)
+        async with self._require_pool().acquire() as acquired:
+            return await fetch_max_seq(acquired, board_id)
 
-    async def seq_for_batch(self, board_id: str, batch_id: str) -> int | None:
+    async def seq_for_batch(
+        self,
+        board_id: str,
+        batch_id: str,
+        *,
+        conn: asyncpg.Connection | None = None,
+    ) -> int | None:
         """Seq a batch was applied at, or None — used to dedup outbox replays."""
-        async with self._require_pool().acquire() as conn:
+        if conn is not None:
             return await fetch_seq_for_batch(conn, board_id, batch_id)
+        async with self._require_pool().acquire() as acquired:
+            return await fetch_seq_for_batch(acquired, board_id, batch_id)
 
-    async def next_seq(self, board_id: str) -> int:
+    async def next_seq(
+        self,
+        board_id: str,
+        *,
+        conn: asyncpg.Connection | None = None,
+    ) -> int:
         """Allocate the next monotonic seq for a board (atomic, restart-safe).
 
         Uses Redis `INCR`. When the counter is absent (fresh process, or a Redis
@@ -84,7 +113,11 @@ class CollabOplogStore:
         """
         key = f"{SEQ_KEY_PREFIX}{board_id}"
         if not await self._redis.redis.exists(key):
-            seed = await self.max_seq(board_id)
+            seed = (
+                await self.max_seq(board_id)
+                if conn is None
+                else await self.max_seq(board_id, conn=conn)
+            )
             await self._redis.redis.set(key, seed, nx=True)
         return int(await self._redis.redis.incr(key))
 

@@ -21,6 +21,7 @@ from topix.store.image_generation import ImageGenerationStore
 GENERATED_IMAGE_RESULT_NAMESPACE = UUID("2f71a20e-d0f0-5b3f-a638-e8c6f04b0bc1")
 RESULT_NODE_NAME_PREFIX = "dim0:image-result-node:"
 RESULT_EDGE_NAME_PREFIX = "dim0:image-result-edge:"
+RESULT_BATCH_NAME_PREFIX = "dim0:image-result-batch:"
 RESULT_MAX_SIDE = 420.0
 RESULT_GAP = 80.0
 
@@ -59,6 +60,14 @@ def canonical_result_edge_uid(generation_uid: str) -> str:
     return uuid5(
         GENERATED_IMAGE_RESULT_NAMESPACE,
         f"{RESULT_EDGE_NAME_PREFIX}{generation_uid}",
+    ).hex
+
+
+def canonical_result_batch_uid(generation_uid: str, materialized_at: str) -> str:
+    """Derive one stable batch ID for a persisted result materialization."""
+    return uuid5(
+        GENERATED_IMAGE_RESULT_NAMESPACE,
+        f"{RESULT_BATCH_NAME_PREFIX}{generation_uid}:{materialized_at}",
     ).hex
 
 
@@ -154,7 +163,8 @@ def _validate_result_node(
     """Fail closed when a canonical node ID belongs to different content."""
     properties = note.properties
     valid = (
-        note.graph_uid == record.board_uid
+        note.deleted_at is None
+        and note.graph_uid == record.board_uid
         and _keyword_value(properties, "generated_image_marker") == GENERATED_IMAGE_MARKER_VALUE
         and _keyword_value(properties, "image_asset_uid") == record.output_asset_uid
         and _keyword_value(properties, "generated_image_generation_uid") == record.generation_uid
@@ -177,7 +187,8 @@ def _validate_result_edge(
 ) -> None:
     """Fail closed when a canonical edge ID has different endpoints or scope."""
     if (
-        link.graph_uid != record.board_uid
+        link.deleted_at is not None
+        or link.graph_uid != record.board_uid
         or link.parent_id != generator_parent_id
         or link.source != generator_uid
         or link.target != node_uid
@@ -214,104 +225,149 @@ class ImageResultNodeService:
         """Create, recover, or explicitly recreate one canonical result."""
         node_uid = canonical_result_node_uid(generation_uid)
         edge_uid = canonical_result_edge_uid(generation_uid)
-        async with self._image_store.output_node_transaction(
+        record = await self._image_store.get_output_record(
             board_uid=board_uid,
             generation_uid=generation_uid,
-        ) as (conn, record):
-            if record is None:
-                raise ImageResultNodeError(
-                    "generation_not_found",
-                    "Image generation not found.",
-                )
-            self._validate_generation(record, node_uid=node_uid)
-
-            generator_uid = record.generator_node_uid
-            assert generator_uid is not None
-            generator_rows = await self._graph_store.get_nodes([generator_uid])
-            generator = generator_rows[0] if generator_rows else None
-            if generator is None or generator.graph_uid != board_uid or generator.deleted_at is not None or not _is_generator(generator):
-                raise ImageResultNodeError(
-                    "generator_unavailable",
-                    "The image generator node is unavailable.",
-                )
-
-            nodes = await self._graph_store.get_nodes([node_uid])
-            links = await self._graph_store.get_links([edge_uid])
-            existing_node = nodes[0] if nodes else None
-            existing_edge = links[0] if links else None
-            if existing_node is not None:
-                _validate_result_node(
-                    existing_node,
-                    record=record,
-                    generator_uid=generator_uid,
-                )
-            if existing_edge is not None:
-                _validate_result_edge(
-                    existing_edge,
-                    record=record,
-                    generator_uid=generator_uid,
-                    generator_parent_id=generator.parent_id,
-                    node_uid=node_uid,
-                )
-
-            if record.output_node_uid is not None and not recreate:
-                return self._outcome(record, node_uid, created=False, recreated=False)
-
-            node_created = False
-            edge_created = False
-            expected_node = _build_result_note(
-                record=record,
-                generator=generator,
-                node_uid=node_uid,
+        )
+        if record is None:
+            raise ImageResultNodeError(
+                "generation_not_found",
+                "Image generation not found.",
             )
-            if existing_node is None:
-                await self._bridge.add_notes(board_id=board_uid, notes=[expected_node])
-                node_created = True
-            expected_edge = _build_result_edge(
-                record=record,
-                generator=generator,
-                node_uid=node_uid,
-                edge_uid=edge_uid,
-            )
-            if existing_edge is None:
-                await self._bridge.add_links(board_id=board_uid, links=[expected_edge])
-                edge_created = True
+        self._validate_generation(record, node_uid=node_uid)
+        if record.output_node_uid is not None and not recreate:
+            return self._outcome(record, node_uid, created=False, recreated=False)
 
-            durable_nodes = await self._graph_store.get_nodes([node_uid])
-            durable_links = await self._graph_store.get_links([edge_uid])
-            if not durable_nodes or not durable_links:
-                raise ImageResultNodeError(
-                    "canvas_write_incomplete",
-                    "The generated image node could not be stored completely.",
-                )
-            _validate_result_node(
-                durable_nodes[0],
-                record=record,
-                generator_uid=generator_uid,
-            )
+        generator = await self._require_generator(record)
+        existing_node, existing_edge = await self._read_result_objects(
+            node_uid=node_uid,
+            edge_uid=edge_uid,
+        )
+        if existing_node is not None and existing_node.deleted_at is None:
+            _validate_result_node(existing_node, record=record, generator_uid=generator.id)
+        if existing_edge is not None and existing_edge.deleted_at is None:
             _validate_result_edge(
-                durable_links[0],
+                existing_edge,
                 record=record,
-                generator_uid=generator_uid,
+                generator_uid=generator.id,
                 generator_parent_id=generator.parent_id,
                 node_uid=node_uid,
             )
-            if not await self._image_store.bind_output_node(
-                conn,
+
+        missing_node = existing_node is None or existing_node.deleted_at is not None
+        missing_edge = existing_edge is None or existing_edge.deleted_at is not None
+        expected_node = _build_result_note(record=record, generator=generator, node_uid=node_uid)
+        expected_edge = _build_result_edge(
+            record=record,
+            generator=generator,
+            node_uid=node_uid,
+            edge_uid=edge_uid,
+        )
+        await self._bridge.persist_result_objects(
+            board_id=board_uid,
+            note=expected_node if missing_node else None,
+            link=expected_edge if missing_edge else None,
+        )
+
+        delivery = None
+        outcome = None
+        async with self._bridge.result_delivery_order(board_id=board_uid) as room:
+            async with self._image_store.output_node_transaction(
                 board_uid=board_uid,
                 generation_uid=generation_uid,
-                output_node_uid=node_uid,
-            ):
-                raise ImageResultNodeError(
-                    "output_binding_conflict",
-                    "The generated image node could not be linked to its generation.",
-                )
-            return self._outcome(
-                record,
-                node_uid,
-                created=node_created or edge_created,
-                recreated=record.output_node_uid is not None and (node_created or edge_created),
+            ) as (conn, locked_record):
+                if locked_record is None:
+                    raise ImageResultNodeError(
+                        "generation_not_found",
+                        "Image generation not found.",
+                    )
+                self._validate_generation(locked_record, node_uid=node_uid)
+                if locked_record.output_node_uid is not None and not recreate:
+                    outcome = self._outcome(
+                        locked_record,
+                        node_uid,
+                        created=False,
+                        recreated=False,
+                    )
+                else:
+                    durable_generator = await self._require_generator(locked_record)
+                    durable_node, durable_edge = await self._read_result_objects(
+                        node_uid=node_uid,
+                        edge_uid=edge_uid,
+                    )
+                    if durable_node is None or durable_node.deleted_at is not None or durable_edge is None or durable_edge.deleted_at is not None:
+                        raise ImageResultNodeError(
+                            "canvas_write_incomplete",
+                            "The generated image node could not be stored completely.",
+                        )
+                    _validate_result_node(
+                        durable_node,
+                        record=locked_record,
+                        generator_uid=durable_generator.id,
+                    )
+                    _validate_result_edge(
+                        durable_edge,
+                        record=locked_record,
+                        generator_uid=durable_generator.id,
+                        generator_parent_id=durable_generator.parent_id,
+                        node_uid=node_uid,
+                    )
+                    batch_uid = canonical_result_batch_uid(
+                        generation_uid,
+                        durable_node.created_at,
+                    )
+                    delivery = await self._bridge.ensure_result_batch(
+                        conn,
+                        board_id=board_uid,
+                        batch_id=batch_uid,
+                        note=durable_node,
+                        link=durable_edge,
+                        generator=durable_generator,
+                    )
+                    if not await self._image_store.bind_output_node(
+                        conn,
+                        board_uid=board_uid,
+                        generation_uid=generation_uid,
+                        output_node_uid=node_uid,
+                    ):
+                        raise ImageResultNodeError(
+                            "output_binding_conflict",
+                            "The generated image node could not be linked to its generation.",
+                        )
+                    created = missing_node or missing_edge
+                    outcome = self._outcome(
+                        locked_record,
+                        node_uid,
+                        created=created,
+                        recreated=locked_record.output_node_uid is not None and created,
+                    )
+            await self._bridge.deliver_result_batch(room=room, delivery=delivery)
+        assert outcome is not None
+        return outcome
+
+    async def _require_generator(self, record: ImageGenerationOutputRecord) -> Note:
+        """Return the live same-board generator or fail closed."""
+        generator_uid = record.generator_node_uid
+        assert generator_uid is not None
+        rows = await self._graph_store.get_nodes([generator_uid])
+        generator = rows[0] if rows else None
+        if generator is None or generator.graph_uid != record.board_uid or generator.deleted_at is not None or not _is_generator(generator):
+            raise ImageResultNodeError(
+                "generator_unavailable",
+                "The image generator node is unavailable.",
             )
+        return generator
+
+    async def _read_result_objects(
+        self,
+        *,
+        node_uid: str,
+        edge_uid: str,
+    ) -> tuple[Note | None, Link | None]:
+        """Read canonical result objects, including tombstones, in one stage."""
+        nodes = await self._graph_store.get_nodes([node_uid])
+        links = await self._graph_store.get_links([edge_uid])
+        return (nodes[0] if nodes else None, links[0] if links else None)
 
     @staticmethod
     def _validate_generation(
