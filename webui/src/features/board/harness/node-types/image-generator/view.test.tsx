@@ -382,6 +382,37 @@ describe("ImageGeneratorView", () => {
   })
 
 
+  it("lets a viewer recheck stalled status without generation or shared writes", async () => {
+    useBoardAppStore.setState({ canEdit: false })
+    mocks.useImageGeneration.mockReturnValue({
+      phase: "stalled",
+      state: null,
+      error: "지연",
+      generate: mocks.generate,
+      resumePending: mocks.resumePending,
+      checkStatusAgain: mocks.checkStatusAgain,
+      hasPendingRequest: false,
+      canResumePending: false,
+    })
+    await render()
+
+    const recheckButton = [...container.querySelectorAll("button")]
+      .find((candidate) => candidate.textContent === "상태 다시 확인")!
+    const generateButton = [...container.querySelectorAll("button")]
+      .find((candidate) => candidate.className.includes("bg-primary"))!
+    expect(recheckButton.disabled).toBe(false)
+    expect(generateButton.disabled).toBe(true)
+    expect(container.querySelector<HTMLTextAreaElement>('[aria-label="Image prompt"]')?.disabled)
+      .toBe(true)
+
+    act(() => recheckButton.click())
+    expect(mocks.checkStatusAgain).toHaveBeenCalledTimes(1)
+    expect(mocks.generate).not.toHaveBeenCalled()
+    expect(mocks.resumePending).not.toHaveBeenCalled()
+    expect(mocks.updateNode).not.toHaveBeenCalled()
+  })
+
+
   it("requires explicit replacement when the stored model is unavailable", async () => {
     const data = (mocks.node?.data ?? {}) as { properties: Record<string, unknown> }
     data.properties.imageModelId = { type: "keyword", value: "retired-model" }

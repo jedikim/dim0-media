@@ -74,12 +74,15 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollControllerRef = useRef<AbortController | null>(null)
   const postControllerRef = useRef<AbortController | null>(null)
+  const previewControllerRef = useRef<AbortController | null>(null)
   const postingRef = useRef(false)
   const mountedRef = useRef(true)
+  const activeGenerationUidRef = useRef(activeGenerationUid)
   const pendingRef = useRef(pendingRequest)
   const recoveredRequestRef = useRef<string | null>(null)
   const persistRef = useRef(persist)
   persistRef.current = persist
+  activeGenerationUidRef.current = activeGenerationUid
 
   useEffect(() => {
     pendingRef.current = pendingRequest
@@ -102,6 +105,8 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
       stopPolling()
       postControllerRef.current?.abort()
       postControllerRef.current = null
+      previewControllerRef.current?.abort()
+      previewControllerRef.current = null
     }
   }, [stopPolling])
 
@@ -174,7 +179,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
           || (caught instanceof Error && caught.name === "AbortError")
         ) return
         if (imageGenerationStatusCode(caught) === 404) {
-          persistRef.current({ activeGenerationUid: null })
+          if (canStart) persistRef.current({ activeGenerationUid: null })
           setState(null)
           if (!pendingOwnsPhase()) {
             setPhase("idle")
@@ -202,12 +207,37 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
       alive = false
       stopPolling()
     }
-  }, [activeGenerationUid, graphId, pollRevision, stopPolling])
+  }, [activeGenerationUid, canStart, graphId, pollRevision, stopPolling])
+
+  /** Restore only the last confirmed preview after a pending POST fails. */
+  const restoreActivePreview = useCallback(async (): Promise<void> => {
+    const generationUid = activeGenerationUidRef.current
+    if (!generationUid) return
+
+    previewControllerRef.current?.abort()
+    const controller = new AbortController()
+    previewControllerRef.current = controller
+    try {
+      const previous = await getImageGeneration(graphId, generationUid, controller.signal)
+      if (
+        !mountedRef.current
+        || controller.signal.aborted
+        || activeGenerationUidRef.current !== generationUid
+      ) return
+      setState(previous)
+    } catch {
+      // Preview restoration is read-only and must not replace the POST error.
+    } finally {
+      if (previewControllerRef.current === controller) previewControllerRef.current = null
+    }
+  }, [graphId])
 
   const sendPendingRequest = useCallback(async (snapshot: PendingImageRequest): Promise<void> => {
     if (postingRef.current || !canStart) return
     postingRef.current = true
     stopPolling()
+    previewControllerRef.current?.abort()
+    previewControllerRef.current = null
     const controller = new AbortController()
     postControllerRef.current = controller
     setPhase("starting")
@@ -225,6 +255,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
         signal: controller.signal,
       })
       if (!mountedRef.current) return
+      activeGenerationUidRef.current = accepted.generation_uid
       pendingRef.current = null
       setHasPendingRequest(false)
       persistRef.current({
@@ -242,6 +273,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
         persistRef.current({ pendingRequest: null })
         setPhase("failed")
         setError("요청 식별자가 다른 내용에 이미 사용되었습니다. 다시 생성해 주세요.")
+        void restoreActivePreview()
         return
       }
       if (status !== null && SAFE_TO_CLEAR_PENDING_STATUSES.has(status)) {
@@ -254,11 +286,12 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
       // same-UUID recovery.
       setPhase("failed")
       setError(imageGenerationErrorMessage(caught))
+      void restoreActivePreview()
     } finally {
       if (postControllerRef.current === controller) postControllerRef.current = null
       postingRef.current = false
     }
-  }, [canStart, graphId, nodeId, stopPolling])
+  }, [canStart, graphId, nodeId, restoreActivePreview, stopPolling])
 
   useEffect(() => {
     if (!pendingRequest) return
@@ -275,8 +308,15 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
     }
     if (!canStart || recoveredRequestRef.current === pendingRequest.clientRequestUid) return
 
-    recoveredRequestRef.current = pendingRequest.clientRequestUid
-    void sendPendingRequest(pendingRequest)
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled || recoveredRequestRef.current === pendingRequest.clientRequestUid) return
+      recoveredRequestRef.current = pendingRequest.clientRequestUid
+      void sendPendingRequest(pendingRequest)
+    })
+    return () => {
+      cancelled = true
+    }
   }, [canStart, graphId, nodeId, pendingRequest, sendPendingRequest, userId])
 
   const generate = useCallback(async (

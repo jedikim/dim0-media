@@ -405,7 +405,7 @@ function SyncedImageGeneratorCard({
           <button
             type="button"
             className="h-9 rounded-lg border border-border px-3 text-xs font-medium text-foreground disabled:opacity-50"
-            disabled={!canEdit || generation.hasPendingRequest}
+            disabled={generation.hasPendingRequest}
             onClick={generation.checkStatusAgain}
           >
             상태 다시 확인
