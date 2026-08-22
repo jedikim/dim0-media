@@ -144,6 +144,12 @@ Dim0에는 서버에 동기화되지 않는 **로컬 전용 보드**가 있다. 
 
 `x-ai/grok-imagine-image-2.0`, quality `low`, resolution `1K` — **이미지당 $0.04**. T2I 1회면 충분하다.
 
+이 smoke의 성공 조건은 특정 파일 형식을 강제하는 것이 아니라 PR-01 → PR-02 →
+PR-03 전체 경로가 실제 provider 결과를 안전하게 검증·저장·감사·서빙하는지 확인하는
+것이다. 허용된 provider raster 형식은 PNG/JPEG/WebP이며, 실제 바이트 검사 결과와 MIME,
+확장자, dimensions, byte size, SHA-256, DB asset 정보, 인증 다운로드의 HTTP
+`Content-Type`이 모두 일치해야 한다.
+
 ### 절차
 
 **1. 서버 `.env`에만 넣는다**
@@ -175,7 +181,7 @@ GEN=$(curl -sS -X POST "$API/boards/$BOARD/image-generations" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"client_request_uid":"'"$(uuidgen)"'",
        "model_id":"x-ai/grok-imagine-image-2.0",
-       "prompt":"a single red maple leaf on white paper, studio light",
+       "prompt":"<bounded T2I smoke prompt>",
        "parameters":{"resolution":"1K","quality":"low","aspect_ratio":"1:1"},
        "reference_asset_uids":[],"generator_node_uid":null}' \
   | tee /dev/stderr | python3 -c 'import sys,json;print(json.load(sys.stdin)["generation_uid"])')
@@ -189,16 +195,22 @@ cat /tmp/gen.json
 # 3) 인증된 결과 바이트를 실제로 받아본다
 ASSET=$(python3 -c 'import json;print(json.load(open("/tmp/gen.json"))["output_asset_uid"])')
 curl -sS "$API/boards/$BOARD/image-assets/$ASSET/content" \
-  -H "Authorization: Bearer $TOKEN" -o /tmp/out.png -D /tmp/hdr.txt
-file /tmp/out.png; grep -i 'content-type\|cache-control' /tmp/hdr.txt
+  -H "Authorization: Bearer $TOKEN" -o /tmp/out.image -D /tmp/hdr.txt
+file /tmp/out.image; grep -i 'content-type\|cache-control' /tmp/hdr.txt
 ```
 
-**5. 5가지를 확정하고 기록한다**
+**5. 전체 경로를 확정하고 기록한다**
 
 - 상태가 `succeeded`로 끝나는가 — 파이프라인 완주 여부
-- `/tmp/out.png`가 실제 PNG인가, `Content-Type`이 `image/png`인가
+- `/tmp/out.image`가 PNG/JPEG/WebP 중 하나이고 실제 바이트와 MIME이 일치하는가
+- 저장 확장자, dimensions, byte size, SHA-256, DB asset metadata가 일치하는가
+- 인증 다운로드의 HTTP `Content-Type`이 실제 MIME과 일치하는가
 - DB의 `image_generation_attempt`에 `usage`·`cost_usd`·`latency_ms`가 채워졌는가
-- **`provider_request_id`가 채워졌는가** — 비어 있으면 어댑터가 잘못된 위치를 읽는 것
+- generation/attempt 상태 전이와 reference 순서가 보존됐는가
+- 같은 client request에 generation/attempt가 하나뿐이고 provider 중복 호출이 없는가
+- API 응답·DB·로그에 secret, provider 오류 원문, base64 이미지가 노출되지 않는가
+- `provider_request_id`는 공식 OpenRouter Image API 성공 응답에서 보장되지 않는 nullable
+  필드이므로 NULL이어도 smoke 성공이다
 - sanitized 실패는 mock/integration 테스트로 검증한다. 존재하지 않는 model ID는
   capability 검증에서 provider 호출 전에 422가 될 수 있으므로 별도 live failure
   audit 검증으로 간주하지 않으며, 추가 유료 실패 호출은 별도 승인 없이 실행하지 않는다.
@@ -208,9 +220,36 @@ psql -c "SELECT status, provider_request_id, cost_usd, latency_ms, usage
          FROM image_generation_attempt ORDER BY started_at DESC LIMIT 2;"
 ```
 
-**6. 결과를 반영한다**
+**6. 2026-08-22 실호출 결과**
 
-어댑터가 틀렸으면 `providers/openrouter.py`를 **PR-03과 분리된 작은 fix PR**로 고친다. `provider_request_id`가 NULL이면 실제 응답에서 ID 위치를 찾아 매핑을 고친다 — 이것이 이 실호출의 가장 큰 수확이다.
+승인된 T2I smoke는 provider 호출 1회와 attempt 1회로 전체 경로를 완주했다. 결과는
+1024×1024 JPEG, 190,555 bytes였고 실제 바이트 검사 결과, `image/jpeg`, `.jpg`
+확장자, dimensions, byte size, SHA-256, DB asset metadata와 인증 다운로드의 HTTP
+`Content-Type`이 모두 일치했다. generation run과 attempt는 모두 `succeeded`였고,
+usage와 `$0.0400000000` cost가 기록됐다. 같은 client request의 generation과 attempt는
+각각 하나뿐이어서 중복 과금이 없었으며 secret과 provider 원문도 노출되지 않았다.
+`provider_request_id`는 NULL이었고 위 nullable 계약에 따라 정상 결과다.
+
+예상하지 않은 JPEG가 반환됐을 때 Dim0는 provider 주장을 그대로 신뢰하거나 PNG로
+오표기하지 않았다. 제한된 raster bytes를 검사해 실제 형식을 판별하고 올바른 MIME과
+확장자로 저장·서빙했으므로 이 결과는 smoke의 핵심 목적에 대한 검증 성공이다.
+
+**7. PR-02 후속 소형 수정**
+
+OpenRouter adapter는 현재 capability 검증 없이 `output_format="png"`를 강제 전송한다.
+이 값은 `resolution`, `aspect_ratio`, `quality`와 달리 capability registry와
+`validate_generation_parameters()`를 우회하며, 실제 Grok image endpoint도 지원
+파라미터로 광고하지 않는다. 따라서 PR-03과 분리된 후속 소형 PR에서 제거한다.
+향후 출력 형식 선택이 필요하면 하드코딩하지 않고 `supported_output_formats` 같은 모델
+capability와 기존 `_validate_choice` 계열 검증을 통해서만 노출한다.
+
+실제 `provider_request_id` 위치는 아직 확인되지 않았다. 새 위치를 추측해 저장하지 않고,
+다음 PR-04 I2I smoke에서 성공 응답의 bounded top-level key 이름과 response header 이름만
+DEBUG 수준으로 확인한 뒤 공식 자료와 함께 별도 매핑 여부를 결정한다.
+
+`output_format` 제거 뒤 추가 유료 smoke는 필요하지 않다. 이번 호출에서 그 값은 관측상
+적용되지 않았고, 후속 수정은 이미 성공한 provider 동작을 바꾸는 것이 아니라 광고되지
+않은 요청 키만 제거한다.
 
 > **테스트 금칙.** PR-03 테스트에서 네트워크를 타는 코드가 하나도 없어야 한다. OpenRouter 실호출은 위 수동 절차에서만 일어난다.
 
