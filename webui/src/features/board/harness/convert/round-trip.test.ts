@@ -186,6 +186,28 @@ describe("note ↔ node round-trip", () => {
     expect(back.properties.imagePendingRequest).toEqual(note.properties.imagePendingRequest)
   })
 
+
+  it("projects and round-trips an immutable generated-image association", () => {
+    const note = createDefaultNote({ boardId: BOARD_ID, nodeType: "rectangle" })
+    note.properties.generatedImageMarker = { type: "keyword", value: "immutable-result" }
+    note.properties.imageAssetUid = { type: "keyword", value: "a".repeat(32) }
+    note.properties.generatedImageGenerationUid = { type: "keyword", value: "g".repeat(32) }
+    note.properties.generatedImageGeneratorNodeUid = { type: "keyword", value: "n".repeat(32) }
+
+    const node = noteToNode(note)
+    const back = nodeToNote(node)
+
+    expect(node.type).toBe("generated-image")
+    expect(node.style?.autoFit).toBe(false)
+    expect(back.style.type).toBe("rectangle")
+    expect(back.properties.generatedImageMarker).toEqual(note.properties.generatedImageMarker)
+    expect(back.properties.imageAssetUid).toEqual(note.properties.imageAssetUid)
+    expect(back.properties.generatedImageGenerationUid)
+      .toEqual(note.properties.generatedImageGenerationUid)
+    expect(back.properties.generatedImageGeneratorNodeUid)
+      .toEqual(note.properties.generatedImageGeneratorNodeUid)
+  })
+
   it("round-trips the phosphor icon variant with a hex color", () => {
     const note = createDefaultNote({ boardId: BOARD_ID, nodeType: "sheet" })
     note.properties.iconData = {

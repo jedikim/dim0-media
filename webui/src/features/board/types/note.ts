@@ -20,6 +20,9 @@ export interface NoteProperties {
   url: URLProperty
   imageUrl: ImageProperty
   imageAssetUid?: KeywordProperty
+  generatedImageMarker?: KeywordProperty
+  generatedImageGenerationUid?: KeywordProperty
+  generatedImageGeneratorNodeUid?: KeywordProperty
   iconData: IconProperty
   slideName?: TextProperty
   slideNumber?: NumberProperty

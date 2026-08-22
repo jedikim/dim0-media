@@ -112,7 +112,11 @@ export const useStampNewEdges = (
       const targetNode = store.getNode(targetNodeId)
       if (
         targetNode?.type !== "image-generator"
-        || (sourceNode?.type !== "image" && sourceNode?.type !== "image-generator")
+        || (
+          sourceNode?.type !== "image"
+          && sourceNode?.type !== "image-generator"
+          && sourceNode?.type !== "generated-image"
+        )
       ) return null
       return { sourceNodeId, targetNodeId }
     }
@@ -207,7 +211,11 @@ export const useStampNewEdges = (
         const validReference = sourceNode !== null
           && sourceNode !== undefined
           && targetNode?.type === "image-generator"
-          && (sourceNode.type === "image" || sourceNode.type === "image-generator")
+          && (
+            sourceNode.type === "image"
+            || sourceNode.type === "image-generator"
+            || sourceNode.type === "generated-image"
+          )
 
         let referenceData: Record<string, unknown> | null = null
         if (canEdit && !local && validReference && sourceNodeId && targetNodeId) {

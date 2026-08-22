@@ -13,7 +13,7 @@ import math
 from typing import Any
 
 from topix.datatypes.note.link import IMAGE_REFERENCE_EDGE_MARKER, Link
-from topix.datatypes.note.note import Note
+from topix.datatypes.note.note import GENERATED_IMAGE_MARKER_VALUE, Note
 
 DEG_TO_RAD = math.pi / 180.0
 
@@ -69,6 +69,7 @@ _AUTOFIT_DISABLED_CANVAS_TYPES: frozenset[str] = frozenset(
         "code-sandbox",
         "widget",
         "mini-app",
+        "generated-image",
         "document",
     }
 )
@@ -382,16 +383,17 @@ def patch_data_to_wire_patch(data: dict[str, Any]) -> dict[str, Any]:  # noqa: C
 
 
 def _properties_minus_lifted(props) -> dict[str, Any]:
-    """Strip the three lifted properties before serializing to wire.
+    """Strip lifted fields and camel-case Note properties for the wire.
 
     Removes position/size/z so they don't shadow `node.x/y/w/h/z` in
-    the wire payload.
+    the wire payload. Canvas `NoteNodeData` uses frontend camelCase while
+    Pydantic stores snake_case.
     """
     dumped = props.model_dump(exclude_none=True)
     dumped.pop("node_position", None)
     dumped.pop("node_size", None)
     dumped.pop("node_z_index", None)
-    return dumped
+    return {_snake_to_camel(key): value for key, value in dumped.items()}
 
 
 def _canvas_type_for(note: Note) -> str:
@@ -405,6 +407,9 @@ def _canvas_type_for(note: Note) -> str:
     """
     if note.type == "document":
         return "document"
+    marker = getattr(note.properties, "generated_image_marker", None)
+    if getattr(marker, "value", None) == GENERATED_IMAGE_MARKER_VALUE:
+        return "generated-image"
     if note.style and note.style.type:
         raw = str(note.style.type)
         return _DIM0_TO_CANVAS_TYPE.get(raw, raw)

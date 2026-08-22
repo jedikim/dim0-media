@@ -811,3 +811,88 @@ async def test_terminal_failure_rolls_back_attempt_when_run_update_fails(
             generation.uid,
         )
     assert values is not None and tuple(values.values()) == ("started", "started", None, None)
+
+
+@pytest.mark.asyncio
+async def test_output_node_transaction_serializes_workers_and_binds_once(
+    initialized_image_pg_pool: asyncpg.Pool,
+) -> None:
+    """The PostgreSQL advisory lock serializes canvas writers across connections."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        user_uid, board_uid = await _create_user_and_board(conn)
+    store = ImageGenerationStore()
+    await store.open(initialized_image_pg_pool)
+    generation = _generation(
+        user_uid=user_uid,
+        board_uid=board_uid,
+        generator_node_uid=gen_uid(),
+        model_id="x-ai/grok-imagine-image-2.0",
+        prompt="Create one canonical canvas result",
+    )
+    await store.start_generation(generation)
+    content = b"canonical-output"
+    output_asset = _asset(
+        user_uid=user_uid,
+        board_uid=board_uid,
+        content=content,
+        source=ImageAssetSource.GENERATED,
+    )
+    assert await store.set_pending_output(
+        generation_uid=generation.uid,
+        worker_uid=WORKER_UID,
+        storage_key=output_asset.storage_key,
+    )
+    await store.finish_succeeded(
+        generation_uid=generation.uid,
+        attempt_uid=generation.attempt_uid,
+        worker_uid=WORKER_UID,
+        output_asset=output_asset,
+        result=_provider_result(content),
+        latency_ms=10,
+    )
+
+    first_entered = asyncio.Event()
+    release_first = asyncio.Event()
+    second_entered = asyncio.Event()
+    node_uid = gen_uid()
+
+    async def first_writer() -> None:
+        """Hold the output transaction until the competing writer is waiting."""
+        async with store.output_node_transaction(
+            board_uid=board_uid,
+            generation_uid=generation.uid,
+        ) as (conn, record):
+            assert record is not None and record.output_node_uid is None
+            first_entered.set()
+            await release_first.wait()
+            assert await store.bind_output_node(
+                conn,
+                board_uid=board_uid,
+                generation_uid=generation.uid,
+                output_node_uid=node_uid,
+            )
+
+    async def second_writer() -> None:
+        """Observe the committed canonical binding after advisory-lock handoff."""
+        await first_entered.wait()
+        async with store.output_node_transaction(
+            board_uid=board_uid,
+            generation_uid=generation.uid,
+        ) as (_conn, record):
+            assert record is not None and record.output_node_uid == node_uid
+            second_entered.set()
+
+    first_task = asyncio.create_task(first_writer())
+    second_task = asyncio.create_task(second_writer())
+    await first_entered.wait()
+    await asyncio.sleep(0.05)
+    assert not second_entered.is_set()
+    release_first.set()
+    await asyncio.gather(first_task, second_task)
+    assert second_entered.is_set()
+
+    async with store.output_node_transaction(
+        board_uid=gen_uid(),
+        generation_uid=generation.uid,
+    ) as (_conn, foreign_record):
+        assert foreign_record is None

@@ -184,7 +184,7 @@ test-backend: setup-mini-app-compiler ## Backend unit tests (integration deferre
 	cd backend && uv run pytest test/unit
 
 .PHONY: test-backend-db
-test-backend-db: ## Image-generation DB tests (requires PostgreSQL 15 and explicit opt-in)
+test-backend-db: ## Image-generation integration tests (requires PostgreSQL 15, Qdrant, and opt-ins)
 	cd backend && uv run pytest test/integration/image_generation
 
 .PHONY: test-tauri

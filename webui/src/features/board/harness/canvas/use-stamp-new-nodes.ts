@@ -71,6 +71,13 @@ export const useStampNewNodes = (
         const needsAssetStrip = op.node.type === "image"
           && needsRescope
           && properties.imageAssetUid !== undefined
+        const needsGeneratedAssociationStrip = op.node.type === "generated-image"
+          && needsRescope
+          && (
+            properties.imageAssetUid !== undefined
+            || properties.generatedImageGenerationUid !== undefined
+            || properties.generatedImageGeneratorNodeUid !== undefined
+          )
 
         // Theme staleness check: a pasted node carries `_storedColors`
         // (canonical, theme-independent) and `style.*` (display, baked
@@ -102,10 +109,16 @@ export const useStampNewNodes = (
           nextStyle = { ...(nextStyle ?? currentStyle), autoFit: false }
         }
 
-        if (!needsRescope && !needsPendingStrip && !needsAssetStrip && !nextStyle) continue
+        if (
+          !needsRescope
+          && !needsPendingStrip
+          && !needsAssetStrip
+          && !needsGeneratedAssociationStrip
+          && !nextStyle
+        ) continue
 
         const patch: Parameters<typeof store.updateNode>[1] = {}
-        if (needsRescope || needsPendingStrip || needsAssetStrip) {
+        if (needsRescope || needsPendingStrip || needsAssetStrip || needsGeneratedAssociationStrip) {
           patch.data = {
             ...data,
             ...(needsRescope ? { graphUid: boardId, parentId: wantedParentId } : {}),
@@ -122,6 +135,16 @@ export const useStampNewNodes = (
                   properties: {
                     ...properties,
                     imageAssetUid: CLEARED_IMAGE_ASSET_UID,
+                  },
+                }
+              : {}),
+            ...(needsGeneratedAssociationStrip
+              ? {
+                  properties: {
+                    ...properties,
+                    imageAssetUid: CLEARED_IMAGE_ASSET_UID,
+                    generatedImageGenerationUid: { type: "keyword", value: "" },
+                    generatedImageGeneratorNodeUid: { type: "keyword", value: "" },
                   },
                 }
               : {}),

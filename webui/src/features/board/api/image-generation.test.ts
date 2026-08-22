@@ -7,6 +7,7 @@ vi.mock("@/api", () => ({ apiFetch }))
 
 import {
   fetchImageAssetBlob,
+  ensureImageGenerationOutputNode,
   getImageGeneration,
   imageGenerationErrorDetail,
   imageGenerationErrorMessage,
@@ -76,6 +77,26 @@ describe("image generation API client", () => {
     expect(apiFetch).toHaveBeenNthCalledWith(2, {
       path: "/boards/board%2Fone/image-assets/asset%2Ftwo/content",
       responseType: "blob",
+      signal: undefined,
+    })
+  })
+
+
+  it("sends only the recreate choice to the canonical output-node PUT", async () => {
+    apiFetch.mockResolvedValue({
+      generation_uid: "gen/two",
+      output_node_uid: "a".repeat(32),
+      output_asset_uid: "b".repeat(32),
+      created: true,
+      recreated: false,
+    })
+
+    await ensureImageGenerationOutputNode("board/one", "gen/two", true)
+
+    expect(apiFetch).toHaveBeenCalledWith({
+      path: "/boards/board%2Fone/image-generations/gen%2Ftwo/output-node",
+      method: "PUT",
+      body: { recreate: true },
       signal: undefined,
     })
   })
@@ -152,6 +173,19 @@ describe("image generation API client", () => {
       "선택한 모델이 이 요청을 지원하지 않습니다.",
     )
     expect(imageGenerationErrorMessage(unknown)).not.toContain(secret)
+  })
+
+
+  it("maps canonical result-node errors without exposing server details", () => {
+    const secret = "qdrant-internal-secret"
+    const error = new Error(`409 Conflict - ${JSON.stringify({
+      detail: { code: "canonical_collision", message: secret },
+    })}`)
+
+    expect(imageGenerationErrorMessage(error)).toBe(
+      "결과 노드 식별자가 기존 보드 데이터와 충돌합니다.",
+    )
+    expect(imageGenerationErrorMessage(error)).not.toContain(secret)
   })
 })
 

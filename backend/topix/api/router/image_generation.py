@@ -11,6 +11,8 @@ from topix.api.datatypes.image_generation import (
     ImageAssetUploadResponse,
     ImageGenerationAcceptedResponse,
     ImageGenerationCreateRequest,
+    ImageGenerationOutputNodeRequest,
+    ImageGenerationOutputNodeResponse,
     ImageGenerationStatusResponse,
     ImageModelListResponse,
     ImageModelResponse,
@@ -31,6 +33,7 @@ from topix.image_generation.models import (
     ImageReferenceValidationError,
     ImageStorageError,
 )
+from topix.image_generation.result_nodes import ImageResultNodeError, ImageResultNodeService
 from topix.image_generation.service import ImageGenerationService
 
 router = APIRouter(tags=["image-generation"])
@@ -214,10 +217,60 @@ async def get_image_generation(
         model_id=generation.model_id,
         started_at=generation.started_at,
         completed_at=generation.completed_at,
+        output_node_uid=generation.output_node_uid,
         output_asset_uid=generation.output_asset_uid,
         output_content_url=output_url,
         error_code=generation.error_code,
         error_message=generation.error_message,
+    )
+
+
+@router.put(
+    "/boards/{graph_id}/image-generations/{generation_uid}/output-node",
+    response_model=ImageGenerationOutputNodeResponse,
+)
+async def ensure_image_generation_output_node(
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    generation_uid: Annotated[str, Path(description="Image generation UID")],
+    body: ImageGenerationOutputNodeRequest,
+    _: Annotated[None, Depends(verify_board_member_can_edit)],
+) -> ImageGenerationOutputNodeResponse:
+    """Idempotently materialize one succeeded generation on the canvas."""
+    service = ImageResultNodeService(
+        image_store=request.app.image_generation_store,
+        graph_store=request.app.graph_store,
+        bridge=request.app.agent_board_bridge,
+    )
+    try:
+        outcome = await service.ensure_output_node(
+            board_uid=graph_id,
+            generation_uid=generation_uid,
+            recreate=body.recreate,
+        )
+    except ImageResultNodeError as exc:
+        status_code = (
+            status.HTTP_404_NOT_FOUND
+            if exc.code == "generation_not_found"
+            else status.HTTP_503_SERVICE_UNAVAILABLE
+            if exc.code in {"canvas_write_incomplete", "output_binding_conflict"}
+            else status.HTTP_409_CONFLICT
+        )
+        raise HTTPException(
+            status_code=status_code,
+            detail={"code": exc.code, "message": exc.safe_message},
+        ) from None
+    except Exception:  # noqa: BLE001 - keep graph/storage internals out of HTTP responses
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Generated image canvas materialization is temporarily unavailable",
+        ) from None
+    return ImageGenerationOutputNodeResponse(
+        generation_uid=outcome.generation_uid,
+        output_node_uid=outcome.output_node_uid,
+        output_asset_uid=outcome.output_asset_uid,
+        created=outcome.created,
+        recreated=outcome.recreated,
     )
 
 

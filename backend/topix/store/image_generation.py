@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 import asyncpg
 
 from topix.image_generation.capabilities import get_capability, validate_generation_parameters
@@ -12,12 +15,14 @@ from topix.image_generation.models import (
     GenerationStorageState,
     ImageAssetCreate,
     ImageAssetRecord,
+    ImageGenerationOutputRecord,
     ImageGenerationRecord,
     ImageProviderError,
     PendingOutputCleanup,
     ProviderImageResult,
 )
 from topix.store.postgres.image_generation import (
+    bind_image_generation_output_node,
     clear_generation_pending_output,
     create_image_asset,
     finish_image_generation_attempt_failed,
@@ -29,6 +34,7 @@ from topix.store.postgres.image_generation import (
     get_image_assets,
     get_image_generation,
     list_generation_pending_outputs,
+    lock_image_generation_output,
     reconcile_image_generations,
     renew_image_generation_lease,
     set_generation_pending_output,
@@ -90,6 +96,38 @@ class ImageGenerationStore:
         """Return one board-scoped generation for polling."""
         async with self._pool().acquire() as conn:
             return await get_image_generation(conn, board_uid=board_uid, generation_uid=generation_uid)
+
+    @asynccontextmanager
+    async def output_node_transaction(
+        self,
+        *,
+        board_uid: str,
+        generation_uid: str,
+    ) -> AsyncIterator[tuple[asyncpg.Connection, ImageGenerationOutputRecord | None]]:
+        """Hold the cross-worker output lock while canvas state is reconciled."""
+        async with self._pool().acquire() as conn, conn.transaction():
+            record = await lock_image_generation_output(
+                conn,
+                board_uid=board_uid,
+                generation_uid=generation_uid,
+            )
+            yield conn, record
+
+    async def bind_output_node(
+        self,
+        conn: asyncpg.Connection,
+        *,
+        board_uid: str,
+        generation_uid: str,
+        output_node_uid: str,
+    ) -> bool:
+        """Bind one canonical result node inside an output transaction."""
+        return await bind_image_generation_output_node(
+            conn,
+            board_uid=board_uid,
+            generation_uid=generation_uid,
+            output_node_uid=output_node_uid,
+        )
 
     async def reconcile_incomplete(self) -> int:
         """Fail only expired owned generations under the database writer lock."""

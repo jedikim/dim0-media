@@ -19,6 +19,9 @@ from PIL import Image
 from topix.api.router.image_generation import router
 from topix.api.utils.rate_limit.dependency import rate_limiter
 from topix.api.utils.security import get_current_user_uid
+from topix.datatypes.note.link import Link
+from topix.datatypes.note.note import Note, NoteProperties
+from topix.datatypes.property import TextProperty
 from topix.image_generation.models import (
     GeneratedImagePayload,
     ImageAssetCreate,
@@ -71,7 +74,8 @@ class _FakeGraphStore:
         """Bind role fixtures to one existing private board."""
         self.board_uid = board_uid
         self.roles = roles
-        self.nodes: dict[str, SimpleNamespace] = {}
+        self.nodes: dict[str, Note | SimpleNamespace] = {}
+        self.links: dict[str, Link] = {}
 
     async def get_graph_role(self, graph_uid: str, user_uid: str) -> str | None:
         """Return a role only for the configured board."""
@@ -87,6 +91,32 @@ class _FakeGraphStore:
         """Return configured node fixtures in request order."""
         return [self.nodes[node_uid] for node_uid in node_ids if node_uid in self.nodes]
 
+    async def get_links(self, link_ids: list[str]):
+        """Return configured link fixtures in request order."""
+        return [self.links[link_uid] for link_uid in link_ids if link_uid in self.links]
+
+
+class _FakeBridge:
+    """Persist result nodes through the graph fake without external services."""
+
+    def __init__(self, graph_store: _FakeGraphStore) -> None:
+        """Bind the observable graph store."""
+        self.graph_store = graph_store
+        self.note_calls = 0
+        self.link_calls = 0
+
+    async def add_notes(self, *, board_id: str, notes: list[Note]) -> None:
+        """Store canonical notes as the production bridge would."""
+        self.note_calls += 1
+        assert all(note.graph_uid == board_id for note in notes)
+        self.graph_store.nodes.update({note.id: note for note in notes})
+
+    async def add_links(self, *, board_id: str, links: list[Link]) -> None:
+        """Store canonical links as the production bridge would."""
+        self.link_calls += 1
+        assert all(link.graph_uid == board_id for link in links)
+        self.graph_store.links.update({link.id: link for link in links})
+
 
 @dataclass
 class _APIContext:
@@ -97,6 +127,7 @@ class _APIContext:
     tasks: ImageGenerationTaskManager
     adapter: _FakeAdapter
     graph_store: _FakeGraphStore
+    bridge: _FakeBridge
     board_uid: str
     foreign_board_uid: str
     owner_uid: str
@@ -137,10 +168,13 @@ async def _api_context(pool: asyncpg.Pool, root):
         board_uid=board_uid,
         roles={owner_uid: "owner", member_uid: "member", viewer_uid: "viewer"},
     )
+    bridge = _FakeBridge(graph_store)
     app = FastAPI()
     app.include_router(router)
     app.image_generation_service = service
+    app.image_generation_store = store
     app.graph_store = graph_store
+    app.agent_board_bridge = bridge
 
     async def _test_user(request: Request) -> str:
         """Authenticate from a test-only header without creating a real JWT."""
@@ -161,6 +195,7 @@ async def _api_context(pool: asyncpg.Pool, root):
             tasks=tasks,
             adapter=adapter,
             graph_store=graph_store,
+            bridge=bridge,
             board_uid=board_uid,
             foreign_board_uid=foreign_board_uid,
             owner_uid=owner_uid,
@@ -181,6 +216,24 @@ def _request_body(*, request_uid: str | None = None, prompt: str = "Create a cla
         "reference_asset_uids": [],
         "generator_node_uid": None,
     }
+
+
+async def _create_succeeded_generator_run(context: _APIContext) -> tuple[str, str]:
+    """Create one local-provider run tied to a real generator Note fixture."""
+    generator_uid = gen_uid()
+    context.graph_store.nodes[generator_uid] = Note(
+        id=generator_uid,
+        graph_uid=context.board_uid,
+        properties=NoteProperties(image_prompt=TextProperty(text="a cyan square")),
+    )
+    response = await context.client.post(
+        f"/boards/{context.board_uid}/image-generations",
+        headers={"X-Test-User": context.owner_uid},
+        json=_request_body() | {"generator_node_uid": generator_uid},
+    )
+    assert response.status_code == 202
+    await context.tasks.wait()
+    return response.json()["generation_uid"], generator_uid
 
 
 @pytest.mark.asyncio
@@ -443,3 +496,82 @@ async def test_models_endpoint_exposes_allowlist_without_configuration_state(
         assert "api_key" not in serialized
         assert "configured" not in serialized
         assert "provider_tag" not in serialized
+
+
+@pytest.mark.asyncio
+async def test_output_node_put_requires_editor_and_reconciles_without_provider_work(
+    initialized_image_pg_pool: asyncpg.Pool,
+    tmp_path,
+) -> None:
+    """Only editors can idempotently materialize and explicitly restore a result."""
+    async with _api_context(initialized_image_pg_pool, tmp_path) as context:
+        generation_uid, generator_uid = await _create_succeeded_generator_run(context)
+        provider_calls = len(context.adapter.requests)
+        path = f"/boards/{context.board_uid}/image-generations/{generation_uid}/output-node"
+
+        for denied_uid in (context.viewer_uid, context.stranger_uid):
+            denied = await context.client.put(
+                path,
+                headers={"X-Test-User": denied_uid},
+                json={"recreate": False},
+            )
+            assert denied.status_code == 404
+
+        injected = await context.client.put(
+            path,
+            headers={"X-Test-User": context.owner_uid},
+            json={"recreate": False, "output_asset_uid": gen_uid()},
+        )
+        assert injected.status_code == 422
+
+        first = await context.client.put(
+            path,
+            headers={"X-Test-User": context.member_uid},
+            json={"recreate": False},
+        )
+        repeated = await context.client.put(
+            path,
+            headers={"X-Test-User": context.owner_uid},
+            json={"recreate": False},
+        )
+        assert first.status_code == repeated.status_code == 200
+        assert first.json()["created"] is True
+        assert repeated.json()["created"] is False
+        assert first.json()["output_node_uid"] == repeated.json()["output_node_uid"]
+        node_uid = first.json()["output_node_uid"]
+        assert len(node_uid) == 32 and node_uid == node_uid.lower()
+        assert int(node_uid, 16) >= 0
+        assert context.bridge.note_calls == context.bridge.link_calls == 1
+        assert len(context.graph_store.links) == 1
+
+        status_response = await context.client.get(
+            f"/boards/{context.board_uid}/image-generations/{generation_uid}",
+            headers={"X-Test-User": context.viewer_uid},
+        )
+        assert status_response.json()["output_node_uid"] == node_uid
+
+        context.graph_store.nodes.pop(node_uid)
+        context.graph_store.links.clear()
+        no_resurrection = await context.client.put(
+            path,
+            headers={"X-Test-User": context.owner_uid},
+            json={"recreate": False},
+        )
+        assert no_resurrection.status_code == 200
+        assert node_uid not in context.graph_store.nodes
+
+        restored = await context.client.put(
+            path,
+            headers={"X-Test-User": context.owner_uid},
+            json={"recreate": True},
+        )
+        assert restored.status_code == 200
+        assert restored.json()["output_node_uid"] == node_uid
+        assert restored.json()["recreated"] is True
+        assert context.graph_store.nodes[node_uid].graph_uid == context.board_uid
+        assert next(iter(context.graph_store.links.values())).source == generator_uid
+        assert len(context.adapter.requests) == provider_calls
+        serialized = first.text + repeated.text + restored.text
+        assert "storage_key" not in serialized
+        assert "authorization" not in serialized.lower()
+        assert "api_key" not in serialized.lower()

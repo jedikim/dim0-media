@@ -19,7 +19,7 @@ from topix.collab.note_to_wire import (
 )
 from topix.datatypes.file.document import Document
 from topix.datatypes.note.link import IMAGE_REFERENCE_EDGE_MARKER, Link, LinkProperties
-from topix.datatypes.note.note import Note
+from topix.datatypes.note.note import GENERATED_IMAGE_MARKER_VALUE, Note, NoteProperties
 from topix.datatypes.note.style import NodeType, StrokeStyle, Style
 from topix.datatypes.property import KeywordProperty, NumberProperty
 
@@ -116,6 +116,27 @@ def test_document_takes_precedence_over_style_type() -> None:
     doc = Document(id="n1", graph_uid="b1", style=Style(type=NodeType.RECTANGLE))
     wire = note_to_wire_node(doc)
     assert wire["type"] == "document"
+
+
+def test_generated_image_marker_projects_to_custom_wire_type() -> None:
+    """Server-created immutable results render immediately on live peers."""
+    note = Note(
+        id="result-1",
+        graph_uid="b1",
+        style=Style(type=NodeType.RECTANGLE),
+        properties=NoteProperties(
+            image_asset_uid=KeywordProperty(value="a" * 32),
+            generated_image_marker=KeywordProperty(value=GENERATED_IMAGE_MARKER_VALUE),
+            generated_image_generation_uid=KeywordProperty(value="g" * 32),
+            generated_image_generator_node_uid=KeywordProperty(value="n" * 32),
+        ),
+    )
+
+    wire = note_to_wire_node(note)
+
+    assert wire["type"] == "generated-image"
+    assert wire["style"]["autoFit"] is False
+    assert wire["data"]["properties"]["generatedImageMarker"]["value"] == GENERATED_IMAGE_MARKER_VALUE
 
 
 # ---------------------------------------------------------------------------

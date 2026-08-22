@@ -95,7 +95,7 @@ describe("useStampNewEdges — paste preservation", () => {
   const addNode = (
     store: CanvasStore,
     id: string,
-    type: "image" | "image-generator" | "text",
+    type: "image" | "image-generator" | "generated-image" | "text",
   ): void => {
     store.addNode({
       id: asNodeId(id),
@@ -187,6 +187,25 @@ describe("useStampNewEdges — paste preservation", () => {
     ])).toEqual([
       ["image-1", 0],
       ["generator-source", 1],
+    ])
+  })
+
+
+  it("marks immutable generated-image sources as ordinary ordered references", () => {
+    const store = createCanvasStore()
+    mountStamp(store)
+    addNode(store, "generated-result", "generated-image")
+    addNode(store, "generator-target", "image-generator")
+
+    act(() => {
+      addAttachedEdge(store, "generated-result", "generator-target")
+    })
+
+    expect(orderedImageReferences(store, asNodeId("generator-target"))).toEqual([
+      expect.objectContaining({
+        sourceNodeId: asNodeId("generated-result"),
+        ordinal: 0,
+      }),
     ])
   })
 

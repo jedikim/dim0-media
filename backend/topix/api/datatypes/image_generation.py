@@ -70,10 +70,27 @@ class ImageGenerationStatusResponse(ImageGenerationAPIModel):
     model_id: str
     started_at: datetime
     completed_at: datetime | None
+    output_node_uid: str | None
     output_asset_uid: str | None
     output_content_url: str | None
     error_code: str | None
     error_message: str | None
+
+
+class ImageGenerationOutputNodeRequest(ImageGenerationAPIModel):
+    """Only client choice accepted by the canonical output-node endpoint."""
+
+    recreate: bool = False
+
+
+class ImageGenerationOutputNodeResponse(ImageGenerationAPIModel):
+    """Safe canonical result-node association returned to an editor."""
+
+    generation_uid: str
+    output_node_uid: str
+    output_asset_uid: str
+    created: bool
+    recreated: bool
 
 
 class ImageModelResponse(ImageGenerationAPIModel):

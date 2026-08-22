@@ -45,6 +45,7 @@ const generationState = (
   completed_at: status === "succeeded" || status === "failed"
     ? "2026-08-21T00:00:01Z"
     : null,
+  output_node_uid: null,
   output_asset_uid: status === "succeeded" ? "asset-1" : null,
   output_content_url: status === "succeeded"
     ? "/boards/board-1/image-assets/asset-1/content"

@@ -440,11 +440,16 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
     await sendPendingRequest(snapshot)
   }, [graphId, nodeId, sendPendingRequest, userId])
 
-  const checkStatusAgain = useCallback((): void => {
-    if (!activeGenerationUid || phase !== "stalled" || pendingRef.current) return
+  const refreshStatus = useCallback((): void => {
+    if (!activeGenerationUid || pendingRef.current) return
     stopPolling()
     setPollRevision((revision) => revision + 1)
-  }, [activeGenerationUid, phase, stopPolling])
+  }, [activeGenerationUid, stopPolling])
+
+  const checkStatusAgain = useCallback((): void => {
+    if (phase !== "stalled") return
+    refreshStatus()
+  }, [phase, refreshStatus])
 
   const canResumePending = isOwnedPendingImageRequest(
     hasPendingRequest ? pendingRef.current : null,
@@ -460,6 +465,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
     generate,
     resumePending,
     checkStatusAgain,
+    refreshStatus,
     hasPendingRequest,
     canResumePending,
   }

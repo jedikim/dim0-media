@@ -87,6 +87,34 @@ const addGenerator = (store: CanvasStore, id: string, generationUid: string): vo
 }
 
 
+const addGeneratedImage = (
+  store: CanvasStore,
+  id: string,
+  { asset, generation, generator }: { asset: string; generation: string; generator: string },
+): void => {
+  store.addNode({
+    id: asNodeId(id),
+    type: "generated-image",
+    x: 0,
+    y: 0,
+    w: 100,
+    h: 100,
+    angle: 0,
+    z: 0,
+    groups: [],
+    data: {
+      graphUid: BOARD_ID,
+      properties: {
+        generatedImageMarker: { type: "keyword", value: "immutable-result" },
+        imageAssetUid: { type: "keyword", value: asset },
+        generatedImageGenerationUid: { type: "keyword", value: generation },
+        generatedImageGeneratorNodeUid: { type: "keyword", value: generator },
+      },
+    },
+  })
+}
+
+
 const uploaded = (uid: string) => ({
   asset_uid: uid,
   mime_type: "image/png" as const,
@@ -152,6 +180,95 @@ describe("ordered image reference resolution", () => {
       undefined,
     )
     expect(upload).not.toHaveBeenCalled()
+    expect(startImageGeneration).not.toHaveBeenCalled()
+  })
+
+
+  it("resolves generated results directly in exact edge order without network work", async () => {
+    const store = createCanvasStore()
+    const first = assetUid("a")
+    const second = assetUid("b")
+    addGeneratedImage(store, "result-1", {
+      asset: first,
+      generation: assetUid("1"),
+      generator: assetUid("2"),
+    })
+    addImage(store, "image-1", { existing: second })
+    const upload = vi.fn()
+
+    await expect(resolveReferenceAssetUids({
+      store,
+      graphId: BOARD_ID,
+      sourceNodeUids: ["result-1", "image-1"],
+      getCurrentSourceNodeUids: () => ["result-1", "image-1"],
+      upload,
+    })).resolves.toEqual([first, second])
+
+    expect(upload).not.toHaveBeenCalled()
+    expect(getImageGeneration).not.toHaveBeenCalled()
+    expect(startImageGeneration).not.toHaveBeenCalled()
+  })
+
+
+  it("rejects a generated-result association changed during ordered resolution", async () => {
+    const store = createCanvasStore()
+    addGeneratedImage(store, "result-1", {
+      asset: assetUid("a"),
+      generation: assetUid("1"),
+      generator: assetUid("2"),
+    })
+    addImage(store, "image-1")
+    const uploadResponse = deferred<ReturnType<typeof uploaded>>()
+    const upload = vi.fn(() => uploadResponse.promise)
+
+    const resolution = resolveReferenceAssetUids({
+      store,
+      graphId: BOARD_ID,
+      sourceNodeUids: ["result-1", "image-1"],
+      upload,
+    })
+    await Promise.resolve()
+    const data = store.getNode(asNodeId("result-1"))?.data as {
+      properties: { imageAssetUid: { type: "keyword"; value: string } }
+    }
+    data.properties.imageAssetUid = { type: "keyword", value: assetUid("c") }
+    uploadResponse.resolve(uploaded(assetUid("d")))
+
+    await expect(resolution).rejects.toThrow(IMAGE_REFERENCE_CHANGED_MESSAGE)
+    expect(startImageGeneration).not.toHaveBeenCalled()
+  })
+
+
+  it("fails closed for incomplete and cross-board generated results", async () => {
+    const store = createCanvasStore()
+    addGeneratedImage(store, "incomplete", {
+      asset: assetUid("a"),
+      generation: assetUid("1"),
+      generator: assetUid("2"),
+    })
+    const incomplete = store.getNode(asNodeId("incomplete"))?.data as {
+      properties: { generatedImageGenerationUid: { value: string } }
+    }
+    incomplete.properties.generatedImageGenerationUid.value = ""
+    addGeneratedImage(store, "foreign", {
+      asset: assetUid("b"),
+      generation: assetUid("3"),
+      generator: assetUid("4"),
+    })
+    const foreign = store.getNode(asNodeId("foreign"))?.data as { graphUid: string }
+    foreign.graphUid = "other-board"
+
+    await expect(resolveReferenceAssetUids({
+      store,
+      graphId: BOARD_ID,
+      sourceNodeUids: ["incomplete"],
+    })).rejects.toThrow("참조로 사용할 수 없습니다")
+    await expect(resolveReferenceAssetUids({
+      store,
+      graphId: BOARD_ID,
+      sourceNodeUids: ["foreign"],
+    })).rejects.toThrow("이 보드")
+    expect(getImageGeneration).not.toHaveBeenCalled()
     expect(startImageGeneration).not.toHaveBeenCalled()
   })
 

@@ -132,4 +132,33 @@ describe("useStampNewNodes — autoFit normalization", () => {
     expect(same.properties.imageAssetUid.value).toBe("a".repeat(32))
     expect(foreign.properties.imageAssetUid.value).toBe("")
   })
+
+
+  it("preserves same-board result clones and clears cross-board associations", () => {
+    const store = createCanvasStore()
+    mount(store)
+    const association = {
+      generatedImageMarker: { type: "keyword", value: "immutable-result" },
+      imageAssetUid: { type: "keyword", value: "a".repeat(32) },
+      generatedImageGenerationUid: { type: "keyword", value: "g".repeat(32) },
+      generatedImageGeneratorNodeUid: { type: "keyword", value: "n".repeat(32) },
+    }
+    addNode(store, "same-result", "generated-image", { properties: association })
+    addNode(store, "foreign-result", "generated-image", {
+      graphUid: "other-board",
+      properties: association,
+    })
+
+    const same = store.getNode(asNodeId("same-result"))?.data as {
+      properties: typeof association
+    }
+    const foreign = store.getNode(asNodeId("foreign-result"))?.data as {
+      properties: typeof association
+    }
+    expect(same.properties).toEqual(association)
+    expect(foreign.properties.generatedImageMarker).toEqual(association.generatedImageMarker)
+    expect(foreign.properties.imageAssetUid.value).toBe("")
+    expect(foreign.properties.generatedImageGenerationUid.value).toBe("")
+    expect(foreign.properties.generatedImageGeneratorNodeUid.value).toBe("")
+  })
 })
