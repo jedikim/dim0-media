@@ -47,8 +47,88 @@ const INPUT_CLASS =
   "w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-ring disabled:opacity-50"
 
 
+export const IMAGE_PROMPT_DEBOUNCE_MS = 400
+
+
 const isSupportedChoice = (value: string | null, choices: string[] | null): value is string =>
   value !== null && choices !== null && choices.includes(value)
+
+
+/** Keep prompt typing local and flush the latest whole value at safe boundaries. */
+function usePromptDraft(
+  storedPrompt: string,
+  persistPrompt: (prompt: string) => void,
+  locked: boolean,
+) {
+  const [draft, setDraft] = useState(storedPrompt)
+  const draftRef = useRef(storedPrompt)
+  const storedPromptRef = useRef(storedPrompt)
+  const editingRef = useRef(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const persistPromptRef = useRef(persistPrompt)
+  persistPromptRef.current = persistPrompt
+
+  const clearTimer = useCallback((): void => {
+    if (timerRef.current === null) return
+    clearTimeout(timerRef.current)
+    timerRef.current = null
+  }, [])
+
+  const commitPrompt = useCallback((): string => {
+    clearTimer()
+    const next = draftRef.current
+    editingRef.current = false
+    if (next !== storedPromptRef.current) {
+      storedPromptRef.current = next
+      persistPromptRef.current(next)
+    }
+    return next
+  }, [clearTimer])
+
+  useEffect(() => {
+    storedPromptRef.current = storedPrompt
+    if (editingRef.current) {
+      if (storedPrompt === draftRef.current) editingRef.current = false
+      return
+    }
+    if (storedPrompt !== draftRef.current) {
+      draftRef.current = storedPrompt
+      setDraft(storedPrompt)
+    }
+  }, [storedPrompt])
+
+  useEffect(() => {
+    if (!locked) return
+    clearTimer()
+    editingRef.current = false
+    if (draftRef.current !== storedPromptRef.current) {
+      draftRef.current = storedPromptRef.current
+      setDraft(storedPromptRef.current)
+    }
+  }, [clearTimer, locked])
+
+  useEffect(() => () => {
+    if (editingRef.current) commitPrompt()
+    else clearTimer()
+  }, [clearTimer, commitPrompt])
+
+  const updateDraft = useCallback((next: string): void => {
+    draftRef.current = next
+    editingRef.current = true
+    setDraft(next)
+    clearTimer()
+    timerRef.current = setTimeout(commitPrompt, IMAGE_PROMPT_DEBOUNCE_MS)
+  }, [clearTimer, commitPrompt])
+
+  const flushForGenerate = useCallback((): string => {
+    clearTimer()
+    editingRef.current = false
+    storedPromptRef.current = draftRef.current
+    return draftRef.current
+  }, [clearTimer])
+
+  return { draft, updateDraft, commitPrompt, flushForGenerate }
+}
 
 
 /** Render one capability selector only when the server advertises values. */
@@ -178,12 +258,32 @@ function SyncedImageGeneratorCard({
     }
   }, [])
 
+  const busy = generation.phase === "starting"
+    || generation.phase === "running"
+    || generation.phase === "stalled"
+  const inputsLocked = !canEdit || busy || generation.hasPendingRequest
+
   const storedModelId = readKeywordProperty(properties.imageModelId)
-  const model = useMemo(() => {
-    const selected = models.find((candidate) => candidate.model_id === storedModelId)
-    return selected ?? models.find((candidate) => candidate.supports_text_to_image) ?? null
-  }, [models, storedModelId])
-  const prompt = readTextProperty(properties.imagePrompt)
+  const textToImageModels = useMemo(
+    () => models.filter((candidate) => candidate.supports_text_to_image),
+    [models],
+  )
+  const storedModel = useMemo(
+    () => models.find((candidate) => candidate.model_id === storedModelId) ?? null,
+    [models, storedModelId],
+  )
+  const storedModelUnavailable = !modelsLoading
+    && !modelsError
+    && storedModelId !== null
+    && storedModel?.supports_text_to_image !== true
+  const model = storedModelId
+    ? storedModel?.supports_text_to_image === true ? storedModel : null
+    : textToImageModels[0] ?? null
+  const storedPrompt = readTextProperty(properties.imagePrompt)
+  const persistPrompt = useCallback((next: string): void => {
+    patchProperties({ imagePrompt: { type: "text", text: next } })
+  }, [patchProperties])
+  const prompt = usePromptDraft(storedPrompt, persistPrompt, inputsLocked)
   const aspectRatio = readKeywordProperty(properties.imageAspectRatio)
   const resolution = readKeywordProperty(properties.imageResolution)
   const quality = readKeywordProperty(properties.imageQuality)
@@ -204,16 +304,13 @@ function SyncedImageGeneratorCard({
     graphId,
     generation.state?.output_asset_uid ?? null,
   )
-  const busy = generation.phase === "starting"
-    || generation.phase === "running"
-    || generation.phase === "stalled"
   const canGenerate = canEdit
     && !modelsLoading
     && !modelsError
     && model?.supports_text_to_image === true
-    && prompt.trim().length > 0
-    && !busy
-    && !generation.hasPendingRequest
+    && !storedModelUnavailable
+    && prompt.draft.trim().length > 0
+    && !inputsLocked
   const footerStatus = generation.phase === "starting" || generation.phase === "running"
     ? "saving"
     : generation.phase === "succeeded"
@@ -232,13 +329,12 @@ function SyncedImageGeneratorCard({
       <textarea
         aria-label="Image prompt"
         className={cn(INPUT_CLASS, "min-h-20 resize-none")}
-        value={prompt}
-        disabled={!canEdit || busy}
+        value={prompt.draft}
+        disabled={inputsLocked}
         maxLength={32_000}
         placeholder="만들고 싶은 이미지를 설명하세요"
-        onChange={(event) => patchProperties({
-          imagePrompt: { type: "text", text: event.target.value },
-        })}
+        onChange={(event) => prompt.updateDraft(event.target.value)}
+        onBlur={() => prompt.commitPrompt()}
       />
 
       <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
@@ -246,12 +342,17 @@ function SyncedImageGeneratorCard({
         <select
           aria-label="Image model"
           className={SELECT_CLASS}
-          value={model?.model_id ?? ""}
-          disabled={!canEdit || busy || modelsLoading || models.length === 0}
+          value={storedModelUnavailable ? storedModelId ?? "" : model?.model_id ?? ""}
+          disabled={inputsLocked || modelsLoading || textToImageModels.length === 0}
           onChange={(event) => patchProperties({ imageModelId: keywordProperty(event.target.value) })}
         >
-          {models.length === 0 && <option value="">사용 가능한 모델 없음</option>}
-          {models.map((candidate) => (
+          {storedModelUnavailable && storedModelId && (
+            <option value={storedModelId}>사용할 수 없는 모델 ({storedModelId})</option>
+          )}
+          {textToImageModels.length === 0 && (
+            <option value="">사용 가능한 모델 없음</option>
+          )}
+          {textToImageModels.map((candidate) => (
             <option key={candidate.model_id} value={candidate.model_id}>
               {candidate.display_name}
             </option>
@@ -264,21 +365,21 @@ function SyncedImageGeneratorCard({
           label="비율"
           value={aspectRatio}
           choices={model?.supported_aspect_ratios ?? null}
-          disabled={!canEdit || busy}
+          disabled={inputsLocked}
           onChange={(value) => patchProperties({ imageAspectRatio: keywordProperty(value) })}
         />
         <CapabilitySelect
           label="해상도"
           value={resolution}
           choices={model?.supported_resolutions ?? null}
-          disabled={!canEdit || busy}
+          disabled={inputsLocked}
           onChange={(value) => patchProperties({ imageResolution: keywordProperty(value) })}
         />
         <CapabilitySelect
           label="품질"
           value={quality}
           choices={model?.supported_qualities ?? null}
-          disabled={!canEdit || busy}
+          disabled={inputsLocked}
           onChange={(value) => patchProperties({ imageQuality: keywordProperty(value) })}
         />
       </div>
@@ -288,10 +389,28 @@ function SyncedImageGeneratorCard({
           type="button"
           className="h-9 flex-1 rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
           disabled={!canGenerate}
-          onClick={() => model && void generation.generate(model.model_id, prompt, parameters)}
+          onClick={() => {
+            if (!model) return
+            const latestPrompt = prompt.flushForGenerate()
+            patchProperties({
+              imagePrompt: { type: "text", text: latestPrompt },
+              imageModelId: keywordProperty(model.model_id),
+            })
+            void generation.generate(model.model_id, latestPrompt, parameters)
+          }}
         >
           {busy ? "생성 중…" : "Generate"}
         </button>
+        {generation.phase === "stalled" && (
+          <button
+            type="button"
+            className="h-9 rounded-lg border border-border px-3 text-xs font-medium text-foreground disabled:opacity-50"
+            disabled={!canEdit || generation.hasPendingRequest}
+            onClick={generation.checkStatusAgain}
+          >
+            상태 다시 확인
+          </button>
+        )}
         {generation.hasPendingRequest && (
           <button
             type="button"
@@ -314,9 +433,12 @@ function SyncedImageGeneratorCard({
         )}
       </div>
 
-      {(modelsError || generation.error) && (
+      {(modelsError || storedModelUnavailable || generation.error) && (
         <p role="alert" className="text-xs text-destructive">
-          {modelsError ?? generation.error}
+          {modelsError
+            ?? (storedModelUnavailable
+              ? "저장된 모델을 사용할 수 없습니다. 다른 모델을 선택해 주세요."
+              : generation.error)}
         </p>
       )}
       <NodeFooter status={footerStatus}>

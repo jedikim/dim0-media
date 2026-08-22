@@ -71,6 +71,9 @@ export const nodeToNote = (node: Node): Note => {
       {
         // Prefer the original style.type stashed in data — preserves it
         // across canvas-type overrides (e.g. documents).
+        // Image generators deliberately keep the production wire type as
+        // rectangle in PR-03. `imagePrompt` is the one-way projection marker,
+        // so no backend enum or discriminator schema change is required here.
         type: node.type === "image-generator"
           ? "rectangle"
           : data.styleType ?? canvasTypeToDim0(node.type),

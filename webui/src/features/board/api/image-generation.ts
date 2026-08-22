@@ -71,7 +71,7 @@ export function imageGenerationErrorMessage(error: unknown): string {
     case 404:
       return "보드나 이미지 생성 기록을 찾을 수 없습니다."
     case 409:
-      return "같은 요청의 처리 여부를 확인할 수 없습니다. 요청을 재개해 주세요."
+      return "요청 식별자가 다른 내용에 이미 사용되었습니다. 다시 생성해 주세요."
     case 429:
       return "요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요."
     case 503:

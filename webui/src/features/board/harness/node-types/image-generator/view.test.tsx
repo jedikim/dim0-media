@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   useAuthedImage: vi.fn(),
   generate: vi.fn(),
   resumePending: vi.fn(),
+  checkStatusAgain: vi.fn(),
 }))
 
 vi.mock("@canvas-harness/react", () => ({
@@ -73,15 +74,19 @@ const MODEL = {
 describe("ImageGeneratorView", () => {
   let container: HTMLDivElement
   let root: Root
+  let mounted: boolean
 
 
   beforeEach(() => {
+    vi.useFakeTimers()
     container = document.createElement("div")
     document.body.appendChild(container)
     root = createRoot(container)
+    mounted = true
     mocks.local = false
     mocks.generate.mockReset()
     mocks.resumePending.mockReset()
+    mocks.checkStatusAgain.mockReset()
     mocks.listImageModels.mockReset().mockResolvedValue([MODEL])
     mocks.useAuthedImage.mockReset().mockReturnValue({ url: null, failed: false })
     mocks.useImageGeneration.mockReset().mockReturnValue({
@@ -90,10 +95,13 @@ describe("ImageGeneratorView", () => {
       error: null,
       generate: mocks.generate,
       resumePending: mocks.resumePending,
+      checkStatusAgain: mocks.checkStatusAgain,
       hasPendingRequest: false,
       canResumePending: false,
     })
-    mocks.updateNode.mockReset()
+    mocks.updateNode.mockReset().mockImplementation((_id, patch: Record<string, unknown>) => {
+      mocks.node = { ...mocks.node, ...patch }
+    })
     mocks.node = {
       id: "node-1",
       data: {
@@ -114,8 +122,9 @@ describe("ImageGeneratorView", () => {
 
 
   afterEach(() => {
-    act(() => root.unmount())
+    if (mounted) act(() => root.unmount())
     container.remove()
+    vi.useRealTimers()
   })
 
 
@@ -125,6 +134,20 @@ describe("ImageGeneratorView", () => {
       await Promise.resolve()
       await Promise.resolve()
     })
+  }
+
+
+  const inputText = (element: HTMLTextAreaElement, value: string): void => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set
+    setter?.call(element, value)
+    element.dispatchEvent(new Event("input", { bubbles: true }))
+  }
+
+
+  const selectOption = (element: HTMLSelectElement, value: string): void => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set
+    setter?.call(element, value)
+    element.dispatchEvent(new Event("change", { bubbles: true }))
   }
 
 
@@ -199,6 +222,7 @@ describe("ImageGeneratorView", () => {
       error: null,
       generate: mocks.generate,
       resumePending: mocks.resumePending,
+      checkStatusAgain: mocks.checkStatusAgain,
       hasPendingRequest: false,
       canResumePending: false,
     })
@@ -206,5 +230,197 @@ describe("ImageGeneratorView", () => {
 
     expect(mocks.useAuthedImage).toHaveBeenCalledWith("board-1", "asset-existing")
     expect(mocks.generate).not.toHaveBeenCalled()
+  })
+
+
+  it("debounces rapid prompt edits and persists only the trailing value", async () => {
+    await render()
+    const textarea = container.querySelector<HTMLTextAreaElement>('[aria-label="Image prompt"]')!
+
+    act(() => {
+      inputText(textarea, "a")
+      inputText(textarea, "a blue")
+      inputText(textarea, "a blue heron")
+    })
+    expect(mocks.updateNode).not.toHaveBeenCalled()
+
+    act(() => vi.advanceTimersByTime(399))
+    expect(mocks.updateNode).not.toHaveBeenCalled()
+    act(() => vi.advanceTimersByTime(1))
+
+    expect(mocks.updateNode).toHaveBeenCalledTimes(1)
+    expect(mocks.updateNode).toHaveBeenLastCalledWith("node-1", expect.objectContaining({
+      data: expect.objectContaining({
+        properties: expect.objectContaining({
+          imagePrompt: { type: "text", text: "a blue heron" },
+        }),
+      }),
+    }))
+  })
+
+
+  it("accepts external prompt changes while idle and cancels a draft when pending locks arrive", async () => {
+    await render()
+    let textarea = container.querySelector<HTMLTextAreaElement>('[aria-label="Image prompt"]')!
+    const data = (mocks.node?.data ?? {}) as { properties: Record<string, unknown> }
+    data.properties.imagePrompt = { type: "text", text: "external prompt" }
+    await render()
+    textarea = container.querySelector<HTMLTextAreaElement>('[aria-label="Image prompt"]')!
+    expect(textarea.value).toBe("external prompt")
+
+    act(() => inputText(textarea, "unsaved local prompt"))
+    mocks.useImageGeneration.mockReturnValue({
+      phase: "failed",
+      state: null,
+      error: "확인 필요",
+      generate: mocks.generate,
+      resumePending: mocks.resumePending,
+      checkStatusAgain: mocks.checkStatusAgain,
+      hasPendingRequest: true,
+      canResumePending: false,
+    })
+    await render()
+    act(() => vi.advanceTimersByTime(1_000))
+
+    textarea = container.querySelector<HTMLTextAreaElement>('[aria-label="Image prompt"]')!
+    expect(textarea.value).toBe("external prompt")
+    expect(mocks.updateNode).not.toHaveBeenCalled()
+  })
+
+
+  it("flushes the latest prompt on blur, Generate, and unmount", async () => {
+    await render()
+    let textarea = container.querySelector<HTMLTextAreaElement>('[aria-label="Image prompt"]')!
+
+    act(() => {
+      inputText(textarea, "blurred prompt")
+      textarea.dispatchEvent(new FocusEvent("focusout", { bubbles: true }))
+    })
+    expect(mocks.updateNode).toHaveBeenCalledTimes(1)
+
+    mocks.updateNode.mockClear()
+    act(() => inputText(textarea, "generated prompt"))
+    const generateButton = [...container.querySelectorAll("button")]
+      .find((candidate) => candidate.textContent === "Generate")!
+    act(() => generateButton.click())
+
+    expect(mocks.generate).toHaveBeenCalledWith("model-1", "generated prompt", {})
+    expect(mocks.updateNode).toHaveBeenLastCalledWith("node-1", expect.objectContaining({
+      data: expect.objectContaining({
+        properties: expect.objectContaining({
+          imagePrompt: { type: "text", text: "generated prompt" },
+          imageModelId: { type: "keyword", value: "model-1" },
+        }),
+      }),
+    }))
+
+    mocks.updateNode.mockClear()
+    textarea = container.querySelector<HTMLTextAreaElement>('[aria-label="Image prompt"]')!
+    act(() => inputText(textarea, "unmounted prompt"))
+    act(() => root.unmount())
+    mounted = false
+    expect(mocks.updateNode).toHaveBeenCalledTimes(1)
+    expect(mocks.updateNode.mock.calls[0][1]).toEqual(expect.objectContaining({
+      data: expect.objectContaining({
+        properties: expect.objectContaining({
+          imagePrompt: { type: "text", text: "unmounted prompt" },
+        }),
+      }),
+    }))
+  })
+
+
+  it.each([
+    ["owned ambiguous", true],
+    ["another user", false],
+  ])("locks every input while %s pending work exists", async (_label, canResumePending) => {
+    mocks.useImageGeneration.mockReturnValue({
+      phase: "failed",
+      state: null,
+      error: "확인 필요",
+      generate: mocks.generate,
+      resumePending: mocks.resumePending,
+      checkStatusAgain: mocks.checkStatusAgain,
+      hasPendingRequest: true,
+      canResumePending,
+    })
+    await render()
+
+    expect(container.querySelector<HTMLTextAreaElement>('[aria-label="Image prompt"]')?.disabled)
+      .toBe(true)
+    for (const select of container.querySelectorAll("select")) {
+      expect(select.disabled).toBe(true)
+    }
+    const generateButton = [...container.querySelectorAll("button")]
+      .find((candidate) => candidate.textContent === "Generate")
+    expect(generateButton?.disabled).toBe(true)
+    expect(mocks.generate).not.toHaveBeenCalled()
+  })
+
+
+  it("rechecks a stalled generation with GET-only hook action", async () => {
+    mocks.useImageGeneration.mockReturnValue({
+      phase: "stalled",
+      state: null,
+      error: "지연",
+      generate: mocks.generate,
+      resumePending: mocks.resumePending,
+      checkStatusAgain: mocks.checkStatusAgain,
+      hasPendingRequest: false,
+      canResumePending: false,
+    })
+    await render()
+
+    const button = [...container.querySelectorAll("button")]
+      .find((candidate) => candidate.textContent === "상태 다시 확인")!
+    expect(button).toBeDefined()
+    act(() => button.click())
+    expect(mocks.checkStatusAgain).toHaveBeenCalledTimes(1)
+    expect(mocks.generate).not.toHaveBeenCalled()
+    expect(container.querySelector<HTMLTextAreaElement>('[aria-label="Image prompt"]')?.disabled)
+      .toBe(true)
+  })
+
+
+  it("requires explicit replacement when the stored model is unavailable", async () => {
+    const data = (mocks.node?.data ?? {}) as { properties: Record<string, unknown> }
+    data.properties.imageModelId = { type: "keyword", value: "retired-model" }
+    await render()
+
+    const modelSelect = container.querySelector<HTMLSelectElement>('[aria-label="Image model"]')!
+    const generateButton = [...container.querySelectorAll("button")]
+      .find((candidate) => candidate.textContent === "Generate")!
+    expect(modelSelect.value).toBe("retired-model")
+    expect(generateButton.disabled).toBe(true)
+    expect(container.textContent).toContain("저장된 모델을 사용할 수 없습니다")
+    expect(mocks.generate).not.toHaveBeenCalled()
+
+    act(() => selectOption(modelSelect, "model-1"))
+    await render()
+    const enabledGenerate = [...container.querySelectorAll("button")]
+      .find((candidate) => candidate.textContent === "Generate")!
+    expect(enabledGenerate.disabled).toBe(false)
+    act(() => enabledGenerate.click())
+    expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", {})
+  })
+
+
+  it("persists a new node's displayed default model before its first Generate", async () => {
+    const data = (mocks.node?.data ?? {}) as { properties: Record<string, unknown> }
+    delete data.properties.imageModelId
+    await render()
+
+    const generateButton = [...container.querySelectorAll("button")]
+      .find((candidate) => candidate.textContent === "Generate")!
+    act(() => generateButton.click())
+
+    expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", {})
+    expect(mocks.updateNode).toHaveBeenCalledWith("node-1", expect.objectContaining({
+      data: expect.objectContaining({
+        properties: expect.objectContaining({
+          imageModelId: { type: "keyword", value: "model-1" },
+        }),
+      }),
+    }))
   })
 })

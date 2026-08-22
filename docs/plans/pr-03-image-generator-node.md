@@ -135,6 +135,11 @@ Dim0에는 서버에 동기화되지 않는 **로컬 전용 보드**가 있다. 
 
 **왜 코딩 전이 아니라 병합 전인가.** OpenRouter 응답 형태는 **PR-03 UI에 보이지 않는다.** `b64_json`도 `usage.cost`도 어댑터 내부에서만 쓰이고, UI가 다루는 것은 Dim0 자체 API의 응답 — 즉 PR-02의 Pydantic 모델(`ImageGenerationStatusResponse` 등)로 레포 안에 이미 확정된 형태다. 따라서 PR-03의 mock 픽스처는 provider 계약과 무관하게 지금 정확히 쓸 수 있다. 실호출이 검증하는 것은 *파이프라인이 끝까지 완주하는가*이지 UI 계약이 아니다.
 
+무료 테스트와 Draft PR 작성·검토는 유료 호출 전에 완료할 수 있다. 다만 **사용자가
+명시적으로 승인한 Dim0 API 전체 경로 T2I smoke가 성공하기 전에는 Draft를 Ready로
+전환하거나 merge하지 않는다.** CI는 OpenRouter 키를 요구하거나 외부 유료 API를
+호출하지 않는다.
+
 ### 비용
 
 `x-ai/grok-imagine-image-2.0`, quality `low`, resolution `1K` — **이미지당 $0.04**. T2I 1회면 충분하다.
@@ -222,8 +227,12 @@ psql -c "SELECT status, provider_request_id, cost_usd, latency_ms, usage
 | `imageAspectRatio` | `KeywordProperty` | 비율 | 영구 |
 | `imageResolution` | `KeywordProperty` | 해상도 | 영구 |
 | `imageQuality` | `KeywordProperty` | 품질 | 영구 |
-| `activeGenerationUid` | `KeywordProperty` | 마지막/진행 중 생성 | 영구 (다음 생성 시 교체) |
-| `imagePendingRequest` | `TextProperty` (canonical JSON) | 전송 중 요청 스냅샷 | **202 수신 시 빈 sentinel로 clear** |
+| `activeGenerationUid` | `KeywordProperty` | 마지막으로 서버가 확인한 생성·결과 | 영구 (**새 202 수신 시에만 교체**) |
+| `imagePendingRequest` | `TextProperty` (canonical JSON) | 아직 202를 확인하지 못한 새 시작 요청 | **202 또는 확정적 사전 거부 시 빈 sentinel로 clear** |
+
+두 필드는 동시에 존재할 수 있다. `activeGenerationUid`는 기존 preview를 보존하고,
+`imagePendingRequest`는 새 POST의 복구 상태를 소유한다. 이전 active의 polling 결과는
+새 pending을 clear하거나 그 phase/error를 덮어쓸 수 없다.
 
 `phase`(`idle`/`starting`/`running`/`succeeded`/`failed`/**`stalled`**)는 **저장하지 않는다.** 전부 React state다. 특히 `stalled`는 *이 브라우저의 폴링 타이머*가 만들어낸 클라이언트 전용 판단이므로, 저장하면 한 사람의 타이밍이 같은 보드의 모두에게 "멈췄다"로 전파된다. 서버는 그동안 정상 진행 중일 수 있다.
 
@@ -280,17 +289,23 @@ PR-02의 fingerprint는 `(model_id, prompt, parameters, reference_asset_uids, ge
 | 상황 | 동작 |
 |---|---|
 | **Generate 클릭** (내용 무관) | **항상 새 UUID 발급** + 스냅샷 교체 |
-| **마운트 복구** — 스냅샷이 이 보드·이 노드 소유이고 `activeGenerationUid` 없음 | 스냅샷을 **그대로 1회 재전송**. 새 UUID를 만들지 않는다 |
+| **마운트 복구** — 스냅샷이 이 보드·이 노드·현재 사용자 소유 | active 존재 여부와 무관하게 스냅샷을 **그대로 1회 재전송**. 새 UUID를 만들지 않는다 |
 | **마운트 복구** — 스냅샷의 `version`/`boardUid`/`generatorNodeUid`가 어긋남 | **네트워크 요청 없이** 스냅샷 폐기 |
 | **마운트 복구** — `initiatorUserUid`가 현재 사용자와 다름 | 원 사용자의 복구 키를 보존하고 POST·clear 모두 하지 않음 |
 | **202 수신** | `activeGenerationUid` 저장 후 스냅샷을 빈 TextProperty로 **명시적 clear** |
-| **409 수신** | pending snapshot을 유지하고 충돌을 표시. 자동 재시도·새 UUID 발급 금지, 명시적 재개만 같은 snapshot 사용 |
+| **400/401/403/404/422/429 수신** | run 생성 전 확정 거부이므로 pending만 clear하고 이전 active는 유지 |
+| **transport/5xx** | 결과가 불명확하므로 active와 pending을 모두 유지. 명시적 재개는 같은 snapshot/UUID 사용 |
+| **409 수신** | 같은 UUID가 다른 fingerprint에 묶인 확정 충돌. pending을 clear하고 안전한 충돌을 표시하며 자동 POST하지 않음 |
 
 **클릭은 언제나 새 UUID다.** 이미지 생성은 비결정적이므로 같은 프롬프트로 다시 누르는 것은 *새 변형을 요청하는 정당한 행위*다. 내용이 같다고 기존 run을 돌려주면 사용자에게는 버튼이 고장 난 것으로 보인다.
 
 **클라이언트에서 서버 fingerprint를 재구현하지 않는다.** 서버는 `{generator_node_uid, model_id, parameters(exclude_none=False), prompt, reference_asset_uids}`를 정렬해 해싱한다. 클라이언트가 이를 흉내 내면 필드 누락·키 순서·null 처리에서 조용히 어긋나고, 그 드리프트는 과금 오작동으로 나타난다. 스냅샷은 **오직 응답 유실·새로고침 복구용**이며 클릭 중복 제거에는 쓰지 않는다. 같은 세션의 더블클릭은 버튼 disabled로 막는다.
 
-**409는 "일어나면 안 되는" 신호다.** 위 두 규칙을 지키면 복구는 fingerprint가 일치하고 클릭은 충돌이 없으므로 409에 도달할 경로가 사실상 없다. 그런데도 발생했다면 그 키의 run이 **이미 존재하며 과금 중일 수 있다**는 뜻이다. 새 UUID로 자동 재시도하면 정확히 중복 과금이 된다. pending을 유지하고 중단한 뒤, 사용자가 요청 재개를 명시한 경우에만 같은 UUID와 snapshot을 다시 보낸다.
+**409는 transport 실패가 아니다.** 서버는 동일 UUID·동일 fingerprint면 기존
+generation을 202로 반환한다. 409는 동일 UUID가 *다른* fingerprint에 이미 묶였다는
+확정 충돌이므로 같은 snapshot 재개는 무의미하다. blocking pending을 clear하되 자동
+POST나 새 UUID 발급은 하지 않는다. 사용자가 오류를 확인한 뒤 Generate를 다시
+명시적으로 눌렀을 때만 새 UUID로 새 변형을 시작한다. 이전 active 결과는 유지한다.
 
 ### 저장하지 않는 것
 
@@ -299,6 +314,17 @@ API 키, Authorization 헤더, provider 원문 응답, base64/data URL, 서버 �
 ### 로컬 UI 상태
 
 드롭다운 open, 버튼 disabled, 폴링 타이머 id, `AbortController`, blob URL, 마지막 status 응답, 에러 문자열.
+
+프롬프트는 타이핑 중 local draft로 유지하고 400ms trailing debounce로 공유 property에
+반영한다. blur·unmount·Generate 직전에 flush하며, Generate snapshot과 저장 prompt는
+항상 같은 최신 값을 쓴다. pending이 생기면 소유자와 무관하게 prompt·model·모든 옵션과
+Generate를 잠그고, 아직 저장되지 않은 local draft timer는 취소한다. 협업은 기존
+whole-value last-write-wins를 유지하며 새 CRDT나 고정 wire 메시지 수를 도입하지 않는다.
+
+저장된 `imageModelId`가 현재 catalog에 없거나 T2I를 지원하지 않으면 첫 모델로 조용히
+fallback하지 않는다. 명시적인 unavailable 상태에서 Generate를 막고 사용자가 다른 모델을
+선택하게 한다. 모델 ID가 없는 새 노드는 첫 T2I 모델을 표시할 수 있지만, 최초 Generate
+직전에 실제 모델 ID를 prompt와 함께 node property에 저장한다.
 
 ### 서버 authoritative
 
@@ -349,12 +375,12 @@ stateDiagram-v2
     running --> succeeded: status = succeeded
     running --> failed: status = failed
     running --> stalled: 5분 경과, 아직 비종료
-    stalled --> running: 사용자 새로고침
+    stalled --> running: 상태 다시 확인 (같은 UID GET, 새 deadline)
     succeeded --> starting: 다시 Generate
     failed --> starting: 다시 Generate
-    stalled --> starting: 다시 Generate
+    stalled --> stalled: 재확인도 5분 초과
     running --> idle: 언마운트 (서버는 계속 진행)
-    idle --> starting: 재마운트 + 스냅샷 있고 생성 없음 (202 유실 복구)
+    idle --> starting: 재마운트 + 소유 스냅샷 (active와 공존 가능)
     idle --> running: 재마운트 + activeGenerationUid 존재
 ```
 
@@ -390,7 +416,10 @@ stateDiagram-v2
 
 backend `Style` enum은 바꾸지 않는다. wire에서는 `rectangle`을 유지하고
 `imagePrompt` marker가 있는 Note만 frontend 변환 계층에서 `image-generator` custom
-type으로 projection한다. 건드리지 않는 것은 `board-app-store.ts`의
+type으로 projection한다. `imagePrompt`는 이 projection을 위한 예약 marker이며,
+일단 marker가 생긴 노드를 일반 rectangle로 자동 되돌리지 않는 one-way/immutable
+계약이다. 새 backend discriminator schema나 `NodeType` enum은 PR-03에 추가하지 않는다.
+건드리지 않는 것은 `board-app-store.ts`의
 `NodeSurfaceKind`, `use-surface-from-url.tsx`, 라우팅, backend production code,
 `build/schema.sql`이다.
 
@@ -701,15 +730,15 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
           return
         }
 
-        // 종료 — 스냅샷을 비워 다음 생성이 새 키를 쓰게 한다.
-        persistRef.current({ pendingRequest: null })
+        // Polling은 active만 관찰한다. 새 pending이 있으면 phase/error도 건드리지 않는다.
+        if (pendingRef.current) return
         if (next.status === "succeeded") { setPhase("succeeded"); setError(null) }
         else { setPhase("failed"); setError(next.error_message ?? "이미지 생성에 실패했습니다.") }
       } catch (err) {
         if (!alive || (err as Error)?.name === "AbortError") return
         // 404 = 생성 기록이 사라짐(보드 복제 등). 노드를 idle로 되돌린다.
         if (/^404 /.test((err as Error).message)) {
-          persistRef.current({ activeGenerationUid: null, pendingRequest: null })
+          persistRef.current({ activeGenerationUid: null })
           setPhase("idle"); setState(null); return
         }
         setPhase("failed"); setError(messageForError(err))
@@ -735,12 +764,11 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
       // activeGenerationUid 변경이 위 effect를 다시 돌려 폴링을 시작한다.
       persistRef.current({ activeGenerationUid: accepted.generation_uid, pendingRequest: null })
     } catch (err) {
-      // 409는 "일어나면 안 되는" 신호다. 그 키의 run이 이미 존재하며 과금 중일 수 있으므로
-      // 새 키로 자동 재시도하면 정확히 중복 과금이 된다. 중단하고 사용자에게 알린다.
+      // 409는 동일 UUID와 다른 fingerprint의 확정 충돌이다.
       if (statusCodeOf(err) === 409) {
-        // 응답이 불명확하므로 snapshot을 유지한다. 명시적 재개만 같은 키로 보낸다.
+        persistRef.current({ pendingRequest: null })
         setPhase("failed")
-        setError("같은 요청의 처리 여부를 확인할 수 없습니다. 요청을 재개해 주세요.")
+        setError("요청 식별자가 다른 내용에 이미 사용되었습니다. 다시 생성해 주세요.")
         return
       }
       setPhase("failed"); setError(messageForError(err))
@@ -760,11 +788,9 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
       persistRef.current({ pendingRequest: null })   // (a) POST하지 않는다
       return
     }
-    if (activeGenerationUid) return                  // 이미 진행 중 — 폴링 effect가 맡는다
-
     setPhase("starting")
-    void send(pendingRequest)                        // (b)
-  }, [graphId, nodeId, userId, activeGenerationUid, pendingRequest, send])
+    void send(pendingRequest)                        // (b), 이전 active와 공존해도 복구 우선
+  }, [graphId, nodeId, userId, pendingRequest, send])
 
   const generate = useCallback(
     async (modelId: string, prompt: string, parameters: GenerationParameters) => {
@@ -779,7 +805,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
         boardUid: graphId,
         generatorNodeUid: nodeId,
         initiatorUserUid: userId,
-        clientRequestUid: crypto.randomUUID(),
+        clientRequestUid: uuidv4(),
         modelId, prompt, parameters,
       }
 
@@ -885,7 +911,7 @@ export function ImageGeneratorView({ id }: { id: NodeId }) {
     return parsePendingImageRequest(raw)
   }, [props.imagePendingRequest])
 
-  const { phase, state, error, generate } = useImageGeneration({
+  const { phase, state, error, generate, hasPendingRequest } = useImageGeneration({
     graphId: graphId ?? "",
     nodeId: String(id),
     userId,
@@ -899,14 +925,20 @@ export function ImageGeneratorView({ id }: { id: NodeId }) {
   const [models, setModels] = useState<ImageModel[]>([])
   useEffect(() => { void listImageModels().then(setModels).catch(() => setModels([])) }, [])
 
-  const modelId = kw(props.imageModelId) ?? models[0]?.model_id ?? ""
-  const model = useMemo(() => models.find((m) => m.model_id === modelId), [models, modelId])
-  const prompt = tx(props.imagePrompt)
+  const storedModelId = kw(props.imageModelId)
+  const storedModel = models.find((m) => m.model_id === storedModelId) ?? null
+  const model = storedModelId
+    ? storedModel                         // 없으면 unavailable, 자동 fallback 금지
+    : models.find((m) => m.supports_text_to_image) ?? null
+  const modelUnavailable = !!storedModelId && !storedModel
+  const prompt = useDebouncedPromptDraft(tx(props.imagePrompt), patchProps) // 400ms + boundary flush
 
   const { url: previewUrl } = useAuthedImage(graphId, state?.output_asset_uid ?? null)
 
-  const busy = phase === "starting" || phase === "running"
-  const canGenerate = canEdit && !busy && prompt.trim().length > 0 && !!modelId
+  const busy = phase === "starting" || phase === "running" || phase === "stalled"
+  const inputsLocked = !canEdit || busy || hasPendingRequest
+  const canGenerate = !inputsLocked && !modelUnavailable
+    && prompt.draft.trim().length > 0 && !!model
 
   const footerStatus =
     phase === "running" || phase === "starting" ? "saving"
@@ -919,14 +951,15 @@ export function ImageGeneratorView({ id }: { id: NodeId }) {
         <NodeTrafficLights nodeId={id} />
 
         <textarea
-          value={prompt}
-          disabled={!canEdit}
+          value={prompt.draft}
+          disabled={inputsLocked}
           placeholder="만들고 싶은 이미지를 설명하세요"
-          onChange={(e) => patchProps({ imagePrompt: { type: "text", text: e.target.value } })}
+          onChange={(e) => prompt.update(e.target.value)}
+          onBlur={prompt.flush}
         />
 
         <div className="flex gap-2">
-          <select value={modelId} disabled={!canEdit}
+          <select value={storedModelId ?? model?.model_id ?? ""} disabled={inputsLocked}
             onChange={(e) => patchProps({ imageModelId: { type: "keyword", value: e.target.value } })}>
             {models.map((m) => <option key={m.model_id} value={m.model_id}>{m.display_name}</option>)}
           </select>
@@ -944,7 +977,7 @@ export function ImageGeneratorView({ id }: { id: NodeId }) {
 
         <button
           disabled={!canGenerate}
-          onClick={() => void generate(modelId, prompt, {
+          onClick={() => void generate(model!.model_id, prompt.flushForGenerate(), {
             aspect_ratio: kw(props.imageAspectRatio),
             resolution: kw(props.imageResolution),
             quality: kw(props.imageQuality),
@@ -974,11 +1007,11 @@ export function ImageGeneratorView({ id }: { id: NodeId }) {
 |---|---|---|
 | API 클라이언트 | `api/image-generation.test.ts` | 요청 body 형태 · 상태코드→문구 매핑 · 모델 캐시 1회 · 실패는 캐시 안 함 |
 | `api.ts` blob 모드 | `api.blob.test.ts` | **401 → refresh → blob 재요청**이 Blob을 반환하는가 |
-| 상태 머신 | `use-image-generation.test.ts` | started→succeeded · **retryable은 폴링 지속** · **5분 뒤 stalled** · 종료 시 스냅샷 삭제 · 404 → idle · 언마운트 정리 |
-| 멱등 스냅샷 | 동일 | **명시적 클릭은 항상 새 UUID** · **마운트 복구 시 스냅샷 그대로 재전송** · **409는 pending 유지, 자동 재시도 없이 중단** |
+| 상태 머신 | `use-image-generation.test.ts` | started→succeeded · **retryable은 폴링 지속** · **5분 뒤 stalled** · 같은 UID 재확인 · polling은 pending 불변 · 404 → active만 clear · 언마운트 정리 |
+| 멱등 스냅샷 | 동일 | **명시적 클릭은 항상 새 UUID** · **active와 공존해도 스냅샷 그대로 복구** · **409는 pending clear 후 명시적 새 Generate만 허용** · transport/5xx는 같은 UUID 유지 |
 | 소유권 가드 | 동일 | 다른 `boardUid`/`generatorNodeUid`/`version` 스냅샷은 **요청 없이 폐기**. 다른 `initiatorUserUid`는 보존하되 POST하지 않음 (과금 0) |
 | blob 훅 | `use-authed-image.test.ts` | objectURL 생성 · asset 교체 시 revoke · 언마운트 시 revoke |
-| 뷰 | `view.test.tsx` | viewer 비활성 · 빈 프롬프트 비활성 · 생성 중 비활성 · `supported_*` null이면 셀렉트 미렌더 |
+| 뷰 | `view.test.tsx` | viewer 비활성 · pending 중 모든 입력 잠금 · stalled GET-only 재확인 · prompt debounce/flush · 사라진 모델 explicit 선택 · 신규 기본 모델 저장 · `supported_*` null이면 셀렉트 미렌더 |
 | 로컬 보드 가드 | 동일 | Generate 비활성 · 안내 렌더 · 요청 미발생 |
 | 복제 안전 | `use-stamp-new-nodes.test.tsx` + 상태 훅 테스트 | 복제 노드는 `imagePendingRequest`만 제거하고 `activeGenerationUid`를 유지하는가. 기존 generation GET만 수행하고 POST는 0회인가 |
 | 등록 parity | `custom-node-types.test.ts` | 기존 테스트가 자동 강제 — 목록만 갱신 |
@@ -1041,7 +1074,7 @@ it("명시적 클릭은 내용이 같아도 항상 새 UUID를 쓴다", async ()
   expect(vi.mocked(startImageGeneration).mock.calls.at(-1)![0].clientRequestUid).not.toBe("key-1")
 })
 
-it("409는 자동 재시도하지 않고 중단한다", async () => {
+it("409는 pending을 clear하고 자동 재시도하지 않는다", async () => {
   vi.mocked(startImageGeneration).mockRejectedValue(new Error("409 Conflict - {}"))
   const persist = vi.fn()
 
@@ -1052,7 +1085,7 @@ it("409는 자동 재시도하지 않고 중단한다", async () => {
 
   expect(startImageGeneration).toHaveBeenCalledTimes(1)     // 재시도 없음
   expect(result.current.phase).toBe("failed")
-  expect(persist).not.toHaveBeenCalledWith({ pendingRequest: null })
+  expect(persist).toHaveBeenCalledWith({ pendingRequest: null })
 })
 
 // --- 소유권 가드: 사용자/보드/노드가 다른 클라이언트가 남의 스냅샷을 재생하지 못하게 한다 ---
@@ -1083,14 +1116,14 @@ it("다른 사용자의 복구 키는 POST나 clear 없이 보존한다", async 
   expect(persist).not.toHaveBeenCalled()
 })
 
-it("종료 시 스냅샷을 지운다", async () => {
+it("active 종료 polling은 새 pending을 지우지 않는다", async () => {
   const persist = vi.fn()
   vi.mocked(getImageGeneration).mockResolvedValue(base({ status: "failed", error_message: "x" }))
 
   renderHook(() => useImageGeneration({ ...argsWith("gen-1"), persist }))
   await act(() => vi.advanceTimersByTimeAsync(100))
 
-  expect(persist).toHaveBeenCalledWith({ pendingRequest: null })
+  expect(persist).not.toHaveBeenCalledWith({ pendingRequest: null })
 })
 ```
 

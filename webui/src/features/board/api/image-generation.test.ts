@@ -96,6 +96,8 @@ describe("image generation API client", () => {
     expect(imageGenerationErrorMessage(new Error(`503 Service Unavailable - ${rawSecret}`)))
       .toBe("이미지 생성 서비스가 일시적으로 중단되었습니다.")
     expect(imageGenerationErrorMessage(new Error(rawSecret))).not.toContain(rawSecret)
+    expect(imageGenerationErrorMessage(new Error(`409 Conflict - ${rawSecret}`)))
+      .toBe("요청 식별자가 다른 내용에 이미 사용되었습니다. 다시 생성해 주세요.")
   })
 })
 

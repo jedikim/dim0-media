@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { v4 as uuidv4 } from "uuid"
 
 import {
   NON_TERMINAL_IMAGE_STATUSES,
@@ -68,6 +69,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
   const [state, setState] = useState<GenerationState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hasPendingRequest, setHasPendingRequest] = useState(pendingRequest !== null)
+  const [pollRevision, setPollRevision] = useState(0)
 
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pollControllerRef = useRef<AbortController | null>(null)
@@ -116,12 +118,15 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
     let alive = true
     let delay = 0
     const deadline = Date.now() + IMAGE_GENERATION_POLL_CEILING_MS
+    const pendingOwnsPhase = (): boolean => pendingRef.current !== null
 
     const scheduleNext = (): void => {
       if (!alive) return
       if (Date.now() >= deadline) {
-        setPhase("stalled")
-        setError("이미지 생성 상태 확인이 오래 걸리고 있습니다. 노드를 다시 열어 확인해 주세요.")
+        if (!pendingOwnsPhase()) {
+          setPhase("stalled")
+          setError("이미지 생성 상태 확인이 오래 걸리고 있습니다. 상태를 다시 확인해 주세요.")
+        }
         return
       }
       delay = delay === 0
@@ -138,19 +143,23 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
       pollControllerRef.current = controller
       try {
         const next = await getImageGeneration(graphId, activeGenerationUid, controller.signal)
-        if (!alive) return
+        if (!alive || controller.signal.aborted) return
         setState(next)
-        setError(null)
 
         if (NON_TERMINAL_IMAGE_STATUSES.has(next.status)) {
-          setPhase("running")
+          if (!pendingOwnsPhase()) {
+            setPhase("running")
+            setError(null)
+          }
           scheduleNext()
           return
         }
 
-        pendingRef.current = null
-        setHasPendingRequest(false)
-        persistRef.current({ pendingRequest: null })
+        // An active handle identifies only the last server-confirmed run. A
+        // simultaneous pending snapshot belongs to a newer POST and polling
+        // cannot prove any relationship between them, so this path is read-only
+        // while pending exists.
+        if (pendingOwnsPhase()) return
         if (next.status === "succeeded") {
           setPhase("succeeded")
           setError(null)
@@ -159,37 +168,46 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
           setError(next.error_message || "이미지 생성에 실패했습니다.")
         }
       } catch (caught) {
-        if (!alive || (caught instanceof Error && caught.name === "AbortError")) return
+        if (
+          !alive
+          || controller.signal.aborted
+          || (caught instanceof Error && caught.name === "AbortError")
+        ) return
         if (imageGenerationStatusCode(caught) === 404) {
-          pendingRef.current = null
-          setHasPendingRequest(false)
-          persistRef.current({ activeGenerationUid: null, pendingRequest: null })
+          persistRef.current({ activeGenerationUid: null })
           setState(null)
-          setPhase("idle")
-          setError("이 보드에서는 기존 이미지 생성 기록을 불러올 수 없습니다.")
+          if (!pendingOwnsPhase()) {
+            setPhase("idle")
+            setError("이 보드에서는 기존 이미지 생성 기록을 불러올 수 없습니다.")
+          }
           return
         }
 
         // A status transport failure is not a terminal provider failure. Keep
         // the active generation locked and continue checking within the cap.
-        setPhase("running")
-        setError(imageGenerationErrorMessage(caught))
+        if (!pendingOwnsPhase()) {
+          setPhase("running")
+          setError(imageGenerationErrorMessage(caught))
+        }
         scheduleNext()
       }
     }
 
-    setPhase("running")
-    setError(null)
+    if (!pendingOwnsPhase()) {
+      setPhase("running")
+      setError(null)
+    }
     void tick()
     return () => {
       alive = false
       stopPolling()
     }
-  }, [activeGenerationUid, graphId, stopPolling])
+  }, [activeGenerationUid, graphId, pollRevision, stopPolling])
 
   const sendPendingRequest = useCallback(async (snapshot: PendingImageRequest): Promise<void> => {
     if (postingRef.current || !canStart) return
     postingRef.current = true
+    stopPolling()
     const controller = new AbortController()
     postControllerRef.current = controller
     setPhase("starting")
@@ -218,23 +236,32 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
     } catch (caught) {
       if (!mountedRef.current || (caught instanceof Error && caught.name === "AbortError")) return
       const status = imageGenerationStatusCode(caught)
+      if (status === 409) {
+        pendingRef.current = null
+        setHasPendingRequest(false)
+        persistRef.current({ pendingRequest: null })
+        setPhase("failed")
+        setError("요청 식별자가 다른 내용에 이미 사용되었습니다. 다시 생성해 주세요.")
+        return
+      }
       if (status !== null && SAFE_TO_CLEAR_PENDING_STATUSES.has(status)) {
         pendingRef.current = null
         setHasPendingRequest(false)
         persistRef.current({ pendingRequest: null })
       }
-      // Transport, 5xx, and 409 outcomes are ambiguous: the server may have
-      // started and charged the request, so retain the exact snapshot.
+      // Transport and 5xx outcomes are ambiguous: the server may have started
+      // and charged the request, so retain the exact snapshot for explicit
+      // same-UUID recovery.
       setPhase("failed")
       setError(imageGenerationErrorMessage(caught))
     } finally {
       if (postControllerRef.current === controller) postControllerRef.current = null
       postingRef.current = false
     }
-  }, [canStart, graphId, nodeId])
+  }, [canStart, graphId, nodeId, stopPolling])
 
   useEffect(() => {
-    if (!pendingRequest || activeGenerationUid) return
+    if (!pendingRequest) return
     // A pending snapshot is shared node data but idempotency is scoped to the
     // authenticated user. Never replay or clear another user's recovery key.
     if (pendingRequest.initiatorUserUid !== userId) return
@@ -250,7 +277,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
 
     recoveredRequestRef.current = pendingRequest.clientRequestUid
     void sendPendingRequest(pendingRequest)
-  }, [activeGenerationUid, canStart, graphId, nodeId, pendingRequest, sendPendingRequest, userId])
+  }, [canStart, graphId, nodeId, pendingRequest, sendPendingRequest, userId])
 
   const generate = useCallback(async (
     modelId: string,
@@ -266,7 +293,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
       boardUid: graphId,
       generatorNodeUid: nodeId,
       initiatorUserUid: userId,
-      clientRequestUid: crypto.randomUUID(),
+      clientRequestUid: uuidv4(),
       modelId,
       prompt,
       parameters,
@@ -276,9 +303,9 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
     setHasPendingRequest(true)
     setPhase("starting")
     setError(null)
-    // Clear a previous terminal handle and save the request snapshot in the
-    // same node update before the POST can leave this browser.
-    persistRef.current({ activeGenerationUid: null, pendingRequest: snapshot })
+    // Preserve the last confirmed result while the new POST is indeterminate.
+    // Only a 202 response is allowed to replace activeGenerationUid.
+    persistRef.current({ pendingRequest: snapshot })
     await sendPendingRequest(snapshot)
   }, [activeGenerationUid, canStart, graphId, nodeId, phase, sendPendingRequest, stopPolling, userId])
 
@@ -288,8 +315,14 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
     await sendPendingRequest(snapshot)
   }, [graphId, nodeId, sendPendingRequest, userId])
 
+  const checkStatusAgain = useCallback((): void => {
+    if (!activeGenerationUid || phase !== "stalled" || pendingRef.current) return
+    stopPolling()
+    setPollRevision((revision) => revision + 1)
+  }, [activeGenerationUid, phase, stopPolling])
+
   const canResumePending = isOwnedPendingImageRequest(
-    pendingRequest,
+    hasPendingRequest ? pendingRef.current : null,
     graphId,
     nodeId,
     userId,
@@ -301,6 +334,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
     error,
     generate,
     resumePending,
+    checkStatusAgain,
     hasPendingRequest,
     canResumePending,
   }

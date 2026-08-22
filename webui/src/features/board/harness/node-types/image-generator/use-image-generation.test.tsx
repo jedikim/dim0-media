@@ -7,11 +7,13 @@ const apiMocks = vi.hoisted(() => ({
   getImageGeneration: vi.fn(),
   startImageGeneration: vi.fn(),
 }))
+const uuidMocks = vi.hoisted(() => ({ uuidv4: vi.fn() }))
 
 vi.mock("@/features/board/api/image-generation", async (importOriginal) => ({
   ...await importOriginal<typeof import("@/features/board/api/image-generation")>(),
   ...apiMocks,
 }))
+vi.mock("uuid", () => ({ v4: uuidMocks.uuidv4 }))
 
 import type { GenerationState } from "@/features/board/api/image-generation"
 import type { PendingImageRequest } from "./node-state"
@@ -92,7 +94,7 @@ describe("useImageGeneration", () => {
     }
     apiMocks.getImageGeneration.mockReset()
     apiMocks.startImageGeneration.mockReset()
-    vi.spyOn(crypto, "randomUUID")
+    uuidMocks.uuidv4.mockReset()
       .mockReturnValueOnce(UUID_1)
       .mockReturnValueOnce(UUID_2)
   })
@@ -135,6 +137,7 @@ describe("useImageGeneration", () => {
     expect(latest?.phase).toBe("succeeded")
     expect(latest?.state?.output_asset_uid).toBe("asset-1")
     expect(apiMocks.getImageGeneration).toHaveBeenCalledTimes(2)
+    expect(persist).not.toHaveBeenCalledWith({ pendingRequest: null })
   })
 
 
@@ -166,6 +169,29 @@ describe("useImageGeneration", () => {
   })
 
 
+  it("rechecks the same stalled generation without POST and can stall again", async () => {
+    let status: GenerationState["status"] = "started"
+    apiMocks.getImageGeneration.mockImplementation(async () => generationState(status))
+    render({ activeGenerationUid: "gen-1" })
+    await flush()
+    await act(() => vi.advanceTimersByTimeAsync(IMAGE_GENERATION_POLL_CEILING_MS + 10_000))
+
+    expect(latest?.phase).toBe("stalled")
+    act(() => latest?.checkStatusAgain())
+    await flush()
+    await act(() => vi.advanceTimersByTimeAsync(IMAGE_GENERATION_POLL_CEILING_MS + 10_000))
+    expect(latest?.phase).toBe("stalled")
+
+    status = "succeeded"
+    act(() => latest?.checkStatusAgain())
+    await flush()
+    expect(latest?.phase).toBe("succeeded")
+    expect(apiMocks.getImageGeneration.mock.calls.every((call) => call[1] === "gen-1")).toBe(true)
+    expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
+    expect(uuidMocks.uuidv4).not.toHaveBeenCalled()
+  })
+
+
   it("cancels a pending status fetch and all timers on unmount", async () => {
     let signal: AbortSignal | undefined
     apiMocks.getImageGeneration.mockImplementation((_board, _generation, nextSignal) => {
@@ -194,7 +220,6 @@ describe("useImageGeneration", () => {
       referenceAssetUids: [],
     }))
     expect(persist).toHaveBeenNthCalledWith(1, {
-      activeGenerationUid: null,
       pendingRequest: expect.objectContaining({ clientRequestUid: UUID_1 }),
     })
   })
@@ -230,6 +255,78 @@ describe("useImageGeneration", () => {
   })
 
 
+  it("recovers owned pending work even while the previous active result exists", async () => {
+    apiMocks.getImageGeneration.mockResolvedValue(generationState("succeeded", {
+      generation_uid: "gen-old",
+      output_asset_uid: "asset-old",
+    }))
+    apiMocks.startImageGeneration.mockResolvedValue({
+      generation_uid: "gen-new",
+      status: "started",
+    })
+    const snapshot = pending({ clientRequestUid: UUID_2, prompt: "a newer bird" })
+    render({ activeGenerationUid: "gen-old", pendingRequest: snapshot })
+    await flush()
+
+    expect(apiMocks.startImageGeneration).toHaveBeenCalledTimes(1)
+    expect(apiMocks.startImageGeneration).toHaveBeenCalledWith(expect.objectContaining({
+      clientRequestUid: UUID_2,
+      prompt: "a newer bird",
+      parameters: snapshot.parameters,
+    }))
+    expect(persist).toHaveBeenCalledWith({
+      activeGenerationUid: "gen-new",
+      pendingRequest: null,
+    })
+  })
+
+
+  it.each(["terminal", "404"])(
+    "never lets an old active %s clear owned pending work",
+    async (outcome) => {
+      if (outcome === "terminal") {
+        apiMocks.getImageGeneration.mockResolvedValue(generationState("succeeded"))
+      } else {
+        apiMocks.getImageGeneration.mockRejectedValue(new Error("404 Not Found - {}"))
+      }
+      apiMocks.startImageGeneration.mockReturnValue(new Promise(() => undefined))
+      const snapshot = pending({ clientRequestUid: UUID_2 })
+      render({ activeGenerationUid: "gen-old", pendingRequest: snapshot })
+      await flush()
+
+      expect(apiMocks.startImageGeneration).toHaveBeenCalledTimes(1)
+      expect(persist).not.toHaveBeenCalledWith({ pendingRequest: null })
+      expect(persist).not.toHaveBeenCalledWith(expect.objectContaining({
+        pendingRequest: null,
+      }))
+    },
+  )
+
+
+  it.each(["terminal", "404"])(
+    "preserves another user's pending work after an old active %s",
+    async (outcome) => {
+      if (outcome === "terminal") {
+        apiMocks.getImageGeneration.mockResolvedValue(generationState("succeeded"))
+      } else {
+        apiMocks.getImageGeneration.mockRejectedValue(new Error("404 Not Found - {}"))
+      }
+      render({
+        activeGenerationUid: "gen-old",
+        pendingRequest: pending({ initiatorUserUid: "user-2" }),
+      })
+      await flush()
+
+      expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
+      expect(persist).not.toHaveBeenCalledWith(expect.objectContaining({ pendingRequest: null }))
+      expect(latest?.hasPendingRequest).toBe(true)
+      if (outcome === "404") {
+        expect(persist).toHaveBeenCalledWith({ activeGenerationUid: null })
+      }
+    },
+  )
+
+
   it.each([
     ["other board", pending({ boardUid: "board-2" })],
     ["other node", pending({ generatorNodeUid: "node-2" })],
@@ -253,16 +350,26 @@ describe("useImageGeneration", () => {
   })
 
 
-  it("retains a 409 snapshot and never retries automatically", async () => {
-    apiMocks.startImageGeneration.mockRejectedValue(new Error("409 Conflict - secret body"))
+  it("clears a 409 conflict and waits for explicit Generate with a new UUID", async () => {
+    apiMocks.startImageGeneration
+      .mockRejectedValueOnce(new Error("409 Conflict - secret body"))
+      .mockResolvedValueOnce({ generation_uid: "gen-new", status: "started" })
     render()
     await act(async () => latest?.generate("model-1", "a blue bird", {}))
     await act(() => vi.advanceTimersByTimeAsync(60_000))
 
     expect(apiMocks.startImageGeneration).toHaveBeenCalledTimes(1)
-    expect(latest?.hasPendingRequest).toBe(true)
-    expect(persist).not.toHaveBeenCalledWith({ pendingRequest: null })
+    expect(latest?.hasPendingRequest).toBe(false)
+    expect(latest?.canResumePending).toBe(false)
+    expect(persist).toHaveBeenCalledWith({ pendingRequest: null })
     expect(latest?.error).not.toContain("secret body")
+
+    await act(async () => latest?.generate("model-1", "a blue bird", {}))
+    expect(apiMocks.startImageGeneration).toHaveBeenCalledTimes(2)
+    expect(apiMocks.startImageGeneration).toHaveBeenLastCalledWith(expect.objectContaining({
+      clientRequestUid: UUID_2,
+    }))
+    expect(uuidMocks.uuidv4).toHaveBeenCalledTimes(2)
   })
 
 
@@ -275,7 +382,7 @@ describe("useImageGeneration", () => {
     await act(async () => latest?.generate("model-1", "a blue bird", {}))
 
     expect(apiMocks.startImageGeneration).toHaveBeenCalledTimes(1)
-    expect(crypto.randomUUID).toHaveBeenCalledTimes(1)
+    expect(uuidMocks.uuidv4).toHaveBeenCalledTimes(1)
     expect(persist).not.toHaveBeenCalledWith({ pendingRequest: null })
 
     await act(async () => latest?.resumePending())
@@ -285,7 +392,7 @@ describe("useImageGeneration", () => {
       prompt: "a blue bird",
       parameters: {},
     }))
-    expect(crypto.randomUUID).toHaveBeenCalledTimes(1)
+    expect(uuidMocks.uuidv4).toHaveBeenCalledTimes(1)
   })
 
 
@@ -295,6 +402,45 @@ describe("useImageGeneration", () => {
     await act(async () => latest?.generate("model-1", "a blue bird", {}))
 
     expect(persist).toHaveBeenLastCalledWith({ pendingRequest: null })
+  })
+
+
+  it.each([
+    ["transport", new TypeError("network down")],
+    ["5xx", new Error("503 Service Unavailable - provider secret")],
+  ])("preserves the previous active preview and pending snapshot after %s", async (_label, failure) => {
+    apiMocks.getImageGeneration.mockResolvedValue(generationState("succeeded", {
+      generation_uid: "gen-old",
+      output_asset_uid: "asset-old",
+    }))
+    apiMocks.startImageGeneration.mockRejectedValue(failure)
+    render({ activeGenerationUid: "gen-old" })
+    await flush()
+    await act(async () => latest?.generate("model-1", "a new bird", {}))
+
+    expect(latest?.state?.output_asset_uid).toBe("asset-old")
+    expect(latest?.hasPendingRequest).toBe(true)
+    expect(persist).toHaveBeenCalledWith({
+      pendingRequest: expect.objectContaining({ prompt: "a new bird" }),
+    })
+    expect(persist).not.toHaveBeenCalledWith(expect.objectContaining({
+      activeGenerationUid: null,
+    }))
+    expect(persist).not.toHaveBeenCalledWith({ pendingRequest: null })
+  })
+
+
+  it("clears only pending after a determinate rejection and keeps the old active", async () => {
+    apiMocks.getImageGeneration.mockResolvedValue(generationState("succeeded"))
+    apiMocks.startImageGeneration.mockRejectedValue(new Error("422 Unprocessable Entity - {}"))
+    render({ activeGenerationUid: "gen-old" })
+    await flush()
+    await act(async () => latest?.generate("model-1", "a new bird", {}))
+
+    expect(persist).toHaveBeenLastCalledWith({ pendingRequest: null })
+    expect(persist).not.toHaveBeenCalledWith(expect.objectContaining({
+      activeGenerationUid: null,
+    }))
   })
 
 
@@ -318,7 +464,7 @@ describe("useImageGeneration", () => {
     await flush()
 
     expect(latest?.phase).toBe("idle")
-    expect(persist).toHaveBeenCalledWith({ activeGenerationUid: null, pendingRequest: null })
+    expect(persist).toHaveBeenCalledWith({ activeGenerationUid: null })
     expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
   })
 
