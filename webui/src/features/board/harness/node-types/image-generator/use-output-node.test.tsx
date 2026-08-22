@@ -22,6 +22,7 @@ vi.mock("@/features/board/api/image-generation", () => ({
 import type { GenerationState } from "@/features/board/api/image-generation"
 import {
   AUTOMATIC_ENSURE_DEADLINE_MS,
+  EXPLICIT_RECREATE_DEADLINE_MS,
   useImageGenerationOutputNode,
 } from "./use-output-node"
 
@@ -263,6 +264,72 @@ describe("useImageGenerationOutputNode", () => {
       expect.any(AbortSignal),
     )
     expect(mocks.refresh).toHaveBeenCalledTimes(1)
+  })
+
+
+  it("aborts a hanging recreate, unlocks, and permits a same-generation retry", async () => {
+    const signals: AbortSignal[] = []
+    mocks.ensure.mockImplementation(
+      (_boardId: string, generationUid: string, recreate: boolean, signal: AbortSignal) => {
+        signals.push(signal)
+        if (signals.length === 1) return new Promise(() => undefined)
+        return Promise.resolve({
+          ...successfulOutcome(generationUid),
+          created: recreate,
+          recreated: recreate,
+        })
+      },
+    )
+    await render(generation("generation-recreate-timeout", {
+      output_node_uid: OUTPUT_NODE_UID,
+    }))
+
+    let timedOutRequest: Promise<void> | undefined
+    act(() => {
+      timedOutRequest = latest?.recreate()
+    })
+    expect(latest?.recreating).toBe(true)
+    await act(() => vi.advanceTimersByTimeAsync(EXPLICIT_RECREATE_DEADLINE_MS))
+    await act(async () => {
+      await timedOutRequest
+    })
+
+    expect(signals[0]?.aborted).toBe(true)
+    expect(latest?.recreating).toBe(false)
+    expect(latest?.error).toBe("안전한 결과 노드 오류")
+    expect(mocks.refresh).not.toHaveBeenCalled()
+
+    await act(async () => {
+      await latest?.recreate()
+    })
+    expect(mocks.ensure).toHaveBeenCalledTimes(2)
+    expect(signals[1]?.aborted).toBe(false)
+    expect(latest?.recreating).toBe(false)
+    expect(latest?.error).toBeNull()
+    expect(mocks.refresh).toHaveBeenCalledTimes(1)
+  })
+
+
+  it("aborts an explicit recreate on unmount without surfacing a stale error", async () => {
+    let signal: AbortSignal | null = null
+    mocks.ensure.mockImplementation(
+      (_boardId: string, _generationUid: string, _recreate: boolean, requestSignal: AbortSignal) => {
+        signal = requestSignal
+        return new Promise(() => undefined)
+      },
+    )
+    await render(generation("generation-recreate-unmount", {
+      output_node_uid: OUTPUT_NODE_UID,
+    }))
+
+    act(() => {
+      void latest?.recreate()
+    })
+    expect(latest?.recreating).toBe(true)
+    act(() => root.unmount())
+
+    expect((signal as AbortSignal | null)?.aborted).toBe(true)
+    expect(mocks.refresh).not.toHaveBeenCalled()
   })
 
 

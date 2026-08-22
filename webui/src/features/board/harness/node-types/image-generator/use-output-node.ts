@@ -15,6 +15,7 @@ const AUTOMATIC_ENSURE_ATTEMPTS = 3
 const AUTOMATIC_ENSURE_RETRY_MS = 250
 const AUTOMATIC_ENSURE_CACHE_MS = 30_000
 export const AUTOMATIC_ENSURE_DEADLINE_MS = 30_000
+export const EXPLICIT_RECREATE_DEADLINE_MS = 30_000
 
 type AutomaticEnsureEntry = {
   promise: Promise<GenerationOutputNode>
@@ -232,13 +233,26 @@ export function useImageGenerationOutputNode(args: {
     recreateRequest.current = { token, controller }
     setRecreating(true)
     setError(null)
+    let timedOut = false
+    let rejectDeadline: (error: Error) => void = () => undefined
+    const deadline = new Promise<never>((_resolve, reject) => {
+      rejectDeadline = reject
+    })
+    const deadlineTimer = setTimeout(() => {
+      timedOut = true
+      rejectDeadline(new Error("Image result recreation deadline exceeded"))
+      controller.abort()
+    }, EXPLICIT_RECREATE_DEADLINE_MS)
     try {
-      const outcome = await ensureImageGenerationOutputNode(
-        graphId,
-        generationUid,
-        true,
-        controller.signal,
-      )
+      const outcome = await Promise.race([
+        ensureImageGenerationOutputNode(
+          graphId,
+          generationUid,
+          true,
+          controller.signal,
+        ),
+        deadline,
+      ])
       if (recreateRequest.current?.token !== token || controller.signal.aborted) return
       if (!isExpectedOutput(outcome, generationUid, outputAssetUid)) {
         throw new Error("invalid output node response")
@@ -246,9 +260,13 @@ export function useImageGenerationOutputNode(args: {
       setEnsuredOutputNodeUid(outcome.output_node_uid)
       refreshStatus()
     } catch (caught) {
-      if (recreateRequest.current?.token !== token || controller.signal.aborted) return
+      if (
+        recreateRequest.current?.token !== token
+        || (controller.signal.aborted && !timedOut)
+      ) return
       setError(imageGenerationErrorMessage(caught))
     } finally {
+      clearTimeout(deadlineTimer)
       if (recreateRequest.current?.token === token) {
         recreateRequest.current = null
         setRecreating(false)
