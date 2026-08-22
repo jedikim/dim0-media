@@ -48,13 +48,18 @@ names:
 - `dim0:image-result-edge:{generation_uid}`
 
 Qdrant reconciliation happens before the PostgreSQL writer critical section.
-Existing live canonical objects are validated and reused, tombstones are treated
-as absent only for an explicit recreation, and conflicting live objects fail
-closed. After both pieces are durable, a short advisory-locked PostgreSQL
-transaction appends one deterministic combined `node.add` + `edge.add`
-collaboration batch and binds `output_node_uid` using the same shared-pool
-connection. The batch commit is therefore recoverable and never recursively
-acquires the pool.
+Existing live canonical objects are validated and reused. An unbound tombstone is
+partial state and is prepared by an ordinary `recreate: false` retry; only an
+already-bound deletion requires explicit recreation. Conflicting live objects
+fail closed. After both pieces are durable, a short advisory-locked PostgreSQL
+transaction appends one deterministic combined `node.add` + `edge.add` batch and
+binds `output_node_uid` using the same shared-pool connection. The batch identity
+includes both Qdrant objects' stable ISO-string `created_at` values, so node-only,
+edge-only, and pair recreation each create one new collaboration materialization,
+while response-loss retries reuse the same ID. Re-sending the authoritative pair
+also repairs incident-edge state without resetting a user's persisted node
+position or size. The batch commit is recoverable and never recursively acquires
+the pool.
 
 Recovery is intentionally idempotent across the non-transactional stores:
 
@@ -66,7 +71,10 @@ Recovery is intentionally idempotent across the non-transactional stores:
   the missing deterministic batch without duplicating audits;
 - canonical collision: do not overwrite;
 - `recreate: false` with an already-bound but deleted canvas object: do not revive;
-- explicit `recreate: true`: restore missing canonical objects with the same IDs.
+- explicit `recreate: true`: restore missing canonical objects with the same IDs;
+- generator folder move during unbound preparation: fail the raced final check,
+  then reparent only the partial canonical pair on retry while preserving its
+  other persisted fields.
 
 Deleting a result node/edge never deletes the generation, attempt, reference
 snapshot, asset row, usage/cost audit, or image file.
@@ -82,6 +90,9 @@ Before materialization, the Generator keeps its inline preview. Once
 duplicate blob GET, and offers selection/centering of the result. If the node was
 deleted, it stays deleted until an editor explicitly chooses “결과 노드 다시 추가,”
 which sends `recreate: true` without creating a generation, attempt, or asset.
+The explicit PUT owns a thirty-second hard deadline; timeout aborts the request,
+releases the generator input lock, shows only fixed safe error copy, and permits a
+new same-generation restoration attempt.
 
 ## Authenticated image loading
 
@@ -146,6 +157,6 @@ concurrency and the module-global lock redesign remain outside this PR.
 ## Rollback
 
 Revert the feature commit. Existing generation/asset/audit rows remain valid;
-`output_node_uid` may remain populated as a harmless reserved field. Canonical
-result Notes/Links can be deleted from the canvas without touching image files or
-audit history.
+`output_node_uid` may remain populated as the durable association to a canonical
+result that an older server simply ignores. Canonical result Notes/Links can be
+deleted from the canvas without touching image files or audit history.
