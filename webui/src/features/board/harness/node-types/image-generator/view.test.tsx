@@ -9,9 +9,15 @@ import { useBoardAppStore } from "../../store/board-app-store"
 const mocks = vi.hoisted(() => ({
   local: false,
   node: null as Record<string, unknown> | null,
+  sourceNodes: new Map<string, Record<string, unknown>>(),
+  edges: [] as Record<string, unknown>[],
   getNode: vi.fn(),
+  getAllEdges: vi.fn(),
+  subscribe: vi.fn(),
+  removeEdge: vi.fn(),
   updateNode: vi.fn(),
   listImageModels: vi.fn(),
+  getImageGeneration: vi.fn(),
   useImageGeneration: vi.fn(),
   useAuthedImage: vi.fn(),
   generate: vi.fn(),
@@ -20,8 +26,14 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock("@canvas-harness/react", () => ({
-  useNode: () => mocks.node,
-  useCanvasStore: () => ({ getNode: mocks.getNode, updateNode: mocks.updateNode }),
+  useNode: (id: string) => mocks.getNode(id),
+  useCanvasStore: () => ({
+    getNode: mocks.getNode,
+    getAllEdges: mocks.getAllEdges,
+    subscribe: mocks.subscribe,
+    removeEdge: mocks.removeEdge,
+    updateNode: mocks.updateNode,
+  }),
 }))
 
 vi.mock("../../canvas/board-runtime-context", () => ({
@@ -39,7 +51,12 @@ vi.mock("@/features/board/harness/graph/subtree", () => ({ removeNodeSubtree: vi
 
 vi.mock("@/features/board/api/image-generation", () => ({
   listImageModels: mocks.listImageModels,
+  getImageGeneration: mocks.getImageGeneration,
   imageGenerationErrorMessage: () => "모델 목록을 불러올 수 없습니다.",
+  imageGenerationStatusCode: (error: unknown) => {
+    const match = error instanceof Error ? /^(\d{3})\b/.exec(error.message) : null
+    return match ? Number(match[1]) : null
+  },
 }))
 
 vi.mock("@/features/board/hooks/use-authed-image", () => ({
@@ -71,6 +88,30 @@ const MODEL = {
 }
 
 
+const I2I_MODEL = {
+  ...MODEL,
+  model_id: "model-i2i",
+  display_name: "Model I2I",
+  supports_image_to_image: true,
+  max_reference_images: 3,
+}
+
+
+const referenceEdge = (id: string, source: string, ordinal: number) => ({
+  id,
+  source: { nodeId: source, localOffset: { x: 0, y: 0 } },
+  target: { nodeId: "node-1", localOffset: { x: 0, y: 0 } },
+  pathStyle: "bezier",
+  z: 0,
+  groups: [],
+  data: {
+    imageReference: true,
+    imageReferenceOrdinal: ordinal,
+    createdAt: `2026-08-22T00:00:0${ordinal}.000Z`,
+  },
+})
+
+
 describe("ImageGeneratorView", () => {
   let container: HTMLDivElement
   let root: Root
@@ -84,10 +125,13 @@ describe("ImageGeneratorView", () => {
     root = createRoot(container)
     mounted = true
     mocks.local = false
+    mocks.sourceNodes.clear()
+    mocks.edges = []
     mocks.generate.mockReset()
     mocks.resumePending.mockReset()
     mocks.checkStatusAgain.mockReset()
     mocks.listImageModels.mockReset().mockResolvedValue([MODEL])
+    mocks.getImageGeneration.mockReset()
     mocks.useAuthedImage.mockReset().mockReturnValue({ url: null, failed: false })
     mocks.useImageGeneration.mockReset().mockReturnValue({
       phase: "idle",
@@ -102,6 +146,9 @@ describe("ImageGeneratorView", () => {
     mocks.updateNode.mockReset().mockImplementation((_id, patch: Record<string, unknown>) => {
       mocks.node = { ...mocks.node, ...patch }
     })
+    mocks.getAllEdges.mockReset().mockImplementation(() => mocks.edges)
+    mocks.subscribe.mockReset().mockReturnValue(() => undefined)
+    mocks.removeEdge.mockReset()
     mocks.node = {
       id: "node-1",
       data: {
@@ -115,7 +162,9 @@ describe("ImageGeneratorView", () => {
         },
       },
     }
-    mocks.getNode.mockReset().mockImplementation(() => mocks.node)
+    mocks.getNode.mockReset().mockImplementation((id: string) => (
+      id === "node-1" ? mocks.node : mocks.sourceNodes.get(String(id)) ?? null
+    ))
     useBoardAppStore.setState({ canEdit: true })
     useAppStore.setState({ userId: "user-1" })
   })
@@ -199,7 +248,7 @@ describe("ImageGeneratorView", () => {
       .find((candidate) => candidate.textContent === "Generate")
     act(() => button?.click())
 
-    expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", {})
+    expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", {}, [])
   })
 
 
@@ -212,6 +261,24 @@ describe("ImageGeneratorView", () => {
     expect(button?.disabled).toBe(true)
     expect(container.textContent).toContain("모델 목록을 불러올 수 없습니다.")
     expect(container.textContent).not.toContain("provider secret")
+  })
+
+
+  it("renders the hook's safe reference materialization message", async () => {
+    const safeMessage = "이 이미지 노드는 참조 자산으로 등록할 수 없습니다."
+    mocks.useImageGeneration.mockReturnValue({
+      phase: "failed",
+      state: { output_asset_uid: "asset-existing" },
+      error: safeMessage,
+      generate: mocks.generate,
+      resumePending: mocks.resumePending,
+      checkStatusAgain: mocks.checkStatusAgain,
+      hasPendingRequest: false,
+      canResumePending: false,
+    })
+    await render()
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe(safeMessage)
   })
 
 
@@ -304,7 +371,7 @@ describe("ImageGeneratorView", () => {
       .find((candidate) => candidate.textContent === "Generate")!
     act(() => generateButton.click())
 
-    expect(mocks.generate).toHaveBeenCalledWith("model-1", "generated prompt", {})
+    expect(mocks.generate).toHaveBeenCalledWith("model-1", "generated prompt", {}, [])
     expect(mocks.updateNode).toHaveBeenLastCalledWith("node-1", expect.objectContaining({
       data: expect.objectContaining({
         properties: expect.objectContaining({
@@ -432,7 +499,7 @@ describe("ImageGeneratorView", () => {
       .find((candidate) => candidate.textContent === "Generate")!
     expect(enabledGenerate.disabled).toBe(false)
     act(() => enabledGenerate.click())
-    expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", {})
+    expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", {}, [])
   })
 
 
@@ -445,7 +512,7 @@ describe("ImageGeneratorView", () => {
       .find((candidate) => candidate.textContent === "Generate")!
     act(() => generateButton.click())
 
-    expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", {})
+    expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", {}, [])
     expect(mocks.updateNode).toHaveBeenCalledWith("node-1", expect.objectContaining({
       data: expect.objectContaining({
         properties: expect.objectContaining({
@@ -453,5 +520,266 @@ describe("ImageGeneratorView", () => {
         }),
       }),
     }))
+  })
+
+
+  it("renders references in ordinal order and removes the selected edge", async () => {
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, unknown>
+    }).properties
+    properties.imageModelId = { type: "keyword", value: "model-i2i" }
+    mocks.listImageModels.mockResolvedValue([MODEL, I2I_MODEL])
+    mocks.sourceNodes.set("image-first", {
+      id: "image-first",
+      type: "image",
+      data: { graphUid: "board-1", src: "data:image/png;base64,Zmlyc3Q=", properties: {} },
+    })
+    mocks.sourceNodes.set("image-second", {
+      id: "image-second",
+      type: "image",
+      data: { graphUid: "board-1", src: "data:image/jpeg;base64,c2Vjb25k", properties: {} },
+    })
+    mocks.sourceNodes.set("image-third", {
+      id: "image-third",
+      type: "image",
+      data: { graphUid: "board-1", src: "data:image/webp;base64,dGhpcmQ=", properties: {} },
+    })
+    mocks.edges = [
+      referenceEdge("edge-second", "image-second", 1),
+      referenceEdge("edge-third", "image-third", 2),
+      referenceEdge("edge-first", "image-first", 0),
+    ]
+    await render()
+
+    const references = container.querySelector('[aria-label="Image references"]')!
+    const images = [...references.querySelectorAll<HTMLImageElement>("img")]
+    expect(images.map((image) => image.src)).toEqual([
+      "data:image/png;base64,Zmlyc3Q=",
+      "data:image/jpeg;base64,c2Vjb25k",
+      "data:image/webp;base64,dGhpcmQ=",
+    ])
+    expect(references.textContent).toContain("1")
+    expect(references.textContent).toContain("2")
+    expect(references.textContent).toContain("3")
+    const modelOptions = [...container.querySelectorAll<HTMLOptionElement>(
+      '[aria-label="Image model"] option',
+    )]
+    expect(modelOptions.map((option) => option.value)).toEqual(["model-i2i"])
+
+    const removeFirst = container.querySelector<HTMLButtonElement>(
+      '[aria-label="Remove reference 1"]',
+    )!
+    act(() => removeFirst.click())
+    expect(mocks.removeEdge).toHaveBeenCalledWith("edge-first")
+
+    const generateButton = [...container.querySelectorAll("button")]
+      .find((candidate) => candidate.textContent === "Generate")!
+    act(() => generateButton.click())
+    expect(mocks.generate).toHaveBeenCalledWith(
+      "model-i2i",
+      "a blue bird",
+      {},
+      ["image-first", "image-second", "image-third"],
+    )
+  })
+
+
+  it("clears a stale generator thumbnail and polls retryable source B to success", async () => {
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, unknown>
+    }).properties
+    properties.imageModelId = { type: "keyword", value: "model-i2i" }
+    mocks.listImageModels.mockResolvedValue([I2I_MODEL])
+    const sourceProperties: Record<string, unknown> = {
+      activeGenerationUid: { type: "keyword", value: "generation-a" },
+    }
+    mocks.sourceNodes.set("generator-source", {
+      id: "generator-source",
+      type: "image-generator",
+      data: { graphUid: "board-1", properties: sourceProperties },
+    })
+    mocks.edges = [referenceEdge("edge-1", "generator-source", 0)]
+    mocks.useAuthedImage.mockImplementation((_graphId: string, assetUid: string | null) => ({
+      url: assetUid ? `blob:${assetUid}` : null,
+      failed: false,
+    }))
+    mocks.getImageGeneration.mockResolvedValueOnce({
+      status: "succeeded",
+      output_asset_uid: "asset-a",
+    })
+    await render()
+    expect(container.querySelector<HTMLImageElement>('img[alt="참조 생성 이미지"]')?.src)
+      .toBe("blob:asset-a")
+
+    sourceProperties.activeGenerationUid = { type: "keyword", value: "generation-b" }
+    mocks.getImageGeneration
+      .mockResolvedValueOnce({ status: "started", output_asset_uid: null })
+      .mockResolvedValueOnce({ status: "retryable", output_asset_uid: null })
+      .mockResolvedValueOnce({ status: "succeeded", output_asset_uid: "asset-b" })
+    await render()
+    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+
+    await act(() => vi.advanceTimersByTimeAsync(3_000))
+    expect(container.querySelector<HTMLImageElement>('img[alt="참조 생성 이미지"]')?.src)
+      .toBe("blob:asset-b")
+    expect(mocks.getImageGeneration.mock.calls.slice(-3).map((call) => call[1]))
+      .toEqual(["generation-b", "generation-b", "generation-b"])
+  })
+
+
+  it("retries a transient generator thumbnail GET and then renders success", async () => {
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, unknown>
+    }).properties
+    properties.imageModelId = { type: "keyword", value: "model-i2i" }
+    mocks.listImageModels.mockResolvedValue([I2I_MODEL])
+    mocks.sourceNodes.set("generator-source", {
+      id: "generator-source",
+      type: "image-generator",
+      data: {
+        graphUid: "board-1",
+        properties: { activeGenerationUid: { type: "keyword", value: "generation-a" } },
+      },
+    })
+    mocks.edges = [referenceEdge("edge-1", "generator-source", 0)]
+    mocks.useAuthedImage.mockImplementation((_graphId: string, assetUid: string | null) => ({
+      url: assetUid ? `blob:${assetUid}` : null,
+      failed: false,
+    }))
+    mocks.getImageGeneration
+      .mockRejectedValueOnce(new TypeError("temporary network failure"))
+      .mockResolvedValueOnce({ status: "succeeded", output_asset_uid: "asset-a" })
+
+    await render()
+    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+    await act(() => vi.advanceTimersByTimeAsync(1_000))
+
+    expect(mocks.getImageGeneration).toHaveBeenCalledTimes(2)
+    expect(container.querySelector<HTMLImageElement>('img[alt="참조 생성 이미지"]')?.src)
+      .toBe("blob:asset-a")
+  })
+
+
+  it.each([403, 404])("stops thumbnail polling after determinate HTTP %s", async (status) => {
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, unknown>
+    }).properties
+    properties.imageModelId = { type: "keyword", value: "model-i2i" }
+    mocks.listImageModels.mockResolvedValue([I2I_MODEL])
+    mocks.sourceNodes.set("generator-source", {
+      id: "generator-source",
+      type: "image-generator",
+      data: {
+        graphUid: "board-1",
+        properties: { activeGenerationUid: { type: "keyword", value: "generation-a" } },
+      },
+    })
+    mocks.edges = [referenceEdge("edge-1", "generator-source", 0)]
+    mocks.getImageGeneration.mockRejectedValue(new Error(`${status} - unavailable`))
+
+    await render()
+    await act(() => vi.advanceTimersByTimeAsync(30_000))
+
+    expect(mocks.getImageGeneration).toHaveBeenCalledTimes(1)
+    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+  })
+
+
+  it("never restores A after B fails or a late A response arrives", async () => {
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, unknown>
+    }).properties
+    properties.imageModelId = { type: "keyword", value: "model-i2i" }
+    mocks.listImageModels.mockResolvedValue([I2I_MODEL])
+    const sourceProperties: Record<string, unknown> = {
+      activeGenerationUid: { type: "keyword", value: "generation-a" },
+    }
+    mocks.sourceNodes.set("generator-source", {
+      id: "generator-source",
+      type: "image-generator",
+      data: { graphUid: "board-1", properties: sourceProperties },
+    })
+    mocks.edges = [referenceEdge("edge-1", "generator-source", 0)]
+    mocks.useAuthedImage.mockImplementation((_graphId: string, assetUid: string | null) => ({
+      url: assetUid ? `blob:${assetUid}` : null,
+      failed: false,
+    }))
+    let resolveA: ((value: { status: string; output_asset_uid: string }) => void) | null = null
+    mocks.getImageGeneration.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveA = resolve
+    }))
+    await render()
+
+    sourceProperties.activeGenerationUid = { type: "keyword", value: "generation-b" }
+    mocks.getImageGeneration.mockResolvedValueOnce({ status: "failed", output_asset_uid: null })
+    await render()
+    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+
+    await act(async () => {
+      resolveA?.({ status: "succeeded", output_asset_uid: "asset-a" })
+      await Promise.resolve()
+    })
+    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+  })
+
+
+  it("accepts the advertised reference maximum and rejects one beyond it", async () => {
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, unknown>
+    }).properties
+    properties.imageModelId = { type: "keyword", value: "model-i2i" }
+    mocks.listImageModels.mockResolvedValue([I2I_MODEL])
+    for (let index = 0; index < 4; index += 1) {
+      const source = `image-${index}`
+      mocks.sourceNodes.set(source, {
+        id: source,
+        type: "image",
+        data: { graphUid: "board-1", src: "data:image/png;base64,c2FmZQ==", properties: {} },
+      })
+      mocks.edges.push(referenceEdge(`edge-${index}`, source, index))
+    }
+    await render()
+
+    const generateButton = [...container.querySelectorAll("button")]
+      .find((candidate) => candidate.textContent === "Generate")!
+    expect(generateButton.disabled).toBe(true)
+    expect(container.textContent).toContain("최대 3장")
+    expect(mocks.generate).not.toHaveBeenCalled()
+  })
+
+
+  it("locks reference removal throughout local resolving", async () => {
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, unknown>
+    }).properties
+    properties.imageModelId = { type: "keyword", value: "model-i2i" }
+    mocks.listImageModels.mockResolvedValue([I2I_MODEL])
+    mocks.sourceNodes.set("image-1", {
+      id: "image-1",
+      type: "image",
+      data: { graphUid: "board-1", src: "data:image/png;base64,c2FmZQ==", properties: {} },
+    })
+    mocks.edges = [referenceEdge("edge-1", "image-1", 0)]
+    mocks.useImageGeneration.mockReturnValue({
+      phase: "resolving",
+      state: null,
+      error: null,
+      generate: mocks.generate,
+      resumePending: mocks.resumePending,
+      checkStatusAgain: mocks.checkStatusAgain,
+      hasPendingRequest: false,
+      canResumePending: false,
+    })
+    await render()
+
+    expect(container.querySelector<HTMLButtonElement>(
+      '[aria-label="Remove reference 1"]',
+    )?.disabled).toBe(true)
+    expect(container.querySelector<HTMLTextAreaElement>(
+      '[aria-label="Image prompt"]',
+    )?.disabled).toBe(true)
+    const generateButton = [...container.querySelectorAll("button")]
+      .find((candidate) => candidate.textContent === "생성 중…")
+    expect(generateButton?.disabled).toBe(true)
   })
 })

@@ -16,6 +16,8 @@ vi.mock("@/features/board/api/image-generation", async (importOriginal) => ({
 vi.mock("uuid", () => ({ v4: uuidMocks.uuidv4 }))
 
 import type { GenerationState } from "@/features/board/api/image-generation"
+import { ImageReferenceResolutionError } from "../../image-reference-resolution"
+import { IMAGE_REFERENCE_CHANGED_MESSAGE } from "../../image-reference-assets"
 import type { PendingImageRequest } from "./node-state"
 import {
   IMAGE_GENERATION_POLL_CEILING_MS,
@@ -54,7 +56,7 @@ const generationState = (
 
 
 const pending = (patch: Partial<PendingImageRequest> = {}): PendingImageRequest => ({
-  version: 1,
+  version: 2,
   boardUid: "board-1",
   generatorNodeUid: "node-1",
   initiatorUserUid: "user-1",
@@ -62,6 +64,8 @@ const pending = (patch: Partial<PendingImageRequest> = {}): PendingImageRequest 
   modelId: "model-1",
   prompt: "a blue bird",
   parameters: { aspect_ratio: "1:1" },
+  referenceSourceNodeUids: [],
+  referenceAssetUids: [],
   ...patch,
 })
 
@@ -249,9 +253,200 @@ describe("useImageGeneration", () => {
   })
 
 
+  it("resolves ordered references once before creating an immutable pending snapshot", async () => {
+    apiMocks.startImageGeneration.mockResolvedValue({ generation_uid: "gen-new", status: "started" })
+    const sourceNodeUids = ["image-first", "image-second", "image-third"]
+    const resolvedAssetUids = ["a".repeat(32), "b".repeat(32), "c".repeat(32)]
+    let release: ((assetUids: string[]) => void) | null = null
+    const resolveReferenceAssets = vi.fn(() => new Promise<string[]>((resolve) => {
+      release = resolve
+    }))
+    render({ resolveReferenceAssets })
+
+    let first: Promise<void> | undefined
+    act(() => {
+      first = latest?.generate("model-1", "ordered bird", {}, sourceNodeUids)
+      void latest?.generate("model-1", "ordered bird", {}, sourceNodeUids)
+    })
+    expect(latest?.phase).toBe("resolving")
+    expect(latest?.hasPendingRequest).toBe(false)
+    expect(resolveReferenceAssets).toHaveBeenCalledTimes(1)
+    expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
+
+    await act(async () => {
+      release?.(resolvedAssetUids)
+      await first
+    })
+    sourceNodeUids.reverse()
+    resolvedAssetUids.reverse()
+
+    expect(apiMocks.startImageGeneration).toHaveBeenCalledTimes(1)
+    expect(apiMocks.startImageGeneration).toHaveBeenCalledWith(expect.objectContaining({
+      clientRequestUid: UUID_1,
+      referenceAssetUids: ["a".repeat(32), "b".repeat(32), "c".repeat(32)],
+    }))
+    expect(persist).toHaveBeenNthCalledWith(1, {
+      pendingRequest: expect.objectContaining({
+        referenceSourceNodeUids: ["image-first", "image-second", "image-third"],
+        referenceAssetUids: ["a".repeat(32), "b".repeat(32), "c".repeat(32)],
+      }),
+    })
+  })
+
+
+  it("rejects a collaboration reorder after resolution without pending state or POST", async () => {
+    const initial = ["image-first", "image-second"]
+    let current = [...initial]
+    let release: ((assetUids: string[]) => void) | null = null
+    const resolveReferenceAssets = vi.fn(() => new Promise<string[]>((resolve) => {
+      release = resolve
+    }))
+    render({
+      resolveReferenceAssets,
+      getCurrentReferenceSourceNodeUids: () => [...current],
+    })
+
+    let generation: Promise<void> | undefined
+    act(() => {
+      generation = latest?.generate("model-1", "ordered bird", {}, initial)
+    })
+    current = ["image-second", "image-first"]
+    await act(async () => {
+      release?.(["a".repeat(32), "b".repeat(32)])
+      await generation
+    })
+
+    expect(latest?.phase).toBe("failed")
+    expect(latest?.error).toBe(IMAGE_REFERENCE_CHANGED_MESSAGE)
+    expect(latest?.hasPendingRequest).toBe(false)
+    expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
+    expect(persist).not.toHaveBeenCalledWith(expect.objectContaining({
+      pendingRequest: expect.anything(),
+    }))
+  })
+
+
+  it("keeps a confirmed pending snapshot immutable after later canvas changes", async () => {
+    let current = ["image-first"]
+    const resolveReferenceAssets = vi.fn().mockResolvedValue(["a".repeat(32)])
+    apiMocks.startImageGeneration.mockReturnValue(new Promise(() => undefined))
+    render({
+      resolveReferenceAssets,
+      getCurrentReferenceSourceNodeUids: () => [...current],
+    })
+
+    act(() => {
+      void latest?.generate("model-1", "ordered bird", {}, ["image-first"])
+    })
+    await flush()
+    current = []
+    act(() => {
+      void latest?.generate("model-1", "changed bird", {}, [])
+    })
+    await flush()
+
+    expect(apiMocks.startImageGeneration).toHaveBeenCalledTimes(1)
+    expect(persist).toHaveBeenCalledWith({
+      pendingRequest: expect.objectContaining({
+        referenceSourceNodeUids: ["image-first"],
+        referenceAssetUids: ["a".repeat(32)],
+      }),
+    })
+    expect(uuidMocks.uuidv4).toHaveBeenCalledTimes(1)
+  })
+
+
+  it("keeps the old preview and permits a clean retry after reference resolution fails", async () => {
+    const oldState = generationState("succeeded", {
+      generation_uid: "gen-old",
+      output_asset_uid: "asset-old",
+    })
+    apiMocks.getImageGeneration.mockResolvedValue(oldState)
+    const resolveReferenceAssets = vi.fn()
+      .mockRejectedValueOnce(new ImageReferenceResolutionError(IMAGE_REFERENCE_CHANGED_MESSAGE))
+      .mockResolvedValueOnce(["d".repeat(32)])
+    apiMocks.startImageGeneration.mockResolvedValue({ generation_uid: "gen-new", status: "started" })
+    render({ activeGenerationUid: "gen-old", resolveReferenceAssets })
+    await flush()
+
+    await act(async () => latest?.generate("model-1", "new bird", {}, ["image-1"]))
+    await flush()
+    expect(latest?.phase).toBe("failed")
+    expect(latest?.error).toBe(IMAGE_REFERENCE_CHANGED_MESSAGE)
+    expect(latest?.state?.output_asset_uid).toBe("asset-old")
+    expect(latest?.hasPendingRequest).toBe(false)
+    expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
+    expect(persist).not.toHaveBeenCalledWith(expect.objectContaining({ pendingRequest: expect.anything() }))
+    expect(uuidMocks.uuidv4).not.toHaveBeenCalled()
+
+    await act(async () => latest?.generate("model-1", "new bird", {}, ["image-1"]))
+    expect(resolveReferenceAssets).toHaveBeenCalledTimes(2)
+    expect(apiMocks.startImageGeneration).toHaveBeenCalledTimes(1)
+  })
+
+
+  it("shows safe materialization copy but never exposes an arbitrary upload body", async () => {
+    const oldState = generationState("succeeded", {
+      generation_uid: "gen-old",
+      output_asset_uid: "asset-old",
+    })
+    apiMocks.getImageGeneration.mockResolvedValue(oldState)
+    const safeMessage = "이 이미지 노드는 참조 자산으로 등록할 수 없습니다."
+    const resolveReferenceAssets = vi.fn()
+      .mockRejectedValueOnce(new ImageReferenceResolutionError(safeMessage))
+      .mockRejectedValueOnce(new Error("500 - private upstream response body"))
+    render({ activeGenerationUid: "gen-old", resolveReferenceAssets })
+    await flush()
+
+    await act(async () => latest?.generate("model-1", "new bird", {}, ["image-1"]))
+    expect(latest?.error).toBe(safeMessage)
+    expect(latest?.state?.output_asset_uid).toBe("asset-old")
+    expect(uuidMocks.uuidv4).not.toHaveBeenCalled()
+    expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
+    expect(persist).not.toHaveBeenCalledWith(expect.objectContaining({
+      pendingRequest: expect.anything(),
+    }))
+
+    await act(async () => latest?.generate("model-1", "new bird", {}, ["image-1"]))
+    expect(latest?.error).toBe("이미지 생성 요청을 확인할 수 없습니다.")
+    expect(latest?.error).not.toContain("private upstream")
+    expect(latest?.state?.output_asset_uid).toBe("asset-old")
+    expect(uuidMocks.uuidv4).not.toHaveBeenCalled()
+    expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
+  })
+
+
+  it("aborts in-flight reference resolution on unmount without a generation POST", async () => {
+    const signalHolder: { current?: AbortSignal } = {}
+    let generation: Promise<void> | undefined
+    const resolveReferenceAssets = vi.fn((_sourceNodeUids, signal: AbortSignal) => {
+      signalHolder.current = signal
+      return new Promise<string[]>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")))
+      })
+    })
+    render({ resolveReferenceAssets })
+
+    act(() => {
+      generation = latest?.generate("model-1", "new bird", {}, ["image-1"])
+    })
+    await flush()
+    act(() => root.unmount())
+    mounted = false
+    await act(async () => generation)
+
+    expect(signalHolder.current?.aborted).toBe(true)
+    expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
+    expect(persist).not.toHaveBeenCalled()
+  })
+
+
   it("recovers an owned pending request with the exact UUID and snapshot", async () => {
     apiMocks.startImageGeneration.mockResolvedValue({ generation_uid: "gen-1", status: "started" })
-    const snapshot = pending()
+    const snapshot = pending({
+      referenceSourceNodeUids: ["image-1", "image-2"],
+      referenceAssetUids: ["a".repeat(32), "b".repeat(32)],
+    })
     render({ pendingRequest: snapshot })
     await flush()
 
@@ -261,6 +456,7 @@ describe("useImageGeneration", () => {
       modelId: snapshot.modelId,
       prompt: snapshot.prompt,
       parameters: snapshot.parameters,
+      referenceAssetUids: snapshot.referenceAssetUids,
     }))
   })
 
@@ -428,6 +624,60 @@ describe("useImageGeneration", () => {
       clientRequestUid: UUID_2,
     }))
     expect(uuidMocks.uuidv4).toHaveBeenCalledTimes(2)
+  })
+
+
+  it("clears a determinate generation 413, preserves preview, and retries only with a new UUID", async () => {
+    apiMocks.getImageGeneration.mockResolvedValue(generationState("succeeded", {
+      generation_uid: "gen-old",
+      output_asset_uid: "asset-old",
+    }))
+    const detail = JSON.stringify({
+      detail: {
+        code: "reference_too_large",
+        message: "provider-controlled message",
+      },
+    })
+    apiMocks.startImageGeneration
+      .mockRejectedValueOnce(new Error(`413 Request Entity Too Large - ${detail}`))
+      .mockResolvedValueOnce({ generation_uid: "gen-new", status: "started" })
+    render({ activeGenerationUid: "gen-old" })
+    await flush()
+
+    await act(async () => latest?.generate("model-1", "a new bird", {}))
+    await flush()
+    await act(() => vi.advanceTimersByTimeAsync(60_000))
+
+    expect(latest?.state?.output_asset_uid).toBe("asset-old")
+    expect(latest?.hasPendingRequest).toBe(false)
+    expect(latest?.canResumePending).toBe(false)
+    expect(latest?.error).toBe("참조 이미지 한 장의 파일 크기가 제한을 초과했습니다.")
+    expect(apiMocks.startImageGeneration).toHaveBeenCalledTimes(1)
+    expect(persist).toHaveBeenCalledWith({ pendingRequest: null })
+
+    await act(async () => latest?.generate("model-1", "a smaller bird", {}))
+    expect(apiMocks.startImageGeneration).toHaveBeenCalledTimes(2)
+    expect(apiMocks.startImageGeneration).toHaveBeenLastCalledWith(expect.objectContaining({
+      clientRequestUid: UUID_2,
+    }))
+  })
+
+
+  it("treats an upload 413 during resolving as pre-pending and performs no generation POST", async () => {
+    const detail = JSON.stringify({
+      detail: { code: "reference_too_large", message: "safe" },
+    })
+    const resolveReferenceAssets = vi.fn().mockRejectedValue(
+      new Error(`413 Request Entity Too Large - ${detail}`),
+    )
+    render({ resolveReferenceAssets })
+
+    await act(async () => latest?.generate("model-1", "a blue bird", {}, ["image-1"]))
+
+    expect(latest?.phase).toBe("failed")
+    expect(latest?.hasPendingRequest).toBe(false)
+    expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
+    expect(persist).not.toHaveBeenCalled()
   })
 
 

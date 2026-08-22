@@ -26,7 +26,10 @@ import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store"
 import { useLocalDocUpload, type LocalDocUpload } from "@/features/agent/local/use-local-doc-upload"
 import { useNodeTypeCount } from "../canvas/use-node-type-count"
-import { canUseServerImageGeneration } from "../canvas/board-runtime-context"
+import {
+  canUseImageImports,
+  canUseServerImageGeneration,
+} from "../canvas/board-runtime-context"
 import { useBoardAppStore } from "../store/board-app-store"
 import { DocumentUploadDialog } from "./document-upload-dialog"
 import { IconSearchDialog } from "./icon-search-dialog"
@@ -62,10 +65,12 @@ const MoreMenuItems = ({
   local,
   localUpload,
   upload,
+  canEdit,
 }: {
   local: boolean
   localUpload: boolean
   upload: LocalDocUpload
+  canEdit: boolean
 }) => {
   const store = useCanvasStore()
   const userPlan = useAppStore((s) => s.userPlan)
@@ -85,11 +90,13 @@ const MoreMenuItems = ({
         <span>Icons</span>
         <DropdownMenuShortcut>G</DropdownMenuShortcut>
       </DropdownMenuItem>
-      <DropdownMenuItem onSelect={() => setChromeDialog("image-search")} className="gap-2 text-sm">
-        <ImageStackIcon className="size-4 shrink-0" />
-        <span>Images</span>
-        <DropdownMenuShortcut>I</DropdownMenuShortcut>
-      </DropdownMenuItem>
+      {canUseImageImports(canEdit) && (
+        <DropdownMenuItem onSelect={() => setChromeDialog("image-search")} className="gap-2 text-sm">
+          <ImageStackIcon className="size-4 shrink-0" />
+          <span>Images</span>
+          <DropdownMenuShortcut>I</DropdownMenuShortcut>
+        </DropdownMenuItem>
+      )}
       <DropdownMenuItem onSelect={() => setTool("folder")} className="gap-2 text-sm">
         <FolderPlusActionIcon className="size-4 shrink-0" />
         <span>Sub-board</span>
@@ -144,13 +151,14 @@ export function HarnessToolbarMore({ local = false }: { local?: boolean } = {}) 
   const chromeDialog = useBoardAppStore((s) => s.chromeDialog)
   const setChromeDialog = useBoardAppStore((s) => s.setChromeDialog)
   const boardId = useBoardAppStore((s) => s.boardId) ?? ""
+  const canEdit = useBoardAppStore((s) => s.canEdit)
 
   // Local boards upload documents through the offline pipeline (same hook as the
   // chat attach button); synced boards keep the legacy server dialog.
   const upload = useLocalDocUpload(boardId)
   const localUpload = local && !!boardId
 
-  const openImageSearch = chromeDialog === "image-search"
+  const openImageSearch = canUseImageImports(canEdit) && chromeDialog === "image-search"
   const openIconSearch = chromeDialog === "icon-search"
   const openDocumentUpload = chromeDialog === "document-upload"
 
@@ -177,7 +185,12 @@ export function HarnessToolbarMore({ local = false }: { local?: boolean } = {}) 
           sideOffset={8}
           className="min-w-[190px]"
         >
-          <MoreMenuItems local={local} localUpload={localUpload} upload={upload} />
+          <MoreMenuItems
+            local={local}
+            localUpload={localUpload}
+            upload={upload}
+            canEdit={canEdit}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
 

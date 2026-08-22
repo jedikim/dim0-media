@@ -6,7 +6,11 @@ without Postgres/Qdrant.
 
 import math
 
+from unittest.mock import AsyncMock
+
 from topix.collab.apply_ops import RAD_TO_DEG, apply_batch
+from topix.datatypes.note.link import Link
+from topix.store.graph import GraphStore
 
 
 class _RecordingGraphStore:
@@ -85,6 +89,7 @@ class _RecordingGraphStore:
 # node.update
 # ---------------------------------------------------------------------------
 
+
 async def test_node_update_position_only():
     """Node update position only."""
     store = _RecordingGraphStore()
@@ -93,18 +98,20 @@ async def test_node_update_position_only():
     results = await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
 
     assert results[0].applied is True
-    assert store.patch_calls == [{
-        "node_id": "n1",
-        "user_uid": "u1",
-        "data": {
-            "properties": {
-                "node_position": {
-                    "type": "position",
-                    "position": {"x": 200.0, "y": 150.0},
+    assert store.patch_calls == [
+        {
+            "node_id": "n1",
+            "user_uid": "u1",
+            "data": {
+                "properties": {
+                    "node_position": {
+                        "type": "position",
+                        "position": {"x": 200.0, "y": 150.0},
+                    },
                 },
             },
-        },
-    }]
+        }
+    ]
 
 
 async def test_node_update_resize_emits_node_size():
@@ -303,16 +310,16 @@ async def test_node_update_style_display_colors_ignored_in_favor_of_stored():
         "id": "n1",
         "patch": {
             "style": {
-                "strokeColor": "#dadce0",     # dark-adapted, ignore
-                "backgroundColor": "#222",    # dark-adapted, ignore
-                "textColor": "#fafafa",       # dark-adapted, ignore
-                "roundness": 0,               # non-color, keep
+                "strokeColor": "#dadce0",  # dark-adapted, ignore
+                "backgroundColor": "#222",  # dark-adapted, ignore
+                "textColor": "#fafafa",  # dark-adapted, ignore
+                "roundness": 0,  # non-color, keep
             },
             "data": {
                 "_storedColors": {
-                    "strokeColor": "#000000",     # canonical, win
-                    "backgroundColor": "#ffffff", # canonical, win
-                    "textColor": "#111111",       # canonical, win
+                    "strokeColor": "#000000",  # canonical, win
+                    "backgroundColor": "#ffffff",  # canonical, win
+                    "textColor": "#111111",  # canonical, win
                 },
             },
         },
@@ -430,11 +437,19 @@ async def test_node_add_carries_stored_colors_onto_style():
     op = {
         "type": "node.add",
         "node": {
-            "id": "n1", "x": 0, "y": 0, "w": 200, "h": 80, "z": 0, "angle": 0,
+            "id": "n1",
+            "x": 0,
+            "y": 0,
+            "w": 200,
+            "h": 80,
+            "z": 0,
+            "angle": 0,
             "content": "",
             "style": {"backgroundColor": "#1A2C5C"},
             "data": {
-                "noteType": "note", "styleType": "rectangle", "version": 1,
+                "noteType": "note",
+                "styleType": "rectangle",
+                "version": 1,
                 "_storedColors": {"backgroundColor": "#3b82f6"},
             },
         },
@@ -468,6 +483,7 @@ async def test_node_update_with_truly_empty_patch_is_not_applied():
 # node.remove
 # ---------------------------------------------------------------------------
 
+
 async def test_node_remove_dispatches_to_delete_node():
     """Node remove dispatches to delete node."""
     store = _RecordingGraphStore()
@@ -494,6 +510,7 @@ async def test_node_remove_missing_id_is_rejected():
 # node.add
 # ---------------------------------------------------------------------------
 
+
 async def test_node_add_constructs_note_with_board_id_and_position():
     """Node add constructs note with board id and position."""
     store = _RecordingGraphStore()
@@ -501,7 +518,11 @@ async def test_node_add_constructs_note_with_board_id_and_position():
         "type": "node.add",
         "node": {
             "id": "n1",
-            "x": 100, "y": 100, "w": 200, "h": 80, "z": 0,
+            "x": 100,
+            "y": 100,
+            "w": 200,
+            "h": 80,
+            "z": 0,
             "angle": 0,
             "content": "hello",
             "data": {"noteType": "note", "styleType": "rectangle", "version": 1},
@@ -534,7 +555,11 @@ async def test_node_add_falls_back_to_wire_type_when_style_type_missing():
         "type": "node.add",
         "node": {
             "id": "n1",
-            "x": 0, "y": 0, "w": 200, "h": 80, "z": 0,
+            "x": 0,
+            "y": 0,
+            "w": 200,
+            "h": 80,
+            "z": 0,
             "angle": 0,
             # NB: `type` uses canvas-harness vocabulary; `data.styleType`
             # is intentionally omitted to exercise the fallback.
@@ -560,7 +585,11 @@ async def test_node_add_wire_type_rect_maps_back_to_rectangle():
         "type": "node.add",
         "node": {
             "id": "n1",
-            "x": 0, "y": 0, "w": 200, "h": 80, "z": 0,
+            "x": 0,
+            "y": 0,
+            "w": 200,
+            "h": 80,
+            "z": 0,
             "angle": 0,
             "type": "rect",
             "data": {"noteType": "note", "version": 1},
@@ -587,7 +616,11 @@ async def test_node_add_persists_style_roundness_from_wire():
         "type": "node.add",
         "node": {
             "id": "n1",
-            "x": 0, "y": 0, "w": 200, "h": 80, "z": 0,
+            "x": 0,
+            "y": 0,
+            "w": 200,
+            "h": 80,
+            "z": 0,
             "angle": 0,
             "type": "rect",
             "style": {"roundness": 0, "strokeWidth": 4, "fontFamily": "serif"},
@@ -618,7 +651,11 @@ async def test_node_add_persists_image_url_from_data_properties():
         "type": "node.add",
         "node": {
             "id": "n1",
-            "x": 0, "y": 0, "w": 200, "h": 200, "z": 0,
+            "x": 0,
+            "y": 0,
+            "w": 200,
+            "h": 200,
+            "z": 0,
             "angle": 0,
             "type": "image",
             "data": {
@@ -655,7 +692,11 @@ async def test_node_add_persists_icon_name_from_data_properties():
         "type": "node.add",
         "node": {
             "id": "n1",
-            "x": 0, "y": 0, "w": 64, "h": 64, "z": 0,
+            "x": 0,
+            "y": 0,
+            "w": 64,
+            "h": 64,
+            "z": 0,
             "angle": 0,
             "type": "svg-icon",
             "data": {
@@ -813,7 +854,11 @@ async def test_node_add_persists_label_from_data():
         "type": "node.add",
         "node": {
             "id": "n1",
-            "x": 0, "y": 0, "w": 320, "h": 200, "z": 0,
+            "x": 0,
+            "y": 0,
+            "w": 320,
+            "h": 200,
+            "z": 0,
             "angle": 0,
             "type": "sheet",
             "data": {
@@ -878,7 +923,11 @@ async def test_node_add_data_properties_cannot_override_top_level_size():
         "type": "node.add",
         "node": {
             "id": "n1",
-            "x": 0, "y": 0, "w": 100, "h": 80, "z": 0,
+            "x": 0,
+            "y": 0,
+            "w": 100,
+            "h": 80,
+            "z": 0,
             "angle": 0,
             "type": "rect",
             "data": {
@@ -908,6 +957,7 @@ async def test_node_add_data_properties_cannot_override_top_level_size():
 # edge.* — Link round-trip
 # ---------------------------------------------------------------------------
 
+
 async def test_edge_add_constructs_link_with_endpoints():
     """Edge add constructs link with endpoints."""
     store = _RecordingGraphStore()
@@ -928,6 +978,86 @@ async def test_edge_add_constructs_link_with_endpoints():
     assert link.graph_uid == "b1"
     assert link.source == "n1"
     assert link.target == "n2"
+
+
+async def test_edge_add_persists_image_reference_order_metadata():
+    """A complete reference marker pair survives the inbound collaboration path."""
+    store = _RecordingGraphStore()
+    op = {
+        "type": "edge.add",
+        "edge": {
+            "id": "e1",
+            "source": {"nodeId": "image-1"},
+            "target": {"nodeId": "generator-1"},
+            "data": {
+                "imageReference": True,
+                "imageReferenceOrdinal": 2,
+            },
+        },
+    }
+
+    await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    [link] = store.add_links_calls[0]
+    assert link.properties.image_reference is not None
+    assert link.properties.image_reference.value == "image-generator-reference"
+    assert link.properties.image_reference_ordinal is not None
+    assert link.properties.image_reference_ordinal.number == 2
+
+
+async def test_edge_update_sets_and_explicitly_clears_image_reference_metadata():
+    """Reference updates persist while an explicit null pair clears stale metadata."""
+    store = _RecordingGraphStore()
+    ops = [
+        {
+            "type": "edge.update",
+            "id": "e1",
+            "patch": {
+                "data": {
+                    "imageReference": True,
+                    "imageReferenceOrdinal": 1,
+                },
+            },
+            "prev": {},
+        },
+        {
+            "type": "edge.update",
+            "id": "e2",
+            "patch": {
+                "data": {
+                    "imageReference": None,
+                    "imageReferenceOrdinal": None,
+                },
+            },
+            "prev": {},
+        },
+    ]
+
+    await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=ops)
+
+    assert store.update_link_calls == [
+        {
+            "link_id": "e1",
+            "data": {
+                "properties": {
+                    "image_reference": {
+                        "type": "keyword",
+                        "value": "image-generator-reference",
+                    },
+                    "image_reference_ordinal": {"type": "number", "number": 1},
+                },
+            },
+        },
+        {
+            "link_id": "e2",
+            "data": {
+                "properties": {
+                    "image_reference": None,
+                    "image_reference_ordinal": None,
+                },
+            },
+        },
+    ]
 
 
 async def test_edge_add_carries_parent_id_from_data():
@@ -1257,7 +1387,7 @@ async def test_edge_add_persists_free_endpoint_world_point():
     assert results[0].applied is True
     [link] = store.add_links_calls[0]
     assert link.source == "n1"
-    assert link.target == ""    # empty-string sentinel for free
+    assert link.target == ""  # empty-string sentinel for free
     assert link.properties.end_point.is_local_offset is False
     assert link.properties.end_point.position.x == 800.0
     assert link.properties.end_point.position.y == 400.0
@@ -1314,6 +1444,7 @@ async def test_edge_add_carries_midpoint_onto_link_properties():
 # ---------------------------------------------------------------------------
 # Unsupported / batch behaviour
 # ---------------------------------------------------------------------------
+
 
 async def test_unsupported_op_does_not_apply_but_does_not_raise():
     """Unsupported op does not apply but does not raise."""
@@ -1376,9 +1507,32 @@ async def test_op_handler_exception_is_caught_per_bucket():
     assert results[2].applied is True
 
 
+async def test_invalid_merged_link_patch_is_not_saved_and_reports_not_applied():
+    """GraphStore validation failure fails the edge bucket before any content write."""
+    store = GraphStore.__new__(GraphStore)
+    store._content_store = AsyncMock()
+    store.get_links = AsyncMock(
+        return_value=[
+            Link(source="source-1", target="target-1", graph_uid="b1"),
+        ]
+    )
+    op = {
+        "type": "edge.update",
+        "id": store.get_links.return_value[0].id,
+        "patch": {"pathStyle": "not-a-path-style"},
+        "prev": {},
+    }
+
+    results = await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=[op])
+
+    assert results[0].applied is False
+    store._content_store.update.assert_not_awaited()
+
+
 # ---------------------------------------------------------------------------
 # Grouped bulk dispatch — the win behind apply_batch's restructure.
 # ---------------------------------------------------------------------------
+
 
 async def test_homogeneous_node_add_batch_dispatches_as_one_bulk_call():
     """1000 node.add ops should hit `add_notes` once, not 1000 times.
@@ -1393,7 +1547,12 @@ async def test_homogeneous_node_add_batch_dispatches_as_one_bulk_call():
             "type": "node.add",
             "node": {
                 "id": f"n{i}",
-                "x": 0, "y": 0, "w": 200, "h": 80, "z": 0, "angle": 0,
+                "x": 0,
+                "y": 0,
+                "w": 200,
+                "h": 80,
+                "z": 0,
+                "angle": 0,
                 "data": {"noteType": "note", "styleType": "rectangle", "version": 1},
             },
         }
@@ -1488,10 +1647,7 @@ async def test_image_generator_clear_sentinels_survive_property_patch_lift():
 async def test_homogeneous_node_update_batch_dispatches_as_one_patch_notes_call():
     """N node.updates collapse to one bulk patch_notes(updates) call."""
     store = _RecordingGraphStore()
-    ops = [
-        {"type": "node.update", "id": f"n{i}", "patch": {"x": i, "y": i}, "prev": {}}
-        for i in range(20)
-    ]
+    ops = [{"type": "node.update", "id": f"n{i}", "patch": {"x": i, "y": i}, "prev": {}} for i in range(20)]
 
     await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=ops)
 
@@ -1505,10 +1661,7 @@ async def test_homogeneous_node_update_batch_dispatches_as_one_patch_notes_call(
 async def test_homogeneous_node_remove_batch_dispatches_as_one_delete_nodes_call():
     """N node.removes collapse to one bulk delete_nodes(ids) call."""
     store = _RecordingGraphStore()
-    ops = [
-        {"type": "node.remove", "node": {"id": f"n{i}"}}
-        for i in range(15)
-    ]
+    ops = [{"type": "node.remove", "node": {"id": f"n{i}"}} for i in range(15)]
 
     await apply_batch(graph_store=store, board_id="b1", user_id="u1", ops=ops)
 
@@ -1539,9 +1692,9 @@ async def test_mixed_batch_groups_ops_by_kind_each_kind_one_bulk_call():
 
     # Per-kind: one bulk call carrying all items of that kind.
     assert len(store.add_notes_calls) == 1
-    assert len(store.add_notes_calls[0]) == 2     # n1, n3
+    assert len(store.add_notes_calls[0]) == 2  # n1, n3
     assert len(store.patch_notes_bulk_calls) == 1
-    assert len(store.patch_notes_bulk_calls[0]["updates"]) == 2   # n2, n4
+    assert len(store.patch_notes_bulk_calls[0]["updates"]) == 2  # n2, n4
     assert len(store.delete_nodes_bulk_calls) == 1
     assert len(store.delete_nodes_bulk_calls[0]["node_ids"]) == 1  # n5
     # All 5 results in input order, all applied.

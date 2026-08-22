@@ -8,6 +8,7 @@ import {
 } from "../theme/color-adapter"
 import { getBoardThemeMode } from "../theme/theme-mode-ref"
 import { CLEARED_IMAGE_PENDING_REQUEST } from "../node-types/image-generator/node-state"
+import { CLEARED_IMAGE_ASSET_UID } from "../image-reference-assets"
 
 
 /**
@@ -67,6 +68,9 @@ export const useStampNewNodes = (
         const properties = data.properties ?? {}
         const pending = properties.imagePendingRequest?.text
         const needsPendingStrip = op.node.type === "image-generator" && !!pending
+        const needsAssetStrip = op.node.type === "image"
+          && needsRescope
+          && properties.imageAssetUid !== undefined
 
         // Theme staleness check: a pasted node carries `_storedColors`
         // (canonical, theme-independent) and `style.*` (display, baked
@@ -98,10 +102,10 @@ export const useStampNewNodes = (
           nextStyle = { ...(nextStyle ?? currentStyle), autoFit: false }
         }
 
-        if (!needsRescope && !needsPendingStrip && !nextStyle) continue
+        if (!needsRescope && !needsPendingStrip && !needsAssetStrip && !nextStyle) continue
 
         const patch: Parameters<typeof store.updateNode>[1] = {}
-        if (needsRescope || needsPendingStrip) {
+        if (needsRescope || needsPendingStrip || needsAssetStrip) {
           patch.data = {
             ...data,
             ...(needsRescope ? { graphUid: boardId, parentId: wantedParentId } : {}),
@@ -110,6 +114,14 @@ export const useStampNewNodes = (
                   properties: {
                     ...properties,
                     imagePendingRequest: CLEARED_IMAGE_PENDING_REQUEST,
+                  },
+                }
+              : {}),
+            ...(needsAssetStrip
+              ? {
+                  properties: {
+                    ...properties,
+                    imageAssetUid: CLEARED_IMAGE_ASSET_UID,
                   },
                 }
               : {}),

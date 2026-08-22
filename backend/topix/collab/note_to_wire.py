@@ -12,7 +12,7 @@ import math
 
 from typing import Any
 
-from topix.datatypes.note.link import Link
+from topix.datatypes.note.link import IMAGE_REFERENCE_EDGE_MARKER, Link
 from topix.datatypes.note.note import Note
 
 DEG_TO_RAD = math.pi / 180.0
@@ -62,9 +62,16 @@ _CANVAS_TO_DIM0_TYPE: dict[str, str] = {v: k for k, v in _DIM0_TO_CANVAS_TYPE.it
 # sheet reaches peers with autoFit unset (→ on) and grows unbounded.
 # IMPORTANT: keep in sync with webui/.../convert/note-to-node.ts
 # (`AUTOFIT_DISABLED_TYPES`).
-_AUTOFIT_DISABLED_CANVAS_TYPES: frozenset[str] = frozenset({
-    "folder", "sheet", "code-sandbox", "widget", "mini-app", "document",
-})
+_AUTOFIT_DISABLED_CANVAS_TYPES: frozenset[str] = frozenset(
+    {
+        "folder",
+        "sheet",
+        "code-sandbox",
+        "widget",
+        "mini-app",
+        "document",
+    }
+)
 
 
 # Lifted / dropped Dim0 style keys — handled out-of-band before the
@@ -75,9 +82,15 @@ _AUTOFIT_DISABLED_CANVAS_TYPES: frozenset[str] = frozenset({
 #   - `fill_style`: canvas-harness's Style has no `fillStyle` field
 #     (solid-only per migration-canvas-harness §3.3).
 #   - `path_style`: lifted to `Edge.pathStyle` (LinkStyle only).
-_LIFTED_OR_DROPPED_STYLE_KEYS: frozenset[str] = frozenset({
-    "type", "angle", "group_ids", "fill_style", "path_style",
-})
+_LIFTED_OR_DROPPED_STYLE_KEYS: frozenset[str] = frozenset(
+    {
+        "type",
+        "angle",
+        "group_ids",
+        "fill_style",
+        "path_style",
+    }
+)
 
 
 def _snake_to_camel(s: str) -> str:
@@ -186,9 +199,7 @@ def link_to_wire_edge(
     receiver runs `midpointToCubicControls` to get the curve. Keeps the
     server stateless on geometry.
     """
-    style_dict: dict[str, Any] = (
-        link.style.model_dump(exclude_none=True) if link.style else {}
-    )
+    style_dict: dict[str, Any] = link.style.model_dump(exclude_none=True) if link.style else {}
     path_style = style_dict.pop("path_style", "bezier") or "bezier"
     group_ids = style_dict.pop("group_ids", []) or []
     for key in _LIFTED_OR_DROPPED_STYLE_KEYS:
@@ -220,9 +231,23 @@ def link_to_wire_edge(
         # build cubic controls with its own endpoint world coords.
         edge["_midpoint"] = midpoint
 
+    edge_data: dict[str, Any] = {}
     stored = _style_stored_colors(link.style)
     if stored:
-        edge["data"] = {"_storedColors": stored}
+        edge_data["_storedColors"] = stored
+    image_reference = getattr(link.properties, "image_reference", None)
+    image_reference_ordinal = getattr(link.properties, "image_reference_ordinal", None)
+    ordinal = getattr(image_reference_ordinal, "number", None)
+    if (
+        getattr(image_reference, "value", None) == IMAGE_REFERENCE_EDGE_MARKER
+        and isinstance(ordinal, int)
+        and not isinstance(ordinal, bool)
+        and ordinal >= 0
+    ):
+        edge_data["imageReference"] = True
+        edge_data["imageReferenceOrdinal"] = ordinal
+    if edge_data:
+        edge["data"] = edge_data
 
     return edge
 

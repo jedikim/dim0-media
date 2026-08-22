@@ -111,7 +111,7 @@ export const useBoardKeyboard = (store: CanvasStore): void => {
       }
       if (key === "i") {
         e.preventDefault()
-        app.setChromeDialog("image-search")
+        if (app.canEdit) app.setChromeDialog("image-search")
         return
       }
       if (key === "m") {

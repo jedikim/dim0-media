@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from topix.image_generation.capabilities import MAX_ANY_MODEL_REFERENCES
-from topix.image_generation.models import GenerationStatus, ImageGenerationParameters
+from topix.image_generation.models import GenerationStatus, ImageGenerationParameters, ProviderRasterMimeType
 
 
 class ImageGenerationAPIModel(BaseModel):
@@ -49,6 +49,17 @@ class ImageGenerationAcceptedResponse(ImageGenerationAPIModel):
 
     generation_uid: str
     status: GenerationStatus
+
+
+class ImageAssetUploadResponse(ImageGenerationAPIModel):
+    """Safe metadata returned after one immutable board image upload."""
+
+    asset_uid: str
+    mime_type: ProviderRasterMimeType
+    width: int
+    height: int
+    byte_size: int
+    content_sha256: str
 
 
 class ImageGenerationStatusResponse(ImageGenerationAPIModel):

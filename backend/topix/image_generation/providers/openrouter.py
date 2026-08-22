@@ -7,7 +7,7 @@ import binascii
 import json
 import logging
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -69,11 +69,20 @@ def serialize_openrouter_request(request: ProviderImageRequest) -> dict[str, Any
 
 
 def _safe_provider_request_id(value: Any) -> str | None:
-    """Accept only a bounded optional provider ID from the parsed response body."""
+    """Accept only a bounded optional provider request identifier."""
     if not isinstance(value, str):
         return None
     value = value.strip()
     return value if value and len(value) <= 512 else None
+
+
+def _response_header(headers: Mapping[str, str], name: str) -> str | None:
+    """Read one response header case-insensitively without logging its value."""
+    wanted = name.lower()
+    for key, value in headers.items():
+        if key.lower() == wanted:
+            return value
+    return None
 
 
 def _bounded_diagnostic_names(values: Iterable[object]) -> tuple[str, ...]:
@@ -220,7 +229,7 @@ def _normalize_response(
     body: bytes,
     *,
     request: ProviderImageRequest,
-    response_header_names: tuple[str, ...] = (),
+    response_headers: Mapping[str, str] | None = None,
 ) -> ProviderImageResult:
     """Validate an OpenRouter response into the provider-neutral result."""
     try:
@@ -237,11 +246,15 @@ def _normalize_response(
 
     image = _decode_image(data[0])
     usage, cost = _normalize_usage(payload, generated_images=len(data))
-    _log_success_shape(payload, response_header_names)
+    header_names = tuple(response_headers.keys()) if response_headers is not None else ()
+    _log_success_shape(payload, header_names)
+    provider_request_id = _safe_provider_request_id(payload.get("id"))
+    if provider_request_id is None and response_headers is not None:
+        provider_request_id = _safe_provider_request_id(_response_header(response_headers, "x-generation-id"))
 
     return ProviderImageResult(
         image=image,
-        provider_request_id=_safe_provider_request_id(payload.get("id")),
+        provider_request_id=provider_request_id,
         usage=usage,
         cost_usd=cost,
     )
@@ -274,7 +287,7 @@ class OpenRouterImageAdapter:
                 if response.status_code >= 400:
                     raise _status_error(response)
                 body = await _read_bounded_response(response)
-                response_header_names = tuple(response.headers.keys())
+                response_headers = response.headers
         except ImageProviderError:
             raise
         except httpx.TimeoutException:
@@ -282,4 +295,4 @@ class OpenRouterImageAdapter:
         except httpx.RequestError:
             raise ImageProviderError("provider_unavailable", "The image provider is temporarily unavailable") from None
 
-        return _normalize_response(body, request=request, response_header_names=response_header_names)
+        return _normalize_response(body, request=request, response_headers=response_headers)

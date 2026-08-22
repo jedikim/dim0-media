@@ -3,6 +3,7 @@ import type { Link } from "@/features/board/types/link"
 import { applyColorsToEdgeStyle } from "../theme/color-adapter"
 import { canvasEdgeStyleToDim0Link } from "./style"
 import type { LinkEdgeData } from "./link-to-edge"
+import { IMAGE_REFERENCE_EDGE_MARKER, readImageReferenceOrdinal } from "../image-reference-edges"
 
 
 type FlatEnd = {
@@ -90,6 +91,9 @@ export const edgeToLink = (edge: Edge, nodes: Map<string, Node>): Link => {
   const sourceWorld = endWorldPoint(edge.source, nodes)
   const targetWorld = endWorldPoint(edge.target, nodes)
   const midpoint = cubicControlToMidpoint(sourceWorld, targetWorld, edge.control)
+  const imageReferenceOrdinal = data.imageReference === true
+    ? readImageReferenceOrdinal(data)
+    : null
 
   // Prefer stored colors over the (possibly dark-adapted) display
   // values on `edge.style` so save round-trips the user's pick.
@@ -132,6 +136,12 @@ export const edgeToLink = (edge: Edge, nodes: Map<string, Node>): Link => {
             isLocalOffset: targetFlat.isLocalOffset,
           }
         : undefined,
+      imageReference: imageReferenceOrdinal === null
+        ? undefined
+        : { type: "keyword", value: IMAGE_REFERENCE_EDGE_MARKER },
+      imageReferenceOrdinal: imageReferenceOrdinal === null
+        ? undefined
+        : { type: "number", number: imageReferenceOrdinal },
     },
   }
 }

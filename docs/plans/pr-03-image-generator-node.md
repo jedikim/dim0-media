@@ -68,7 +68,7 @@ PR-01과 PR-02가 서버 쪽을 전부 끝내놨다. PR-03은 UI 한 겹만 얹�
 | **`apiFetch`는 envelope를 벗기지 않는다** | `api.ts:243` — `res.json()`을 `TResponse`로 반환 | bare response에 어댑터 **불필요** |
 | **노드 속성은 `extra='allow'`지만 값은 `DataProperty`여야 한다** | `datatypes/resource.py:29` + `__pydantic_extra__: dict[str, DataProperty]` | `TextProperty`/`KeywordProperty`만 쓰면 **백엔드·DB 변경 0** |
 | **노드 id는 생성 시 동기 반환** | `use-add-image.ts:89` — `const id = store.addNode(...)` | `generator_node_uid` 즉시 확보 |
-| `provider_request_id` 위치 | **미확인.** PR-02가 body `id`를 추정 사용 중 | 승인된 smoke test에서 후속 확인 |
+| `provider_request_id` 위치 | T2I body에는 없었고 PR-04 I2I에서 `x-generation-id` header를 확인 | nullable audit field로 body ID 우선·header fallback 사용 |
 
 ---
 
@@ -129,7 +129,7 @@ Dim0에는 서버에 동기화되지 않는 **로컬 전용 보드**가 있다. 
 | `usage.cost` 필드명 | 공식 문서 명시 | 낮음 |
 | 옵션이 top-level인지 | 공식 문서 명시 | 중간. 틀리면 옵션이 조용히 무시됨 |
 | `input_references` 중첩 형태 | 공식 문서 명시 | 중간. 틀리면 I2I 전량 실패 (PR-04에서 발현) |
-| `provider_request_id` 위치 | **미확인** | **높음.** 성공·실패 응답 모두에서 확인 필요 |
+| `provider_request_id` 위치 | T2I body에는 없었고 PR-04 I2I header에서 확인 | nullable이며 body ID 우선·검증된 header fallback 사용 |
 | 에러 응답 형태 | 미확인 | 낮음. 방어적 파싱이라 안전 |
 | 파이프라인 완주 (저장·감사·MIME) | **미검증** | **높음.** 한 번도 끝까지 돌아본 적 없음 |
 
@@ -234,22 +234,17 @@ usage와 `$0.0400000000` cost가 기록됐다. 같은 client request의 generati
 오표기하지 않았다. 제한된 raster bytes를 검사해 실제 형식을 판별하고 올바른 MIME과
 확장자로 저장·서빙했으므로 이 결과는 smoke의 핵심 목적에 대한 검증 성공이다.
 
-**7. PR-02 후속 소형 수정**
+**7. PR-02 후속 소형 수정 결과**
 
-OpenRouter adapter는 현재 capability 검증 없이 `output_format="png"`를 강제 전송한다.
-이 값은 `resolution`, `aspect_ratio`, `quality`와 달리 capability registry와
-`validate_generation_parameters()`를 우회하며, 실제 Grok image endpoint도 지원
-파라미터로 광고하지 않는다. 따라서 PR-03과 분리된 후속 소형 PR에서 제거한다.
-향후 출력 형식 선택이 필요하면 하드코딩하지 않고 `supported_output_formats` 같은 모델
-capability와 기존 `_validate_choice` 계열 검증을 통해서만 노출한다.
+광고되지 않은 `output_format="png"` 강제 전송은 제거됐다. 향후 출력 형식 선택이
+필요하면 하드코딩하지 않고 `supported_output_formats` 같은 모델 capability와 기존
+검증 경로를 통해서만 노출한다.
 
-실제 `provider_request_id` 위치는 아직 확인되지 않았다. 새 위치를 추측해 저장하지 않고,
-다음 PR-04 I2I smoke에서 성공 응답의 bounded top-level key 이름과 response header 이름만
-DEBUG 수준으로 확인한 뒤 공식 자료와 함께 별도 매핑 여부를 결정한다.
-
-`output_format` 제거 뒤 추가 유료 smoke는 필요하지 않다. 이번 호출에서 그 값은 관측상
-적용되지 않았고, 후속 수정은 이미 성공한 provider 동작을 바꾸는 것이 아니라 광고되지
-않은 요청 키만 제거한다.
+T2I smoke에서는 body ID가 없었고, PR-04 I2I smoke에서는 성공 body의 `created`, `data`,
+`usage`와 response header의 `x-generation-id`를 확인했다. 현재 adapter는 bounded body ID를
+우선하고 없을 때만 같은 길이·공백 검증을 거친 case-insensitive header 값을 사용한다.
+이 값은 감사 필드에만 저장하며 로그나 클라이언트 응답에는 노출하지 않는다. 이 계약
+정리만을 위한 추가 유료 smoke는 수행하지 않는다.
 
 > **테스트 금칙.** PR-03 테스트에서 네트워크를 타는 코드가 하나도 없어야 한다. OpenRouter 실호출은 위 수동 절차에서만 일어난다.
 
@@ -333,6 +328,7 @@ PR-02의 fingerprint는 `(model_id, prompt, parameters, reference_asset_uids, ge
 | **마운트 복구** — `initiatorUserUid`가 현재 사용자와 다름 | 원 사용자의 복구 키를 보존하고 POST·clear 모두 하지 않음 |
 | **202 수신** | `activeGenerationUid` 저장 후 스냅샷을 빈 TextProperty로 **명시적 clear** |
 | **400/401/403/404/422/429 수신** | run 생성 전 확정 거부이므로 pending만 clear하고 이전 active는 유지 |
+| **typed reference-size 413 수신** | PR-04의 확정 거부 코드이면 pending만 clear하고 이전 active를 유지. 수정 후 명시적 Generate가 새 UUID 사용 |
 | **transport/5xx** | 결과가 불명확하므로 active와 pending을 모두 유지. 명시적 재개는 같은 snapshot/UUID 사용 |
 | **409 수신** | 같은 UUID가 다른 fingerprint에 묶인 확정 충돌. pending을 clear하고 안전한 충돌을 표시하며 자동 POST하지 않음 |
 
@@ -1226,8 +1222,8 @@ nvm use 20 && make check
 
 | 후속 | PR-03이 남기는 것 | PR-04/05가 채우는 것 |
 |---|---|---|
-| PR-04 · 참조 이미지 | `startImageGeneration`의 `referenceAssetUids?: string[]`. PR-03은 항상 `[]` | incoming edge → asset ID 배열 변환 함수 하나. 순서는 edge 순서. API·스키마 변경 0 |
-| PR-04 · 권한 검사 | 없음. 서버가 이미 board-scoped로 검증 | `reference_node_uid`가 실제로 전달되기 시작하므로 **node 소유 board 검증을 반드시 추가** |
+| PR-04 · 참조 이미지 | `startImageGeneration`의 `referenceAssetUids?: string[]`. PR-03은 항상 `[]` | incoming edge를 ordered immutable asset UID 배열로 해석. generation API에는 이 배열만 전달하며 순서를 보존 |
+| PR-04 · provenance | 없음. 서버가 asset의 board 범위만 검증 | 검증 가능한 node↔asset association이 없으므로 `reference_node_uid`는 `NULL` 유지. canvas source UID는 UI/pending 복구용이며 server audit provenance로 신뢰하지 않음 |
 | PR-04 · legacy 정규화 | 없음. `file://`·data URL을 asset으로 승격하지 않는다 | 업로드 경로에서 `filePath`를 살리고 asset 레코드를 만드는 별도 작업 |
 | PR-05 · 결과 노드 | `generatorNodeUid`를 이미 요청에 실어 보냄 | `output_asset_uid` → 새 image node 생성 + `output_node_uid` 기록 |
 | PR-05 · 실시간 | node data 기반 간접 공유 | collab 이벤트로 상태 전파. 함정 ①도 함께 해소 |

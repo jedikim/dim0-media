@@ -405,7 +405,12 @@ class ImageModelCapability(FrozenModel):
 
 
 class CapabilityValidationError(ValueError):
-    """Raised when a request exceeds or contradicts model capabilities."""
+    """Describe a safe capability failure for the image API boundary."""
+
+    def __init__(self, message: str, *, code: str = "unsupported_image_request") -> None:
+        """Store a stable public code alongside the sanitized message."""
+        super().__init__(message)
+        self.code = code
 
 
 class InvalidGenerationTransition(RuntimeError):  # noqa: N818 - approved domain name
@@ -414,6 +419,15 @@ class InvalidGenerationTransition(RuntimeError):  # noqa: N818 - approved domain
 
 class ImageAssetResolutionError(LookupError):
     """Raised when a reference asset cannot be resolved on the current board."""
+
+
+class ImageReferenceValidationError(ValueError):
+    """Describe a safe reference limit or format failure."""
+
+    def __init__(self, code: str, message: str) -> None:
+        """Store a stable public code alongside the sanitized message."""
+        super().__init__(message)
+        self.code = code
 
 
 class GenerationIdempotencyConflictError(RuntimeError):
@@ -425,4 +439,9 @@ class ImageStorageError(RuntimeError):
 
 
 class ImageContentValidationError(ValueError):
-    """Raised when image bytes contradict trusted raster metadata."""
+    """Classify image-byte failures without exposing the original input."""
+
+    def __init__(self, message: str, *, reason: str = "invalid_content") -> None:
+        """Store an internal reason used for safe HTTP error mapping."""
+        super().__init__(message)
+        self.reason = reason

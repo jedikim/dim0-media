@@ -1,6 +1,7 @@
 import { generateUuid } from "@/lib/common"
 import { createDefaultLinkStyle, type LinkStyle } from "./style"
 import type { RichText } from "./note"
+import type { KeywordProperty, NumberProperty } from "@/features/newsfeed/types/properties"
 
 
 /**
@@ -29,6 +30,8 @@ export interface LinkProperties {
     /** Mirrors `startPoint.isLocalOffset` for the target endpoint. */
     isLocalOffset?: boolean
   }
+  imageReference?: KeywordProperty
+  imageReferenceOrdinal?: NumberProperty
 }
 
 export const createDefaultLinkProperties = (): LinkProperties => ({

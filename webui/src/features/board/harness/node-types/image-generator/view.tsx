@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { NodeId } from "@canvas-harness/core"
 import { useCanvasStore, useNode } from "@canvas-harness/react"
+import { X } from "@phosphor-icons/react"
 
 import { ImageStackIcon } from "@/components/icons"
 import {
   imageGenerationErrorMessage,
+  imageGenerationStatusCode,
+  getImageGeneration,
   listImageModels,
   type GenerationParameters,
   type ImageModel,
@@ -16,6 +19,12 @@ import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store"
 import { useBoardRuntime } from "../../canvas/board-runtime-context"
 import type { NoteNodeData } from "../../convert/note-to-node"
+import {
+  orderedImageReferences,
+  useImageReferenceTargetLock,
+  useOrderedImageReferences,
+} from "../../image-reference-edges"
+import { resolveReferenceAssetUids } from "../../image-reference-resolution"
 import {
   NodeFooter,
   NodeTitleCaption,
@@ -48,6 +57,9 @@ const INPUT_CLASS =
 
 
 export const IMAGE_PROMPT_DEBOUNCE_MS = 400
+const REFERENCE_THUMBNAIL_FIRST_POLL_MS = 1_000
+const REFERENCE_THUMBNAIL_MAX_POLL_MS = 5_000
+const REFERENCE_THUMBNAIL_POLL_CEILING_MS = 5 * 60 * 1_000
 
 
 const isSupportedChoice = (value: string | null, choices: string[] | null): value is string =>
@@ -170,6 +182,7 @@ function CapabilitySelect({
 /** Convert hook phase into compact, non-authoritative UI copy. */
 function phaseLabel(phase: ReturnType<typeof useImageGeneration>["phase"]): string {
   switch (phase) {
+    case "resolving": return "참조 확인 중"
     case "starting": return "요청 저장 중"
     case "running": return "이미지 생성 중"
     case "succeeded": return "완료"
@@ -177,6 +190,105 @@ function phaseLabel(phase: ReturnType<typeof useImageGeneration>["phase"]): stri
     case "stalled": return "상태 확인 지연"
     default: return "준비됨"
   }
+}
+
+
+/** Load a generator source's latest successful output for a read-only thumbnail. */
+function GeneratorReferenceThumbnail({
+  graphId,
+  generationUid,
+}: {
+  graphId: string
+  generationUid: string | null
+}) {
+  const [resolved, setResolved] = useState<{
+    generationUid: string
+    assetUid: string
+  } | null>(null)
+  const generationUidRef = useRef(generationUid)
+  generationUidRef.current = generationUid
+  useEffect(() => {
+    setResolved(null)
+    if (!generationUid) {
+      return
+    }
+    const controller = new AbortController()
+    const requestedUid = generationUid
+    const deadline = Date.now() + REFERENCE_THUMBNAIL_POLL_CEILING_MS
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let delay = 0
+    let alive = true
+
+    const scheduleNext = (): void => {
+      if (!alive || controller.signal.aborted || Date.now() >= deadline) return
+      delay = delay === 0
+        ? REFERENCE_THUMBNAIL_FIRST_POLL_MS
+        : Math.min(delay * 1.5, REFERENCE_THUMBNAIL_MAX_POLL_MS)
+      timer = setTimeout(() => void poll(), delay)
+    }
+
+    const poll = async (): Promise<void> => {
+      try {
+        const generation = await getImageGeneration(graphId, requestedUid, controller.signal)
+        if (!alive || controller.signal.aborted || generationUidRef.current !== requestedUid) return
+        if (generation.status === "succeeded" && generation.output_asset_uid) {
+          setResolved({
+            generationUid: requestedUid,
+            assetUid: generation.output_asset_uid,
+          })
+          return
+        }
+        if (generation.status !== "started" && generation.status !== "retryable") return
+        scheduleNext()
+      } catch (error) {
+        if (
+          !alive
+          || controller.signal.aborted
+          || (error instanceof Error && error.name === "AbortError")
+        ) return
+        const status = imageGenerationStatusCode(error)
+        if (
+          error instanceof TypeError
+          || status === 408
+          || status === 429
+          || (status !== null && status >= 500)
+        ) scheduleNext()
+        // Determinate client failures keep the source as a placeholder.
+      }
+    }
+
+    void poll()
+    return () => {
+      alive = false
+      controller.abort()
+      if (timer) clearTimeout(timer)
+    }
+  }, [generationUid, graphId])
+  const assetUid = resolved?.generationUid === generationUid ? resolved.assetUid : null
+  const { url } = useAuthedImage(graphId, assetUid)
+  return url
+    ? <img className="size-full object-cover" src={url} alt="참조 생성 이미지" />
+    : <ImageStackIcon className="size-4 text-muted-foreground" />
+}
+
+
+/** Render one live canvas source as a compact reference thumbnail. */
+function ReferenceThumbnail({ graphId, sourceNodeId }: { graphId: string; sourceNodeId: NodeId }) {
+  const source = useNode(sourceNodeId)
+  if (!source) return <ImageStackIcon className="size-4 text-muted-foreground" />
+  const data = (source.data ?? {}) as NoteNodeData & { src?: unknown }
+  if (source.type === "image" && typeof data.src === "string") {
+    return <img className="size-full object-cover" src={data.src} alt="참조 이미지" />
+  }
+  if (source.type === "image-generator") {
+    return (
+      <GeneratorReferenceThumbnail
+        graphId={graphId}
+        generationUid={readKeywordProperty(data.properties?.activeGenerationUid)}
+      />
+    )
+  }
+  return <ImageStackIcon className="size-4 text-muted-foreground" />
 }
 
 
@@ -194,6 +306,7 @@ function SyncedImageGeneratorCard({
   canEdit: boolean
   patchProperties: (patch: Partial<NoteProperties>) => void
 }) {
+  const store = useCanvasStore()
   const graphId = data.graphUid
   const nodeId = String(id)
   const userId = useAppStore((state) => state.userId)
@@ -202,6 +315,26 @@ function SyncedImageGeneratorCard({
     () => parsePendingImageRequest(rawPendingRequest),
     [rawPendingRequest],
   )
+  const references = useOrderedImageReferences(store, id)
+  const referenceSourceNodeUids = useMemo(
+    () => references.map((reference) => String(reference.sourceNodeId)),
+    [references],
+  )
+  const getCurrentReferenceSourceNodeUids = useCallback(
+    (): string[] => orderedImageReferences(store, id)
+      .map((reference) => String(reference.sourceNodeId)),
+    [id, store],
+  )
+  const resolveReferenceAssets = useCallback((
+    sourceNodeUids: readonly string[],
+    signal: AbortSignal,
+  ): Promise<string[]> => resolveReferenceAssetUids({
+    store,
+    graphId,
+    sourceNodeUids,
+    signal,
+    getCurrentSourceNodeUids: getCurrentReferenceSourceNodeUids,
+  }), [getCurrentReferenceSourceNodeUids, graphId, store])
 
   const persist = useCallback((patch: PersistImageGenerationPatch): void => {
     const propertyPatch: Partial<NoteProperties> = {}
@@ -232,6 +365,8 @@ function SyncedImageGeneratorCard({
     pendingRequest,
     canStart: canEdit,
     persist,
+    resolveReferenceAssets,
+    getCurrentReferenceSourceNodeUids,
   })
 
   const [models, setModels] = useState<ImageModel[]>([])
@@ -258,15 +393,20 @@ function SyncedImageGeneratorCard({
     }
   }, [])
 
-  const busy = generation.phase === "starting"
+  const busy = generation.phase === "resolving"
+    || generation.phase === "starting"
     || generation.phase === "running"
     || generation.phase === "stalled"
   const inputsLocked = !canEdit || busy || generation.hasPendingRequest
+  useImageReferenceTargetLock(id, inputsLocked)
 
   const storedModelId = readKeywordProperty(properties.imageModelId)
-  const textToImageModels = useMemo(
-    () => models.filter((candidate) => candidate.supports_text_to_image),
-    [models],
+  const hasReferences = references.length > 0
+  const compatibleModels = useMemo(
+    () => models.filter((candidate) => hasReferences
+      ? candidate.supports_image_to_image
+      : candidate.supports_text_to_image),
+    [hasReferences, models],
   )
   const storedModel = useMemo(
     () => models.find((candidate) => candidate.model_id === storedModelId) ?? null,
@@ -275,10 +415,16 @@ function SyncedImageGeneratorCard({
   const storedModelUnavailable = !modelsLoading
     && !modelsError
     && storedModelId !== null
-    && storedModel?.supports_text_to_image !== true
+    && (hasReferences
+      ? storedModel?.supports_image_to_image !== true
+      : storedModel?.supports_text_to_image !== true)
   const model = storedModelId
-    ? storedModel?.supports_text_to_image === true ? storedModel : null
-    : textToImageModels[0] ?? null
+    ? (hasReferences
+        ? storedModel?.supports_image_to_image === true
+        : storedModel?.supports_text_to_image === true)
+      ? storedModel
+      : null
+    : compatibleModels[0] ?? null
   const storedPrompt = readTextProperty(properties.imagePrompt)
   const persistPrompt = useCallback((next: string): void => {
     patchProperties({ imagePrompt: { type: "text", text: next } })
@@ -307,11 +453,14 @@ function SyncedImageGeneratorCard({
   const canGenerate = canEdit
     && !modelsLoading
     && !modelsError
-    && model?.supports_text_to_image === true
+    && (hasReferences ? model?.supports_image_to_image === true : model?.supports_text_to_image === true)
+    && references.length <= (model?.max_reference_images ?? 0)
     && !storedModelUnavailable
     && prompt.draft.trim().length > 0
     && !inputsLocked
-  const footerStatus = generation.phase === "starting" || generation.phase === "running"
+  const footerStatus = generation.phase === "resolving"
+    || generation.phase === "starting"
+    || generation.phase === "running"
     ? "saving"
     : generation.phase === "succeeded"
     ? "saved"
@@ -337,22 +486,47 @@ function SyncedImageGeneratorCard({
         onBlur={() => prompt.commitPrompt()}
       />
 
+      {references.length > 0 && (
+        <div aria-label="Image references" className="flex gap-2 overflow-x-auto py-1">
+          {references.map((reference, index) => (
+            <div
+              key={String(reference.edge.id)}
+              className="relative size-12 shrink-0 overflow-hidden rounded-md border border-border bg-muted/40"
+            >
+              <ReferenceThumbnail graphId={graphId} sourceNodeId={reference.sourceNodeId} />
+              <span className="absolute bottom-0 left-0 rounded-tr bg-background/90 px-1 text-[10px] font-semibold">
+                {index + 1}
+              </span>
+              <button
+                type="button"
+                aria-label={`Remove reference ${index + 1}`}
+                className="absolute right-0 top-0 grid size-5 place-items-center rounded-bl bg-background/90 text-foreground disabled:opacity-50"
+                disabled={inputsLocked}
+                onClick={() => store.removeEdge(reference.edge.id)}
+              >
+                <X className="size-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
         <span>모델</span>
         <select
           aria-label="Image model"
           className={SELECT_CLASS}
           value={storedModelUnavailable ? storedModelId ?? "" : model?.model_id ?? ""}
-          disabled={inputsLocked || modelsLoading || textToImageModels.length === 0}
+          disabled={inputsLocked || modelsLoading || compatibleModels.length === 0}
           onChange={(event) => patchProperties({ imageModelId: keywordProperty(event.target.value) })}
         >
           {storedModelUnavailable && storedModelId && (
             <option value={storedModelId}>사용할 수 없는 모델 ({storedModelId})</option>
           )}
-          {textToImageModels.length === 0 && (
+          {compatibleModels.length === 0 && (
             <option value="">사용 가능한 모델 없음</option>
           )}
-          {textToImageModels.map((candidate) => (
+          {compatibleModels.map((candidate) => (
             <option key={candidate.model_id} value={candidate.model_id}>
               {candidate.display_name}
             </option>
@@ -396,7 +570,12 @@ function SyncedImageGeneratorCard({
               imagePrompt: { type: "text", text: latestPrompt },
               imageModelId: keywordProperty(model.model_id),
             })
-            void generation.generate(model.model_id, latestPrompt, parameters)
+            void generation.generate(
+              model.model_id,
+              latestPrompt,
+              parameters,
+              referenceSourceNodeUids,
+            )
           }}
         >
           {busy ? "생성 중…" : "Generate"}
@@ -439,6 +618,11 @@ function SyncedImageGeneratorCard({
             ?? (storedModelUnavailable
               ? "저장된 모델을 사용할 수 없습니다. 다른 모델을 선택해 주세요."
               : generation.error)}
+        </p>
+      )}
+      {model && references.length > model.max_reference_images && (
+        <p role="alert" className="text-xs text-destructive">
+          이 모델은 참조 이미지를 최대 {model.max_reference_images}장까지 지원합니다.
         </p>
       )}
       <NodeFooter status={footerStatus}>

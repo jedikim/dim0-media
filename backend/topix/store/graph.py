@@ -129,6 +129,22 @@ class GraphStore:
                 merged[key] = value
         return merged
 
+    @classmethod
+    def _merge_link_patch(cls, existing_link: Link, patch: dict) -> Link:
+        """Merge one link patch, treating property nulls as key deletion."""
+        merged_payload = cls._deep_merge_dict(
+            existing_link.model_dump(exclude_none=False),
+            patch,
+        )
+        patched_properties = patch.get("properties")
+        merged_properties = merged_payload.get("properties")
+        if isinstance(patched_properties, dict) and isinstance(merged_properties, dict):
+            for key, value in patched_properties.items():
+                if value is None:
+                    merged_properties.pop(key, None)
+        merged_payload["id"] = existing_link.id
+        return Link.model_validate(merged_payload)
+
     async def patch_note(self, node_id: str, data: dict, user_uid: str | None = None) -> Note | None:
         """Patch a note by merging the update into the full stored note payload.
 
@@ -412,14 +428,8 @@ class GraphStore:
         if not existing_links:
             return
 
-        existing_link = existing_links[0]
-        merged_payload = self._deep_merge_dict(
-            existing_link.model_dump(exclude_none=False),
-            data,
-        )
-        merged_payload["id"] = link_id
-
-        await self._content_store.update([merged_payload])
+        merged_link = self._merge_link_patch(existing_links[0], data)
+        await self._content_store.update([merged_link.model_dump(exclude_none=False)])
 
     async def update_links(self, updates: list[tuple[str, dict]]) -> None:
         """Bulk-patch multiple links in one DB round-trip.
@@ -435,28 +445,18 @@ class GraphStore:
         existing_links = await self.get_links(unique_ids)
         by_id: dict[str, Link] = {link.id: link for link in existing_links}
 
-        merged_payloads: list[dict] = []
+        touched_ids: list[str] = []
         for link_id, data in updates:
             cur = by_id.get(link_id)
             if cur is None:
                 continue
-            merged = self._deep_merge_dict(
-                cur.model_dump(exclude_none=False),
-                data,
-            )
-            merged["id"] = link_id
-            # Re-validate as Link so subsequent same-id merges in this
-            # batch see the result of the previous one.
-            try:
-                merged_link = Link.model_validate(merged)
-            except Exception:
-                logger.exception("update_links: failed to validate merged link id=%s", link_id)
-                continue
+            merged_link = self._merge_link_patch(cur, data)
             by_id[link_id] = merged_link
-            merged_payloads.append(merged_link.model_dump(exclude_none=False))
+            if link_id not in touched_ids:
+                touched_ids.append(link_id)
 
-        if merged_payloads:
-            await self._content_store.update(merged_payloads)
+        if touched_ids:
+            await self._content_store.update([by_id[link_id].model_dump(exclude_none=False) for link_id in touched_ids])
 
     async def delete_link(self, link_id: str):
         """Delete a link from the graph."""

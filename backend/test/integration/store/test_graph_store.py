@@ -3,10 +3,13 @@
 import pytest
 import pytest_asyncio
 
+from qdrant_client import AsyncQdrantClient
+
+from topix.collab.note_to_wire import link_to_wire_edge
 from topix.datatypes.graph.graph import Graph
-from topix.datatypes.note.link import Link
+from topix.datatypes.note.link import IMAGE_REFERENCE_EDGE_MARKER, Link
 from topix.datatypes.note.note import Note
-from topix.datatypes.property import PositionProperty
+from topix.datatypes.property import KeywordProperty, NumberProperty, PositionProperty
 from topix.datatypes.resource import RichText
 from topix.datatypes.user import User
 from topix.store.graph import GraphStore
@@ -14,6 +17,48 @@ from topix.store.postgres.graph_user import add_user_to_graph_by_uid
 from topix.store.qdrant.store import ContentStore
 from topix.store.user import UserStore
 from topix.utils.common import gen_uid
+
+
+class _DeterministicEmbedder:
+    """Provide local vectors so Qdrant integration never calls an API."""
+
+    dimensions = 4
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        """Return one fixed-size zero vector per input string."""
+        return [[0.0] * self.dimensions for _ in texts]
+
+
+@pytest_asyncio.fixture
+async def isolated_content_store(config):
+    """Yield a disposable Qdrant collection with a local-only embedder."""
+    qdrant = config.run.databases.qdrant
+    client = AsyncQdrantClient(
+        host=qdrant.host,
+        port=qdrant.port,
+        https=qdrant.https,
+        api_key=qdrant.api_key.get_secret_value() if qdrant.api_key else None,
+    )
+    store = ContentStore(
+        qdrant_client=client,
+        embedder=_DeterministicEmbedder(),
+        collection=f"test_graph_reference_{gen_uid()}",
+    )
+    await store.create_collection(quantized=False)
+    try:
+        yield store
+    finally:
+        cleanup_client = AsyncQdrantClient(
+            host=qdrant.host,
+            port=qdrant.port,
+            https=qdrant.https,
+            api_key=qdrant.api_key.get_secret_value() if qdrant.api_key else None,
+        )
+        try:
+            if await cleanup_client.collection_exists(store.collection):
+                await cleanup_client.delete_collection(store.collection)
+        finally:
+            await cleanup_client.close()
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
@@ -59,12 +104,7 @@ async def test_graph_crud_lifecycle(config, init_collection):
         assert {n.id for n in nodes} == {node1.id, node2.id}
 
         # 5. Add link between nodes
-        link = Link(
-            source=node1.id,
-            target=node2.id,
-            graph_uid=graph.uid,
-            content=RichText(markdown="Friend")
-        )
+        link = Link(source=node1.id, target=node2.id, graph_uid=graph.uid, content=RichText(markdown="Friend"))
         await store.add_links([link])
 
         # 6. Fetch links and verify
@@ -276,6 +316,64 @@ async def test_update_link_merges_partial_payload(config, init_collection):
         assert updated_link.graph_uid == graph.uid
         assert updated_link.properties.start_point is not None
         assert updated_link.properties.end_point is not None
+    finally:
+        await store.delete_graph(graph.uid, hard_delete=True)
+        await store.close()
+
+
+@pytest.mark.asyncio
+async def test_link_reference_clear_round_trips_as_key_deletion(
+    config,
+    isolated_content_store,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """GraphStore reload preserves geometry/custom data while deleting reference keys."""
+    monkeypatch.setattr(
+        ContentStore,
+        "from_config",
+        classmethod(lambda _cls: isolated_content_store),
+    )
+    store = GraphStore()
+    await store.open()
+    graph = Graph(label="Reference clear graph")
+    try:
+        await store.add_graph(graph, user_uid="root")
+        link = Link(
+            source="source-1",
+            target="target-1",
+            graph_uid=graph.uid,
+            properties={
+                "edge_control_point": PositionProperty(
+                    position=PositionProperty.Position(x=30, y=40),
+                ),
+                "custom": KeywordProperty(value="keep"),
+                "image_reference": KeywordProperty(value=IMAGE_REFERENCE_EDGE_MARKER),
+                "image_reference_ordinal": NumberProperty(number=1),
+            },
+        )
+        await store.add_links([link])
+
+        await store.update_links(
+            [
+                (
+                    link.id,
+                    {
+                        "properties": {
+                            "image_reference": None,
+                            "image_reference_ordinal": None,
+                        }
+                    },
+                )
+            ]
+        )
+
+        reloaded = (await store.get_links([link.id]))[0]
+        properties = reloaded.properties.model_dump(exclude_none=False)
+        assert "image_reference" not in properties
+        assert "image_reference_ordinal" not in properties
+        assert properties["custom"]["value"] == "keep"
+        assert properties["edge_control_point"]["position"] == {"x": 30.0, "y": 40.0}
+        assert "imageReference" not in link_to_wire_edge(reloaded).get("data", {})
     finally:
         await store.delete_graph(graph.uid, hard_delete=True)
         await store.close()

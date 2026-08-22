@@ -4,8 +4,10 @@ from pydantic import Field
 from typing_extensions import Literal
 
 from topix.datatypes.note.style import LinkStyle
-from topix.datatypes.property import DataProperty, PositionProperty
+from topix.datatypes.property import DataProperty, KeywordProperty, NumberProperty, PositionProperty
 from topix.datatypes.resource import Resource, ResourceProperties
+
+IMAGE_REFERENCE_EDGE_MARKER = "image-generator-reference"
 
 
 class LinkProperties(ResourceProperties):
@@ -13,11 +15,11 @@ class LinkProperties(ResourceProperties):
 
     __pydantic_extra__: dict[str, DataProperty] = Field(init=False)
 
-    edge_control_point: PositionProperty = Field(
-        default_factory=lambda: PositionProperty()
-    )
+    edge_control_point: PositionProperty = Field(default_factory=lambda: PositionProperty())
     start_point: PositionProperty | None = None
     end_point: PositionProperty | None = None
+    image_reference: KeywordProperty | None = None
+    image_reference_ordinal: NumberProperty | None = None
 
 
 class Link(Resource):

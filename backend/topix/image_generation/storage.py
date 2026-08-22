@@ -64,24 +64,39 @@ def _validate_image_bytes(
 ) -> ValidatedRaster:
     """Validate bounded image bytes against an explicit MIME policy."""
     if not content or len(content) > max_bytes:
-        raise ImageContentValidationError("Image content exceeds the allowed byte size")
+        raise ImageContentValidationError(
+            "Image content exceeds the allowed byte size",
+            reason="byte_limit",
+        )
 
     try:
         with Image.open(BytesIO(content)) as image:
             mime_type = _ASSET_FORMAT_TO_MIME.get(image.format or "")
             if mime_type is None or mime_type not in allowed_mime_types:
-                raise ImageContentValidationError("Image content is not an allowed raster format")
+                raise ImageContentValidationError(
+                    "Image content is not an allowed raster format",
+                    reason="unsupported_format",
+                )
             width, height = image.size
             if width <= 0 or height <= 0 or width * height > MAX_GENERATED_IMAGE_PIXELS:
-                raise ImageContentValidationError("Image dimensions exceed the allowed pixel size")
+                raise ImageContentValidationError(
+                    "Image dimensions exceed the allowed pixel size",
+                    reason="pixel_limit",
+                )
             image.verify()
     except ImageContentValidationError:
         raise
     except (Image.DecompressionBombError, UnidentifiedImageError, OSError, ValueError) as exc:
-        raise ImageContentValidationError("Image content is not a valid bounded raster") from exc
+        raise ImageContentValidationError(
+            "Image content is not a valid bounded raster",
+            reason="invalid_content",
+        ) from exc
 
     if claimed_mime_type is not None and claimed_mime_type != mime_type:
-        raise ImageContentValidationError("Image media type does not match its bytes")
+        raise ImageContentValidationError(
+            "Image media type does not match its bytes",
+            reason="mime_mismatch",
+        )
     return ValidatedRaster(
         mime_type=mime_type,
         width=width,
@@ -172,6 +187,40 @@ class ImageStorage:
         ImageAssetCreate.validate_storage_key(storage_key)
         return storage_key
 
+    def uploaded_storage_key(self, board_uid: str, asset_uid: str, raster: ValidatedRaster) -> str:
+        """Build one server-owned uploaded key containing the verified digest."""
+        extension = _MIME_TO_EXTENSION[raster.mime_type]
+        storage_key = f"images/uploaded/{board_uid}/{asset_uid}/{raster.content_sha256}.{extension}"
+        ImageAssetCreate.validate_storage_key(storage_key)
+        return storage_key
+
+    async def write_uploaded(
+        self,
+        *,
+        board_uid: str,
+        asset_uid: str,
+        content: bytes,
+        raster: ValidatedRaster,
+    ) -> tuple[str, bool]:
+        """Atomically write one verified upload and report whether it was created."""
+        verified = validate_provider_raster_bytes(content, claimed_mime_type=raster.mime_type)
+        if verified != raster:
+            raise ImageContentValidationError("Uploaded image metadata does not match its bytes")
+        storage_key = self.uploaded_storage_key(board_uid, asset_uid, raster)
+        write_task = asyncio.create_task(asyncio.to_thread(self._write_atomic, storage_key, content))
+        try:
+            created = await asyncio.shield(write_task)
+        except asyncio.CancelledError:
+            created = False
+            try:
+                created = await write_task
+            except Exception as exc:  # noqa: BLE001 - cancellation must retain its identity
+                logger.warning("Cancelled uploaded image write completed with %s", type(exc).__name__)
+            if created and not await asyncio.to_thread(self._ensure_uploaded_deleted, storage_key):
+                logger.warning("Cancelled uploaded image write cleanup failed")
+            raise
+        return storage_key, created
+
     async def write_generated(self, generation_uid: str, image: GeneratedImagePayload) -> str:
         """Atomically write a validated generated raster under a content-addressed key."""
         storage_key = self.generated_storage_key(generation_uid, image)
@@ -241,6 +290,12 @@ class ImageStorage:
             return False
         return await asyncio.to_thread(self._delete_generated, storage_key)
 
+    async def ensure_uploaded_deleted(self, storage_key: str) -> bool:
+        """Ensure one uploaded file is absent during failed registration cleanup."""
+        if not storage_key.startswith("images/uploaded/"):
+            return False
+        return await asyncio.to_thread(self._ensure_uploaded_deleted, storage_key)
+
     async def ensure_generated_deleted(self, storage_key: str) -> bool:
         """Ensure one generated file is absent for idempotent durable cleanup."""
         if not storage_key.startswith("images/generated/"):
@@ -255,6 +310,15 @@ class ImageStorage:
             return True
         except FileNotFoundError:
             return False
+        except (ImageStorageError, OSError):
+            return False
+
+    def _ensure_uploaded_deleted(self, storage_key: str) -> bool:
+        """Return true when one confined uploaded file is absent after cleanup."""
+        try:
+            path = self._resolve(storage_key, must_exist=False)
+            path.unlink(missing_ok=True)
+            return not path.exists()
         except (ImageStorageError, OSError):
             return False
 

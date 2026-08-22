@@ -13,6 +13,10 @@ export const BoardRuntimeContext = createContext<BoardRuntime>({ local: false })
 export const canUseServerImageGeneration = (local: boolean): boolean => !local
 
 
+/** Return whether image import/search chrome may be exposed for this board role. */
+export const canUseImageImports = (canEdit: boolean): boolean => canEdit
+
+
 /** Read whether the current HarnessCanvas is local-only or server-synced. */
 export function useBoardRuntime(): BoardRuntime {
   return useContext(BoardRuntimeContext)

@@ -14,11 +14,14 @@ from topix.collab.note_to_wire import (
     _DIM0_TO_CANVAS_TYPE,
     _camel_to_snake,
     _snake_to_camel,
+    link_to_wire_edge,
     note_to_wire_node,
 )
 from topix.datatypes.file.document import Document
+from topix.datatypes.note.link import IMAGE_REFERENCE_EDGE_MARKER, Link, LinkProperties
 from topix.datatypes.note.note import Note
 from topix.datatypes.note.style import NodeType, StrokeStyle, Style
+from topix.datatypes.property import KeywordProperty, NumberProperty
 
 
 def _note_with_style_type(style_type: NodeType) -> Note:
@@ -72,7 +75,8 @@ def test_wire_type_applies_renames(dim0_type: NodeType, expected: str) -> None:
 
 @pytest.mark.parametrize(("dim0_type", "expected"), IDENTITY)
 def test_wire_type_passes_through_built_ins_and_custom_defs(
-    dim0_type: NodeType, expected: str,
+    dim0_type: NodeType,
+    expected: str,
 ) -> None:
     """14 Dim0 enum values where the canvas-harness name matches verbatim."""
     note = _note_with_style_type(dim0_type)
@@ -118,6 +122,7 @@ def test_document_takes_precedence_over_style_type() -> None:
 # Snake ↔ camel case helpers
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     ("snake", "camel"),
     [
@@ -140,6 +145,7 @@ def test_snake_to_camel_round_trip(snake: str, camel: str) -> None:
 # Node style on the wire — Dim0 snake_case → canvas-harness camelCase
 # ---------------------------------------------------------------------------
 
+
 def test_wire_style_is_camel_case_with_dim0_values() -> None:
     """All Dim0 LinkStyle fields appear on the wire under their camelCase keys.
 
@@ -148,7 +154,8 @@ def test_wire_style_is_camel_case_with_dim0_values() -> None:
     generic blue rectangle instead of the agent's intended palette" bug.
     """
     note = Note(
-        id="n1", graph_uid="b1",
+        id="n1",
+        graph_uid="b1",
         style=Style(
             type=NodeType.RECTANGLE,
             stroke_color="#222222",
@@ -192,7 +199,8 @@ def test_wire_node_ships_stored_colors_for_theme_adaptation() -> None:
     pick).
     """
     note = Note(
-        id="n1", graph_uid="b1",
+        id="n1",
+        graph_uid="b1",
         style=Style(
             type=NodeType.RECTANGLE,
             stroke_color="#000",
@@ -211,11 +219,30 @@ def test_wire_node_ships_stored_colors_for_theme_adaptation() -> None:
 def test_wire_node_lifts_group_ids_onto_node_groups() -> None:
     """`style.group_ids` is lifted onto `Node.groups` per canvas-harness model."""
     note = Note(
-        id="n1", graph_uid="b1",
+        id="n1",
+        graph_uid="b1",
         style=Style(type=NodeType.RECTANGLE, group_ids=["g1", "g2"]),
     )
     wire = note_to_wire_node(note)
     assert wire["groups"] == ["g1", "g2"]
+
+
+def test_wire_link_preserves_image_reference_marker_and_ordinal() -> None:
+    """A persisted reference edge is restored for peers and snapshot reloads."""
+    link = Link(
+        source="image-1",
+        target="generator-1",
+        graph_uid="b1",
+        properties=LinkProperties(
+            image_reference=KeywordProperty(value=IMAGE_REFERENCE_EDGE_MARKER),
+            image_reference_ordinal=NumberProperty(number=2),
+        ),
+    )
+
+    wire = link_to_wire_edge(link)
+
+    assert wire["data"]["imageReference"] is True
+    assert wire["data"]["imageReferenceOrdinal"] == 2
 
 
 # ---------------------------------------------------------------------------
