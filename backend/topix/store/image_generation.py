@@ -22,6 +22,7 @@ from topix.image_generation.models import (
     ProviderImageResult,
 )
 from topix.store.postgres.image_generation import (
+    acquire_image_generation_output_writer,
     bind_image_generation_output_node,
     clear_generation_pending_output,
     create_image_asset,
@@ -37,6 +38,7 @@ from topix.store.postgres.image_generation import (
     list_generation_pending_outputs,
     lock_image_generation_output,
     reconcile_image_generations,
+    release_image_generation_output_writer,
     renew_image_generation_lease,
     set_generation_pending_output,
     start_image_generation,
@@ -118,15 +120,53 @@ class ImageGenerationStore:
         *,
         board_uid: str,
         generation_uid: str,
+        conn: asyncpg.Connection | None = None,
     ) -> AsyncIterator[tuple[asyncpg.Connection, ImageGenerationOutputRecord | None]]:
-        """Hold the cross-worker output lock while canvas state is reconciled."""
-        async with self._pool().acquire() as conn, conn.transaction():
+        """Run the short final output transaction, optionally on an owned connection."""
+        if conn is not None:
+            async with conn.transaction():
+                record = await lock_image_generation_output(
+                    conn,
+                    board_uid=board_uid,
+                    generation_uid=generation_uid,
+                )
+                yield conn, record
+            return
+        async with self._pool().acquire() as acquired_conn, acquired_conn.transaction():
             record = await lock_image_generation_output(
-                conn,
+                acquired_conn,
                 board_uid=board_uid,
                 generation_uid=generation_uid,
             )
-            yield conn, record
+            yield acquired_conn, record
+
+    @asynccontextmanager
+    async def output_node_writer(
+        self,
+        *,
+        board_uid: str,
+        generation_uid: str,
+    ) -> AsyncIterator[tuple[asyncpg.Connection, ImageGenerationOutputRecord | None]]:
+        """Own one generation from Qdrant preparation through final commit."""
+        async with self._pool().acquire() as conn:
+            await acquire_image_generation_output_writer(
+                conn,
+                generation_uid=generation_uid,
+            )
+            try:
+                record = await get_image_generation_output(
+                    conn,
+                    board_uid=board_uid,
+                    generation_uid=generation_uid,
+                )
+                yield conn, record
+            finally:
+                released = await release_image_generation_output_writer(
+                    conn,
+                    generation_uid=generation_uid,
+                )
+                if not released:
+                    raise RuntimeError("Image generation output writer lock was not held")
 
     async def bind_output_node(
         self,

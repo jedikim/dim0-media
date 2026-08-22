@@ -25,6 +25,35 @@ from topix.image_generation.models import (
 )
 
 _IMAGE_RECONCILE_ADVISORY_LOCK = 4_909_157_410_015_203_302
+_OUTPUT_NODE_ADVISORY_SEED = 704_568_223
+
+
+async def acquire_image_generation_output_writer(
+    conn: asyncpg.Connection,
+    *,
+    generation_uid: str,
+) -> None:
+    """Hold one generation-scoped session lock across cross-store preparation."""
+    await conn.execute(
+        "SELECT pg_advisory_lock(hashtextextended($1, $2))",
+        generation_uid,
+        _OUTPUT_NODE_ADVISORY_SEED,
+    )
+
+
+async def release_image_generation_output_writer(
+    conn: asyncpg.Connection,
+    *,
+    generation_uid: str,
+) -> bool:
+    """Release a generation writer lock before its connection returns to the pool."""
+    return bool(
+        await conn.fetchval(
+            "SELECT pg_advisory_unlock(hashtextextended($1, $2))",
+            generation_uid,
+            _OUTPUT_NODE_ADVISORY_SEED,
+        )
+    )
 
 
 async def create_image_asset(conn: asyncpg.Connection, asset: ImageAssetCreate) -> None:
@@ -127,8 +156,9 @@ async def lock_image_generation_output(
 ) -> ImageGenerationOutputRecord | None:
     """Lock and return one generation's authoritative output association."""
     await conn.execute(
-        "SELECT pg_advisory_xact_lock(hashtextextended($1, 704568223))",
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
         generation_uid,
+        _OUTPUT_NODE_ADVISORY_SEED,
     )
     row = await conn.fetchrow(
         "SELECT run.uid AS generation_uid, run.board_uid, run.status, "

@@ -63,12 +63,20 @@ class _FakeImageStore:
         self.lock = asyncio.Lock()
 
     @asynccontextmanager
-    async def output_node_transaction(self, *, board_uid: str, generation_uid: str):
-        """Yield the configured record as if the advisory lock were held."""
+    async def output_node_writer(self, *, board_uid: str, generation_uid: str):
+        """Serialize fake preparation and finalization for one generation."""
         assert board_uid == BOARD_UID
         assert generation_uid == GENERATION_UID
         async with self.lock:
             yield object(), self.record
+
+    @asynccontextmanager
+    async def output_node_transaction(self, *, board_uid: str, generation_uid: str, conn=None):
+        """Yield the configured record on the fake writer connection."""
+        assert board_uid == BOARD_UID
+        assert generation_uid == GENERATION_UID
+        assert conn is not None
+        yield conn, self.record
 
     async def get_output_record(
         self,
@@ -508,7 +516,7 @@ async def test_bound_partial_recreates_get_new_batches_and_truthful_outcomes() -
 
 @pytest.mark.asyncio
 async def test_concurrent_explicit_recreate_reports_one_durable_writer() -> None:
-    """Concurrent explicit requests converge and only the batch writer reports work."""
+    """Concurrent explicit requests serialize before stale Qdrant preparation."""
     service, _image_store, graph, bridge = _service()
     await service.ensure_output_node(
         board_uid=BOARD_UID,
@@ -524,35 +532,44 @@ async def test_concurrent_explicit_recreate_reports_one_durable_writer() -> None
         update={"deleted_at": "2026-08-22T00:00:00"},
     )
     original_persist = bridge.persist_result_objects
-    both_prepared = asyncio.Event()
-    prepared_count = 0
+    first_prepared = asyncio.Event()
+    release_first = asyncio.Event()
+    persist_calls = 0
 
-    async def synchronized_persist(*, board_id: str, note: Note | None, link: Link | None) -> None:
-        """Hold both requests after their Qdrant-equivalent preparation."""
-        nonlocal prepared_count
+    async def hold_first_persist(*, board_id: str, note: Note | None, link: Link | None) -> None:
+        """Hold the first writer after prepare while the second waits for ownership."""
+        nonlocal persist_calls
         await original_persist(board_id=board_id, note=note, link=link)
-        prepared_count += 1
-        if prepared_count == 2:
-            both_prepared.set()
-        await both_prepared.wait()
+        persist_calls += 1
+        if persist_calls == 1:
+            first_prepared.set()
+            await release_first.wait()
 
-    bridge.persist_result_objects = synchronized_persist  # type: ignore[method-assign]
-    first, second = await asyncio.gather(
+    bridge.persist_result_objects = hold_first_persist  # type: ignore[method-assign]
+    first_task = asyncio.create_task(
         service.ensure_output_node(
             board_uid=BOARD_UID,
             generation_uid=GENERATION_UID,
             recreate=True,
-        ),
-        service.ensure_output_node(
-            board_uid=BOARD_UID,
-            generation_uid=GENERATION_UID,
-            recreate=True,
-        ),
+        )
     )
+    await first_prepared.wait()
+    second_task = asyncio.create_task(
+        service.ensure_output_node(
+            board_uid=BOARD_UID,
+            generation_uid=GENERATION_UID,
+            recreate=True,
+        )
+    )
+    await asyncio.sleep(0)
+    assert persist_calls == 1
+    release_first.set()
+    first, second = await asyncio.gather(first_task, second_task)
 
     assert sum(outcome.created for outcome in (first, second)) == 1
     assert sum(outcome.recreated for outcome in (first, second)) == 1
     assert len(bridge.batch_calls) == 2
+    assert persist_calls == 2
     assert graph.nodes[node_uid].deleted_at is None
     assert graph.links[edge_uid].deleted_at is None
 

@@ -29,6 +29,7 @@ from topix.image_generation.models import (
     ProviderImageRequest,
     ProviderImageResult,
 )
+from topix.image_generation.result_nodes import ImageResultNodeError, ImageResultNodeService
 from topix.image_generation.service import ImageGenerationService
 from topix.image_generation.storage import ImageStorage
 from topix.image_generation.tasks import ImageGenerationTaskManager
@@ -616,3 +617,43 @@ async def test_output_node_put_requires_editor_and_reconciles_without_provider_w
         assert "storage_key" not in serialized
         assert "authorization" not in serialized.lower()
         assert "api_key" not in serialized.lower()
+
+
+@pytest.mark.asyncio
+async def test_output_node_put_preserves_materialization_race_code(
+    initialized_image_pg_pool: asyncpg.Pool,
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Return a structured 409 so only the recoverable frontend path retries."""
+
+    async def raise_materialization_race(
+        _service: ImageResultNodeService,
+        *,
+        board_uid: str,
+        generation_uid: str,
+        recreate: bool,
+    ) -> None:
+        """Inject the stable recoverable error without touching a provider."""
+        assert board_uid and generation_uid and recreate is False
+        raise ImageResultNodeError(
+            "materialization_raced",
+            "The image result changed while it was being prepared. Please retry.",
+        )
+
+    monkeypatch.setattr(ImageResultNodeService, "ensure_output_node", raise_materialization_race)
+    async with _api_context(initialized_image_pg_pool, tmp_path) as context:
+        response = await context.client.put(
+            f"/boards/{context.board_uid}/image-generations/{gen_uid()}/output-node",
+            headers={"X-Test-User": context.member_uid},
+            json={"recreate": False},
+        )
+
+        assert response.status_code == 409
+        assert response.json() == {
+            "detail": {
+                "code": "materialization_raced",
+                "message": "The image result changed while it was being prepared. Please retry.",
+            }
+        }
+        assert context.adapter.requests == []

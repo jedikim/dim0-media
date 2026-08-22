@@ -208,6 +208,316 @@ async def isolated_result_redis(config: Config):
         await store.close()
 
 
+@pytest_asyncio.fixture(loop_scope="function")
+async def two_connection_result_pool(
+    config: Config,
+    initialized_image_pg_pool: asyncpg.Pool,
+):
+    """Yield two real connections confined to the disposable test schema."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        schema_name = await conn.fetchval("SELECT current_schema()")
+
+    async def initialize_connection(conn: asyncpg.Connection) -> None:
+        """Point every competing connection at the existing disposable schema."""
+        await conn.execute("SELECT set_config('search_path', $1, false)", schema_name)
+
+    pool = await asyncpg.create_pool(
+        config.run.databases.postgres.dsn(),
+        min_size=2,
+        max_size=2,
+        setup=initialize_connection,
+    )
+    try:
+        yield pool
+    finally:
+        await pool.close()
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_output_writer_lock_releases_and_does_not_serialize_other_generations(
+    two_connection_result_pool: asyncpg.Pool,
+) -> None:
+    """Session ownership is generation-scoped and released on errors and cancellation."""
+    first_store = ImageGenerationStore()
+    second_store = ImageGenerationStore()
+    await first_store.open(two_connection_result_pool)
+    await second_store.open(two_connection_result_pool)
+    board_uid = gen_uid()
+    generation_uid = gen_uid()
+    other_generation_uid = gen_uid()
+    first_entered = asyncio.Event()
+    release_first = asyncio.Event()
+    same_generation_entered = asyncio.Event()
+    other_generation_entered = asyncio.Event()
+
+    async def hold_first() -> None:
+        """Hold one session lock while competing ownership is observed."""
+        async with first_store.output_node_writer(
+            board_uid=board_uid,
+            generation_uid=generation_uid,
+        ):
+            first_entered.set()
+            await release_first.wait()
+
+    async def enter_same_generation() -> None:
+        """Record entry only after the first generation owner releases."""
+        await first_entered.wait()
+        async with second_store.output_node_writer(
+            board_uid=board_uid,
+            generation_uid=generation_uid,
+        ):
+            same_generation_entered.set()
+
+    async def enter_other_generation() -> None:
+        """Use a distinct key without waiting for the first generation."""
+        await first_entered.wait()
+        async with second_store.output_node_writer(
+            board_uid=board_uid,
+            generation_uid=other_generation_uid,
+        ):
+            other_generation_entered.set()
+
+    first_task = asyncio.create_task(hold_first())
+    same_task = asyncio.create_task(enter_same_generation())
+    await first_entered.wait()
+    await asyncio.sleep(0.05)
+    assert not same_generation_entered.is_set()
+    same_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await same_task
+
+    other_task = asyncio.create_task(enter_other_generation())
+    await asyncio.wait_for(other_generation_entered.wait(), timeout=1)
+    await other_task
+
+    first_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await first_task
+    async with asyncio.timeout(1):
+        async with second_store.output_node_writer(
+            board_uid=board_uid,
+            generation_uid=generation_uid,
+        ):
+            pass
+
+    with pytest.raises(RuntimeError, match="synthetic writer failure"):
+        async with first_store.output_node_writer(
+            board_uid=board_uid,
+            generation_uid=generation_uid,
+        ):
+            raise RuntimeError("synthetic writer failure")
+    async with asyncio.timeout(1):
+        async with second_store.output_node_writer(
+            board_uid=board_uid,
+            generation_uid=generation_uid,
+        ):
+            pass
+
+
+@pytest.mark.parametrize("deleted_scope", ["edge", "pair"])
+@pytest.mark.asyncio(loop_scope="function")
+async def test_cross_worker_explicit_recreate_serializes_adverse_interleaving(
+    deleted_scope: str,
+    two_connection_result_pool: asyncpg.Pool,
+    isolated_result_content_store: ContentStore,
+    isolated_result_redis: RedisStore,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A late cross-worker restore cannot overwrite or append a second batch."""
+    user_uid = gen_uid()
+    board_uid = gen_uid()
+    generator_uid = gen_uid()
+    async with two_connection_result_pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO users (uid, email, username) VALUES ($1, $2, $3)",
+            user_uid,
+            f"{user_uid}@example.test",
+            user_uid,
+        )
+        await conn.execute("INSERT INTO graphs (uid) VALUES ($1)", board_uid)
+
+    first_image_store = ImageGenerationStore()
+    second_image_store = ImageGenerationStore()
+    await first_image_store.open(two_connection_result_pool)
+    await second_image_store.open(two_connection_result_pool)
+    monkeypatch.setattr(
+        ContentStore,
+        "from_config",
+        classmethod(lambda _cls: isolated_result_content_store),
+    )
+    graph_store = GraphStore()
+    await graph_store.open(two_connection_result_pool)
+    await graph_store.add_notes(
+        [
+            Note(
+                id=generator_uid,
+                graph_uid=board_uid,
+                properties=NoteProperties(image_prompt=TextProperty(text="cross-worker result")),
+            )
+        ]
+    )
+    generation, _asset = await _create_succeeded_generation(
+        first_image_store,
+        user_uid=user_uid,
+        board_uid=board_uid,
+        generator_uid=generator_uid,
+        worker_uid=f"cross-worker-{deleted_scope}",
+    )
+
+    first_oplog = CollabOplogStore(isolated_result_redis)
+    second_oplog = CollabOplogStore(isolated_result_redis)
+    await first_oplog.open(two_connection_result_pool)
+    await second_oplog.open(two_connection_result_pool)
+    first_registry = RoomRegistry()
+    second_registry = RoomRegistry()
+    socket = _RecordingSocket()
+    await first_registry.join(board_uid, socket, user_uid)  # type: ignore[arg-type]
+    first_bridge = AgentBoardBridge(
+        graph_store=graph_store,
+        registry=first_registry,
+        oplog=first_oplog,
+    )
+    second_bridge = AgentBoardBridge(
+        graph_store=graph_store,
+        registry=second_registry,
+        oplog=second_oplog,
+    )
+    first_service = ImageResultNodeService(
+        image_store=first_image_store,
+        graph_store=graph_store,
+        bridge=first_bridge,
+    )
+    second_service = ImageResultNodeService(
+        image_store=second_image_store,
+        graph_store=graph_store,
+        bridge=second_bridge,
+    )
+    initial = await first_service.ensure_output_node(
+        board_uid=board_uid,
+        generation_uid=generation.uid,
+        recreate=False,
+    )
+    assert initial.created is True
+    node_uid = canonical_result_node_uid(generation.uid)
+    edge_uid = canonical_result_edge_uid(generation.uid)
+    live_node = (await graph_store.get_nodes([node_uid]))[0]
+    live_edge = (await graph_store.get_links([edge_uid]))[0]
+    tombstone_at = "2026-08-23T00:00:00"
+    tombstones = [live_edge.model_copy(update={"deleted_at": tombstone_at}).model_dump(exclude_none=False)]
+    if deleted_scope == "pair":
+        tombstones.insert(
+            0,
+            live_node.model_copy(update={"deleted_at": tombstone_at}).model_dump(exclude_none=False),
+        )
+    await isolated_result_content_store.update_payload_only(tombstones)
+
+    first_persisted = asyncio.Event()
+    first_delivered = asyncio.Event()
+    release_first_writer = asyncio.Event()
+    second_prepare_calls: list[tuple[Note | None, Link | None]] = []
+    original_first_persist = first_bridge.persist_result_objects
+    original_first_delivery = first_bridge.deliver_result_batch
+    original_second_persist = second_bridge.persist_result_objects
+
+    async def record_first_persist(*, board_id: str, note: Note | None, link: Link | None) -> None:
+        """Expose the first authoritative Qdrant prepare boundary."""
+        await original_first_persist(board_id=board_id, note=note, link=link)
+        first_persisted.set()
+
+    async def hold_after_first_delivery(*, room, delivery) -> None:
+        """Keep ownership after commit while a user moves the restored node."""
+        await original_first_delivery(room=room, delivery=delivery)
+        first_delivered.set()
+        await release_first_writer.wait()
+
+    async def record_second_persist(*, board_id: str, note: Note | None, link: Link | None) -> None:
+        """Prove the late writer never carries a stale object upsert."""
+        second_prepare_calls.append((note, link))
+        await original_second_persist(board_id=board_id, note=note, link=link)
+
+    monkeypatch.setattr(first_bridge, "persist_result_objects", record_first_persist)
+    monkeypatch.setattr(first_bridge, "deliver_result_batch", hold_after_first_delivery)
+    monkeypatch.setattr(second_bridge, "persist_result_objects", record_second_persist)
+
+    first_task = asyncio.create_task(
+        first_service.ensure_output_node(
+            board_uid=board_uid,
+            generation_uid=generation.uid,
+            recreate=True,
+        )
+    )
+    await asyncio.wait_for(first_persisted.wait(), timeout=1)
+    second_task = asyncio.create_task(
+        second_service.ensure_output_node(
+            board_uid=board_uid,
+            generation_uid=generation.uid,
+            recreate=True,
+        )
+    )
+    await asyncio.wait_for(first_delivered.wait(), timeout=1)
+    await asyncio.sleep(0.05)
+    assert second_prepare_calls == []
+
+    restored_node = (await graph_store.get_nodes([node_uid]))[0]
+    moved_position = restored_node.properties.node_position.model_copy(
+        update={
+            "position": restored_node.properties.node_position.position.model_copy(
+                update={"x": 777.0, "y": 333.0},
+            )
+        }
+    )
+    moved_size = restored_node.properties.node_size.model_copy(
+        update={
+            "size": restored_node.properties.node_size.size.model_copy(
+                update={"width": 333.0, "height": 222.0},
+            )
+        }
+    )
+    await isolated_result_content_store.update_payload_only(
+        [
+            restored_node.model_copy(
+                update={
+                    "properties": restored_node.properties.model_copy(
+                        update={"node_position": moved_position, "node_size": moved_size},
+                    )
+                }
+            ).model_dump(exclude_none=False)
+        ]
+    )
+    release_first_writer.set()
+    first, second = await asyncio.wait_for(
+        asyncio.gather(first_task, second_task),
+        timeout=2,
+    )
+
+    assert sum(outcome.created for outcome in (first, second)) == 1
+    assert sum(outcome.recreated for outcome in (first, second)) == 1
+    assert second_prepare_calls == [(None, None)]
+    final_nodes = await graph_store.get_nodes([node_uid])
+    final_edges = await graph_store.get_links([edge_uid])
+    assert len(final_nodes) == len(final_edges) == 1
+    assert final_nodes[0].properties.node_position.position.model_dump() == {
+        "x": 777.0,
+        "y": 333.0,
+    }
+    assert final_nodes[0].properties.node_size.size.model_dump() == {
+        "width": 333.0,
+        "height": 222.0,
+    }
+    batches = await first_oplog.batches_since(board_uid, 0)
+    assert len(batches) == 2
+    recreation_batch = batches[-1][1]
+    assert json.loads(socket.frames[-1])["batch"] == recreation_batch
+    assert [op["type"] for op in recreation_batch["ops"]] == ["node.add", "edge.add"]
+    assert [op["node"]["id"] for op in recreation_batch["ops"] if op["type"] == "node.add"] == [node_uid]
+    assert [op["edge"]["id"] for op in recreation_batch["ops"] if op["type"] == "edge.add"] == [edge_uid]
+    assert len(socket.frames) == 2
+
+    await first_oplog.close()
+    await second_oplog.close()
+    await graph_store.close()
+
+
 @pytest.mark.asyncio(loop_scope="function")
 async def test_result_nodes_round_trip_and_recover_across_postgres_qdrant(
     initialized_image_pg_pool: asyncpg.Pool,
