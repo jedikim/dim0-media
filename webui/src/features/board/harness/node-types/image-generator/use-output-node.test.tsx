@@ -13,6 +13,22 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/features/board/api/image-generation", () => ({
   ensureImageGenerationOutputNode: mocks.ensure,
   imageGenerationErrorMessage: () => "안전한 결과 노드 오류",
+  imageGenerationErrorDetail: (error: unknown) => {
+    if (!(error instanceof Error)) return null
+    const delimiter = error.message.indexOf(" - ")
+    if (delimiter < 0) return null
+    try {
+      const parsed = JSON.parse(error.message.slice(delimiter + 3)) as {
+        detail?: { code?: unknown; message?: unknown }
+      }
+      return typeof parsed.detail?.code === "string"
+        && typeof parsed.detail.message === "string"
+        ? parsed.detail
+        : null
+    } catch {
+      return null
+    }
+  },
   imageGenerationStatusCode: (error: unknown) => {
     const match = error instanceof Error ? /^(\d{3})\b/.exec(error.message) : null
     return match ? Number(match[1]) : null
@@ -61,6 +77,11 @@ const successfulOutcome = (generationUid: string) => ({
   created: true,
   recreated: false,
 })
+
+
+const outputNodeError = (code: string): Error => new Error(
+  `409 Conflict - ${JSON.stringify({ detail: { code, message: "safe server copy" } })}`,
+)
 
 
 describe("useImageGenerationOutputNode", () => {
@@ -195,6 +216,104 @@ describe("useImageGenerationOutputNode", () => {
       [BOARD_ID, "generation-retry", false, expect.any(AbortSignal)],
     ])
     expect(latest?.outputNodeUid).toBe(OUTPUT_NODE_UID)
+  })
+
+
+  it("retries only materialization_raced 409 and applies the recovered node", async () => {
+    const signals: AbortSignal[] = []
+    mocks.ensure.mockImplementation(
+      (_boardId: string, generationUid: string, _recreate: boolean, signal: AbortSignal) => {
+        signals.push(signal)
+        return signals.length === 1
+          ? Promise.reject(outputNodeError("materialization_raced"))
+          : Promise.resolve(successfulOutcome(generationUid))
+      },
+    )
+
+    await render(generation("generation-materialization-race"))
+    expect(mocks.ensure).toHaveBeenCalledTimes(1)
+    await act(() => vi.advanceTimersByTimeAsync(250))
+
+    expect(mocks.ensure.mock.calls).toEqual([
+      [BOARD_ID, "generation-materialization-race", false, expect.any(AbortSignal)],
+      [BOARD_ID, "generation-materialization-race", false, expect.any(AbortSignal)],
+    ])
+    expect(signals[0]).toBe(signals[1])
+    expect(signals[0]?.aborted).toBe(false)
+    expect(latest?.outputNodeUid).toBe(OUTPUT_NODE_UID)
+    expect(latest?.error).toBeNull()
+    expect(mocks.refresh).toHaveBeenCalledTimes(1)
+  })
+
+
+  it.each([
+    ["canonical collision", outputNodeError("canonical_collision")],
+    ["unstructured conflict", new Error("409 Conflict - private response")],
+  ])("does not retry a terminal %s", async (_label, failure) => {
+    mocks.ensure.mockRejectedValueOnce(failure)
+
+    await render(generation(`generation-terminal-${_label}`))
+    await act(() => vi.advanceTimersByTimeAsync(5_000))
+
+    expect(mocks.ensure).toHaveBeenCalledTimes(1)
+    expect(latest?.error).toBe("안전한 결과 노드 오류")
+  })
+
+
+  it("bounds repeated materialization races to the existing attempt limit", async () => {
+    mocks.ensure.mockRejectedValue(outputNodeError("materialization_raced"))
+
+    await render(generation("generation-race-limit"))
+    await act(() => vi.advanceTimersByTimeAsync(250))
+    await act(() => vi.advanceTimersByTimeAsync(500))
+    await act(() => vi.advanceTimersByTimeAsync(AUTOMATIC_ENSURE_DEADLINE_MS))
+
+    expect(mocks.ensure).toHaveBeenCalledTimes(3)
+    expect(latest?.outputNodeUid).toBeNull()
+    expect(latest?.error).toBe("안전한 결과 노드 오류")
+  })
+
+
+  it("aborts a scheduled race retry when the generation changes", async () => {
+    const signals: AbortSignal[] = []
+    mocks.ensure.mockImplementation(
+      (_boardId: string, generationUid: string, _recreate: boolean, signal: AbortSignal) => {
+        signals.push(signal)
+        return generationUid === "generation-race-old"
+          ? Promise.reject(outputNodeError("materialization_raced"))
+          : Promise.resolve(successfulOutcome(generationUid))
+      },
+    )
+    await render(generation("generation-race-old"))
+
+    await render(generation("generation-race-new"))
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    await act(() => vi.advanceTimersByTimeAsync(1_000))
+
+    expect(signals[0]?.aborted).toBe(true)
+    expect(mocks.ensure).toHaveBeenCalledTimes(2)
+    expect(latest?.outputNodeUid).toBe(OUTPUT_NODE_UID)
+    expect(latest?.error).toBeNull()
+  })
+
+
+  it("aborts a scheduled race retry after a real unmount", async () => {
+    let signal: AbortSignal | null = null
+    mocks.ensure.mockImplementation(
+      (_boardId: string, _generationUid: string, _recreate: boolean, requestSignal: AbortSignal) => {
+        signal = requestSignal
+        return Promise.reject(outputNodeError("materialization_raced"))
+      },
+    )
+    await render(generation("generation-race-unmount"))
+
+    act(() => root.unmount())
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    await act(() => vi.advanceTimersByTimeAsync(1_000))
+
+    expect((signal as AbortSignal | null)?.aborted).toBe(true)
+    expect(mocks.ensure).toHaveBeenCalledTimes(1)
+    expect(mocks.refresh).not.toHaveBeenCalled()
   })
 
 

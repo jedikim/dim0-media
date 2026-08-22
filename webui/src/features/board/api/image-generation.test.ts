@@ -187,6 +187,19 @@ describe("image generation API client", () => {
     )
     expect(imageGenerationErrorMessage(error)).not.toContain(secret)
   })
+
+
+  it("maps a materialization race without exposing server details", () => {
+    const secret = "qdrant-race-internal-secret"
+    const error = new Error(`409 Conflict - ${JSON.stringify({
+      detail: { code: "materialization_raced", message: secret },
+    })}`)
+
+    expect(imageGenerationErrorMessage(error)).toBe(
+      "결과 노드 준비 중 보드가 변경되었습니다. 잠시 후 다시 시도해 주세요.",
+    )
+    expect(imageGenerationErrorMessage(error)).not.toContain(secret)
+  })
 })
 
 

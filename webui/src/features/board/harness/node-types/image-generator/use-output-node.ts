@@ -3,6 +3,7 @@ import { asNodeId, type CanvasStore } from "@canvas-harness/core"
 
 import {
   ensureImageGenerationOutputNode,
+  imageGenerationErrorDetail,
   imageGenerationErrorMessage,
   imageGenerationStatusCode,
   type GenerationOutputNode,
@@ -22,6 +23,13 @@ type AutomaticEnsureEntry = {
   controller: AbortController
   deadlineTimer: ReturnType<typeof setTimeout>
   cacheTimer: ReturnType<typeof setTimeout> | null
+  releaseTimer: ReturnType<typeof setTimeout> | null
+  subscribers: number
+}
+
+type AutomaticEnsureSubscription = {
+  promise: Promise<GenerationOutputNode>
+  release: () => void
 }
 
 // Follow-up: move this cache and image-reference-edges' lockedReferenceTargets
@@ -32,7 +40,9 @@ const automaticEnsures = new Map<string, AutomaticEnsureEntry>()
 /** Return whether an idempotent canvas PUT can be retried after response loss. */
 function isTransientEnsureFailure(error: unknown): boolean {
   const status = imageGenerationStatusCode(error)
-  return error instanceof TypeError
+  const detail = imageGenerationErrorDetail(error)
+  return (status === 409 && detail?.code === "materialization_raced")
+    || error instanceof TypeError
     || status === 408
     || status === 429
     || (status !== null && status >= 500)
@@ -74,15 +84,43 @@ function removeAutomaticEnsure(key: string, abort: boolean): void {
   automaticEnsures.delete(key)
   clearTimeout(entry.deadlineTimer)
   if (entry.cacheTimer !== null) clearTimeout(entry.cacheTimer)
+  if (entry.releaseTimer !== null) clearTimeout(entry.releaseTimer)
   if (abort) entry.controller.abort()
 }
 
 
+/** Release a pending observer after StrictMode has a chance to resubscribe. */
+function releaseAutomaticEnsure(key: string, entry: AutomaticEnsureEntry): void {
+  if (automaticEnsures.get(key) !== entry) return
+  entry.subscribers = Math.max(0, entry.subscribers - 1)
+  if (entry.subscribers > 0 || entry.releaseTimer !== null) return
+  entry.releaseTimer = setTimeout(() => {
+    entry.releaseTimer = null
+    if (automaticEnsures.get(key) === entry && entry.subscribers === 0) {
+      removeAutomaticEnsure(key, true)
+    }
+  }, 0)
+}
+
+
 /** Share one bounded automatic ensure across StrictMode/remount observers. */
-function automaticEnsure(graphId: string, generationUid: string): Promise<GenerationOutputNode> {
+function automaticEnsure(
+  graphId: string,
+  generationUid: string,
+): AutomaticEnsureSubscription {
   const key = `${graphId}:${generationUid}`
   const existing = automaticEnsures.get(key)
-  if (existing) return existing.promise
+  if (existing) {
+    existing.subscribers += 1
+    if (existing.releaseTimer !== null) {
+      clearTimeout(existing.releaseTimer)
+      existing.releaseTimer = null
+    }
+    return {
+      promise: existing.promise,
+      release: () => releaseAutomaticEnsure(key, existing),
+    }
+  }
   const controller = new AbortController()
 
   const runAttempt = async (attempt: number): Promise<GenerationOutputNode> => {
@@ -119,11 +157,14 @@ function automaticEnsure(graphId: string, generationUid: string): Promise<Genera
     controller,
     deadlineTimer,
     cacheTimer: null,
+    releaseTimer: null,
+    subscribers: 1,
   }
   automaticEnsures.set(key, entry)
   void request.then(
     () => {
       clearTimeout(deadlineTimer)
+      if (automaticEnsures.get(key) !== entry) return
       entry.cacheTimer = setTimeout(() => {
         if (automaticEnsures.get(key) === entry) removeAutomaticEnsure(key, false)
       }, AUTOMATIC_ENSURE_CACHE_MS)
@@ -132,7 +173,10 @@ function automaticEnsure(graphId: string, generationUid: string): Promise<Genera
       if (automaticEnsures.get(key) === entry) removeAutomaticEnsure(key, true)
     },
   )
-  return request
+  return {
+    promise: request,
+    release: () => releaseAutomaticEnsure(key, entry),
+  }
 }
 
 
@@ -198,7 +242,8 @@ export function useImageGenerationOutputNode(args: {
       || serverOutputNodeUid
     ) return
     let alive = true
-    void automaticEnsure(graphId, generationUid)
+    const subscription = automaticEnsure(graphId, generationUid)
+    void subscription.promise
       .then((outcome) => {
         if (!alive) return
         if (!isExpectedOutput(outcome, generationUid, outputAssetUid)) {
@@ -215,6 +260,7 @@ export function useImageGenerationOutputNode(args: {
       })
     return () => {
       alive = false
+      subscription.release()
     }
   }, [canEdit, generation?.status, generationUid, graphId, outputAssetUid, refreshStatus, serverOutputNodeUid])
 

@@ -90,6 +90,7 @@ const REFERENCE_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   generation_not_succeeded: "완료된 이미지 생성만 결과 노드로 추가할 수 있습니다.",
   output_asset_unavailable: "생성된 이미지 자산을 사용할 수 없습니다.",
   generator_unavailable: "원본 이미지 생성 노드를 찾을 수 없습니다.",
+  materialization_raced: "결과 노드 준비 중 보드가 변경되었습니다. 잠시 후 다시 시도해 주세요.",
   canonical_collision: "결과 노드 식별자가 기존 보드 데이터와 충돌합니다.",
   canvas_write_incomplete: "결과 노드를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
   output_binding_conflict: "결과 노드를 생성 기록에 연결하지 못했습니다.",

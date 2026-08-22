@@ -47,8 +47,10 @@ names:
 - `dim0:image-result-node:{generation_uid}`
 - `dim0:image-result-edge:{generation_uid}`
 
-Qdrant reconciliation happens before the PostgreSQL writer critical section.
-Existing live canonical objects are validated and reused. An unbound tombstone is
+Qdrant reconciliation runs under a generation-scoped PostgreSQL session advisory
+lock, but outside a database transaction. The shared-pool connection stays owned
+through the short final transaction and releases its session lock in `finally`
+before returning to the pool. Existing live canonical objects are validated and reused. An unbound tombstone is
 partial state and is prepared by an ordinary `recreate: false` retry; only an
 already-bound deletion requires explicit recreation. Conflicting live objects
 fail closed. After both pieces are durable, a short advisory-locked PostgreSQL
@@ -66,7 +68,8 @@ Recovery is intentionally idempotent across the non-transactional stores:
 - node-only state: create/validate the missing edge;
 - node+edge with missing PostgreSQL binding: validate and bind;
 - response loss: return the same canonical IDs on retry;
-- repeated/concurrent calls: advisory lock serializes the final batch/bind writer;
+- repeated/concurrent calls: generation-scoped session ownership serializes
+  Qdrant preparation and the final batch/bind writer across backend workers;
 - Qdrant success with oplog failure: retry validates the same objects and appends
   the missing deterministic batch without duplicating audits;
 - canonical collision: do not overwrite;
@@ -84,6 +87,11 @@ snapshot, asset row, usage/cost audit, or image file.
 An editor observing `succeeded` with `output_node_uid = null` calls the idempotent
 PUT with `recreate: false`. Viewers and local boards issue zero mutation calls.
 StrictMode/remount concurrency is harmless because the server is authoritative.
+Automatic materialization retries only transport/transient statuses and the
+structured `materialization_raced` 409 code, using the existing three attempts,
+backoff, and thirty-second deadline. Other 409 responses remain terminal. A real
+unmount or generation change releases the pending observer and aborts its retry;
+the deferred release still lets StrictMode reuse one request.
 
 Before materialization, the Generator keeps its inline preview. Once
 `output_node_uid` is confirmed, it passes `null` to `useAuthedImage`, stops the
@@ -148,8 +156,9 @@ concurrency and the module-global lock redesign remain outside this PR.
   cleanup, hard polling deadline, automatic ensure, explicit recreate, viewer/local
   zero-mutation, preview de-duplication, clone/paste, immutable references, and
   snapshot/live hydration.
-- Integration: disposable PostgreSQL, Qdrant, and Redis with a one-connection
-  PostgreSQL pool; clean/reapplied schema;
+- Integration: disposable PostgreSQL, Qdrant, and Redis with the one-connection
+  recursive-acquire regression plus two-connection cross-worker advisory-lock
+  competition; clean/reapplied schema;
   existing local/dev volumes and retained smoke data are untouched.
 - Full Node 20 UI/backend checks, local-only mocked Playwright E2E, Rust/Tauri CI,
   `git diff --check`, Ruff, and GitHub CI. External provider calls remain zero.
