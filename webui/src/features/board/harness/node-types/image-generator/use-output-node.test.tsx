@@ -267,6 +267,7 @@ describe("useImageGenerationOutputNode", () => {
 
   it.each([
     ["canonical collision", outputNodeError("canonical_collision")],
+    ["other structured conflict", outputNodeError("output_binding_conflict")],
     ["unstructured conflict", new Error("409 Conflict - private response")],
   ])("does not retry a terminal %s", async (_label, failure) => {
     mocks.ensure.mockRejectedValueOnce(failure)
@@ -362,7 +363,9 @@ describe("useImageGenerationOutputNode", () => {
         }
         await Promise.resolve()
       })
+      await act(() => vi.advanceTimersByTimeAsync(1_000))
 
+      expect(mocks.ensure).toHaveBeenCalledTimes(3)
       expect(latest?.outputNodeUid).toBe("c".repeat(32))
       expect(latest?.error).toBeNull()
       expect(mocks.refresh).toHaveBeenCalledTimes(1)
@@ -370,22 +373,32 @@ describe("useImageGenerationOutputNode", () => {
   )
 
 
-  it("aborts a scheduled race retry after a real unmount", async () => {
-    let signal: AbortSignal | null = null
+  it("does not schedule a late transient retry after a real unmount", async () => {
+    let rejectPending: ((error: Error) => void) | null = null
+    const signals: AbortSignal[] = []
     mocks.ensure.mockImplementation(
       (_boardId: string, _generationUid: string, _recreate: boolean, requestSignal: AbortSignal) => {
-        signal = requestSignal
-        return Promise.reject(outputNodeError("materialization_raced"))
+        signals.push(requestSignal)
+        if (signals.length === 1) {
+          return Promise.reject(outputNodeError("materialization_raced"))
+        }
+        return new Promise((_resolve, reject) => { rejectPending = reject })
       },
     )
     await render(generation("generation-race-unmount"))
+    await act(() => vi.advanceTimersByTimeAsync(250))
+    expect(mocks.ensure).toHaveBeenCalledTimes(2)
 
     act(() => root.unmount())
     await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(signals[1]?.aborted).toBe(true)
+    await act(async () => {
+      rejectPending?.(outputNodeError("materialization_raced"))
+      await Promise.resolve()
+    })
     await act(() => vi.advanceTimersByTimeAsync(1_000))
 
-    expect((signal as AbortSignal | null)?.aborted).toBe(true)
-    expect(mocks.ensure).toHaveBeenCalledTimes(1)
+    expect(mocks.ensure).toHaveBeenCalledTimes(2)
     expect(mocks.refresh).not.toHaveBeenCalled()
   })
 

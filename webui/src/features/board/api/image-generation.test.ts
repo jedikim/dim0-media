@@ -196,7 +196,7 @@ describe("image generation API client", () => {
     })}`)
 
     expect(imageGenerationErrorMessage(error)).toBe(
-      "결과 노드 준비 중 보드가 변경되었습니다. 잠시 후 다시 시도해 주세요.",
+      "결과 노드 준비 작업이 겹쳤습니다. 잠시 후 다시 시도해 주세요.",
     )
     expect(imageGenerationErrorMessage(error)).not.toContain(secret)
   })

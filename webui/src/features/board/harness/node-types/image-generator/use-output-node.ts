@@ -61,12 +61,19 @@ function isExpectedOutput(
 }
 
 
+/** Create the stable cancellation error used by automatic result retries. */
+function automaticEnsureAbortError(): DOMException {
+  return new DOMException("Image result request aborted", "AbortError")
+}
+
+
 /** Wait for one retry delay, rejecting immediately when the request is aborted. */
 function waitForEnsureRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(automaticEnsureAbortError())
   return new Promise((resolve, reject) => {
     const onAbort = (): void => {
       clearTimeout(timer)
-      reject(new DOMException("Image result request aborted", "AbortError"))
+      reject(automaticEnsureAbortError())
     }
     const timer = setTimeout(() => {
       signal.removeEventListener("abort", onAbort)
@@ -124,6 +131,7 @@ function automaticEnsure(
   const controller = new AbortController()
 
   const runAttempt = async (attempt: number): Promise<GenerationOutputNode> => {
+    if (controller.signal.aborted) throw automaticEnsureAbortError()
     try {
       return await ensureImageGenerationOutputNode(
         graphId,
