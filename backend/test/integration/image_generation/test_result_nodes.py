@@ -95,6 +95,7 @@ async def isolated_result_content_store(config: Config):
 async def test_result_nodes_round_trip_and_recover_across_postgres_qdrant(
     initialized_image_pg_pool: asyncpg.Pool,
     isolated_result_content_store: ContentStore,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Canonical node/edge writes recover without duplicating audit or assets."""
     user_uid = gen_uid()
@@ -111,8 +112,12 @@ async def test_result_nodes_round_trip_and_recover_across_postgres_qdrant(
 
     image_store = ImageGenerationStore()
     await image_store.open(initialized_image_pg_pool)
+    monkeypatch.setattr(
+        ContentStore,
+        "from_config",
+        classmethod(lambda _cls: isolated_result_content_store),
+    )
     graph_store = GraphStore()
-    graph_store._content_store = isolated_result_content_store
     await graph_store.open(initialized_image_pg_pool)
     generator = Note(
         id=generator_uid,
