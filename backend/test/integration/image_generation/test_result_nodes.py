@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 
 from hashlib import sha256
@@ -17,6 +18,7 @@ from redis.asyncio import Redis
 from topix.collab.agent_bridge import AgentBoardBridge
 from topix.collab.room import RoomRegistry
 from topix.config.config import Config
+from topix.datatypes.note.link import Link
 from topix.datatypes.note.note import Note, NoteProperties
 from topix.datatypes.property import TextProperty
 from topix.image_generation.models import (
@@ -27,7 +29,9 @@ from topix.image_generation.models import (
     ProviderImageResult,
 )
 from topix.image_generation.result_nodes import (
+    ImageResultNodeError,
     ImageResultNodeService,
+    canonical_result_batch_uid,
     canonical_result_edge_uid,
     canonical_result_node_uid,
 )
@@ -88,6 +92,61 @@ class _FailOnceOplog:
         return await self.delegate.append(board_id, seq, batch, conn=conn)
 
 
+async def _create_succeeded_generation(
+    image_store: ImageGenerationStore,
+    *,
+    user_uid: str,
+    board_uid: str,
+    generator_uid: str,
+    worker_uid: str,
+) -> tuple[GenerationStart, ImageAssetCreate]:
+    """Create one provider-free succeeded generation for result-node integration."""
+    generation = GenerationStart(
+        user_uid=user_uid,
+        board_uid=board_uid,
+        client_request_uid=gen_uid(),
+        worker_uid=worker_uid,
+        generator_node_uid=generator_uid,
+        model_id="x-ai/grok-imagine-image-2.0",
+        prompt="Create a local result fixture",
+    )
+    await image_store.start_generation(generation)
+    content = f"local-result-{generation.uid}".encode()
+    asset = ImageAssetCreate(
+        board_uid=board_uid,
+        created_by_user_uid=user_uid,
+        source_kind=ImageAssetSource.GENERATED,
+        storage_key=f"images/generated/{generation.uid}/output.png",
+        mime_type="image/png",
+        byte_size=len(content),
+        width=320,
+        height=160,
+        content_sha256=sha256(content).hexdigest(),
+    )
+    assert await image_store.set_pending_output(
+        generation_uid=generation.uid,
+        worker_uid=worker_uid,
+        storage_key=asset.storage_key,
+    )
+    await image_store.finish_succeeded(
+        generation_uid=generation.uid,
+        attempt_uid=generation.attempt_uid,
+        worker_uid=worker_uid,
+        output_asset=asset,
+        result=ProviderImageResult(
+            image=GeneratedImagePayload(
+                mime_type="image/png",
+                content=content,
+                width=320,
+                height=160,
+                content_sha256=asset.content_sha256,
+            )
+        ),
+        latency_ms=1,
+    )
+    return generation, asset
+
+
 @pytest_asyncio.fixture(loop_scope="function")
 async def isolated_result_content_store(config: Config):
     """Yield a disposable Qdrant collection behind an explicit test opt-in."""
@@ -137,10 +196,15 @@ async def isolated_result_redis(config: Config):
         decode_responses=True,
     )
     await client.ping()
+    initial_sequence_keys = {str(key) async for key in client.scan_iter(match=f"{SEQ_KEY_PREFIX}*")}
     store = RedisStore(redis_client=client)
     try:
         yield store
     finally:
+        current_sequence_keys = {str(key) async for key in client.scan_iter(match=f"{SEQ_KEY_PREFIX}*")}
+        new_sequence_keys = current_sequence_keys - initial_sequence_keys
+        if new_sequence_keys:
+            await client.delete(*new_sequence_keys)
         await store.close()
 
 
@@ -180,48 +244,12 @@ async def test_result_nodes_round_trip_and_recover_across_postgres_qdrant(
     )
     await graph_store.add_notes([generator])
 
-    generation = GenerationStart(
+    generation, asset = await _create_succeeded_generation(
+        image_store,
         user_uid=user_uid,
         board_uid=board_uid,
-        client_request_uid=gen_uid(),
+        generator_uid=generator_uid,
         worker_uid="result-node-test-worker",
-        generator_node_uid=generator_uid,
-        model_id="x-ai/grok-imagine-image-2.0",
-        prompt="Create a local result fixture",
-    )
-    await image_store.start_generation(generation)
-    content = b"local-result-bytes"
-    asset = ImageAssetCreate(
-        board_uid=board_uid,
-        created_by_user_uid=user_uid,
-        source_kind=ImageAssetSource.GENERATED,
-        storage_key=f"images/generated/{generation.uid}/output.png",
-        mime_type="image/png",
-        byte_size=len(content),
-        width=320,
-        height=160,
-        content_sha256=sha256(content).hexdigest(),
-    )
-    assert await image_store.set_pending_output(
-        generation_uid=generation.uid,
-        worker_uid="result-node-test-worker",
-        storage_key=asset.storage_key,
-    )
-    await image_store.finish_succeeded(
-        generation_uid=generation.uid,
-        attempt_uid=generation.attempt_uid,
-        worker_uid="result-node-test-worker",
-        output_asset=asset,
-        result=ProviderImageResult(
-            image=GeneratedImagePayload(
-                mime_type="image/png",
-                content=content,
-                width=320,
-                height=160,
-                content_sha256=asset.content_sha256,
-            )
-        ),
-        latency_ms=1,
     )
 
     oplog = CollabOplogStore(isolated_result_redis)
@@ -303,6 +331,76 @@ async def test_result_nodes_round_trip_and_recover_across_postgres_qdrant(
     assert '"type": "node.add"' in socket.frames[0]
     assert '"type": "edge.add"' in socket.frames[0]
 
+    initial_batch_uid = canonical_result_batch_uid(
+        generation.uid,
+        nodes[0].created_at,
+        links[0].created_at,
+    )
+    round_trip_node = (await graph_store.get_nodes([node_uid]))[0]
+    round_trip_edge = (await graph_store.get_links([edge_uid]))[0]
+    assert (
+        canonical_result_batch_uid(
+            generation.uid,
+            round_trip_node.created_at,
+            round_trip_edge.created_at,
+        )
+        == initial_batch_uid
+    )
+
+    await graph_store.delete_link(edge_uid)
+    edge_only = await service.ensure_output_node(
+        board_uid=board_uid,
+        generation_uid=generation.uid,
+        recreate=True,
+    )
+    assert edge_only.created is edge_only.recreated is True
+    edge_only_node = (await graph_store.get_nodes([node_uid]))[0]
+    edge_only_edge = (await graph_store.get_links([edge_uid]))[0]
+    edge_only_batch_uid = canonical_result_batch_uid(
+        generation.uid,
+        edge_only_node.created_at,
+        edge_only_edge.created_at,
+    )
+    assert edge_only_batch_uid != initial_batch_uid
+    assert edge_only_node.created_at == round_trip_node.created_at
+    assert len(socket.frames) == 2
+    edge_only_live_batch = json.loads(socket.frames[-1])["batch"]
+    edge_only_catch_up = await oplog.batches_since(board_uid, 1)
+    assert edge_only_catch_up[-1][1] == edge_only_live_batch
+    assert [op["type"] for op in edge_only_live_batch["ops"]] == [
+        "node.add",
+        "edge.add",
+    ]
+
+    edge_only_repeated = await service.ensure_output_node(
+        board_uid=board_uid,
+        generation_uid=generation.uid,
+        recreate=True,
+    )
+    assert edge_only_repeated.created is edge_only_repeated.recreated is False
+    assert len(socket.frames) == 2
+
+    await isolated_result_content_store.update_payload_only(
+        [
+            edge_only_edge.model_copy(
+                update={"deleted_at": "2026-08-22T00:00:00"},
+            ).model_dump(exclude_none=False),
+        ]
+    )
+    edge_tombstone = await service.ensure_output_node(
+        board_uid=board_uid,
+        generation_uid=generation.uid,
+        recreate=True,
+    )
+    assert edge_tombstone.created is edge_tombstone.recreated is True
+    tombstone_edge = (await graph_store.get_links([edge_uid]))[0]
+    assert canonical_result_batch_uid(
+        generation.uid,
+        edge_only_node.created_at,
+        tombstone_edge.created_at,
+    ) not in {initial_batch_uid, edge_only_batch_uid}
+    assert len(socket.frames) == 3
+
     await graph_store.delete_link(edge_uid)
     await graph_store.delete_node(node_uid)
     automatic = await service.ensure_output_node(
@@ -359,6 +457,147 @@ async def test_result_nodes_round_trip_and_recover_across_postgres_qdrant(
             asset.uid,
         )
     assert after is not None and tuple(after.values()) == (1, 1, 1)
-    await isolated_result_redis.redis.delete(f"{SEQ_KEY_PREFIX}{board_uid}")
+
+    rollback_generation, _rollback_asset = await _create_succeeded_generation(
+        image_store,
+        user_uid=user_uid,
+        board_uid=board_uid,
+        generator_uid=generator_uid,
+        worker_uid="result-node-rollback-worker",
+    )
+    rollback_node_uid = canonical_result_node_uid(rollback_generation.uid)
+    rollback_edge_uid = canonical_result_edge_uid(rollback_generation.uid)
+    original_bind = image_store.bind_output_node
+    fail_binding_once = True
+
+    async def fail_after_real_append(
+        conn,
+        *,
+        board_uid: str,
+        generation_uid: str,
+        output_node_uid: str,
+    ) -> bool:
+        """Fail after the real transactional append to prove rollback recovery."""
+        nonlocal fail_binding_once
+        if generation_uid == rollback_generation.uid and fail_binding_once:
+            fail_binding_once = False
+            raise RuntimeError("synthetic binding failure after append")
+        return await original_bind(
+            conn,
+            board_uid=board_uid,
+            generation_uid=generation_uid,
+            output_node_uid=output_node_uid,
+        )
+
+    monkeypatch.setattr(image_store, "bind_output_node", fail_after_real_append)
+    async with initialized_image_pg_pool.acquire() as conn:
+        batches_before_rollback = await conn.fetchval(
+            "SELECT count(*) FROM board_oplog WHERE board_id = $1",
+            board_uid,
+        )
+    frames_before_rollback = len(socket.frames)
+    with pytest.raises(RuntimeError, match="synthetic binding failure after append"):
+        await service.ensure_output_node(
+            board_uid=board_uid,
+            generation_uid=rollback_generation.uid,
+            recreate=False,
+        )
+    assert len(await graph_store.get_nodes([rollback_node_uid])) == 1
+    assert len(await graph_store.get_links([rollback_edge_uid])) == 1
+    async with initialized_image_pg_pool.acquire() as conn:
+        rolled_back = await conn.fetchrow(
+            "SELECT output_node_uid, (SELECT count(*) FROM board_oplog WHERE board_id = $2) AS batches FROM image_generation_run WHERE uid = $1",
+            rollback_generation.uid,
+            board_uid,
+        )
+    assert rolled_back is not None
+    assert tuple(rolled_back.values()) == (None, batches_before_rollback)
+    assert len(socket.frames) == frames_before_rollback
+
+    rollback_recovered = await service.ensure_output_node(
+        board_uid=board_uid,
+        generation_uid=rollback_generation.uid,
+        recreate=False,
+    )
+    assert rollback_recovered.created is True
+    async with initialized_image_pg_pool.acquire() as conn:
+        recovered_state = await conn.fetchrow(
+            "SELECT output_node_uid, (SELECT count(*) FROM board_oplog WHERE board_id = $2) AS batches FROM image_generation_run WHERE uid = $1",
+            rollback_generation.uid,
+            board_uid,
+        )
+    assert recovered_state is not None
+    assert tuple(recovered_state.values()) == (
+        rollback_node_uid,
+        batches_before_rollback + 1,
+    )
+    assert len(socket.frames) == frames_before_rollback + 1
+    rollback_repeated = await service.ensure_output_node(
+        board_uid=board_uid,
+        generation_uid=rollback_generation.uid,
+        recreate=False,
+    )
+    assert rollback_repeated.created is False
+
+    race_generation, _race_asset = await _create_succeeded_generation(
+        image_store,
+        user_uid=user_uid,
+        board_uid=board_uid,
+        generator_uid=generator_uid,
+        worker_uid="result-node-folder-race-worker",
+    )
+    race_node_uid = canonical_result_node_uid(race_generation.uid)
+    race_edge_uid = canonical_result_edge_uid(race_generation.uid)
+    original_persist = bridge.persist_result_objects
+    moved_generator = False
+
+    async def persist_then_move_generator(
+        *,
+        board_id: str,
+        note: Note | None,
+        link: Link | None,
+    ) -> None:
+        """Move the real Qdrant generator between preparation and final read."""
+        nonlocal moved_generator
+        await original_persist(board_id=board_id, note=note, link=link)
+        if note is not None and note.id == race_node_uid and not moved_generator:
+            moved_generator = True
+            await graph_store.patch_note(
+                generator_uid,
+                {"parent_id": "folder-b"},
+                user_uid=None,
+            )
+
+    monkeypatch.setattr(bridge, "persist_result_objects", persist_then_move_generator)
+    with pytest.raises(ImageResultNodeError) as folder_race:
+        await service.ensure_output_node(
+            board_uid=board_uid,
+            generation_uid=race_generation.uid,
+            recreate=False,
+        )
+    assert folder_race.value.code == "materialization_raced"
+    race_node = (await graph_store.get_nodes([race_node_uid]))[0]
+    race_edge = (await graph_store.get_links([race_edge_uid]))[0]
+    assert race_node.parent_id is None and race_edge.parent_id is None
+
+    race_recovered = await service.ensure_output_node(
+        board_uid=board_uid,
+        generation_uid=race_generation.uid,
+        recreate=False,
+    )
+    assert race_recovered.created is True
+    recovered_node = (await graph_store.get_nodes([race_node_uid]))[0]
+    recovered_edge = (await graph_store.get_links([race_edge_uid]))[0]
+    assert recovered_node.parent_id == recovered_edge.parent_id == "folder-b"
+    assert canonical_result_batch_uid(
+        race_generation.uid,
+        recovered_node.created_at,
+        recovered_edge.created_at,
+    ) == canonical_result_batch_uid(
+        race_generation.uid,
+        (await graph_store.get_nodes([race_node_uid]))[0].created_at,
+        (await graph_store.get_links([race_edge_uid]))[0].created_at,
+    )
+
     await oplog.close()
     await graph_store.close()

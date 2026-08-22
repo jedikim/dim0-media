@@ -218,10 +218,20 @@ def test_canonical_ids_are_stable_distinct_lowercase_hex() -> None:
     int(node_uid, 16)
     int(edge_uid, 16)
     assert canonical_result_node_uid("other") != node_uid
-    batch_uid = canonical_result_batch_uid(GENERATION_UID, "2026-08-22T00:00:00")
+    batch_uid = canonical_result_batch_uid(
+        GENERATION_UID,
+        "2026-08-22T00:00:00",
+        "2026-08-22T00:00:01",
+    )
     assert batch_uid == canonical_result_batch_uid(
         GENERATION_UID,
         "2026-08-22T00:00:00",
+        "2026-08-22T00:00:01",
+    )
+    assert batch_uid != canonical_result_batch_uid(
+        GENERATION_UID,
+        "2026-08-22T00:00:00",
+        "2026-08-22T00:00:02",
     )
     assert batch_uid not in {node_uid, edge_uid}
 
@@ -282,6 +292,8 @@ async def test_concurrent_automatic_ensure_creates_only_one_node_and_edge() -> N
     )
 
     assert first.output_node_uid == second.output_node_uid
+    assert sum(outcome.created for outcome in (first, second)) == 1
+    assert not any(outcome.recreated for outcome in (first, second))
     assert bridge.note_calls == bridge.link_calls == 1
     assert len(graph.nodes) == 2
     assert len(graph.links) == 1
@@ -367,7 +379,7 @@ async def test_oplog_failure_leaves_qdrant_recoverable_without_binding() -> None
         recreate=False,
     )
 
-    assert outcome.created is False
+    assert outcome.created is True
     assert image_store.bind_calls == [canonical_result_node_uid(GENERATION_UID)]
     assert len(bridge.batch_calls) == 1
     assert bridge.delivery_calls == 1
@@ -437,6 +449,205 @@ async def test_tombstoned_result_objects_are_absent_only_for_explicit_recreate()
 
 
 @pytest.mark.asyncio
+async def test_bound_partial_recreates_get_new_batches_and_truthful_outcomes() -> None:
+    """Each node/edge rematerialization gets one batch and one truthful response."""
+    service, image_store, graph, bridge = _service()
+    initial = await service.ensure_output_node(
+        board_uid=BOARD_UID,
+        generation_uid=GENERATION_UID,
+        recreate=False,
+    )
+    assert initial.created is True
+    first_batch_uid = bridge.batch_calls[-1][0]
+    node_uid = canonical_result_node_uid(GENERATION_UID)
+    edge_uid = canonical_result_edge_uid(GENERATION_UID)
+    original_node_created_at = graph.nodes[node_uid].created_at
+
+    graph.links.pop(edge_uid)
+    edge_only = await service.ensure_output_node(
+        board_uid=BOARD_UID,
+        generation_uid=GENERATION_UID,
+        recreate=True,
+    )
+    edge_batch_uid = bridge.batch_calls[-1][0]
+    assert edge_only.created is edge_only.recreated is True
+    assert edge_batch_uid != first_batch_uid
+    assert graph.nodes[node_uid].created_at == original_node_created_at
+
+    repeated = await service.ensure_output_node(
+        board_uid=BOARD_UID,
+        generation_uid=GENERATION_UID,
+        recreate=True,
+    )
+    assert repeated.created is repeated.recreated is False
+    assert len(bridge.batch_calls) == 2
+
+    graph.links[edge_uid] = graph.links[edge_uid].model_copy(
+        update={"deleted_at": "2026-08-22T00:00:00"},
+    )
+    tombstone_edge = await service.ensure_output_node(
+        board_uid=BOARD_UID,
+        generation_uid=GENERATION_UID,
+        recreate=True,
+    )
+    tombstone_batch_uid = bridge.batch_calls[-1][0]
+    assert tombstone_edge.created is tombstone_edge.recreated is True
+    assert tombstone_batch_uid not in {first_batch_uid, edge_batch_uid}
+
+    graph.nodes.pop(node_uid)
+    node_only = await service.ensure_output_node(
+        board_uid=BOARD_UID,
+        generation_uid=GENERATION_UID,
+        recreate=True,
+    )
+    assert node_only.created is node_only.recreated is True
+    assert bridge.batch_calls[-1][0] != tombstone_batch_uid
+    assert len(graph.nodes) == 2
+    assert len(graph.links) == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_explicit_recreate_reports_one_durable_writer() -> None:
+    """Concurrent explicit requests converge and only the batch writer reports work."""
+    service, _image_store, graph, bridge = _service()
+    await service.ensure_output_node(
+        board_uid=BOARD_UID,
+        generation_uid=GENERATION_UID,
+        recreate=False,
+    )
+    node_uid = canonical_result_node_uid(GENERATION_UID)
+    edge_uid = canonical_result_edge_uid(GENERATION_UID)
+    graph.nodes[node_uid] = graph.nodes[node_uid].model_copy(
+        update={"deleted_at": "2026-08-22T00:00:00"},
+    )
+    graph.links[edge_uid] = graph.links[edge_uid].model_copy(
+        update={"deleted_at": "2026-08-22T00:00:00"},
+    )
+    original_persist = bridge.persist_result_objects
+    both_prepared = asyncio.Event()
+    prepared_count = 0
+
+    async def synchronized_persist(*, board_id: str, note: Note | None, link: Link | None) -> None:
+        """Hold both requests after their Qdrant-equivalent preparation."""
+        nonlocal prepared_count
+        await original_persist(board_id=board_id, note=note, link=link)
+        prepared_count += 1
+        if prepared_count == 2:
+            both_prepared.set()
+        await both_prepared.wait()
+
+    bridge.persist_result_objects = synchronized_persist  # type: ignore[method-assign]
+    first, second = await asyncio.gather(
+        service.ensure_output_node(
+            board_uid=BOARD_UID,
+            generation_uid=GENERATION_UID,
+            recreate=True,
+        ),
+        service.ensure_output_node(
+            board_uid=BOARD_UID,
+            generation_uid=GENERATION_UID,
+            recreate=True,
+        ),
+    )
+
+    assert sum(outcome.created for outcome in (first, second)) == 1
+    assert sum(outcome.recreated for outcome in (first, second)) == 1
+    assert len(bridge.batch_calls) == 2
+    assert graph.nodes[node_uid].deleted_at is None
+    assert graph.links[edge_uid].deleted_at is None
+
+
+@pytest.mark.asyncio
+async def test_generator_folder_move_during_prepare_recovers_on_retry() -> None:
+    """An unbound preparation race is reparented without resetting node placement."""
+    service, _image_store, graph, bridge = _service()
+    original_persist = bridge.persist_result_objects
+    moved = False
+
+    async def persist_then_move(*, board_id: str, note: Note | None, link: Link | None) -> None:
+        """Move the generator after the first canonical Qdrant-equivalent write."""
+        nonlocal moved
+        await original_persist(board_id=board_id, note=note, link=link)
+        if not moved:
+            moved = True
+            graph.nodes[GENERATOR_UID] = graph.nodes[GENERATOR_UID].model_copy(
+                update={"parent_id": "folder-b"},
+            )
+
+    bridge.persist_result_objects = persist_then_move  # type: ignore[method-assign]
+    with pytest.raises(ImageResultNodeError) as raced:
+        await service.ensure_output_node(
+            board_uid=BOARD_UID,
+            generation_uid=GENERATION_UID,
+            recreate=False,
+        )
+    assert raced.value.code == "materialization_raced"
+    assert bridge.batch_calls == []
+
+    node_uid = canonical_result_node_uid(GENERATION_UID)
+    edge_uid = canonical_result_edge_uid(GENERATION_UID)
+    position = graph.nodes[node_uid].properties.node_position.model_copy(
+        update={
+            "position": graph.nodes[node_uid].properties.node_position.position.model_copy(
+                update={"x": 999.0},
+            )
+        },
+    )
+    graph.nodes[node_uid] = graph.nodes[node_uid].model_copy(
+        update={
+            "properties": graph.nodes[node_uid].properties.model_copy(
+                update={"node_position": position},
+            )
+        },
+    )
+
+    recovered = await service.ensure_output_node(
+        board_uid=BOARD_UID,
+        generation_uid=GENERATION_UID,
+        recreate=False,
+    )
+
+    assert recovered.created is True
+    assert graph.nodes[node_uid].parent_id == "folder-b"
+    assert graph.links[edge_uid].parent_id == "folder-b"
+    assert graph.nodes[node_uid].properties.node_position.position.x == 999.0
+    assert len(bridge.batch_calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_unbound_tombstones_materialize_without_explicit_recreate() -> None:
+    """Unbound tombstones are partial state, while bound deletion stays opt-in."""
+    service, image_store, graph, bridge = _service()
+    await service.ensure_output_node(
+        board_uid=BOARD_UID,
+        generation_uid=GENERATION_UID,
+        recreate=False,
+    )
+    assert image_store.record is not None
+    image_store.record = image_store.record.model_copy(update={"output_node_uid": None})
+    bridge.batch_ids.clear()
+    bridge.batch_calls.clear()
+    node_uid = canonical_result_node_uid(GENERATION_UID)
+    edge_uid = canonical_result_edge_uid(GENERATION_UID)
+    graph.nodes[node_uid] = graph.nodes[node_uid].model_copy(
+        update={"deleted_at": "2026-08-22T00:00:00"},
+    )
+    graph.links[edge_uid] = graph.links[edge_uid].model_copy(
+        update={"deleted_at": "2026-08-22T00:00:00"},
+    )
+
+    recovered = await service.ensure_output_node(
+        board_uid=BOARD_UID,
+        generation_uid=GENERATION_UID,
+        recreate=False,
+    )
+
+    assert recovered.created is True
+    assert graph.nodes[node_uid].deleted_at is None
+    assert graph.links[edge_uid].deleted_at is None
+
+
+@pytest.mark.asyncio
 async def test_canonical_collision_fails_closed_without_overwrite() -> None:
     """Existing content under a canonical ID is never replaced."""
     service, image_store, graph, bridge = _service()
@@ -495,7 +706,7 @@ async def test_missing_generation_asset_and_generator_fail_closed() -> None:
 
 @pytest.mark.asyncio
 async def test_wrong_generator_marker_and_edge_scope_are_rejected() -> None:
-    """Generator identity and canonical edge folder scope are immutable."""
+    """Generator identity and bound canonical edge folder scope are immutable."""
     service, image_store, graph, bridge = _service()
     graph.nodes[GENERATOR_UID] = Note(id=GENERATOR_UID, graph_uid=BOARD_UID)
     with pytest.raises(ImageResultNodeError) as wrong_marker:
@@ -515,11 +726,15 @@ async def test_wrong_generator_marker_and_edge_scope_are_rejected() -> None:
         graph_uid=BOARD_UID,
         parent_id="folder-2",
     )
+    assert image_store.record is not None
+    image_store.record = image_store.record.model_copy(
+        update={"output_node_uid": canonical_result_node_uid(GENERATION_UID)},
+    )
     with pytest.raises(ImageResultNodeError) as wrong_scope:
         await service.ensure_output_node(
             board_uid=BOARD_UID,
             generation_uid=GENERATION_UID,
-            recreate=False,
+            recreate=True,
         )
     assert wrong_scope.value.code == "canonical_collision"
     assert image_store.bind_calls == []

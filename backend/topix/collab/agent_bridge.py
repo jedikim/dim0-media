@@ -153,7 +153,7 @@ class AgentBoardBridge:
         note: Note | None,
         link: Link | None,
     ) -> None:
-        """Persist missing deterministic result objects without broadcasting early."""
+        """Persist prepared or scope-repaired result objects without early broadcast."""
         if note is not None:
             if note.graph_uid is None:
                 note.graph_uid = board_id

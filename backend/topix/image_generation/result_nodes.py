@@ -63,11 +63,15 @@ def canonical_result_edge_uid(generation_uid: str) -> str:
     ).hex
 
 
-def canonical_result_batch_uid(generation_uid: str, materialized_at: str) -> str:
-    """Derive one stable batch ID for a persisted result materialization."""
+def canonical_result_batch_uid(
+    generation_uid: str,
+    node_materialized_at: str,
+    edge_materialized_at: str,
+) -> str:
+    """Derive one stable batch ID from both persisted result objects."""
     return uuid5(
         GENERATED_IMAGE_RESULT_NAMESPACE,
-        f"{RESULT_BATCH_NAME_PREFIX}{generation_uid}:{materialized_at}",
+        f"{RESULT_BATCH_NAME_PREFIX}{generation_uid}:{node_materialized_at}:{edge_materialized_at}",
     ).hex
 
 
@@ -186,10 +190,30 @@ def _validate_result_edge(
     node_uid: str,
 ) -> None:
     """Fail closed when a canonical edge ID has different endpoints or scope."""
+    _validate_result_edge_identity(
+        link,
+        record=record,
+        generator_uid=generator_uid,
+        node_uid=node_uid,
+    )
+    if link.parent_id != generator_parent_id:
+        raise ImageResultNodeError(
+            "canonical_collision",
+            "The canonical generated image edge conflicts with existing board data.",
+        )
+
+
+def _validate_result_edge_identity(
+    link: Link,
+    *,
+    record: ImageGenerationOutputRecord,
+    generator_uid: str,
+    node_uid: str,
+) -> None:
+    """Validate immutable edge identity independently from folder scope."""
     if (
         link.deleted_at is not None
         or link.graph_uid != record.board_uid
-        or link.parent_id != generator_parent_id
         or link.source != generator_uid
         or link.target != node_uid
         or getattr(link.properties, "image_reference", None) is not None
@@ -239,34 +263,11 @@ class ImageResultNodeService:
             return self._outcome(record, node_uid, created=False, recreated=False)
 
         generator = await self._require_generator(record)
-        existing_node, existing_edge = await self._read_result_objects(
-            node_uid=node_uid,
-            edge_uid=edge_uid,
-        )
-        if existing_node is not None and existing_node.deleted_at is None:
-            _validate_result_node(existing_node, record=record, generator_uid=generator.id)
-        if existing_edge is not None and existing_edge.deleted_at is None:
-            _validate_result_edge(
-                existing_edge,
-                record=record,
-                generator_uid=generator.id,
-                generator_parent_id=generator.parent_id,
-                node_uid=node_uid,
-            )
-
-        missing_node = existing_node is None or existing_node.deleted_at is not None
-        missing_edge = existing_edge is None or existing_edge.deleted_at is not None
-        expected_node = _build_result_note(record=record, generator=generator, node_uid=node_uid)
-        expected_edge = _build_result_edge(
+        await self._prepare_result_objects(
             record=record,
             generator=generator,
             node_uid=node_uid,
             edge_uid=edge_uid,
-        )
-        await self._bridge.persist_result_objects(
-            board_id=board_uid,
-            note=expected_node if missing_node else None,
-            link=expected_edge if missing_edge else None,
         )
 
         delivery = None
@@ -295,26 +296,18 @@ class ImageResultNodeService:
                         node_uid=node_uid,
                         edge_uid=edge_uid,
                     )
-                    if durable_node is None or durable_node.deleted_at is not None or durable_edge is None or durable_edge.deleted_at is not None:
-                        raise ImageResultNodeError(
-                            "canvas_write_incomplete",
-                            "The generated image node could not be stored completely.",
-                        )
-                    _validate_result_node(
+                    self._validate_prepared_result(
                         durable_node,
-                        record=locked_record,
-                        generator_uid=durable_generator.id,
-                    )
-                    _validate_result_edge(
                         durable_edge,
                         record=locked_record,
-                        generator_uid=durable_generator.id,
-                        generator_parent_id=durable_generator.parent_id,
+                        generator=durable_generator,
                         node_uid=node_uid,
                     )
+                    assert durable_node is not None and durable_edge is not None
                     batch_uid = canonical_result_batch_uid(
                         generation_uid,
                         durable_node.created_at,
+                        durable_edge.created_at,
                     )
                     delivery = await self._bridge.ensure_result_batch(
                         conn,
@@ -334,7 +327,7 @@ class ImageResultNodeService:
                             "output_binding_conflict",
                             "The generated image node could not be linked to its generation.",
                         )
-                    created = missing_node or missing_edge
+                    created = delivery is not None
                     outcome = self._outcome(
                         locked_record,
                         node_uid,
@@ -344,6 +337,104 @@ class ImageResultNodeService:
             await self._bridge.deliver_result_batch(room=room, delivery=delivery)
         assert outcome is not None
         return outcome
+
+    async def _prepare_result_objects(
+        self,
+        *,
+        record: ImageGenerationOutputRecord,
+        generator: Note,
+        node_uid: str,
+        edge_uid: str,
+    ) -> None:
+        """Prepare missing objects and repair only recoverable unbound folder drift."""
+        existing_node, existing_edge = await self._read_result_objects(
+            node_uid=node_uid,
+            edge_uid=edge_uid,
+        )
+        if existing_node is not None and existing_node.deleted_at is None:
+            _validate_result_node(existing_node, record=record, generator_uid=generator.id)
+
+        repair_node = None
+        repair_edge = None
+        if existing_edge is not None and existing_edge.deleted_at is None:
+            _validate_result_edge_identity(
+                existing_edge,
+                record=record,
+                generator_uid=generator.id,
+                node_uid=node_uid,
+            )
+            if existing_edge.parent_id != generator.parent_id:
+                if record.output_node_uid is not None:
+                    _validate_result_edge(
+                        existing_edge,
+                        record=record,
+                        generator_uid=generator.id,
+                        generator_parent_id=generator.parent_id,
+                        node_uid=node_uid,
+                    )
+                repair_edge = existing_edge.model_copy(
+                    update={"parent_id": generator.parent_id},
+                )
+
+        if (
+            record.output_node_uid is None
+            and existing_node is not None
+            and existing_node.deleted_at is None
+            and existing_node.parent_id != generator.parent_id
+        ):
+            repair_node = existing_node.model_copy(
+                update={"parent_id": generator.parent_id},
+            )
+
+        missing_node = existing_node is None or existing_node.deleted_at is not None
+        missing_edge = existing_edge is None or existing_edge.deleted_at is not None
+        expected_node = _build_result_note(record=record, generator=generator, node_uid=node_uid)
+        expected_edge = _build_result_edge(
+            record=record,
+            generator=generator,
+            node_uid=node_uid,
+            edge_uid=edge_uid,
+        )
+        await self._bridge.persist_result_objects(
+            board_id=record.board_uid,
+            note=expected_node if missing_node else repair_node,
+            link=expected_edge if missing_edge else repair_edge,
+        )
+
+    @staticmethod
+    def _validate_prepared_result(
+        node: Note | None,
+        edge: Link | None,
+        *,
+        record: ImageGenerationOutputRecord,
+        generator: Note,
+        node_uid: str,
+    ) -> None:
+        """Validate the final Qdrant pair and surface recoverable scope races."""
+        if node is None or node.deleted_at is not None or edge is None or edge.deleted_at is not None:
+            raise ImageResultNodeError(
+                "canvas_write_incomplete",
+                "The generated image node could not be stored completely.",
+            )
+        _validate_result_node(node, record=record, generator_uid=generator.id)
+        _validate_result_edge_identity(
+            edge,
+            record=record,
+            generator_uid=generator.id,
+            node_uid=node_uid,
+        )
+        if record.output_node_uid is None and (node.parent_id != generator.parent_id or edge.parent_id != generator.parent_id):
+            raise ImageResultNodeError(
+                "materialization_raced",
+                "The image result changed while it was being prepared. Please retry.",
+            )
+        _validate_result_edge(
+            edge,
+            record=record,
+            generator_uid=generator.id,
+            generator_parent_id=generator.parent_id,
+            node_uid=node_uid,
+        )
 
     async def _require_generator(self, record: ImageGenerationOutputRecord) -> Note:
         """Return the live same-board generator or fail closed."""
