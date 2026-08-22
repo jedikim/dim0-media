@@ -16,6 +16,7 @@ from topix.image_generation.models import (
     ImageAssetRecord,
     ImageAssetResolutionError,
     ImageAssetSource,
+    ImageGenerationOutputRecord,
     ImageGenerationRecord,
     ImageProviderError,
     InvalidGenerationTransition,
@@ -24,6 +25,37 @@ from topix.image_generation.models import (
 )
 
 _IMAGE_RECONCILE_ADVISORY_LOCK = 4_909_157_410_015_203_302
+_OUTPUT_NODE_ADVISORY_SEED = 704_568_223
+
+
+async def try_acquire_image_generation_output_writer(
+    conn: asyncpg.Connection,
+    *,
+    generation_uid: str,
+) -> bool:
+    """Try to own one generation without parking a pooled connection."""
+    return bool(
+        await conn.fetchval(
+            "SELECT pg_try_advisory_lock(hashtextextended($1, $2))",
+            generation_uid,
+            _OUTPUT_NODE_ADVISORY_SEED,
+        )
+    )
+
+
+async def release_image_generation_output_writer(
+    conn: asyncpg.Connection,
+    *,
+    generation_uid: str,
+) -> bool:
+    """Release a generation writer lock before its connection returns to the pool."""
+    return bool(
+        await conn.fetchval(
+            "SELECT pg_advisory_unlock(hashtextextended($1, $2))",
+            generation_uid,
+            _OUTPUT_NODE_ADVISORY_SEED,
+        )
+    )
 
 
 async def create_image_asset(conn: asyncpg.Connection, asset: ImageAssetCreate) -> None:
@@ -108,13 +140,83 @@ async def get_image_generation(
 ) -> ImageGenerationRecord | None:
     """Return safe board-scoped generation state for polling."""
     row = await conn.fetchrow(
-        "SELECT uid, board_uid, model_id, status, output_asset_uid, error_code, "
+        "SELECT uid, board_uid, model_id, status, generator_node_uid, "
+        "output_node_uid, output_asset_uid, error_code, "
         "error_message, started_at, completed_at "
         "FROM image_generation_run WHERE uid = $1 AND board_uid = $2",
         generation_uid,
         board_uid,
     )
     return ImageGenerationRecord.model_validate(dict(row)) if row is not None else None
+
+
+async def lock_image_generation_output(
+    conn: asyncpg.Connection,
+    *,
+    board_uid: str,
+    generation_uid: str,
+) -> ImageGenerationOutputRecord | None:
+    """Lock and return one generation's authoritative output association."""
+    await conn.execute(
+        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
+        generation_uid,
+        _OUTPUT_NODE_ADVISORY_SEED,
+    )
+    row = await conn.fetchrow(
+        "SELECT run.uid AS generation_uid, run.board_uid, run.status, "
+        "run.generator_node_uid, run.output_node_uid, run.output_asset_uid, "
+        "asset.mime_type AS output_mime_type, asset.width AS output_width, "
+        "asset.height AS output_height "
+        "FROM image_generation_run AS run "
+        "LEFT JOIN image_asset AS asset ON asset.uid = run.output_asset_uid "
+        "AND asset.board_uid = run.board_uid "
+        "WHERE run.uid = $1 AND run.board_uid = $2 FOR UPDATE OF run",
+        generation_uid,
+        board_uid,
+    )
+    return ImageGenerationOutputRecord.model_validate(dict(row)) if row is not None else None
+
+
+async def get_image_generation_output(
+    conn: asyncpg.Connection,
+    *,
+    board_uid: str,
+    generation_uid: str,
+) -> ImageGenerationOutputRecord | None:
+    """Read one generation output association without taking the writer lock."""
+    row = await conn.fetchrow(
+        "SELECT run.uid AS generation_uid, run.board_uid, run.status, "
+        "run.generator_node_uid, run.output_node_uid, run.output_asset_uid, "
+        "asset.mime_type AS output_mime_type, asset.width AS output_width, "
+        "asset.height AS output_height "
+        "FROM image_generation_run AS run "
+        "LEFT JOIN image_asset AS asset ON asset.uid = run.output_asset_uid "
+        "AND asset.board_uid = run.board_uid "
+        "WHERE run.uid = $1 AND run.board_uid = $2",
+        generation_uid,
+        board_uid,
+    )
+    return ImageGenerationOutputRecord.model_validate(dict(row)) if row is not None else None
+
+
+async def bind_image_generation_output_node(
+    conn: asyncpg.Connection,
+    *,
+    board_uid: str,
+    generation_uid: str,
+    output_node_uid: str,
+) -> bool:
+    """Bind a canonical node only after its node and edge are durable."""
+    bound = await conn.fetchval(
+        "UPDATE image_generation_run SET output_node_uid = $3 "
+        "WHERE uid = $1 AND board_uid = $2 AND status = 'succeeded' "
+        "AND output_asset_uid IS NOT NULL "
+        "AND (output_node_uid IS NULL OR output_node_uid = $3) RETURNING uid",
+        generation_uid,
+        board_uid,
+        output_node_uid,
+    )
+    return bound is not None
 
 
 async def get_generation_storage_state(

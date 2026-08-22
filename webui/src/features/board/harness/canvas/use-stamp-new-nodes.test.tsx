@@ -58,9 +58,9 @@ describe("useStampNewNodes — autoFit normalization", () => {
   })
 
 
-  const mount = (store: CanvasStore): void => {
+  const mount = (store: CanvasStore, rootId: string | null = null): void => {
     const Probe = (): null => {
-      useStampNewNodes(store, BOARD_ID, null)
+      useStampNewNodes(store, BOARD_ID, rootId)
       return null
     }
     act(() => root.render(<Probe />))
@@ -131,5 +131,59 @@ describe("useStampNewNodes — autoFit normalization", () => {
     }
     expect(same.properties.imageAssetUid.value).toBe("a".repeat(32))
     expect(foreign.properties.imageAssetUid.value).toBe("")
+  })
+
+
+  it("preserves same-board result clones and clears cross-board associations", () => {
+    const store = createCanvasStore()
+    mount(store)
+    const association = {
+      generatedImageMarker: { type: "keyword", value: "immutable-result" },
+      imageAssetUid: { type: "keyword", value: "a".repeat(32) },
+      generatedImageGenerationUid: { type: "keyword", value: "g".repeat(32) },
+      generatedImageGeneratorNodeUid: { type: "keyword", value: "n".repeat(32) },
+    }
+    addNode(store, "same-result", "generated-image", { properties: association })
+    addNode(store, "foreign-result", "generated-image", {
+      graphUid: "other-board",
+      properties: association,
+    })
+
+    const same = store.getNode(asNodeId("same-result"))?.data as {
+      properties: typeof association
+    }
+    const foreign = store.getNode(asNodeId("foreign-result"))?.data as {
+      properties: typeof association
+    }
+    expect(same.properties).toEqual(association)
+    expect(foreign.properties.generatedImageMarker).toEqual(association.generatedImageMarker)
+    expect(foreign.properties.imageAssetUid.value).toBe("")
+    expect(foreign.properties.generatedImageGenerationUid.value).toBe("")
+    expect(foreign.properties.generatedImageGeneratorNodeUid.value).toBe("")
+  })
+
+
+  it("preserves asset associations when moving between folders on the same board", () => {
+    const store = createCanvasStore()
+    mount(store, "target-folder")
+    const association = {
+      generatedImageMarker: { type: "keyword", value: "immutable-result" },
+      imageAssetUid: { type: "keyword", value: "a".repeat(32) },
+      generatedImageGenerationUid: { type: "keyword", value: "g".repeat(32) },
+      generatedImageGeneratorNodeUid: { type: "keyword", value: "n".repeat(32) },
+    }
+    addNode(store, "same-board-folder-result", "generated-image", {
+      parentId: "source-folder",
+      properties: association,
+    })
+
+    const data = store.getNode(asNodeId("same-board-folder-result"))?.data as {
+      graphUid: string
+      parentId: string
+      properties: typeof association
+    }
+    expect(data.graphUid).toBe(BOARD_ID)
+    expect(data.parentId).toBe("target-folder")
+    expect(data.properties).toEqual(association)
   })
 })

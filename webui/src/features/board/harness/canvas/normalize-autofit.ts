@@ -5,7 +5,7 @@ import { AUTOFIT_DISABLED_TYPES } from "../convert/note-to-node"
 /**
  * Force `style.autoFit = false` on incoming custom-type nodes whose lib
  * grow-to-fit must stay off (sheet, code-sandbox, widget, mini-app,
- * folder, document — they render only a preview of `node.content`).
+ * generated-image, folder, document — they render bounded previews).
  *
  * Defense-in-depth mirroring the server's `note_to_wire` guard: an
  * agent-created sheet from an un-upgraded backend, or a replayed

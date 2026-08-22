@@ -69,7 +69,15 @@ describe("normalizeBatchAutoFit", () => {
 
 
   it("covers every autofit-disabled custom type on node.add", () => {
-    for (const type of ["sheet", "code-sandbox", "widget", "mini-app", "folder", "document"]) {
+    for (const type of [
+      "sheet",
+      "code-sandbox",
+      "widget",
+      "mini-app",
+      "generated-image",
+      "folder",
+      "document",
+    ]) {
       const batch = remoteBatch([addOp(type)])
       normalizeBatchAutoFit(batch, store)
       const op = batch.ops[0]

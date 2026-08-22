@@ -1,6 +1,7 @@
 import { codeSandboxDef } from "./code-sandbox"
 import { documentDef } from "./document"
 import { folderDef } from "./folder"
+import { generatedImageDef } from "./generated-image"
 import { imageGeneratorDef } from "./image-generator"
 import { miniAppDef } from "./mini-app"
 import { sheetDef } from "./sheet"
@@ -14,6 +15,7 @@ import type { BoardNodeTypeDef } from "../store/create-board-store"
  */
 export const boardNodeTypes: ReadonlyArray<BoardNodeTypeDef> = [
   folderDef,
+  generatedImageDef,
   imageGeneratorDef,
   documentDef,
   widgetDef,
@@ -26,6 +28,7 @@ export const boardNodeTypes: ReadonlyArray<BoardNodeTypeDef> = [
 export { codeSandboxDef, CodeSandboxView } from "./code-sandbox"
 export { documentDef, DocumentView } from "./document"
 export { folderDef, FolderView } from "./folder"
+export { generatedImageDef, GeneratedImageView } from "./generated-image"
 export { imageGeneratorDef, ImageGeneratorView } from "./image-generator"
 export { miniAppDef, MiniAppView } from "./mini-app"
 export { sheetDef, SheetView } from "./sheet"

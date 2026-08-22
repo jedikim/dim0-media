@@ -5,9 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 const { fetchImageAssetBlob } = vi.hoisted(() => ({ fetchImageAssetBlob: vi.fn() }))
 
-vi.mock("../api/image-generation", () => ({ fetchImageAssetBlob }))
+vi.mock("../api/image-generation", () => ({
+  fetchImageAssetBlob,
+  imageGenerationStatusCode: (error: unknown) => {
+    const match = error instanceof Error ? /^(\d{3})\b/.exec(error.message) : null
+    return match ? Number(match[1]) : null
+  },
+}))
 
-import { useAuthedImage } from "./use-authed-image"
+import {
+  AUTHED_IMAGE_TOTAL_DEADLINE_MS,
+  useAuthedImage,
+} from "./use-authed-image"
 
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean })
@@ -43,6 +52,7 @@ describe("useAuthedImage", () => {
     container.remove()
     delete (URL as unknown as { createObjectURL?: unknown }).createObjectURL
     delete (URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL
+    vi.useRealTimers()
   })
 
 
@@ -82,5 +92,95 @@ describe("useAuthedImage", () => {
     render(null, null)
     expect(fetchImageAssetBlob).not.toHaveBeenCalled()
     expect(latest).toEqual({ url: null, failed: false })
+  })
+
+
+  it("retries transient transport failures and stops after success", async () => {
+    vi.useFakeTimers()
+    createObjectURL.mockReturnValue("blob:retried")
+    fetchImageAssetBlob
+      .mockRejectedValueOnce(new TypeError("network"))
+      .mockResolvedValueOnce(new Blob(["ok"], { type: "image/png" }))
+
+    render("board-1", "asset-1")
+    await act(async () => { await Promise.resolve() })
+    expect(fetchImageAssetBlob).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250)
+    })
+
+    expect(fetchImageAssetBlob).toHaveBeenCalledTimes(2)
+    expect(latest).toEqual({ url: "blob:retried", failed: false })
+  })
+
+
+  it("does not retry determinate 4xx failures", async () => {
+    fetchImageAssetBlob.mockRejectedValue(new Error("404 - unavailable"))
+
+    render("board-1", "asset-1")
+    await act(async () => { await Promise.resolve() })
+
+    expect(fetchImageAssetBlob).toHaveBeenCalledTimes(1)
+    expect(latest).toEqual({ url: null, failed: true })
+  })
+
+
+  it("exhausts at three transient attempts", async () => {
+    vi.useFakeTimers()
+    fetchImageAssetBlob.mockRejectedValue(new Error("503 - unavailable"))
+
+    render("board-1", "asset-1")
+    await act(async () => { await Promise.resolve() })
+    await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(500) })
+
+    expect(fetchImageAssetBlob).toHaveBeenCalledTimes(3)
+    expect(latest).toEqual({ url: null, failed: true })
+  })
+
+
+  it("fails and aborts never-settling blob requests within the total deadline", async () => {
+    vi.useFakeTimers()
+    const signals: AbortSignal[] = []
+    fetchImageAssetBlob.mockImplementation((_graphId, _assetUid, signal) => {
+      signals.push(signal)
+      return new Promise(() => undefined)
+    })
+
+    render("board-1", "asset-hanging")
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(AUTHED_IMAGE_TOTAL_DEADLINE_MS)
+    })
+
+    expect(fetchImageAssetBlob).toHaveBeenCalledTimes(3)
+    expect(signals.every((signal) => signal.aborted)).toBe(true)
+    expect(latest).toEqual({ url: null, failed: true })
+  })
+
+
+  it("aborts an old asset and ignores its late response", async () => {
+    let resolveFirst: ((blob: Blob) => void) | null = null
+    let firstSignal: AbortSignal | undefined
+    fetchImageAssetBlob.mockImplementation((_graphId, assetUid, signal) => {
+      if (assetUid === "asset-1") {
+        firstSignal = signal
+        return new Promise<Blob>((resolve) => { resolveFirst = resolve })
+      }
+      return Promise.resolve(new Blob(["second"], { type: "image/png" }))
+    })
+    createObjectURL.mockReturnValue("blob:second")
+
+    render("board-1", "asset-1")
+    render("board-1", "asset-2")
+    await act(async () => { await Promise.resolve() })
+    expect(firstSignal?.aborted).toBe(true)
+    expect(latest?.url).toBe("blob:second")
+
+    await act(async () => {
+      resolveFirst?.(new Blob(["late"], { type: "image/png" }))
+      await Promise.resolve()
+    })
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    expect(latest?.url).toBe("blob:second")
   })
 })

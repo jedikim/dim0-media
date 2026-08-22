@@ -29,6 +29,12 @@ export const nodeToNote = (node: Node): Note => {
     url: extraProperties.url ?? { type: "url" },
     imageUrl: extraProperties.imageUrl ?? { type: "image" },
     imageAssetUid: extraProperties.imageAssetUid,
+    generatedImageMarker: extraProperties.generatedImageMarker
+      ?? (node.type === "generated-image"
+        ? { type: "keyword", value: "immutable-result" }
+        : undefined),
+    generatedImageGenerationUid: extraProperties.generatedImageGenerationUid,
+    generatedImageGeneratorNodeUid: extraProperties.generatedImageGeneratorNodeUid,
     iconData: extraProperties.iconData ?? { type: "icon" },
     slideName: extraProperties.slideName,
     slideNumber: extraProperties.slideNumber,

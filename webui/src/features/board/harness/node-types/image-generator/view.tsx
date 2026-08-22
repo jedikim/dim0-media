@@ -46,6 +46,8 @@ import {
   useImageGeneration,
   type PersistImageGenerationPatch,
 } from "./use-image-generation"
+import { useImageGenerationOutputNode } from "./use-output-node"
+import { readGeneratedImageAssociation } from "../generated-image/node-state"
 
 
 const SELECT_CLASS =
@@ -216,29 +218,55 @@ function GeneratorReferenceThumbnail({
     const requestedUid = generationUid
     const deadline = Date.now() + REFERENCE_THUMBNAIL_POLL_CEILING_MS
     let timer: ReturnType<typeof setTimeout> | null = null
+    let deadlineTimer: ReturnType<typeof setTimeout> | null = null
     let delay = 0
     let alive = true
 
+    const clearPollingTimers = (): void => {
+      if (timer) clearTimeout(timer)
+      if (deadlineTimer) clearTimeout(deadlineTimer)
+      timer = null
+      deadlineTimer = null
+    }
+
+    deadlineTimer = setTimeout(() => {
+      if (!alive) return
+      clearPollingTimers()
+      controller.abort()
+    }, REFERENCE_THUMBNAIL_POLL_CEILING_MS)
+
     const scheduleNext = (): void => {
-      if (!alive || controller.signal.aborted || Date.now() >= deadline) return
+      const remaining = deadline - Date.now()
+      if (!alive || controller.signal.aborted || remaining <= 0) {
+        controller.abort()
+        return
+      }
       delay = delay === 0
         ? REFERENCE_THUMBNAIL_FIRST_POLL_MS
         : Math.min(delay * 1.5, REFERENCE_THUMBNAIL_MAX_POLL_MS)
-      timer = setTimeout(() => void poll(), delay)
+      timer = setTimeout(() => void poll(), Math.min(delay, remaining))
     }
 
     const poll = async (): Promise<void> => {
+      if (!alive || controller.signal.aborted || Date.now() >= deadline) {
+        controller.abort()
+        return
+      }
       try {
         const generation = await getImageGeneration(graphId, requestedUid, controller.signal)
         if (!alive || controller.signal.aborted || generationUidRef.current !== requestedUid) return
         if (generation.status === "succeeded" && generation.output_asset_uid) {
+          clearPollingTimers()
           setResolved({
             generationUid: requestedUid,
             assetUid: generation.output_asset_uid,
           })
           return
         }
-        if (generation.status !== "started" && generation.status !== "retryable") return
+        if (generation.status !== "started" && generation.status !== "retryable") {
+          clearPollingTimers()
+          return
+        }
         scheduleNext()
       } catch (error) {
         if (
@@ -247,12 +275,14 @@ function GeneratorReferenceThumbnail({
           || (error instanceof Error && error.name === "AbortError")
         ) return
         const status = imageGenerationStatusCode(error)
-        if (
+        const transient = (
           error instanceof TypeError
           || status === 408
           || status === 429
           || (status !== null && status >= 500)
-        ) scheduleNext()
+        )
+        if (transient) scheduleNext()
+        else clearPollingTimers()
         // Determinate client failures keep the source as a placeholder.
       }
     }
@@ -261,7 +291,7 @@ function GeneratorReferenceThumbnail({
     return () => {
       alive = false
       controller.abort()
-      if (timer) clearTimeout(timer)
+      clearPollingTimers()
     }
   }, [generationUid, graphId])
   const assetUid = resolved?.generationUid === generationUid ? resolved.assetUid : null
@@ -275,8 +305,12 @@ function GeneratorReferenceThumbnail({
 /** Render one live canvas source as a compact reference thumbnail. */
 function ReferenceThumbnail({ graphId, sourceNodeId }: { graphId: string; sourceNodeId: NodeId }) {
   const source = useNode(sourceNodeId)
+  const data = (source?.data ?? {}) as NoteNodeData & { src?: unknown }
+  const generatedAssociation = source?.type === "generated-image"
+    ? readGeneratedImageAssociation(data.properties ?? {})
+    : null
+  const { url: generatedUrl } = useAuthedImage(graphId, generatedAssociation?.assetUid ?? null)
   if (!source) return <ImageStackIcon className="size-4 text-muted-foreground" />
-  const data = (source.data ?? {}) as NoteNodeData & { src?: unknown }
   if (source.type === "image" && typeof data.src === "string") {
     return <img className="size-full object-cover" src={data.src} alt="참조 이미지" />
   }
@@ -287,6 +321,9 @@ function ReferenceThumbnail({ graphId, sourceNodeId }: { graphId: string; source
         generationUid={readKeywordProperty(data.properties?.activeGenerationUid)}
       />
     )
+  }
+  if (source.type === "generated-image" && generatedUrl) {
+    return <img className="size-full object-cover" src={generatedUrl} alt="참조 생성 결과" />
   }
   return <ImageStackIcon className="size-4 text-muted-foreground" />
 }
@@ -368,6 +405,13 @@ function SyncedImageGeneratorCard({
     resolveReferenceAssets,
     getCurrentReferenceSourceNodeUids,
   })
+  const outputNode = useImageGenerationOutputNode({
+    graphId,
+    generation: generation.state,
+    canEdit,
+    store,
+    refreshStatus: generation.refreshStatus,
+  })
 
   const [models, setModels] = useState<ImageModel[]>([])
   const [modelsLoading, setModelsLoading] = useState(true)
@@ -397,6 +441,7 @@ function SyncedImageGeneratorCard({
     || generation.phase === "starting"
     || generation.phase === "running"
     || generation.phase === "stalled"
+    || outputNode.recreating
   const inputsLocked = !canEdit || busy || generation.hasPendingRequest
   useImageReferenceTargetLock(id, inputsLocked)
 
@@ -448,7 +493,7 @@ function SyncedImageGeneratorCard({
 
   const { url: previewUrl, failed: previewFailed } = useAuthedImage(
     graphId,
-    generation.state?.output_asset_uid ?? null,
+    outputNode.outputNodeUid ? null : generation.state?.output_asset_uid ?? null,
   )
   const canGenerate = canEdit
     && !modelsLoading
@@ -603,7 +648,33 @@ function SyncedImageGeneratorCard({
       </div>
 
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted/30">
-        {previewUrl ? (
+        {outputNode.outputNodeUid ? (
+          <div className="flex flex-col items-center gap-2 px-4 text-center text-xs text-muted-foreground">
+            <span>
+              {outputNode.nodePresent
+                ? "결과가 캔버스에 추가되었습니다."
+                : "결과 노드가 삭제되었거나 아직 동기화되지 않았습니다."}
+            </span>
+            {outputNode.nodePresent ? (
+              <button
+                type="button"
+                className="rounded-md border border-border px-3 py-1.5 text-foreground"
+                onClick={outputNode.selectResult}
+              >
+                결과 선택
+              </button>
+            ) : canEdit ? (
+              <button
+                type="button"
+                className="rounded-md border border-border px-3 py-1.5 text-foreground disabled:opacity-50"
+                disabled={outputNode.recreating}
+                onClick={() => void outputNode.recreate()}
+              >
+                {outputNode.recreating ? "추가 중…" : "결과 노드 다시 추가"}
+              </button>
+            ) : null}
+          </div>
+        ) : previewUrl ? (
           <img className="h-full w-full object-contain" src={previewUrl} alt="생성된 이미지" />
         ) : (
           <span className="px-4 text-center text-xs text-muted-foreground">
@@ -612,12 +683,12 @@ function SyncedImageGeneratorCard({
         )}
       </div>
 
-      {(modelsError || storedModelUnavailable || generation.error) && (
+      {(modelsError || storedModelUnavailable || generation.error || outputNode.error) && (
         <p role="alert" className="text-xs text-destructive">
           {modelsError
             ?? (storedModelUnavailable
               ? "저장된 모델을 사용할 수 없습니다. 다른 모델을 선택해 주세요."
-              : generation.error)}
+              : generation.error ?? outputNode.error)}
         </p>
       )}
       {model && references.length > model.max_reference_images && (

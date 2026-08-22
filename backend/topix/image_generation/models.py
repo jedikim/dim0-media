@@ -209,11 +209,27 @@ class ImageGenerationRecord(FrozenModel):
     board_uid: str = Field(min_length=1)
     model_id: str = Field(min_length=1)
     status: GenerationStatus
+    generator_node_uid: str | None = None
+    output_node_uid: str | None = None
     output_asset_uid: str | None = None
     error_code: str | None = None
     error_message: str | None = None
     started_at: datetime
     completed_at: datetime | None = None
+
+
+class ImageGenerationOutputRecord(FrozenModel):
+    """Authoritative generation and asset metadata used for canvas output."""
+
+    generation_uid: str = Field(min_length=1)
+    board_uid: str = Field(min_length=1)
+    status: GenerationStatus
+    generator_node_uid: str | None = None
+    output_node_uid: str | None = None
+    output_asset_uid: str | None = None
+    output_mime_type: RasterImageMimeType | None = None
+    output_width: int | None = Field(default=None, gt=0)
+    output_height: int | None = Field(default=None, gt=0)
 
 
 class GenerationStorageState(FrozenModel):

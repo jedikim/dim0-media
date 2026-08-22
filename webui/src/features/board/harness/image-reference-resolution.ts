@@ -4,6 +4,7 @@ import { getImageGeneration } from "@/features/board/api/image-generation"
 import type { NoteNodeData } from "./convert/note-to-node"
 import {
   IMAGE_REFERENCE_CHANGED_MESSAGE,
+  IMAGE_REFERENCE_BOARD_UNAVAILABLE_MESSAGE,
   ImageReferenceMaterializationError,
   ImageReferenceVersionChangedError,
   isImageAssetUid,
@@ -12,6 +13,7 @@ import {
   type UploadImageAsset,
 } from "./image-reference-assets"
 import { readKeywordProperty } from "./node-types/image-generator/node-state"
+import { readGeneratedImageAssociation } from "./node-types/generated-image/node-state"
 
 
 /** Marker for fixed client-side reference resolution messages. */
@@ -31,6 +33,12 @@ type ImageReferenceSourceDescriptor = {
       imageAssetUid: string | null
       src: string | null
     }
+  | {
+      nodeType: "generated-image"
+      generationUid: string
+      generatorNodeUid: string
+      imageAssetUid: string
+    }
 )
 
 
@@ -49,7 +57,7 @@ function captureReferenceSourceDescriptors(args: {
     const node = store.getNode(asNodeId(sourceNodeUid))
     const data = (node?.data ?? {}) as NoteNodeData & { src?: unknown }
     if (!node || data.graphUid !== graphId) {
-      throw new ImageReferenceResolutionError("참조 노드를 이 보드에서 사용할 수 없습니다.")
+      throw new ImageReferenceResolutionError(IMAGE_REFERENCE_BOARD_UNAVAILABLE_MESSAGE)
     }
     if (node.type === "image-generator") {
       const activeGenerationUid = readKeywordProperty(data.properties?.activeGenerationUid)
@@ -61,6 +69,20 @@ function captureReferenceSourceDescriptors(args: {
         graphUid: graphId,
         nodeType: "image-generator" as const,
         activeGenerationUid,
+      }
+    }
+    if (node.type === "generated-image") {
+      const association = readGeneratedImageAssociation(data.properties ?? {})
+      if (!association) {
+        throw new ImageReferenceResolutionError("이 생성 이미지 결과를 참조로 사용할 수 없습니다.")
+      }
+      return {
+        sourceNodeUid,
+        graphUid: graphId,
+        nodeType: "generated-image" as const,
+        generationUid: association.generationUid,
+        generatorNodeUid: association.generatorNodeUid,
+        imageAssetUid: association.assetUid,
       }
     }
     if (node.type !== "image") {
@@ -120,6 +142,18 @@ function assertReferenceSourcesUnchanged(args: {
       continue
     }
 
+    if (descriptor.nodeType === "generated-image") {
+      const association = readGeneratedImageAssociation(data.properties ?? {})
+      if (
+        !association
+        || association.assetUid !== descriptor.imageAssetUid
+        || association.generationUid !== descriptor.generationUid
+        || association.generatorNodeUid !== descriptor.generatorNodeUid
+        || assetUids[index] !== descriptor.imageAssetUid
+      ) changed()
+      continue
+    }
+
     const currentSrc = typeof data.src === "string" ? data.src : null
     const currentAssetUid = readImageAssetUid(data.properties?.imageAssetUid)
     const resolvedAssetUid = assetUids[index]
@@ -158,6 +192,10 @@ export async function resolveReferenceAssetUids(args: {
     for (const descriptor of descriptors) {
       signal?.throwIfAborted()
       const nodeId = asNodeId(descriptor.sourceNodeUid)
+      if (descriptor.nodeType === "generated-image") {
+        assetUids.push(descriptor.imageAssetUid)
+        continue
+      }
       if (descriptor.nodeType === "image") {
         if (descriptor.imageAssetUid) {
           assetUids.push(descriptor.imageAssetUid)

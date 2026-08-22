@@ -92,11 +92,30 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+      qdrant:
+        image: qdrant/qdrant:v1.17.0
+        ports:
+          - 6333:6333
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
 
     env:
       DIM0_IMAGE_GENERATION_DB_TEST: 1
+      DIM0_IMAGE_GENERATION_QDRANT_TEST: 1
+      DIM0_IMAGE_GENERATION_REDIS_TEST: 1
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
+      QDRANT_HOST: localhost
+      QDRANT_PORT: 6333
+      REDIS_HOST: localhost
+      REDIS_PORT: 6379
 
     steps:
       - name: Check out repository

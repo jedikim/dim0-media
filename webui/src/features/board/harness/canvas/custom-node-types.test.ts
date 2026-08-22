@@ -23,6 +23,7 @@ const EXPECTED_CUSTOM_TYPES = [
   "widget",
   "mini-app",
   "image-generator",
+  "generated-image",
   "code-sandbox",
   "sheet",
   // No text concept — dbl-click must not open the lib's inline editor.

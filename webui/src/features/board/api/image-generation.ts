@@ -45,10 +45,20 @@ export type GenerationState = {
   model_id: string
   started_at: string
   completed_at: string | null
+  output_node_uid: string | null
   output_asset_uid: string | null
   output_content_url: string | null
   error_code: string | null
   error_message: string | null
+}
+
+
+export type GenerationOutputNode = {
+  generation_uid: string
+  output_node_uid: string
+  output_asset_uid: string
+  created: boolean
+  recreated: boolean
 }
 
 
@@ -77,6 +87,13 @@ const REFERENCE_ERROR_MESSAGES: Readonly<Record<string, string>> = {
   reference_encoded_size_exceeded: "참조 이미지 전체 요청 크기가 제한을 초과했습니다.",
   reference_limit_exceeded: "선택한 모델의 참조 이미지 개수 제한을 초과했습니다.",
   image_to_image_unsupported: "선택한 모델은 참조 이미지 생성을 지원하지 않습니다.",
+  generation_not_succeeded: "완료된 이미지 생성만 결과 노드로 추가할 수 있습니다.",
+  output_asset_unavailable: "생성된 이미지 자산을 사용할 수 없습니다.",
+  generator_unavailable: "원본 이미지 생성 노드를 찾을 수 없습니다.",
+  materialization_raced: "결과 노드 준비 작업이 겹쳤습니다. 잠시 후 다시 시도해 주세요.",
+  canonical_collision: "결과 노드 식별자가 기존 보드 데이터와 충돌합니다.",
+  canvas_write_incomplete: "결과 노드를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+  output_binding_conflict: "결과 노드를 생성 기록에 연결하지 못했습니다.",
 }
 
 
@@ -216,6 +233,22 @@ export function getImageGeneration(
 ): Promise<GenerationState> {
   return apiFetch<GenerationState>({
     path: `/boards/${encodeURIComponent(graphId)}/image-generations/${encodeURIComponent(generationUid)}`,
+    signal,
+  })
+}
+
+
+/** Ensure or explicitly restore one generation's canonical canvas result. */
+export function ensureImageGenerationOutputNode(
+  graphId: string,
+  generationUid: string,
+  recreate = false,
+  signal?: AbortSignal,
+): Promise<GenerationOutputNode> {
+  return apiFetch<GenerationOutputNode>({
+    path: `/boards/${encodeURIComponent(graphId)}/image-generations/${encodeURIComponent(generationUid)}/output-node`,
+    method: "PUT",
+    body: { recreate },
     signal,
   })
 }

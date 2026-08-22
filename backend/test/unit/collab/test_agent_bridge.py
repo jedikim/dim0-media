@@ -12,8 +12,8 @@ from typing import Any
 from topix.collab.agent_bridge import AGENT_CLIENT_ID, AgentBoardBridge
 from topix.collab.room import RoomRegistry
 from topix.datatypes.note.link import Link
-from topix.datatypes.note.note import Note, NoteProperties
-from topix.datatypes.property import SizeProperty
+from topix.datatypes.note.note import GENERATED_IMAGE_MARKER_VALUE, Note, NoteProperties
+from topix.datatypes.property import KeywordProperty, SizeProperty
 from topix.datatypes.resource import RichText
 
 
@@ -77,16 +77,27 @@ class _FakeOplog:
         """Init per-board seq counters + captured appends."""
         self._seq: dict[str, int] = {}
         self.appended: list[tuple[str, int, dict]] = []
+        self.connections: list[object | None] = []
 
-    async def next_seq(self, board_id: str) -> int:
+    async def next_seq(self, board_id: str, *, conn=None) -> int:
         """Return a monotonic per-board seq starting at 1."""
+        self.connections.append(conn)
         self._seq[board_id] = self._seq.get(board_id, 0) + 1
         return self._seq[board_id]
 
-    async def append(self, board_id: str, seq: int, batch: dict) -> bool:
+    async def append(self, board_id: str, seq: int, batch: dict, *, conn=None) -> bool:
         """Capture the appended batch."""
+        self.connections.append(conn)
         self.appended.append((board_id, seq, batch))
         return True
+
+    async def seq_for_batch(self, board_id: str, batch_id: str, *, conn=None):
+        """Return an existing deterministic batch sequence when present."""
+        self.connections.append(conn)
+        for existing_board, seq, batch in self.appended:
+            if existing_board == board_id and batch["id"] == batch_id:
+                return seq
+        return None
 
 
 def _make_note(note_id: str = "n1", *, w: float | None = None, h: float | None = None) -> Note:
@@ -135,6 +146,92 @@ async def test_add_notes_persists_and_broadcasts_when_room_exists():
     assert len(msg["batch"]["ops"]) == 1
     assert msg["batch"]["ops"][0]["type"] == "node.add"
     assert msg["batch"]["ops"][0]["node"]["id"] == "n1"
+
+
+async def test_generated_result_node_and_edge_use_durable_peer_ops():
+    """Generated results project through the ordinary oplog/broadcast path."""
+    registry = RoomRegistry()
+    store = _RecordingGraphStore()
+    oplog = _FakeOplog()
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=oplog)
+    socket = _FakeSocket()
+    await registry.join("b1", socket, "u1")
+    generator = _make_note("generator", w=300, h=200)
+    result = Note(
+        id="result",
+        graph_uid="b1",
+        properties=NoteProperties(
+            image_asset_uid=KeywordProperty(value="a" * 32),
+            generated_image_marker=KeywordProperty(value=GENERATED_IMAGE_MARKER_VALUE),
+            generated_image_generation_uid=KeywordProperty(value="g" * 32),
+            generated_image_generator_node_uid=KeywordProperty(value=generator.id),
+        ),
+    )
+    store.nodes_by_uid.update({generator.id: generator, result.id: result})
+
+    await bridge.add_notes(board_id="b1", notes=[result])
+    await bridge.add_links(
+        board_id="b1",
+        links=[Link(id="edge", source=generator.id, target=result.id, graph_uid="b1")],
+    )
+
+    assert [entry[1] for entry in oplog.appended] == [1, 2]
+    node_op = json.loads(socket.sent[0])["batch"]["ops"][0]
+    edge_op = json.loads(socket.sent[1])["batch"]["ops"][0]
+    assert node_op["type"] == "node.add"
+    assert node_op["node"]["type"] == "generated-image"
+    assert node_op["node"]["data"]["properties"]["imageAssetUid"]["value"] == "a" * 32
+    assert edge_op["type"] == "edge.add"
+    assert edge_op["edge"]["source"]["nodeId"] == generator.id
+    assert edge_op["edge"]["target"]["nodeId"] == result.id
+    assert "imageReference" not in edge_op["edge"]["data"]
+
+
+async def test_result_batch_is_combined_durable_and_uses_caller_connection():
+    """Result finalization logs node and edge once through the supplied PG connection."""
+    registry = RoomRegistry()
+    store = _RecordingGraphStore()
+    oplog = _FakeOplog()
+    bridge = AgentBoardBridge(graph_store=store, registry=registry, oplog=oplog)
+    socket = _FakeSocket()
+    room, _ = await registry.join("b1", socket, "u1")
+    generator = _make_note("generator", w=300, h=200)
+    result = _make_note("result", w=420, h=280)
+    link = Link(id="edge", source=generator.id, target=result.id, graph_uid="b1")
+    connection = object()
+
+    async with bridge.result_delivery_order(board_id="b1") as ordered_room:
+        delivery = await bridge.ensure_result_batch(
+            connection,  # type: ignore[arg-type]
+            board_id="b1",
+            batch_id="stable-batch",
+            note=result,
+            link=link,
+            generator=generator,
+        )
+        await bridge.deliver_result_batch(room=ordered_room, delivery=delivery)
+
+    assert ordered_room is room
+    assert oplog.connections == [connection, connection, connection]
+    assert len(oplog.appended) == 1
+    ops = oplog.appended[0][2]["ops"]
+    assert [op["type"] for op in ops] == ["node.add", "edge.add"]
+    assert len(socket.sent) == 1
+
+    async with bridge.result_delivery_order(board_id="b1") as ordered_room:
+        replay = await bridge.ensure_result_batch(
+            connection,  # type: ignore[arg-type]
+            board_id="b1",
+            batch_id="stable-batch",
+            note=result,
+            link=link,
+            generator=generator,
+        )
+        await bridge.deliver_result_batch(room=ordered_room, delivery=replay)
+
+    assert replay is None
+    assert len(oplog.appended) == 1
+    assert len(socket.sent) == 1
 
 
 async def test_no_broadcast_when_no_room_exists():
@@ -368,7 +465,7 @@ async def test_link_to_wire_emits_world_point_for_free_endpoint():
     from topix.datatypes.property import PositionProperty
 
     link = Link(
-        source="",   # free
+        source="",  # free
         target="b",  # attached
         graph_uid="b1",
         properties=LinkProperties(
@@ -492,10 +589,7 @@ async def test_broadcast_runs_under_same_lock_as_seq_assignment():
     sock = _FakeSocket()
     await registry.join("b1", sock, "u1")
 
-    await asyncio.gather(*[
-        bridge.delete_node(board_id="b1", node_id=f"n{i}", user_uid="u1")
-        for i in range(10)
-    ])
+    await asyncio.gather(*[bridge.delete_node(board_id="b1", node_id=f"n{i}", user_uid="u1") for i in range(10)])
 
     seqs = [json.loads(s)["seq"] for s in sock.sent]
     assert seqs == sorted(seqs)

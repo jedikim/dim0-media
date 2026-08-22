@@ -12,6 +12,7 @@ const MAX_REFERENCE_BASE64_LENGTH = Math.ceil(MAX_REFERENCE_BYTES / 3) * 4
 
 
 export const IMAGE_REFERENCE_CHANGED_MESSAGE = "참조 이미지가 변경되었습니다. 확인 후 다시 생성해 주세요."
+export const IMAGE_REFERENCE_BOARD_UNAVAILABLE_MESSAGE = "참조 노드를 이 보드에서 사용할 수 없습니다."
 export const IMAGE_REFERENCE_UNAVAILABLE_MESSAGE = "이 이미지 노드는 참조 자산으로 등록할 수 없습니다."
 export const IMAGE_REFERENCE_INVALID_RESPONSE_MESSAGE = "참조 자산 등록 응답을 확인할 수 없습니다."
 
@@ -119,7 +120,7 @@ export async function materializeImageNodeAsset(args: {
       throw new ImageReferenceVersionChangedError(IMAGE_REFERENCE_CHANGED_MESSAGE)
     }
     throw new ImageReferenceMaterializationError(
-      "참조 이미지 노드를 이 보드에서 사용할 수 없습니다.",
+      IMAGE_REFERENCE_BOARD_UNAVAILABLE_MESSAGE,
     )
   }
 

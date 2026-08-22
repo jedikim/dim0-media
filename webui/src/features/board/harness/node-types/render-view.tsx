@@ -4,6 +4,7 @@ import { useCanvasStore } from "@canvas-harness/react"
 import { CodeSandboxView } from "./code-sandbox"
 import { DocumentView } from "./document"
 import { FolderView } from "./folder"
+import { GeneratedImageView } from "./generated-image"
 import { ImageGeneratorView } from "./image-generator"
 import { MiniAppView } from "./mini-app"
 import { SheetView } from "./sheet"
@@ -19,6 +20,7 @@ import { NodeErrorBoundary } from "../shared-views"
  */
 const VIEW_REGISTRY: Readonly<Record<string, (props: { id: NodeId }) => ReactNode>> = {
   folder: FolderView,
+  "generated-image": GeneratedImageView,
   "image-generator": ImageGeneratorView,
   document: DocumentView,
   widget: WidgetView,

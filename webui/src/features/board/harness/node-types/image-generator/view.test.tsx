@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   listImageModels: vi.fn(),
   getImageGeneration: vi.fn(),
   useImageGeneration: vi.fn(),
+  useOutputNode: vi.fn(),
   useAuthedImage: vi.fn(),
   generate: vi.fn(),
   resumePending: vi.fn(),
@@ -65,6 +66,10 @@ vi.mock("@/features/board/hooks/use-authed-image", () => ({
 
 vi.mock("./use-image-generation", () => ({
   useImageGeneration: mocks.useImageGeneration,
+}))
+
+vi.mock("./use-output-node", () => ({
+  useImageGenerationOutputNode: mocks.useOutputNode,
 }))
 
 import { ImageGeneratorView } from "./view"
@@ -133,6 +138,14 @@ describe("ImageGeneratorView", () => {
     mocks.listImageModels.mockReset().mockResolvedValue([MODEL])
     mocks.getImageGeneration.mockReset()
     mocks.useAuthedImage.mockReset().mockReturnValue({ url: null, failed: false })
+    mocks.useOutputNode.mockReset().mockReturnValue({
+      outputNodeUid: null,
+      nodePresent: false,
+      selectResult: vi.fn(),
+      recreate: vi.fn(),
+      recreating: false,
+      error: null,
+    })
     mocks.useImageGeneration.mockReset().mockReturnValue({
       phase: "idle",
       state: null,
@@ -297,6 +310,86 @@ describe("ImageGeneratorView", () => {
 
     expect(mocks.useAuthedImage).toHaveBeenCalledWith("board-1", "asset-existing")
     expect(mocks.generate).not.toHaveBeenCalled()
+  })
+
+
+  it("stops the generator preview GET after canonical materialization", async () => {
+    mocks.useImageGeneration.mockReturnValue({
+      phase: "succeeded",
+      state: {
+        generation_uid: "generation-1",
+        status: "succeeded",
+        output_asset_uid: "asset-existing",
+        output_node_uid: "a".repeat(32),
+      },
+      error: null,
+      generate: mocks.generate,
+      resumePending: mocks.resumePending,
+      checkStatusAgain: mocks.checkStatusAgain,
+      refreshStatus: vi.fn(),
+      hasPendingRequest: false,
+      canResumePending: false,
+    })
+    const selectResult = vi.fn()
+    mocks.useOutputNode.mockReturnValue({
+      outputNodeUid: "a".repeat(32),
+      nodePresent: true,
+      selectResult,
+      recreate: vi.fn(),
+      recreating: false,
+      error: null,
+    })
+    await render()
+
+    expect(mocks.useAuthedImage).toHaveBeenCalledWith("board-1", null)
+    expect(container.textContent).toContain("결과가 캔버스에 추가되었습니다.")
+    const select = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "결과 선택")
+    act(() => select?.click())
+    expect(selectResult).toHaveBeenCalledTimes(1)
+  })
+
+
+  it("offers explicit deleted-result recovery only to editors", async () => {
+    const recreate = vi.fn()
+    mocks.useOutputNode.mockReturnValue({
+      outputNodeUid: "a".repeat(32),
+      nodePresent: false,
+      selectResult: vi.fn(),
+      recreate,
+      recreating: false,
+      error: null,
+    })
+    await render()
+
+    const recovery = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "결과 노드 다시 추가")
+    act(() => recovery?.click())
+    expect(recreate).toHaveBeenCalledTimes(1)
+
+    useBoardAppStore.setState({ canEdit: false })
+    await render()
+    expect([...container.querySelectorAll("button")]
+      .some((button) => button.textContent === "결과 노드 다시 추가")).toBe(false)
+  })
+
+
+  it("locks generator inputs while an explicit result recreation is running", async () => {
+    mocks.useOutputNode.mockReturnValue({
+      outputNodeUid: "a".repeat(32),
+      nodePresent: false,
+      selectResult: vi.fn(),
+      recreate: vi.fn(),
+      recreating: true,
+      error: null,
+    })
+    await render()
+
+    expect(container.querySelector<HTMLTextAreaElement>('[aria-label="Image prompt"]')?.disabled)
+      .toBe(true)
+    const generateButton = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "생성 중…")
+    expect(generateButton?.disabled).toBe(true)
   })
 
 
@@ -682,6 +775,40 @@ describe("ImageGeneratorView", () => {
 
     expect(mocks.getImageGeneration).toHaveBeenCalledTimes(1)
     expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+  })
+
+
+  it("aborts an in-flight reference status GET at the exact five-minute deadline", async () => {
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, unknown>
+    }).properties
+    properties.imageModelId = { type: "keyword", value: "model-i2i" }
+    mocks.listImageModels.mockResolvedValue([I2I_MODEL])
+    mocks.sourceNodes.set("generator-source", {
+      id: "generator-source",
+      type: "image-generator",
+      data: {
+        graphUid: "board-1",
+        properties: { activeGenerationUid: { type: "keyword", value: "generation-a" } },
+      },
+    })
+    mocks.edges = [referenceEdge("edge-1", "generator-source", 0)]
+    let capturedSignal: AbortSignal | undefined
+    mocks.getImageGeneration.mockImplementation(
+      (_graphId: string, _generationUid: string, signal?: AbortSignal) => {
+        capturedSignal = signal
+        return new Promise(() => undefined)
+      },
+    )
+
+    await render()
+    expect(capturedSignal?.aborted).toBe(false)
+    await act(() => vi.advanceTimersByTimeAsync(5 * 60 * 1_000 - 1))
+    expect(capturedSignal?.aborted).toBe(false)
+    await act(() => vi.advanceTimersByTimeAsync(1))
+
+    expect(capturedSignal?.aborted).toBe(true)
+    expect(mocks.getImageGeneration).toHaveBeenCalledTimes(1)
   })
 
 

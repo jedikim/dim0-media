@@ -35,6 +35,7 @@ export const AUTOFIT_DISABLED_TYPES = new Set([
   "widget",
   "mini-app",
   "image-generator",
+  "generated-image",
   "document",
 ])
 
@@ -117,6 +118,8 @@ export const noteToNode = (note: Note | Document): Node => {
   // generator rather than silently converted back to a generic rectangle.
   const canvasType = note.type === "document"
     ? "document"
+    : note.properties?.generatedImageMarker?.value === "immutable-result"
+    ? "generated-image"
     : note.properties?.imagePrompt !== undefined
     ? "image-generator"
     : dim0TypeToCanvas(note.style.type)
