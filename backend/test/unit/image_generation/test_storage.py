@@ -141,13 +141,22 @@ def test_raster_validation_rejects_excessive_pixel_count(monkeypatch) -> None:
         validate_provider_raster_bytes(_image_bytes(size=(10, 7)))
 
 
+@pytest.mark.parametrize(
+    ("image_format", "mime_type", "extension"),
+    [("PNG", "image/png", "png"), ("JPEG", "image/jpeg", "jpg"), ("WEBP", "image/webp", "webp")],
+)
 @pytest.mark.asyncio
-async def test_generated_write_is_content_addressed_and_deletable(tmp_path) -> None:
-    """Generated output is atomically stored under its digest and can be cleaned up."""
-    content = _image_bytes("PNG")
+async def test_generated_write_is_content_addressed_and_deletable(
+    tmp_path,
+    image_format: str,
+    mime_type: str,
+    extension: str,
+) -> None:
+    """Generated raster formats use content-addressed keys with matching extensions."""
+    content = _image_bytes(image_format)
     digest = sha256(content).hexdigest()
     image = GeneratedImagePayload(
-        mime_type="image/png",
+        mime_type=mime_type,
         content=content,
         width=10,
         height=7,
@@ -157,7 +166,7 @@ async def test_generated_write_is_content_addressed_and_deletable(tmp_path) -> N
 
     key = await storage.write_generated("generation-1", image)
 
-    assert key == f"images/generated/generation-1/{digest}.png"
+    assert key == f"images/generated/generation-1/{digest}.{extension}"
     assert (tmp_path / key).read_bytes() == content
     assert not list((tmp_path / "images" / "generated" / "generation-1").glob(".image-generation-*"))
     assert await storage.delete_generated(key) is True

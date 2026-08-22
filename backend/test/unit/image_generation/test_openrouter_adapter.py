@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 
 from hashlib import sha256
 from io import BytesIO
@@ -50,6 +51,7 @@ def _reference(content: bytes, *, ordinal: int, asset_uid: str) -> ProviderImage
 def _request(
     *,
     model_id: str = "x-ai/grok-imagine-image-2.0",
+    prompt: str = "Create a safe classroom image",
     parameters: ImageGenerationParameters | None = None,
     references: tuple[ProviderImageReference, ...] = (),
 ) -> ProviderImageRequest:
@@ -58,7 +60,7 @@ def _request(
         generation_uid="generation-1",
         attempt_uid="attempt-1",
         model_id=model_id,
-        prompt="Create a safe classroom image",
+        prompt=prompt,
         parameters=parameters or ImageGenerationParameters(),
         references=references,
     )
@@ -83,10 +85,21 @@ def test_serialization_preserves_reference_order_and_top_level_options() -> None
     assert payload["quality"] == "medium"
     assert payload["n"] == 1
     assert "image_config" not in payload
-    assert payload["output_format"] == "png"
+    assert "output_format" not in payload
     urls = [item["image_url"]["url"] for item in payload["input_references"]]
     assert urls[0] == f"data:image/png;base64,{base64.b64encode(first).decode('ascii')}"
     assert urls[1] == f"data:image/jpeg;base64,{base64.b64encode(second).decode('ascii')}"
+
+
+def test_serialization_omits_unset_and_unadvertised_options() -> None:
+    """The adapter sends no optional field that the validated request did not select."""
+    payload = serialize_openrouter_request(_request())
+
+    assert payload == {
+        "model": "x-ai/grok-imagine-image-2.0",
+        "prompt": "Create a safe classroom image",
+        "n": 1,
+    }
 
 
 def test_gemini_4k_is_pinned_to_the_verified_ai_studio_endpoint() -> None:
@@ -109,7 +122,7 @@ def test_gemini_4k_is_pinned_to_the_verified_ai_studio_endpoint() -> None:
 
 
 @pytest.mark.asyncio
-async def test_adapter_normalizes_success_usage_cost_and_documented_body_id() -> None:
+async def test_adapter_normalizes_success_usage_cost_and_optional_body_id() -> None:
     """A valid response becomes one sanitized provider-neutral result."""
     content = _image_bytes("PNG")
     sentinel = f"runtime-{uuid4()}"
@@ -142,6 +155,107 @@ async def test_adapter_normalizes_success_usage_cost_and_documented_body_id() ->
     assert result.image.mime_type == "image/png"
     assert result.usage is not None and result.usage.total_units == 18
     assert str(result.cost_usd) == "0.0125"
+
+
+@pytest.mark.asyncio
+async def test_adapter_normalizes_jpeg_without_provider_request_id() -> None:
+    """A JPEG response without an optional body ID retains exact image and usage metadata."""
+    content = _image_bytes("JPEG")
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        """Return the minimal successful shape observed from image providers."""
+        return httpx.Response(
+            200,
+            json={
+                "data": [{"b64_json": base64.b64encode(content).decode("ascii"), "media_type": "image/jpeg"}],
+                "usage": {"prompt_tokens": 3, "completion_tokens": 5, "total_tokens": 8, "cost": 0.04},
+            },
+        )
+
+    async with httpx.AsyncClient(base_url=f"{OPENROUTER_BASE_URL}/", transport=httpx.MockTransport(handler)) as client:
+        result = await OpenRouterImageAdapter(client, SecretStr(f"runtime-{uuid4()}")).generate(_request())
+
+    assert result.provider_request_id is None
+    assert result.image.content == content
+    assert result.image.mime_type == "image/jpeg"
+    assert (result.image.width, result.image.height) == (8, 6)
+    assert result.image.content_sha256 == sha256(content).hexdigest()
+    assert result.usage is not None and result.usage.total_units == 8
+    assert str(result.cost_usd) == "0.04"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("image_format", "mime_type"), [("PNG", "image/png"), ("WEBP", "image/webp")])
+async def test_adapter_preserves_other_supported_raster_formats(image_format: str, mime_type: str) -> None:
+    """PNG and WebP success paths remain byte-sniffed provider-neutral results."""
+    content = _image_bytes(image_format)
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        """Return one valid raster in the requested synthetic format."""
+        return httpx.Response(200, json={"data": [{"b64_json": base64.b64encode(content).decode("ascii"), "media_type": mime_type}]})
+
+    async with httpx.AsyncClient(base_url=f"{OPENROUTER_BASE_URL}/", transport=httpx.MockTransport(handler)) as client:
+        result = await OpenRouterImageAdapter(client, SecretStr(f"runtime-{uuid4()}")).generate(_request())
+
+    assert result.image.mime_type == mime_type
+    assert result.image.content == content
+
+
+@pytest.mark.asyncio
+async def test_adapter_debug_logs_only_bounded_success_shape_names(caplog: pytest.LogCaptureFixture) -> None:
+    """DEBUG diagnostics expose bounded names but no provider, credential, prompt, or image values."""
+    content = _image_bytes("JPEG")
+    api_key_value = f"runtime-key-{uuid4()}"
+    prompt_value = f"runtime-prompt-{uuid4()}"
+    body_value = f"runtime-body-{uuid4()}"
+    header_value = f"runtime-header-{uuid4()}"
+    encoded_image = base64.b64encode(content).decode("ascii")
+    long_name = "provider-shape-" + "x" * 100
+    extra_names = {f"extra-{index}": index for index in range(40)}
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        """Return safe success metadata with values that must never reach logs."""
+        return httpx.Response(
+            200,
+            headers={"X-Trace-Shape": header_value},
+            json={
+                "data": [{"b64_json": encoded_image, "media_type": "image/jpeg"}],
+                "usage": {"cost": 0.04},
+                "vendor_meta": body_value,
+                long_name: "long-name-value",
+                **extra_names,
+            },
+        )
+
+    caplog.set_level(logging.DEBUG, logger="topix.image_generation.providers.openrouter")
+    async with httpx.AsyncClient(base_url=f"{OPENROUTER_BASE_URL}/", transport=httpx.MockTransport(handler)) as client:
+        await OpenRouterImageAdapter(client, SecretStr(api_key_value)).generate(_request(prompt=prompt_value))
+
+    diagnostic = caplog.text
+    assert "OpenRouter image success response shape" in diagnostic
+    assert "body_keys=" in diagnostic and "data" in diagnostic and "vendor_meta" in diagnostic
+    assert "response_header_names=" in diagnostic and "x-trace-shape" in diagnostic
+    assert long_name not in diagnostic
+    assert long_name[:64] in diagnostic
+    assert diagnostic.count("extra-") <= 28
+    for hidden_value in (api_key_value, prompt_value, body_value, header_value, encoded_image, "long-name-value"):
+        assert hidden_value not in diagnostic
+
+
+@pytest.mark.asyncio
+async def test_adapter_emits_no_shape_diagnostic_when_debug_is_disabled(caplog: pytest.LogCaptureFixture) -> None:
+    """Normal logging levels omit success-response diagnostics entirely."""
+    content = _image_bytes("PNG")
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        """Return one ordinary successful image response."""
+        return httpx.Response(200, json={"data": [{"b64_json": base64.b64encode(content).decode("ascii")}]})
+
+    caplog.set_level(logging.INFO, logger="topix.image_generation.providers.openrouter")
+    async with httpx.AsyncClient(base_url=f"{OPENROUTER_BASE_URL}/", transport=httpx.MockTransport(handler)) as client:
+        await OpenRouterImageAdapter(client, SecretStr(f"runtime-{uuid4()}")).generate(_request())
+
+    assert "OpenRouter image success response shape" not in caplog.text
 
 
 @pytest.mark.asyncio
