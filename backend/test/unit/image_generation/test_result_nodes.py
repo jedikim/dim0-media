@@ -299,7 +299,7 @@ async def test_writer_contention_is_a_recoverable_materialization_race() -> None
         )
 
     assert raced.value.code == "materialization_raced"
-    assert str(raced.value) == "The image result changed while it was being prepared. Please retry."
+    assert str(raced.value) == "Image result preparation overlapped with another operation. Please retry."
 
 
 @pytest.mark.asyncio

@@ -47,16 +47,33 @@ from topix.store.postgres.image_generation import (
     start_image_generation_attempt,
     try_acquire_image_generation_output_writer,
 )
-from topix.store.postgres.pool import create_pool
+from topix.store.postgres.pool import DEFAULT_ACQUIRE_TIMEOUT, create_pool
 
 logger = logging.getLogger(__name__)
 
 OUTPUT_NODE_WRITER_WAIT_SECONDS = 0.25
 OUTPUT_NODE_WRITER_RETRY_SECONDS = 0.025
+OUTPUT_NODE_WRITER_RELEASE_TIMEOUT_SECONDS = DEFAULT_ACQUIRE_TIMEOUT
 
 
 class ImageGenerationOutputWriterBusyError(RuntimeError):
     """Signal bounded contention for one generation's canvas writer."""
+
+
+def _log_output_writer_failure(*, failure_kind: str, generation_uid: str) -> None:
+    """Record one bounded writer failure without exposing connection details."""
+    messages = {
+        "pool_timeout": "Image generation output writer pool acquisition timed out",
+        "writer_contended": "Image generation output writer remained contended",
+    }
+    logger.warning(
+        messages[failure_kind],
+        extra={
+            "failure_kind": failure_kind,
+            "generation_uid": generation_uid,
+            "wait_milliseconds": round(OUTPUT_NODE_WRITER_WAIT_SECONDS * 1_000),
+        },
+    )
 
 
 async def _release_output_writer(
@@ -90,6 +107,31 @@ async def _release_output_writer(
                     "unlock_error_type": "not-held",
                 },
             )
+
+
+async def _release_output_writer_connection(
+    pool: asyncpg.Pool,
+    conn: asyncpg.Connection,
+    *,
+    generation_uid: str,
+    body_error: BaseException | None,
+) -> None:
+    """Return a writer connection without replacing an in-flight body error."""
+    try:
+        await pool.release(
+            conn,
+            timeout=OUTPUT_NODE_WRITER_RELEASE_TIMEOUT_SECONDS,
+        )
+    except BaseException as release_error:
+        logger.error(
+            "Image generation output writer connection release failed",
+            extra={
+                "generation_uid": generation_uid,
+                "release_error_type": type(release_error).__name__,
+            },
+        )
+        if body_error is None:
+            raise
 
 
 class ImageGenerationStore:
@@ -199,11 +241,20 @@ class ImageGenerationStore:
         while True:
             remaining = deadline - loop.time()
             if remaining <= 0:
+                _log_output_writer_failure(
+                    failure_kind="writer_contended",
+                    generation_uid=generation_uid,
+                )
                 raise ImageGenerationOutputWriterBusyError("Image generation output writer is busy")
             try:
                 conn = await pool.acquire(timeout=remaining)
             except TimeoutError as exc:
+                _log_output_writer_failure(
+                    failure_kind="pool_timeout",
+                    generation_uid=generation_uid,
+                )
                 raise ImageGenerationOutputWriterBusyError("Image generation output writer is busy") from exc
+            operation_error: BaseException | None = None
             acquired = False
             try:
                 acquired = await try_acquire_image_generation_output_writer(
@@ -229,10 +280,22 @@ class ImageGenerationStore:
                             body_error=body_error,
                         )
                     return
+            except BaseException as exc:
+                operation_error = exc
+                raise
             finally:
-                await pool.release(conn)
+                await _release_output_writer_connection(
+                    pool,
+                    conn,
+                    generation_uid=generation_uid,
+                    body_error=operation_error,
+                )
             remaining = deadline - loop.time()
             if remaining <= 0:
+                _log_output_writer_failure(
+                    failure_kind="writer_contended",
+                    generation_uid=generation_uid,
+                )
                 raise ImageGenerationOutputWriterBusyError("Image generation output writer is busy")
             await asyncio.sleep(min(OUTPUT_NODE_WRITER_RETRY_SECONDS, remaining))
 

@@ -387,7 +387,7 @@ async def test_output_writer_unlock_anomaly_preserves_body_error_and_pool_reentr
     generation_uid = gen_uid()
     original = ImageResultNodeError(
         "materialization_raced",
-        "The image result changed while it was being prepared. Please retry.",
+        "Image result preparation overlapped with another operation. Please retry.",
     )
     real_release = image_generation_store_module.release_image_generation_output_writer
 
@@ -434,6 +434,91 @@ async def test_output_writer_unlock_anomaly_preserves_body_error_and_pool_reentr
             generation_uid=generation_uid,
         ):
             pass
+
+
+@pytest.mark.asyncio(loop_scope="function")
+async def test_pool_release_fault_preserves_body_error_and_cancellation(
+    config: Config,
+    initialized_image_pg_pool: asyncpg.Pool,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A reset failure never replaces body failure or cancellation, and the pool recovers."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        schema_name = await conn.fetchval("SELECT current_schema()")
+    reset_failures: list[BaseException] = []
+
+    async def initialize_connection(conn: asyncpg.Connection) -> None:
+        """Keep every replacement connection inside the disposable schema."""
+        await conn.execute("SELECT set_config('search_path', $1, false)", schema_name)
+
+    async def fail_selected_reset(_conn: asyncpg.Connection) -> None:
+        """Inject one reset timeout so asyncpg terminates the damaged connection."""
+        if reset_failures:
+            raise reset_failures.pop(0)
+
+    pool = await asyncpg.create_pool(
+        config.run.databases.postgres.dsn(),
+        min_size=1,
+        max_size=1,
+        setup=initialize_connection,
+        reset=fail_selected_reset,
+    )
+    store = ImageGenerationStore()
+    await store.open(pool)
+    generation_uid = gen_uid()
+    original = ImageResultNodeError(
+        "materialization_raced",
+        "Image result preparation overlapped with another operation. Please retry.",
+    )
+    try:
+        reset_failures.append(TimeoutError("private reset detail"))
+        with caplog.at_level(logging.ERROR), pytest.raises(ImageResultNodeError) as propagated:
+            async with store.output_node_writer(
+                board_uid=gen_uid(),
+                generation_uid=generation_uid,
+            ):
+                raise original
+
+        assert propagated.value is original
+        assert propagated.value.code == "materialization_raced"
+        assert str(propagated.value) == str(original)
+        assert "private reset detail" not in caplog.text
+        assert any(
+            record.getMessage() == "Image generation output writer connection release failed"
+            and getattr(record, "generation_uid", None) == generation_uid
+            and getattr(record, "release_error_type", None) == "TimeoutError"
+            for record in caplog.records
+        )
+        async with asyncio.timeout(1):
+            async with store.output_node_writer(
+                board_uid=gen_uid(),
+                generation_uid=generation_uid,
+            ):
+                pass
+
+        caplog.clear()
+        reset_failures.append(TimeoutError("private cancellation reset detail"))
+        with caplog.at_level(logging.ERROR), pytest.raises(asyncio.CancelledError):
+            async with store.output_node_writer(
+                board_uid=gen_uid(),
+                generation_uid=generation_uid,
+            ):
+                raise asyncio.CancelledError
+
+        assert "private cancellation reset detail" not in caplog.text
+        assert any(
+            record.getMessage() == "Image generation output writer connection release failed"
+            and getattr(record, "release_error_type", None) == "TimeoutError"
+            for record in caplog.records
+        )
+        async with asyncio.timeout(1):
+            async with store.output_node_writer(
+                board_uid=gen_uid(),
+                generation_uid=generation_uid,
+            ):
+                pass
+    finally:
+        await pool.close()
 
 
 @pytest.mark.parametrize("starter", ["websocket", "output"])

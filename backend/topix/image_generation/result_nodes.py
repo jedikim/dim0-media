@@ -357,7 +357,7 @@ class ImageResultNodeService:
             except ImageGenerationOutputWriterBusyError as exc:
                 raise ImageResultNodeError(
                     "materialization_raced",
-                    "The image result changed while it was being prepared. Please retry.",
+                    "Image result preparation overlapped with another operation. Please retry.",
                 ) from exc
             await self._bridge.deliver_result_batch(room=room, delivery=delivery)
         assert outcome is not None
@@ -451,7 +451,7 @@ class ImageResultNodeService:
         if record.output_node_uid is None and (node.parent_id != generator.parent_id or edge.parent_id != generator.parent_id):
             raise ImageResultNodeError(
                 "materialization_raced",
-                "The image result changed while it was being prepared. Please retry.",
+                "Image result preparation overlapped with another operation. Please retry.",
             )
         _validate_result_edge(
             edge,

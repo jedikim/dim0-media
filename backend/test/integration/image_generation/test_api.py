@@ -638,7 +638,7 @@ async def test_output_node_put_preserves_materialization_race_code(
         assert board_uid and generation_uid and recreate is False
         raise ImageResultNodeError(
             "materialization_raced",
-            "The image result changed while it was being prepared. Please retry.",
+            "Image result preparation overlapped with another operation. Please retry.",
         )
 
     monkeypatch.setattr(ImageResultNodeService, "ensure_output_node", raise_materialization_race)
@@ -653,7 +653,7 @@ async def test_output_node_put_preserves_materialization_race_code(
         assert response.json() == {
             "detail": {
                 "code": "materialization_raced",
-                "message": "The image result changed while it was being prepared. Please retry.",
+                "message": "Image result preparation overlapped with another operation. Please retry.",
             }
         }
         assert context.adapter.requests == []
