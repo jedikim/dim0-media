@@ -7,6 +7,7 @@ import json
 import logging
 import os
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from hashlib import sha256
 
@@ -262,6 +263,39 @@ async def two_connection_result_pool(
         await pool.close()
 
 
+@asynccontextmanager
+async def _one_connection_reset_fault_pool(
+    config: Config,
+    initialized_image_pg_pool: asyncpg.Pool,
+) -> AsyncIterator[tuple[asyncpg.Pool, list[BaseException]]]:
+    """Yield a disposable max-size-one pool with selectable reset failures."""
+    async with initialized_image_pg_pool.acquire() as conn:
+        schema_name = await conn.fetchval("SELECT current_schema()")
+    reset_failures: list[BaseException] = []
+
+    async def initialize_connection(conn: asyncpg.Connection) -> None:
+        """Keep every replacement connection inside the disposable schema."""
+        await conn.execute("SELECT set_config('search_path', $1, false)", schema_name)
+
+    async def reset_connection(conn: asyncpg.Connection) -> None:
+        """Inject selected reset failures and otherwise perform the standard reset."""
+        if reset_failures:
+            raise reset_failures.pop(0)
+        await conn.reset()
+
+    pool = await asyncpg.create_pool(
+        config.run.databases.postgres.dsn(),
+        min_size=1,
+        max_size=1,
+        setup=initialize_connection,
+        reset=reset_connection,
+    )
+    try:
+        yield pool, reset_failures
+    finally:
+        await pool.close()
+
+
 @pytest.mark.asyncio(loop_scope="function")
 async def test_output_writer_lock_releases_and_does_not_serialize_other_generations(
     two_connection_result_pool: asyncpg.Pool,
@@ -443,34 +477,14 @@ async def test_pool_release_fault_preserves_body_error_and_cancellation(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A reset failure never replaces body failure or cancellation, and the pool recovers."""
-    async with initialized_image_pg_pool.acquire() as conn:
-        schema_name = await conn.fetchval("SELECT current_schema()")
-    reset_failures: list[BaseException] = []
-
-    async def initialize_connection(conn: asyncpg.Connection) -> None:
-        """Keep every replacement connection inside the disposable schema."""
-        await conn.execute("SELECT set_config('search_path', $1, false)", schema_name)
-
-    async def fail_selected_reset(_conn: asyncpg.Connection) -> None:
-        """Inject one reset timeout so asyncpg terminates the damaged connection."""
-        if reset_failures:
-            raise reset_failures.pop(0)
-
-    pool = await asyncpg.create_pool(
-        config.run.databases.postgres.dsn(),
-        min_size=1,
-        max_size=1,
-        setup=initialize_connection,
-        reset=fail_selected_reset,
-    )
-    store = ImageGenerationStore()
-    await store.open(pool)
-    generation_uid = gen_uid()
-    original = ImageResultNodeError(
-        "materialization_raced",
-        "Image result preparation overlapped with another operation. Please retry.",
-    )
-    try:
+    async with _one_connection_reset_fault_pool(config, initialized_image_pg_pool) as (pool, reset_failures):
+        store = ImageGenerationStore()
+        await store.open(pool)
+        generation_uid = gen_uid()
+        original = ImageResultNodeError(
+            "materialization_raced",
+            "Image result preparation overlapped with another operation. Please retry.",
+        )
         reset_failures.append(TimeoutError("private reset detail"))
         with caplog.at_level(logging.ERROR), pytest.raises(ImageResultNodeError) as propagated:
             async with store.output_node_writer(
@@ -517,8 +531,177 @@ async def test_pool_release_fault_preserves_body_error_and_cancellation(
                 generation_uid=generation_uid,
             ):
                 pass
-    finally:
-        await pool.close()
+
+
+@pytest.mark.parametrize("cleanup_anomaly", ["pool_reset", "advisory_unlock"])
+@pytest.mark.asyncio(loop_scope="function")
+async def test_committed_result_delivery_survives_cleanup_anomaly(
+    cleanup_anomaly: str,
+    config: Config,
+    initialized_image_pg_pool: asyncpg.Pool,
+    isolated_result_content_store: ContentStore,
+    isolated_result_redis: RedisStore,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Committed result delivery survives one writer cleanup failure without duplication."""
+    async with _one_connection_reset_fault_pool(config, initialized_image_pg_pool) as (pool, reset_failures):
+        user_uid = gen_uid()
+        board_uid = gen_uid()
+        generator_uid = gen_uid()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                "INSERT INTO users (uid, email, username) VALUES ($1, $2, $3)",
+                user_uid,
+                f"{user_uid}@example.test",
+                user_uid,
+            )
+            await conn.execute("INSERT INTO graphs (uid) VALUES ($1)", board_uid)
+
+        image_store = ImageGenerationStore()
+        await image_store.open(pool)
+        monkeypatch.setattr(
+            ContentStore,
+            "from_config",
+            classmethod(lambda _cls: isolated_result_content_store),
+        )
+        graph_store = GraphStore()
+        await graph_store.open(pool)
+        await graph_store.add_notes(
+            [
+                Note(
+                    id=generator_uid,
+                    graph_uid=board_uid,
+                    properties=NoteProperties(image_prompt=TextProperty(text="cleanup delivery result")),
+                )
+            ]
+        )
+        generation, _asset = await _create_succeeded_generation(
+            image_store,
+            user_uid=user_uid,
+            board_uid=board_uid,
+            generator_uid=generator_uid,
+            worker_uid=f"cleanup-delivery-{cleanup_anomaly}",
+        )
+        oplog = CollabOplogStore(isolated_result_redis)
+        await oplog.open(pool)
+        registry = RoomRegistry()
+        socket = _RecordingSocket()
+        room, client = await registry.join(
+            board_uid,
+            socket,  # type: ignore[arg-type]
+            user_uid,
+        )
+        assert room is not None and client is not None
+        bridge = AgentBoardBridge(graph_store=graph_store, registry=registry, oplog=oplog)
+        service = ImageResultNodeService(
+            image_store=image_store,
+            graph_store=graph_store,
+            bridge=bridge,
+        )
+        writer_backend_pid: int | None = None
+        if cleanup_anomaly == "pool_reset":
+            real_bind = image_store.bind_output_node
+
+            async def bind_then_fail_reset(
+                conn: asyncpg.Connection,
+                *,
+                board_uid: str,
+                generation_uid: str,
+                output_node_uid: str,
+            ) -> bool:
+                """Arm one reset timeout only after the durable binding write."""
+                nonlocal writer_backend_pid
+                bound = await real_bind(
+                    conn,
+                    board_uid=board_uid,
+                    generation_uid=generation_uid,
+                    output_node_uid=output_node_uid,
+                )
+                writer_backend_pid = await conn.fetchval("SELECT pg_backend_pid()")
+                reset_failures.append(TimeoutError("private committed reset detail"))
+                return bound
+
+            monkeypatch.setattr(image_store, "bind_output_node", bind_then_fail_reset)
+        else:
+            real_unlock = image_generation_store_module.release_image_generation_output_writer
+            fail_unlock = True
+
+            async def fail_unlock_once(conn: asyncpg.Connection, *, generation_uid: str) -> bool:
+                """Raise once before unlock so pool reset remains the session backstop."""
+                nonlocal fail_unlock
+                if fail_unlock:
+                    fail_unlock = False
+                    raise RuntimeError("private committed unlock detail")
+                return await real_unlock(conn, generation_uid=generation_uid)
+
+            monkeypatch.setattr(
+                image_generation_store_module,
+                "release_image_generation_output_writer",
+                fail_unlock_once,
+            )
+
+        try:
+            with caplog.at_level(logging.ERROR):
+                outcome = await service.ensure_output_node(
+                    board_uid=board_uid,
+                    generation_uid=generation.uid,
+                    recreate=False,
+                )
+
+            node_uid = canonical_result_node_uid(generation.uid)
+            edge_uid = canonical_result_edge_uid(generation.uid)
+            assert outcome.created is True and outcome.recreated is False
+            assert outcome.output_node_uid == node_uid
+            assert len(socket.frames) == 1
+            assert len(await graph_store.get_nodes([node_uid])) == 1
+            assert len(await graph_store.get_links([edge_uid])) == 1
+            batches = await oplog.batches_since(board_uid, 0)
+            assert len(batches) == 1
+            record = await image_store.get_output_record(
+                board_uid=board_uid,
+                generation_uid=generation.uid,
+            )
+            assert record is not None and record.output_node_uid == node_uid
+
+            if cleanup_anomaly == "pool_reset":
+                assert writer_backend_pid is not None
+                async with pool.acquire() as replacement_conn:
+                    assert await replacement_conn.fetchval("SELECT pg_backend_pid()") != writer_backend_pid
+                assert "private committed reset detail" not in caplog.text
+                expected_log = "Image generation output writer connection release failed"
+                expected_type = "TimeoutError"
+            else:
+                assert "private committed unlock detail" not in caplog.text
+                expected_log = "Image generation output writer unlock failed"
+                expected_type = "RuntimeError"
+            assert any(
+                record.getMessage() == expected_log
+                and getattr(record, "generation_uid", None) == generation.uid
+                and (getattr(record, "release_error_type", None) == expected_type or getattr(record, "unlock_error_type", None) == expected_type)
+                for record in caplog.records
+            )
+
+            repeated = await service.ensure_output_node(
+                board_uid=board_uid,
+                generation_uid=generation.uid,
+                recreate=False,
+            )
+            assert repeated.created is False and repeated.recreated is False
+            assert len(socket.frames) == 1
+            assert len(await oplog.batches_since(board_uid, 0)) == 1
+            assert len(await graph_store.get_nodes([node_uid])) == 1
+            assert len(await graph_store.get_links([edge_uid])) == 1
+            async with asyncio.timeout(1):
+                async with image_store.output_node_writer(
+                    board_uid=board_uid,
+                    generation_uid=generation.uid,
+                ) as (_conn, reentered_record):
+                    assert reentered_record is not None
+                    assert reentered_record.output_node_uid == node_uid
+        finally:
+            await oplog.close()
+            await graph_store.close()
 
 
 @pytest.mark.parametrize("starter", ["websocket", "output"])

@@ -96,7 +96,9 @@ async def _release_output_writer(
                 "unlock_error_type": type(unlock_error).__name__,
             },
         )
-        if body_error is None:
+        if body_error is None and isinstance(unlock_error, asyncio.CancelledError):
+            raise
+        if body_error is None and not isinstance(unlock_error, Exception):
             raise
     else:
         if not released:
@@ -130,7 +132,9 @@ async def _release_output_writer_connection(
                 "release_error_type": type(release_error).__name__,
             },
         )
-        if body_error is None:
+        if body_error is None and isinstance(release_error, asyncio.CancelledError):
+            raise
+        if body_error is None and not isinstance(release_error, Exception):
             raise
 
 

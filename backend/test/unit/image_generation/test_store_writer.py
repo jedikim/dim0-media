@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import pytest
@@ -16,9 +17,15 @@ GENERATION_UID = "g" * 32
 class _FakeWriterPool:
     """Capture acquire and release budgets without opening PostgreSQL."""
 
-    def __init__(self, *, acquire_error: BaseException | None = None) -> None:
-        """Initialize timeout observations and an optional acquire failure."""
+    def __init__(
+        self,
+        *,
+        acquire_error: BaseException | None = None,
+        release_error: BaseException | None = None,
+    ) -> None:
+        """Initialize timeout observations and optional pool failures."""
         self.acquire_error = acquire_error
+        self.release_error = release_error
         self.acquire_timeouts: list[float] = []
         self.release_timeouts: list[float | None] = []
         self.connection = object()
@@ -34,6 +41,8 @@ class _FakeWriterPool:
         """Record the independent reset budget used for the sentinel connection."""
         assert conn is self.connection
         self.release_timeouts.append(timeout)
+        if self.release_error is not None:
+            raise self.release_error
 
 
 def _patch_writer_queries(
@@ -93,6 +102,49 @@ async def test_writer_release_uses_fixed_timeout_after_short_acquire_budget(
     assert 0 < pool.acquire_timeouts[0] <= 0.005
     assert pool.release_timeouts == [image_generation_store_module.OUTPUT_NODE_WRITER_RELEASE_TIMEOUT_SECONDS]
     assert pool.release_timeouts[0] != pool.acquire_timeouts[0]
+
+
+@pytest.mark.parametrize(
+    ("release_error", "propagates"),
+    [
+        (TimeoutError("private reset detail"), False),
+        (asyncio.CancelledError(), True),
+    ],
+)
+@pytest.mark.asyncio
+async def test_normal_writer_completion_only_propagates_cleanup_cancellation(
+    release_error: BaseException,
+    propagates: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Committed work ignores ordinary cleanup faults but preserves cancellation."""
+    pool = _FakeWriterPool(release_error=release_error)
+    _patch_writer_queries(monkeypatch, lock_acquired=True)
+    store = ImageGenerationStore()
+    await store.open(pool)  # type: ignore[arg-type]
+
+    async def complete_writer() -> None:
+        """Complete one normal writer body before the injected release anomaly."""
+        async with store.output_node_writer(
+            board_uid=BOARD_UID,
+            generation_uid=GENERATION_UID,
+        ):
+            pass
+
+    with caplog.at_level(logging.ERROR):
+        if propagates:
+            with pytest.raises(asyncio.CancelledError):
+                await complete_writer()
+        else:
+            await complete_writer()
+
+    assert any(
+        record.getMessage() == "Image generation output writer connection release failed"
+        and getattr(record, "release_error_type", None) == type(release_error).__name__
+        for record in caplog.records
+    )
+    assert "private reset detail" not in caplog.text
 
 
 @pytest.mark.parametrize(
