@@ -301,10 +301,10 @@ async def _history_context(pool: asyncpg.Pool, root: Path):
                 "asset_uid": ref_asset,
                 "source_kind": "uploaded",
                 "storage_key": "not-returned",
-                "mime_type": "image/png",
+                "mime_type": "image/jpeg",
                 "byte_size": len(_png_bytes("blue")),
-                "width": 8,
-                "height": 6,
+                "width": 80,
+                "height": 60,
                 "content_sha256": sha256(_png_bytes("blue")).hexdigest(),
             }
         )
@@ -424,6 +424,13 @@ async def test_history_requires_auth_and_exposes_private_global_records_without_
 ) -> None:
     """Any login sees private prompts, labels, references, creator identity, and no secrets."""
     async with _history_context(initialized_image_pg_pool, tmp_path) as context:
+        async with initialized_image_pg_pool.acquire() as conn:
+            live_reference = await conn.fetchrow(
+                "SELECT mime_type, width, height FROM image_asset WHERE uid = $1",
+                context.assets["reference"],
+            )
+        assert live_reference is not None
+        assert tuple(live_reference.values()) == ("image/png", 8, 6)
         assert (await context.client.get("/image-history")).status_code == 401
         assert (await context.client.get("/image-history/summary")).status_code == 401
         response = await context.client.get("/image-history?limit=25", headers=_auth(context))
@@ -437,6 +444,10 @@ async def test_history_requires_auth_and_exposes_private_global_records_without_
         assert success["prompt"].endswith("never be truncated by the server")
         assert [ref["ordinal"] for ref in success["references"]] == [0, 1]
         assert [ref["asset_uid"] for ref in success["references"]] == [context.assets["reference"]] * 2
+        assert [(ref["mime_type"], ref["width"], ref["height"]) for ref in success["references"]] == [
+            ("image/jpeg", 80, 60),
+            ("image/jpeg", 80, 60),
+        ]
         assert success["output"]["asset_uid"] == context.assets["output"]
         assert success["attempt_count"] == 2
         assert success["known_cost_usd"] == "0.0300000000"
@@ -459,6 +470,7 @@ async def test_history_requires_auth_and_exposes_private_global_records_without_
             "lease_expires_at",
             "pending_output_storage_key",
             "storage_key",
+            "content_sha256",
             "provider_request_id",
             "asset_snapshot",
             "reference_node_uid",
@@ -506,6 +518,51 @@ async def test_history_summary_filters_statuses_and_null_zero_cost_usage_contrac
         )
         assert {item["user"]["uid"] for item in user_response.json()["items"]} == {context.users["alice"]}
         assert len(user_response.json()["items"]) == 2
+
+        attemptless_uid = gen_uid()
+        async with initialized_image_pg_pool.acquire() as conn:
+            await _insert_run(
+                conn,
+                generation_uid=attemptless_uid,
+                user_uid=context.users["carol"],
+                board_uid=context.boards["private"],
+                run_status="started",
+                started_at=datetime(2026, 8, 23, 2, 0, tzinfo=UTC),
+            )
+
+        damaged_summary_response = await context.client.get("/image-history/summary", headers=_auth(context))
+        assert damaged_summary_response.status_code == 200
+        damaged_summary = damaged_summary_response.json()
+        assert damaged_summary["overall"] == {
+            "generation_count": 6,
+            "succeeded_count": 2,
+            "failed_count": 1,
+            "active_count": 3,
+            "attempt_count": 6,
+            "priced_attempt_count": 3,
+            "cost_unreported_attempt_count": 3,
+            "known_cost_usd": "0.0300000000",
+            "usage": {"input_units": 5, "output_units": 7, "total_units": 12, "generated_images": 3},
+        }
+        carol = next(item for item in damaged_summary["users"] if item["user"]["username"] == "carol")
+        assert carol == {
+            "user": {"uid": context.users["carol"], "username": "carol", "name": "Carol"},
+            "generation_count": 1,
+            "succeeded_count": 0,
+            "failed_count": 0,
+            "active_count": 1,
+            "attempt_count": 0,
+            "priced_attempt_count": 0,
+            "cost_unreported_attempt_count": 0,
+            "known_cost_usd": None,
+            "usage": {"input_units": None, "output_units": None, "total_units": None, "generated_images": None},
+        }
+        with pytest.raises(RuntimeError, match="run has no audit attempt"):
+            await context.client.get(
+                "/image-history",
+                params={"user_uid": context.users["carol"]},
+                headers=_auth(context),
+            )
 
 
 @pytest.mark.asyncio

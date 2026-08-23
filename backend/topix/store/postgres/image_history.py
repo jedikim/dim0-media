@@ -59,7 +59,7 @@ run_rollup AS (
         attempts.generated_images
     FROM image_generation_run AS run
     JOIN users ON users.uid = run.user_uid
-    JOIN attempt_totals AS attempts ON attempts.generation_uid = run.uid
+    LEFT JOIN attempt_totals AS attempts ON attempts.generation_uid = run.uid
 )
 SELECT
     CASE WHEN GROUPING(user_uid) = 1 THEN 'overall' ELSE 'user' END AS scope,
@@ -199,11 +199,11 @@ async def _history_references(
 ) -> dict[str, list[ImageHistoryReference]]:
     """Batch ordered reference projections for all runs on one page."""
     rows = await conn.fetch(
-        "SELECT reference.generation_uid, reference.ordinal, asset.uid, "
-        "asset.mime_type, asset.width, asset.height "
+        "SELECT reference.generation_uid, reference.ordinal, reference.asset_uid AS uid, "
+        "reference.asset_snapshot ->> 'mime_type' AS mime_type, "
+        "(reference.asset_snapshot ->> 'width')::integer AS width, "
+        "(reference.asset_snapshot ->> 'height')::integer AS height "
         "FROM image_generation_reference AS reference "
-        "JOIN image_asset AS asset ON asset.uid = reference.asset_uid "
-        "AND asset.board_uid = reference.board_uid "
         "WHERE reference.generation_uid = ANY($1::text[]) "
         "ORDER BY reference.generation_uid, reference.ordinal",
         generation_uids,

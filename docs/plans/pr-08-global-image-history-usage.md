@@ -54,8 +54,11 @@ Creator는 `image_generation_run.user_uid`와 `users.uid`의 join으로 결정�
 - 현재 요청의 필터를 cursor와 독립적으로 parameter binding
 - run page를 먼저 고른 뒤 attempt 집계와 ordered reference를 각각 batch 조회
 - attempt와 reference를 raw join하지 않아 행 증식과 비용 중복을 방지
+- run page와 batch projection은 짧은 read-only `REPEATABLE READ` transaction에서 같은 snapshot을 사용
 
 Run별 cost와 usage는 실패 후 성공한 재시도를 포함한 모든 attempt의 합계다. retryable 오류는 최신 completed failed attempt의 저장된 safe message를 사용하고, failed run은 run의 safe error를 사용한다.
+
+Summary는 audit 손상을 조용히 숨기지 않도록 attempt가 없는 run도 generation/status/creator count에 포함하고 attempt count만 0으로 집계한다. 이때 cost와 usage는 `null`이다. 반면 목록은 run마다 provider 호출 전 attempt가 존재해야 한다는 audit 불변식을 fail-closed로 검사하며, 손상된 run을 발견하면 응답 생성을 거부한다. 별도 복구 시스템은 이번 범위가 아니다.
 
 ### `GET /image-history/{generation_uid}/assets/{asset_uid}/content`
 
@@ -73,6 +76,9 @@ Run별 cost와 usage는 실패 후 성공한 재시도를 포함한 모든 attem
 - `cost_usd IS NULL`은 `$0`이 아니다. 알려진 cost만 합산하고 미보고 attempt 수를 별도로 반환한다.
 - 모든 cost가 미보고면 합계는 `null`, 실제 보고된 0은 문자열 Decimal `"0"` 계열 값이다.
 - Decimal 합계는 서버가 수행하고 API는 문자열로 직렬화한다. frontend는 비용을 다시 합산하지 않는다.
+- Frontend는 `null`을 `미보고`, 실제 0을 `$0.0000`, 10자리 scale 안의 작은 양수를 손실 없는 금액, 파싱·범위 오류를 `비용 표시 오류`로 구분한다.
+
+Reference의 MIME·width·height는 요청 당시 immutable `asset_snapshot`에서 projection한다. UID와 ordinal만 reference row에서 읽고 snapshot 전체나 storage metadata는 반환하지 않는다. Content endpoint는 snapshot이 아니라 live `image_asset` 관계와 confined storage 검증을 계속 사용한다.
 
 ## board 표시
 

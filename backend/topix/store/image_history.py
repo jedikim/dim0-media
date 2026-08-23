@@ -55,15 +55,16 @@ class ImageHistoryStore:
         user_uid: str | None,
         status: GenerationStatus | None,
     ) -> ImageHistoryPage:
-        """Return one filtered newest-first keyset page."""
+        """Return one transactionally consistent newest-first keyset page."""
         async with self._pool().acquire() as conn:
-            return await list_image_history(
-                conn,
-                limit=limit,
-                cursor=cursor,
-                user_uid=user_uid,
-                status=status,
-            )
+            async with conn.transaction(isolation="repeatable_read", readonly=True):
+                return await list_image_history(
+                    conn,
+                    limit=limit,
+                    cursor=cursor,
+                    user_uid=user_uid,
+                    status=status,
+                )
 
     async def get_asset_scope(self, *, generation_uid: str, asset_uid: str) -> ImageHistoryAssetScope | None:
         """Return a board scope only for an asset related to the generation."""
