@@ -118,6 +118,9 @@ IMAGE_MODEL_CAPABILITIES: Mapping[str, ImageModelCapability] = MappingProxyType(
                 "16:9",
             ),
             supported_qualities=None,
+            # OpenRouter advertises n <= 6. Dim0 intentionally caps this at one
+            # until its audit, asset, and canonical result-node pipeline supports
+            # multiple outputs for one logical generation.
             max_output_images=1,
             verified_at=_VERIFIED_AT,
             source_urls=(_OPENROUTER_MODELS_URL,),

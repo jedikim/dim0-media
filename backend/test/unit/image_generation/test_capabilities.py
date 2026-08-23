@@ -29,13 +29,13 @@ from topix.image_generation.models import (
         ("bytedance-seed/seedream-5-0-pro", 14, ("1K", "2K"), 1),
     ],
 )
-def test_default_capabilities_match_verified_provider_metadata(
+def test_default_capabilities_preserve_verified_inputs_and_product_output_limits(
     model_id: str,
     max_references: int,
     resolutions: tuple[str, ...] | None,
     max_outputs: int,
 ) -> None:
-    """Registry entries preserve the exact verified limits for initial models."""
+    """Registry entries preserve verified inputs and explicit Dim0 output caps."""
     capability = get_capability(model_id)
 
     assert capability.max_reference_images == max_references
@@ -152,7 +152,6 @@ def test_new_models_reject_unadvertised_options(
 @pytest.mark.parametrize(
     "model_id",
     [
-        "qwen/qwen-image-3-pro",
         "google/gemini-3.1-flash-image",
         "bytedance-seed/seedream-5-0-pro",
     ],
@@ -162,6 +161,18 @@ def test_new_models_remain_single_output(model_id: str) -> None:
     with pytest.raises(CapabilityValidationError) as exc_info:
         validate_generation_parameters(
             model_id,
+            ImageGenerationParameters(output_count=2),
+            reference_count=0,
+        )
+
+    assert exc_info.value.code == "output_limit_exceeded"
+
+
+def test_qwen_provider_multi_output_is_capped_by_dim0_pipeline() -> None:
+    """Qwen output_count=2 is rejected by the single-result product contract."""
+    with pytest.raises(CapabilityValidationError) as exc_info:
+        validate_generation_parameters(
+            "qwen/qwen-image-3-pro",
             ImageGenerationParameters(output_count=2),
             reference_count=0,
         )
