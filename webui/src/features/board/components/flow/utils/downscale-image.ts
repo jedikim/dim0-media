@@ -13,8 +13,8 @@ export type DownscaleResult = {
 
 /**
  * Downscale an image file so that it fits inside a 1920x1080 box while preserving
- * aspect ratio. Re-encodes as JPEG unless the source is PNG with transparency.
- * Returns the original blob untouched when already within limits and encoded efficiently.
+ * aspect ratio. Preserves PNG/WebP transparency and re-encodes other inputs as JPEG.
+ * Reports the browser's actual encoded MIME when canvas falls back from WebP.
  */
 export async function downscaleImage(
   file: File,
@@ -40,24 +40,24 @@ export async function downscaleImage(
     throw new Error("Canvas 2D context unavailable")
   }
 
-  const isPng = file.type === "image/png"
-  if (!isPng) {
+  const preservesAlpha = file.type === "image/png" || file.type === "image/webp"
+  if (!preservesAlpha) {
     ctx.fillStyle = "#ffffff"
     ctx.fillRect(0, 0, targetW, targetH)
   }
   ctx.drawImage(bitmap, 0, 0, targetW, targetH)
   closeBitmap(bitmap)
 
-  const outputType = isPng ? "image/png" : "image/jpeg"
+  const outputType = preservesAlpha ? file.type : "image/jpeg"
   const blob: Blob = await new Promise((resolve, reject) => {
     canvas.toBlob(
       b => (b ? resolve(b) : reject(new Error("canvas.toBlob returned null"))),
       outputType,
-      isPng ? undefined : JPEG_QUALITY,
+      preservesAlpha ? undefined : JPEG_QUALITY,
     )
   })
 
-  return { blob, width: targetW, height: targetH, mimeType: outputType }
+  return { blob, width: targetW, height: targetH, mimeType: blob.type }
 }
 
 

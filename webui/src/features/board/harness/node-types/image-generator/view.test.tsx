@@ -437,6 +437,61 @@ describe("ImageGeneratorView", () => {
   })
 
 
+  it("offers same-mount automatic ensure recovery without regenerating", async () => {
+    const recreate = vi.fn()
+    mocks.useImageGeneration.mockReturnValue({
+      phase: "succeeded",
+      state: { generation_uid: "generation-1", output_asset_uid: "asset-1" },
+      error: null,
+      generate: mocks.generate,
+      resumePending: mocks.resumePending,
+      checkStatusAgain: mocks.checkStatusAgain,
+      hasPendingRequest: false,
+      canResumePending: false,
+    })
+    mocks.useOutputNode.mockReturnValue({
+      outputNodeUid: null,
+      nodePresent: false,
+      selectResult: vi.fn(),
+      recreate,
+      recreating: false,
+      error: "결과 노드를 준비하지 못했습니다.",
+    })
+    await render()
+
+    const recovery = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "결과 노드 추가 다시 시도")
+    act(() => recovery?.click())
+    expect(recreate).toHaveBeenCalledTimes(1)
+    expect(mocks.generate).not.toHaveBeenCalled()
+
+    mocks.useOutputNode.mockReturnValue({
+      outputNodeUid: "a".repeat(32),
+      nodePresent: true,
+      selectResult: vi.fn(),
+      recreate,
+      recreating: false,
+      error: null,
+    })
+    await render()
+    expect(container.textContent).toContain("완료")
+    expect(container.textContent).not.toContain("결과 노드 추가 다시 시도")
+
+    useBoardAppStore.setState({ canEdit: false })
+    mocks.useOutputNode.mockReturnValue({
+      outputNodeUid: null,
+      nodePresent: false,
+      selectResult: vi.fn(),
+      recreate,
+      recreating: false,
+      error: "결과 노드를 준비하지 못했습니다.",
+    })
+    await render()
+    expect(container.textContent).not.toContain("결과 노드 추가 다시 시도")
+    expect(recreate).toHaveBeenCalledTimes(1)
+  })
+
+
   it("locks generator inputs while an explicit result recreation is running", async () => {
     mocks.useOutputNode.mockReturnValue({
       outputNodeUid: "a".repeat(32),
@@ -802,13 +857,17 @@ describe("ImageGeneratorView", () => {
     properties.imageModelId = { type: "keyword", value: "model-i2i" }
     mocks.listImageModels.mockResolvedValue([I2I_MODEL, LARGE_I2I_MODEL])
     let uploadIndex = 0
-    mocks.addImage.mockImplementation(async (file: File) => {
+    mocks.addImage.mockImplementation(async (
+      file: File,
+      options: { resolvePosition?: (size: { width: number; height: number }) => { x: number; y: number } },
+    ) => {
       const sourceId = `uploaded-${uploadIndex += 1}`
+      const position = options.resolvePosition?.({ width: 200, height: 120 }) ?? { x: 0, y: 0 }
       mocks.sourceNodes.set(sourceId, {
         id: sourceId,
         type: "image",
-        x: 0,
-        y: 0,
+        x: position.x,
+        y: position.y,
         w: 200,
         h: 120,
         data: {
@@ -850,6 +909,8 @@ describe("ImageGeneratorView", () => {
       x: 276,
       y: 236,
     }))
+    expect(mocks.updateNode.mock.calls.filter(([nodeId]) => String(nodeId).startsWith("uploaded-")))
+      .toHaveLength(0)
     expect(container.querySelectorAll('[aria-label="Image references"] img')).toHaveLength(2)
     expect(mocks.generate).not.toHaveBeenCalled()
   })
@@ -1048,6 +1109,54 @@ describe("ImageGeneratorView", () => {
       await Promise.resolve()
     })
     expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+  })
+
+
+  it("does not invent a zero reference limit while models are pending", async () => {
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, unknown>
+    }).properties
+    properties.imageModelId = { type: "keyword", value: "model-i2i" }
+    for (let index = 0; index < 2; index += 1) {
+      const source = `pending-image-${index}`
+      mocks.sourceNodes.set(source, {
+        id: source,
+        type: "image",
+        data: { graphUid: "board-1", src: "data:image/png;base64,c2FmZQ==", properties: {} },
+      })
+      mocks.edges.push(referenceEdge(`pending-edge-${index}`, source, index))
+    }
+    mocks.listImageModels.mockReturnValue(new Promise(() => undefined))
+
+    await render()
+
+    expect(container.textContent).toContain("참조 이미지 2 / —")
+    expect(container.textContent).not.toContain("초과")
+    expect(container.querySelector('[aria-label="Image references"]')?.innerHTML)
+      .not.toContain("border-destructive")
+  })
+
+
+  it("keeps reference limits unresolved after a safe model-list failure", async () => {
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, unknown>
+    }).properties
+    properties.imageModelId = { type: "keyword", value: "model-i2i" }
+    mocks.sourceNodes.set("failed-image", {
+      id: "failed-image",
+      type: "image",
+      data: { graphUid: "board-1", src: "data:image/png;base64,c2FmZQ==", properties: {} },
+    })
+    mocks.edges.push(referenceEdge("failed-edge", "failed-image", 0))
+    mocks.listImageModels.mockRejectedValue(new Error("provider secret"))
+
+    await render()
+
+    expect(container.textContent).toContain("참조 이미지 1 / —")
+    expect(container.textContent).not.toContain("1 / 0")
+    expect(container.textContent).not.toContain("초과")
+    expect(container.querySelector('[aria-label="Image references"]')?.innerHTML)
+      .not.toContain("border-destructive")
   })
 
 

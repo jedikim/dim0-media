@@ -294,6 +294,35 @@ describe("useImageGenerationOutputNode", () => {
   })
 
 
+  it("recovers a failed automatic ensure with one explicit same-run PUT", async () => {
+    mocks.ensure
+      .mockRejectedValueOnce(outputNodeError("materialization_raced"))
+      .mockRejectedValueOnce(outputNodeError("materialization_raced"))
+      .mockRejectedValueOnce(outputNodeError("materialization_raced"))
+      .mockResolvedValueOnce(successfulOutcome("generation-recover"))
+
+    await render(generation("generation-recover"))
+    await act(() => vi.advanceTimersByTimeAsync(250))
+    await act(() => vi.advanceTimersByTimeAsync(500))
+    expect(latest?.outputNodeUid).toBeNull()
+    expect(latest?.error).toBe("안전한 결과 노드 오류")
+
+    await act(async () => {
+      await latest?.recreate()
+    })
+
+    expect(mocks.ensure).toHaveBeenCalledTimes(4)
+    expect(mocks.ensure).toHaveBeenLastCalledWith(
+      BOARD_ID,
+      "generation-recover",
+      true,
+      expect.any(AbortSignal),
+    )
+    expect(latest?.outputNodeUid).toBe(OUTPUT_NODE_UID)
+    expect(latest?.error).toBeNull()
+  })
+
+
   it("aborts a scheduled race retry when the generation changes", async () => {
     const signals: AbortSignal[] = []
     mocks.ensure.mockImplementation(

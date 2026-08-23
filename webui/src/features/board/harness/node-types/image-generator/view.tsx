@@ -484,8 +484,10 @@ function SyncedImageGeneratorCard({
     ),
     [models],
   )
-  const referenceLimit = model?.max_reference_images ?? 0
-  const referenceOverflow = Math.max(0, references.length - referenceLimit)
+  const referenceLimit = model?.max_reference_images ?? null
+  const referenceOverflow = referenceLimit === null
+    ? 0
+    : Math.max(0, references.length - referenceLimit)
   const storedPrompt = readTextProperty(properties.imagePrompt)
   const persistPrompt = useCallback((next: string): void => {
     patchProperties({ imagePrompt: { type: "text", text: next } })
@@ -541,18 +543,14 @@ function SyncedImageGeneratorCard({
     try {
       for (const file of files) {
         const sourceNodeId = await addImage(file, {
-          position: {
-            x: generator.x - 234,
-            y: nextY + 210,
-          },
+          resolvePosition: (size) => ({
+            x: generator.x - size.width - 24,
+            y: nextY,
+          }),
         })
         if (!sourceNodeId) continue
         const source = store.getNode(sourceNodeId)
         if (!source) continue
-        store.updateNode(sourceNodeId, {
-          x: generator.x - source.w - 24,
-          y: nextY,
-        })
         nextY += source.h + 16
         const edgeId = addImageReferenceEdge({
           store,
@@ -594,7 +592,7 @@ function SyncedImageGeneratorCard({
 
       <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
         <span>
-          참조 이미지 {references.length} / {referenceLimit}
+          참조 이미지 {references.length} / {referenceLimit ?? "—"}
           {referenceOverflow > 0 && (
             <span className="text-destructive"> · {referenceOverflow}장 초과</span>
           )}
@@ -629,7 +627,9 @@ function SyncedImageGeneratorCard({
             key={String(reference.edge.id)}
             className={cn(
               "relative size-20 shrink-0 overflow-hidden rounded-md border bg-muted/40",
-              index >= referenceLimit ? "border-destructive" : "border-border",
+              referenceLimit !== null && index >= referenceLimit
+                ? "border-destructive"
+                : "border-border",
             )}
           >
             <ReferenceThumbnail graphId={graphId} sourceNodeId={reference.sourceNodeId} />
@@ -645,7 +645,7 @@ function SyncedImageGeneratorCard({
             >
               <X className="size-3" />
             </button>
-            {index >= referenceLimit && (
+            {referenceLimit !== null && index >= referenceLimit && (
               <span className="absolute bottom-0 right-0 rounded-tl bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
                 초과
               </span>
@@ -774,6 +774,18 @@ function SyncedImageGeneratorCard({
                 )}
               </>
             )
+          ) : outputNode.error && canEdit ? (
+            <>
+              <span>결과 노드를 추가하지 못했습니다.</span>
+              <button
+                type="button"
+                className="rounded-md border border-border px-2 py-1 text-foreground disabled:opacity-50"
+                disabled={outputNode.recreating}
+                onClick={() => void outputNode.recreate()}
+              >
+                {outputNode.recreating ? "추가 중…" : "결과 노드 추가 다시 시도"}
+              </button>
+            </>
           ) : <span>완료 · 결과 노드 준비 중</span>}
         </div>
       )}

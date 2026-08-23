@@ -53,6 +53,8 @@ export type AddImageOptions = {
   position?: { x: number; y: number }
   /** Optional offset added on top of `position` (used to stagger multi-drops). */
   positionOffset?: { x: number; y: number }
+  /** Optional final top-left resolver evaluated after the image size is known. */
+  resolvePosition?: (size: { width: number; height: number }) => { x: number; y: number }
 }
 
 
@@ -81,7 +83,11 @@ export const useHarnessAddImage = (
       if (!boardId || !canEdit) return null
       try {
         const { blob, width, height, mimeType } = await downscaleImage(file)
-        const ext = mimeType === "image/png" ? "png" : "jpg"
+        const ext = mimeType === "image/png"
+          ? "png"
+          : mimeType === "image/webp"
+          ? "webp"
+          : "jpg"
         const base = file.name?.replace(/\.[^.]+$/, "") || "image"
         const filename = `${base}.${ext}`
         const dataUrl = local
@@ -103,7 +109,7 @@ export const useHarnessAddImage = (
               y: options.position.y + (options.positionOffset?.y ?? 0),
             }
           : { x: 0, y: 0 }
-        const position = {
+        const position = options.resolvePosition?.(size) ?? {
           x: center.x - size.width / 2,
           y: center.y - size.height / 2,
         }
