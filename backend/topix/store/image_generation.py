@@ -18,6 +18,7 @@ from topix.image_generation.models import (
     GenerationStorageState,
     ImageAssetCreate,
     ImageAssetRecord,
+    ImageGenerationDetailsRecord,
     ImageGenerationOutputRecord,
     ImageGenerationRecord,
     ImageProviderError,
@@ -36,6 +37,7 @@ from topix.store.postgres.image_generation import (
     get_image_asset,
     get_image_assets,
     get_image_generation,
+    get_image_generation_details,
     get_image_generation_output,
     list_generation_pending_outputs,
     lock_image_generation_output,
@@ -190,6 +192,20 @@ class ImageGenerationStore:
         """Return one board-scoped generation for polling."""
         async with self._pool().acquire() as conn:
             return await get_image_generation(conn, board_uid=board_uid, generation_uid=generation_uid)
+
+    async def get_generation_details(
+        self,
+        *,
+        board_uid: str,
+        generation_uid: str,
+    ) -> ImageGenerationDetailsRecord | None:
+        """Return board-scoped immutable provenance for an authorized reader."""
+        async with self._pool().acquire() as conn:
+            return await get_image_generation_details(
+                conn,
+                board_uid=board_uid,
+                generation_uid=generation_uid,
+            )
 
     async def get_output_record(
         self,

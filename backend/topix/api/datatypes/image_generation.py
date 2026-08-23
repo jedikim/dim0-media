@@ -77,6 +77,27 @@ class ImageGenerationStatusResponse(ImageGenerationAPIModel):
     error_message: str | None
 
 
+class ImageGenerationReferenceDetailsResponse(ImageGenerationAPIModel):
+    """Safe immutable metadata for one ordered generation reference."""
+
+    ordinal: int
+    asset_uid: str
+    mime_type: str
+    width: int
+    height: int
+    content_url: str
+
+
+class ImageGenerationDetailsResponse(ImageGenerationAPIModel):
+    """Read-only prompt, options, and reference provenance for one run."""
+
+    generation_uid: str
+    model_id: str
+    prompt: str
+    parameters: ImageGenerationParameters
+    references: tuple[ImageGenerationReferenceDetailsResponse, ...]
+
+
 class ImageGenerationOutputNodeRequest(ImageGenerationAPIModel):
     """Only client choice accepted by the canonical output-node endpoint."""
 

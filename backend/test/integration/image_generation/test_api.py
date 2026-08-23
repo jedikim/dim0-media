@@ -74,17 +74,17 @@ class _FakeGraphStore:
     def __init__(self, *, board_uid: str, roles: dict[str, str]) -> None:
         """Bind role fixtures to one existing private board."""
         self.board_uid = board_uid
-        self.roles = roles
+        self.roles_by_board = {board_uid: roles}
         self.nodes: dict[str, Note | SimpleNamespace] = {}
         self.links: dict[str, Link] = {}
 
     async def get_graph_role(self, graph_uid: str, user_uid: str) -> str | None:
         """Return a role only for the configured board."""
-        return self.roles.get(user_uid) if graph_uid == self.board_uid else None
+        return self.roles_by_board.get(graph_uid, {}).get(user_uid)
 
     async def get_graph_metadata(self, graph_uid: str):
         """Return private board metadata for read-access fallback checks."""
-        if graph_uid != self.board_uid:
+        if graph_uid not in self.roles_by_board:
             return None
         return SimpleNamespace(deleted_at=None, visibility="private")
 
@@ -210,6 +210,10 @@ async def _api_context(pool: asyncpg.Pool, root):
         board_uid=board_uid,
         roles={owner_uid: "owner", member_uid: "member", viewer_uid: "viewer"},
     )
+    graph_store.roles_by_board[foreign_board_uid] = {
+        owner_uid: "owner",
+        viewer_uid: "viewer",
+    }
     bridge = _FakeBridge(graph_store)
     app = FastAPI()
     app.include_router(router)
@@ -517,6 +521,99 @@ async def test_polling_and_content_are_board_read_scoped_and_hide_storage(
         assert content.headers["cache-control"] == "private, no-store"
         assert content.content == _image_bytes()
         assert str(tmp_path) not in content.text
+
+
+@pytest.mark.asyncio
+async def test_generation_details_are_lazy_safe_ordered_and_board_scoped(
+    initialized_image_pg_pool: asyncpg.Pool,
+    tmp_path,
+) -> None:
+    """Viewers receive ordered provenance while wrong-board IDs reveal nothing."""
+    async with _api_context(initialized_image_pg_pool, tmp_path) as context:
+        owner_headers = {"X-Test-User": context.owner_uid}
+        asset_uids: list[str] = []
+        expected_references: list[dict[str, object]] = []
+        for ordinal, size in enumerate(((7, 5), (8, 6), (9, 7))):
+            content = _image_bytes(size=size)
+            uploaded = await context.client.post(
+                f"/boards/{context.board_uid}/image-assets",
+                headers=owner_headers,
+                files={"file": (f"reference-{ordinal}.png", content, "image/png")},
+            )
+            assert uploaded.status_code == 201
+            asset_uid = uploaded.json()["asset_uid"]
+            asset_uids.append(asset_uid)
+            expected_references.append(
+                {
+                    "ordinal": ordinal,
+                    "asset_uid": asset_uid,
+                    "mime_type": "image/png",
+                    "width": size[0],
+                    "height": size[1],
+                    "content_url": (f"/boards/{context.board_uid}/image-assets/{asset_uid}/content"),
+                }
+            )
+
+        prompt = "first line\nsecond line"
+        created = await context.client.post(
+            f"/boards/{context.board_uid}/image-generations",
+            headers=owner_headers,
+            json=_request_body(prompt=prompt)
+            | {
+                "parameters": {
+                    "aspect_ratio": "1:1",
+                    "resolution": "1K",
+                    "quality": "low",
+                    "output_count": 1,
+                },
+                "reference_asset_uids": asset_uids,
+            },
+        )
+        assert created.status_code == 202
+        generation_uid = created.json()["generation_uid"]
+        await context.tasks.wait()
+        path = f"/boards/{context.board_uid}/image-generations/{generation_uid}/details"
+
+        assert (await context.client.get(path)).status_code == 401
+        outsider = await context.client.get(
+            path,
+            headers={"X-Test-User": context.stranger_uid},
+        )
+        assert outsider.status_code == 404
+        wrong_board = await context.client.get(
+            f"/boards/{context.foreign_board_uid}/image-generations/{generation_uid}/details",
+            headers={"X-Test-User": context.viewer_uid},
+        )
+        assert wrong_board.status_code == 404
+
+        response = await context.client.get(
+            path,
+            headers={"X-Test-User": context.viewer_uid},
+        )
+        assert response.status_code == 200
+        assert response.json() == {
+            "generation_uid": generation_uid,
+            "model_id": "x-ai/grok-imagine-image-2.0",
+            "prompt": prompt,
+            "parameters": {
+                "aspect_ratio": "1:1",
+                "resolution": "1K",
+                "quality": "low",
+                "output_count": 1,
+            },
+            "references": expected_references,
+        }
+        serialized = response.text.lower()
+        for forbidden in (
+            "storage_key",
+            "user_uid",
+            "api_key",
+            "authorization",
+            "provider_request",
+            str(tmp_path).lower(),
+        ):
+            assert forbidden not in serialized
+        assert len(context.adapter.requests) == 1
 
 
 @pytest.mark.asyncio

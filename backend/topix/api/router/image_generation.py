@@ -11,8 +11,10 @@ from topix.api.datatypes.image_generation import (
     ImageAssetUploadResponse,
     ImageGenerationAcceptedResponse,
     ImageGenerationCreateRequest,
+    ImageGenerationDetailsResponse,
     ImageGenerationOutputNodeRequest,
     ImageGenerationOutputNodeResponse,
+    ImageGenerationReferenceDetailsResponse,
     ImageGenerationStatusResponse,
     ImageModelListResponse,
     ImageModelResponse,
@@ -222,6 +224,44 @@ async def get_image_generation(
         output_content_url=output_url,
         error_code=generation.error_code,
         error_message=generation.error_message,
+    )
+
+
+@router.get(
+    "/boards/{graph_id}/image-generations/{generation_uid}/details",
+    response_model=ImageGenerationDetailsResponse,
+)
+async def get_image_generation_details(
+    request: Request,
+    graph_id: Annotated[str, Path(description="Graph ID")],
+    generation_uid: Annotated[str, Path(description="Image generation UID")],
+    user_uid: Annotated[str, Depends(get_current_user_uid)],
+    _: Annotated[None, Depends(verify_board_read_access)],
+) -> ImageGenerationDetailsResponse:
+    """Return board-scoped immutable provenance without storage internals."""
+    service: ImageGenerationService = request.app.image_generation_service
+    details = await service.get_generation_details(
+        board_uid=graph_id,
+        generation_uid=generation_uid,
+    )
+    if details is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image generation not found")
+    return ImageGenerationDetailsResponse(
+        generation_uid=details.generation_uid,
+        model_id=details.model_id,
+        prompt=details.prompt,
+        parameters=details.parameters,
+        references=tuple(
+            ImageGenerationReferenceDetailsResponse(
+                ordinal=reference.ordinal,
+                asset_uid=reference.asset_uid,
+                mime_type=reference.mime_type,
+                width=reference.width,
+                height=reference.height,
+                content_url=(f"/boards/{graph_id}/image-assets/{reference.asset_uid}/content"),
+            )
+            for reference in details.references
+        ),
     )
 
 

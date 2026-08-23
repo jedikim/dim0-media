@@ -16,8 +16,10 @@ from topix.image_generation.models import (
     ImageAssetRecord,
     ImageAssetResolutionError,
     ImageAssetSource,
+    ImageGenerationDetailsRecord,
     ImageGenerationOutputRecord,
     ImageGenerationRecord,
+    ImageGenerationReferenceDetails,
     ImageProviderError,
     InvalidGenerationTransition,
     PendingOutputCleanup,
@@ -148,6 +150,38 @@ async def get_image_generation(
         board_uid,
     )
     return ImageGenerationRecord.model_validate(dict(row)) if row is not None else None
+
+
+async def get_image_generation_details(
+    conn: asyncpg.Connection,
+    *,
+    board_uid: str,
+    generation_uid: str,
+) -> ImageGenerationDetailsRecord | None:
+    """Return board-scoped provenance without exposing storage metadata."""
+    run = await conn.fetchrow(
+        "SELECT uid AS generation_uid, board_uid, model_id, prompt, parameters FROM image_generation_run WHERE uid = $1 AND board_uid = $2",
+        generation_uid,
+        board_uid,
+    )
+    if run is None:
+        return None
+    rows = await conn.fetch(
+        "SELECT ordinal, asset_uid, asset_snapshot ->> 'mime_type' AS mime_type, "
+        "(asset_snapshot ->> 'width')::integer AS width, "
+        "(asset_snapshot ->> 'height')::integer AS height "
+        "FROM image_generation_reference "
+        "WHERE generation_uid = $1 AND board_uid = $2 ORDER BY ordinal ASC",
+        generation_uid,
+        board_uid,
+    )
+    run_payload = dict(run)
+    if isinstance(run_payload["parameters"], str):
+        run_payload["parameters"] = json.loads(run_payload["parameters"])
+    return ImageGenerationDetailsRecord(
+        **run_payload,
+        references=tuple(ImageGenerationReferenceDetails.model_validate(dict(row)) for row in rows),
+    )
 
 
 async def lock_image_generation_output(

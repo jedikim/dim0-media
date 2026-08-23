@@ -19,6 +19,7 @@ from topix.image_generation.models import (
     ImageAssetRecord,
     ImageAssetSource,
     ImageContentValidationError,
+    ImageGenerationDetailsRecord,
     ImageGenerationParameters,
     ImageGenerationRecord,
     ImageProviderError,
@@ -427,6 +428,18 @@ class ImageGenerationService:
     async def get_generation(self, *, board_uid: str, generation_uid: str) -> ImageGenerationRecord | None:
         """Return one board-scoped generation polling record."""
         return await self._store.get_generation(board_uid=board_uid, generation_uid=generation_uid)
+
+    async def get_generation_details(
+        self,
+        *,
+        board_uid: str,
+        generation_uid: str,
+    ) -> ImageGenerationDetailsRecord | None:
+        """Return safe board-scoped provenance for a read-only details view."""
+        return await self._store.get_generation_details(
+            board_uid=board_uid,
+            generation_uid=generation_uid,
+        )
 
     async def get_asset_content(self, *, board_uid: str, asset_uid: str) -> tuple[ImageAssetRecord, bytes] | None:
         """Return verified asset bytes for an authenticated board reader."""
