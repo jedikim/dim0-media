@@ -86,8 +86,11 @@ describe("useHarnessAddImage asset registration", () => {
   it("registers a synced upload and stores imageAssetUid.value", async () => {
     mount(false)
 
+    let addedNodeId: ReturnType<CanvasStore["addNode"]> | null | undefined
     await act(async () => {
-      await addImage?.(new File(["source"], "source.png", { type: "image/png" }))
+      addedNodeId = await addImage?.(
+        new File(["source"], "source.png", { type: "image/png" }),
+      )
     })
 
     expect(uploadImageAsset).toHaveBeenCalledTimes(1)
@@ -96,6 +99,7 @@ describe("useHarnessAddImage asset registration", () => {
     const data = node.data as {
       properties: { imageAssetUid: { value: string } }
     }
+    expect(addedNodeId).toBe(node.id)
     expect(data.properties.imageAssetUid.value).toBe(ASSET_UID)
   })
 
@@ -119,12 +123,12 @@ describe("useHarnessAddImage asset registration", () => {
     useBoardAppStore.setState({ canEdit: false })
     mount(false)
 
-    let added: boolean | undefined
+    let added: ReturnType<CanvasStore["addNode"]> | null | undefined
     await act(async () => {
       added = await addImage?.(new File(["source"], "source.png", { type: "image/png" }))
     })
 
-    expect(added).toBe(false)
+    expect(added).toBeNull()
     expect(downscaleImage).not.toHaveBeenCalled()
     expect(uploadImageAsset).not.toHaveBeenCalled()
     expect(uploadImage).not.toHaveBeenCalled()

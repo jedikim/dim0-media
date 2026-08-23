@@ -1,6 +1,6 @@
 import { useCallback } from "react"
 import { toast } from "sonner"
-import type { CanvasStore } from "@canvas-harness/core"
+import type { CanvasStore, NodeId } from "@canvas-harness/core"
 import { uploadImage } from "@/features/board/api/upload-image"
 import {
   imageGenerationStatusCode,
@@ -77,8 +77,8 @@ export const useHarnessAddImage = (
   const { local } = useBoardRuntime()
   const canEdit = useBoardAppStore((state) => state.canEdit)
   return useCallback(
-    async (file: File, options: AddImageOptions = {}): Promise<boolean> => {
-      if (!boardId || !canEdit) return false
+    async (file: File, options: AddImageOptions = {}): Promise<NodeId | null> => {
+      if (!boardId || !canEdit) return null
       try {
         const { blob, width, height, mimeType } = await downscaleImage(file)
         const ext = mimeType === "image/png" ? "png" : "jpg"
@@ -119,11 +119,11 @@ export const useHarnessAddImage = (
 
         const id = store.addNode(noteToNode(note))
         store.setSelection([id])
-        return true
+        return id
       } catch {
         console.error("[useHarnessAddImage] failed")
         toast.error(`Failed to add "${file.name}"`)
-        return false
+        return null
       }
     },
     [store, boardId, rootId, local, canEdit],

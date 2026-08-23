@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { asEdgeId } from "@canvas-harness/core"
 import type { CanvasStore, Edge, EdgeEnd, EdgeId, NodeId } from "@canvas-harness/core"
 
 
@@ -19,6 +20,12 @@ export type OrderedImageReference = {
   edge: Edge
   sourceNodeId: NodeId
   ordinal: number
+}
+
+
+/** Return whether an edge carries the persisted generator-reference marker. */
+export function isImageReferenceEdge(edge: Pick<Edge, "data"> | undefined): boolean {
+  return (edge?.data as ImageReferenceEdgeData | null)?.imageReference === true
 }
 
 
@@ -92,6 +99,53 @@ export function nextImageReferenceOrdinal(
     .filter((reference) => reference.edge.id !== excludeEdgeId)
     .map((reference) => reference.ordinal)
   return ordinals.length === 0 ? 0 : Math.max(...ordinals) + 1
+}
+
+
+/** Add one explicit source-to-generator reference with complete initial metadata. */
+export function addImageReferenceEdge({
+  store,
+  sourceNodeId,
+  targetNodeId,
+  graphUid,
+  parentId,
+}: {
+  store: CanvasStore
+  sourceNodeId: NodeId
+  targetNodeId: NodeId
+  graphUid: string
+  parentId?: string
+}): EdgeId | null {
+  const source = store.getNode(sourceNodeId)
+  const target = store.getNode(targetNodeId)
+  if (!source || target?.type !== "image-generator") return null
+  if (
+    source.type !== "image"
+    && source.type !== "image-generator"
+    && source.type !== "generated-image"
+  ) return null
+  if (isImageReferenceTargetLocked(targetNodeId)) return null
+  if (orderedImageReferences(store, targetNodeId).some(
+    (reference) => reference.sourceNodeId === sourceNodeId,
+  )) return null
+
+  const edgeId = asEdgeId(store.generateId())
+  store.addEdge({
+    id: edgeId,
+    source: { nodeId: sourceNodeId, localOffset: { x: source.w, y: source.h / 2 } },
+    target: { nodeId: targetNodeId, localOffset: { x: 0, y: target.h / 2 } },
+    pathStyle: "bezier",
+    groups: [],
+    data: {
+      version: 1,
+      createdAt: new Date().toISOString(),
+      graphUid,
+      parentId,
+      imageReference: true,
+      imageReferenceOrdinal: nextImageReferenceOrdinal(store, targetNodeId),
+    },
+  })
+  return store.getEdge(edgeId) ? edgeId : null
 }
 
 

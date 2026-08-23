@@ -63,6 +63,7 @@ import { useHydrateIconNodes } from "./use-hydrate-icon-nodes"
 import { usePresentationMode } from "./use-presentation-mode"
 import { useBlockFolderCopy } from "./use-block-folder-copy"
 import { resolveStoredEdgeColors, useStampNewEdges } from "./use-stamp-new-edges"
+import { isImageReferenceEdge } from "../image-reference-edges"
 import { useStampNewNodes } from "./use-stamp-new-nodes"
 import { useLocalSearchIndex } from "@/features/board/search/use-search-index"
 import { isBrowserAgentActive } from "@/features/agent/local/local-agent-flag"
@@ -302,8 +303,11 @@ export function HarnessCanvas({ local = false }: { local?: boolean } = {}) {
             }
           }
         }
-        // Edge hits: lib already called `beginEdit(edgeId)` — that's
-        // exactly the edge-label editor we want. Nothing further to do.
+        // Reference edges carry no user label. The library begins editing an
+        // edge before this callback, so explicitly cancel only this edge kind.
+        if ("edgeId" in hit && isImageReferenceEdge(store.getEdge(hit.edgeId))) {
+          store.cancelEdit()
+        }
         return
       }
 

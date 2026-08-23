@@ -142,7 +142,19 @@ export const useStampNewEdges = (
         // rejected edge was stored, and callers must inspect the store if needed.
         return edge.id
       }
-      return originalAddEdge(edge)
+      if (!canEdit || local || !endpoints) return originalAddEdge(edge)
+      return originalAddEdge({
+        ...edge,
+        data: {
+          ...(edge.data ?? {}),
+          imageReference: true,
+          imageReferenceOrdinal: nextImageReferenceOrdinal(
+            store,
+            endpoints.targetNodeId,
+            edge.id,
+          ),
+        },
+      })
     }
     const guardedUpdateEdge: CanvasStore["updateEdge"] = (edgeId, patch) => {
       const current = store.getEdge(edgeId)

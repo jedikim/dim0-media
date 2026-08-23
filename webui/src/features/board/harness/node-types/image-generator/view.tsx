@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { NodeId } from "@canvas-harness/core"
 import { useCanvasStore, useNode } from "@canvas-harness/react"
-import { X } from "@phosphor-icons/react"
+import { Plus, X } from "@phosphor-icons/react"
+import { toast } from "sonner"
 
 import { ImageStackIcon } from "@/components/icons"
 import {
@@ -18,8 +19,10 @@ import type { NoteProperties } from "@/features/board/types/note"
 import { cn } from "@/lib/utils"
 import { useAppStore } from "@/store"
 import { useBoardRuntime } from "../../canvas/board-runtime-context"
+import { useHarnessAddImage } from "../../canvas/use-add-image"
 import type { NoteNodeData } from "../../convert/note-to-node"
 import {
+  addImageReferenceEdge,
   orderedImageReferences,
   useImageReferenceTargetLock,
   useOrderedImageReferences,
@@ -345,6 +348,9 @@ function SyncedImageGeneratorCard({
 }) {
   const store = useCanvasStore()
   const graphId = data.graphUid
+  const addImage = useHarnessAddImage(store, graphId, data.parentId ?? null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [addingReferences, setAddingReferences] = useState(false)
   const nodeId = String(id)
   const userId = useAppStore((state) => state.userId)
   const rawPendingRequest = readTextProperty(properties.imagePendingRequest)
@@ -442,8 +448,9 @@ function SyncedImageGeneratorCard({
     || generation.phase === "running"
     || generation.phase === "stalled"
     || outputNode.recreating
-  const inputsLocked = !canEdit || busy || generation.hasPendingRequest
-  useImageReferenceTargetLock(id, inputsLocked)
+  const generationInputsLocked = !canEdit || busy || generation.hasPendingRequest
+  const inputsLocked = generationInputsLocked || addingReferences
+  useImageReferenceTargetLock(id, generationInputsLocked)
 
   const storedModelId = readKeywordProperty(properties.imageModelId)
   const hasReferences = references.length > 0
@@ -470,11 +477,20 @@ function SyncedImageGeneratorCard({
       ? storedModel
       : null
     : compatibleModels[0] ?? null
+  const globalReferenceLimit = useMemo(
+    () => models.reduce(
+      (maximum, candidate) => Math.max(maximum, candidate.max_reference_images),
+      0,
+    ),
+    [models],
+  )
+  const referenceLimit = model?.max_reference_images ?? 0
+  const referenceOverflow = Math.max(0, references.length - referenceLimit)
   const storedPrompt = readTextProperty(properties.imagePrompt)
   const persistPrompt = useCallback((next: string): void => {
     patchProperties({ imagePrompt: { type: "text", text: next } })
   }, [patchProperties])
-  const prompt = usePromptDraft(storedPrompt, persistPrompt, inputsLocked)
+  const prompt = usePromptDraft(storedPrompt, persistPrompt, generationInputsLocked)
   const aspectRatio = readKeywordProperty(properties.imageAspectRatio)
   const resolution = readKeywordProperty(properties.imageResolution)
   const quality = readKeywordProperty(properties.imageQuality)
@@ -491,10 +507,6 @@ function SyncedImageGeneratorCard({
       : {}),
   }), [aspectRatio, model, quality, resolution])
 
-  const { url: previewUrl, failed: previewFailed } = useAuthedImage(
-    graphId,
-    outputNode.outputNodeUid ? null : generation.state?.output_asset_uid ?? null,
-  )
   const canGenerate = canEdit
     && !modelsLoading
     && !modelsError
@@ -503,6 +515,60 @@ function SyncedImageGeneratorCard({
     && !storedModelUnavailable
     && prompt.draft.trim().length > 0
     && !inputsLocked
+  const canAddReferences = canEdit
+    && !generationInputsLocked
+    && !addingReferences
+    && globalReferenceLimit > 0
+    && references.length < globalReferenceLimit
+
+  const addReferenceFiles = useCallback(async (files: readonly File[]): Promise<void> => {
+    if (files.length === 0 || !canAddReferences) return
+    const supportedMimeTypes = new Set(["image/png", "image/jpeg", "image/webp"])
+    if (files.some((file) => !supportedMimeTypes.has(file.type))) {
+      toast.error("PNG, JPEG 또는 WebP 이미지만 참조로 추가할 수 있습니다.")
+      return
+    }
+    const available = globalReferenceLimit - orderedImageReferences(store, id).length
+    if (files.length > available) {
+      toast.error(`참조 이미지는 최대 ${globalReferenceLimit}장까지 추가할 수 있습니다.`)
+      return
+    }
+    const generator = store.getNode(id)
+    if (!generator) return
+
+    setAddingReferences(true)
+    let nextY = generator.y
+    try {
+      for (const file of files) {
+        const sourceNodeId = await addImage(file, {
+          position: {
+            x: generator.x - 234,
+            y: nextY + 210,
+          },
+        })
+        if (!sourceNodeId) continue
+        const source = store.getNode(sourceNodeId)
+        if (!source) continue
+        store.updateNode(sourceNodeId, {
+          x: generator.x - source.w - 24,
+          y: nextY,
+        })
+        nextY += source.h + 16
+        const edgeId = addImageReferenceEdge({
+          store,
+          sourceNodeId,
+          targetNodeId: id,
+          graphUid: graphId,
+          parentId: data.parentId,
+        })
+        if (!edgeId) {
+          toast.error(`"${file.name}" 이미지는 추가했지만 참조로 연결하지 못했습니다.`)
+        }
+      }
+    } finally {
+      setAddingReferences(false)
+    }
+  }, [addImage, canAddReferences, data.parentId, globalReferenceLimit, graphId, id, store])
   const footerStatus = generation.phase === "resolving"
     || generation.phase === "starting"
     || generation.phase === "running"
@@ -514,12 +580,7 @@ function SyncedImageGeneratorCard({
     : "idle"
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 p-3 pt-10">
-      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-        <ImageStackIcon className="size-4 shrink-0" />
-        <span>Image Generator</span>
-      </div>
-
+    <div className="flex h-full min-h-0 flex-col gap-2 p-3 pt-0">
       <textarea
         aria-label="Image prompt"
         className={cn(INPUT_CLASS, "min-h-20 resize-none")}
@@ -531,30 +592,67 @@ function SyncedImageGeneratorCard({
         onBlur={() => prompt.commitPrompt()}
       />
 
-      {references.length > 0 && (
-        <div aria-label="Image references" className="flex gap-2 overflow-x-auto py-1">
-          {references.map((reference, index) => (
-            <div
-              key={String(reference.edge.id)}
-              className="relative size-12 shrink-0 overflow-hidden rounded-md border border-border bg-muted/40"
+      <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <span>
+          참조 이미지 {references.length} / {referenceLimit}
+          {referenceOverflow > 0 && (
+            <span className="text-destructive"> · {referenceOverflow}장 초과</span>
+          )}
+        </span>
+        <button
+          type="button"
+          className="inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-border px-2 text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={!canAddReferences}
+          onClick={() => fileInputRef.current?.click()}
+        >
+          <Plus className="size-3" />
+          참조 이미지
+        </button>
+        <input
+          ref={fileInputRef}
+          aria-label="Add reference images"
+          className="hidden"
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          multiple
+          disabled={!canAddReferences}
+          onChange={(event) => {
+            const files = Array.from(event.currentTarget.files ?? [])
+            event.currentTarget.value = ""
+            void addReferenceFiles(files)
+          }}
+        />
+      </div>
+      <div aria-label="Image references" className="flex min-h-20 gap-2 overflow-x-auto py-1">
+        {references.map((reference, index) => (
+          <div
+            key={String(reference.edge.id)}
+            className={cn(
+              "relative size-20 shrink-0 overflow-hidden rounded-md border bg-muted/40",
+              index >= referenceLimit ? "border-destructive" : "border-border",
+            )}
+          >
+            <ReferenceThumbnail graphId={graphId} sourceNodeId={reference.sourceNodeId} />
+            <span className="absolute bottom-0 left-0 rounded-tr bg-background/90 px-1 text-[10px] font-semibold">
+              {index + 1}
+            </span>
+            <button
+              type="button"
+              aria-label={`Remove reference ${index + 1}`}
+              className="absolute right-0 top-0 grid size-5 place-items-center rounded-bl bg-background/90 text-foreground disabled:opacity-50"
+              disabled={inputsLocked}
+              onClick={() => store.removeEdge(reference.edge.id)}
             >
-              <ReferenceThumbnail graphId={graphId} sourceNodeId={reference.sourceNodeId} />
-              <span className="absolute bottom-0 left-0 rounded-tr bg-background/90 px-1 text-[10px] font-semibold">
-                {index + 1}
+              <X className="size-3" />
+            </button>
+            {index >= referenceLimit && (
+              <span className="absolute bottom-0 right-0 rounded-tl bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
+                초과
               </span>
-              <button
-                type="button"
-                aria-label={`Remove reference ${index + 1}`}
-                className="absolute right-0 top-0 grid size-5 place-items-center rounded-bl bg-background/90 text-foreground disabled:opacity-50"
-                disabled={inputsLocked}
-                onClick={() => store.removeEdge(reference.edge.id)}
-              >
-                <X className="size-3" />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+            )}
+          </div>
+        ))}
+      </div>
 
       <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
         <span>모델</span>
@@ -573,7 +671,7 @@ function SyncedImageGeneratorCard({
           )}
           {compatibleModels.map((candidate) => (
             <option key={candidate.model_id} value={candidate.model_id}>
-              {candidate.display_name}
+              {candidate.display_name} · 참조 최대 {candidate.max_reference_images}장
             </option>
           ))}
         </select>
@@ -647,41 +745,38 @@ function SyncedImageGeneratorCard({
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted/30">
-        {outputNode.outputNodeUid ? (
-          <div className="flex flex-col items-center gap-2 px-4 text-center text-xs text-muted-foreground">
-            <span>
-              {outputNode.nodePresent
-                ? "결과가 캔버스에 추가되었습니다."
-                : "결과 노드가 삭제되었거나 아직 동기화되지 않았습니다."}
-            </span>
-            {outputNode.nodePresent ? (
-              <button
-                type="button"
-                className="rounded-md border border-border px-3 py-1.5 text-foreground"
-                onClick={outputNode.selectResult}
-              >
-                결과 선택
-              </button>
-            ) : canEdit ? (
-              <button
-                type="button"
-                className="rounded-md border border-border px-3 py-1.5 text-foreground disabled:opacity-50"
-                disabled={outputNode.recreating}
-                onClick={() => void outputNode.recreate()}
-              >
-                {outputNode.recreating ? "추가 중…" : "결과 노드 다시 추가"}
-              </button>
-            ) : null}
-          </div>
-        ) : previewUrl ? (
-          <img className="h-full w-full object-contain" src={previewUrl} alt="생성된 이미지" />
-        ) : (
-          <span className="px-4 text-center text-xs text-muted-foreground">
-            {previewFailed ? "결과 이미지를 불러올 수 없습니다." : "생성된 이미지가 여기에 표시됩니다."}
-          </span>
-        )}
-      </div>
+      {(generation.phase === "succeeded" || outputNode.outputNodeUid) && (
+        <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-2 py-1.5 text-xs text-muted-foreground">
+          {outputNode.outputNodeUid ? (
+            outputNode.nodePresent ? (
+              <>
+                <span>완료</span>
+                <button
+                  type="button"
+                  className="rounded-md border border-border px-2 py-1 text-foreground"
+                  onClick={outputNode.selectResult}
+                >
+                  결과로 이동
+                </button>
+              </>
+            ) : (
+              <>
+                <span>결과 노드가 없습니다.</span>
+                {canEdit && (
+                  <button
+                    type="button"
+                    className="rounded-md border border-border px-2 py-1 text-foreground disabled:opacity-50"
+                    disabled={outputNode.recreating}
+                    onClick={() => void outputNode.recreate()}
+                  >
+                    {outputNode.recreating ? "추가 중…" : "결과 노드 다시 추가"}
+                  </button>
+                )}
+              </>
+            )
+          ) : <span>완료 · 결과 노드 준비 중</span>}
+        </div>
+      )}
 
       {(modelsError || storedModelUnavailable || generation.error || outputNode.error) && (
         <p role="alert" className="text-xs text-destructive">
@@ -693,7 +788,7 @@ function SyncedImageGeneratorCard({
       )}
       {model && references.length > model.max_reference_images && (
         <p role="alert" className="text-xs text-destructive">
-          이 모델은 참조 이미지를 최대 {model.max_reference_images}장까지 지원합니다.
+          {referenceOverflow}장을 제거하거나 참조 한도가 더 큰 모델을 선택하세요.
         </p>
       )}
       <NodeFooter status={footerStatus}>
@@ -737,38 +832,43 @@ export function ImageGeneratorView({ id }: { id: NodeId }) {
     <div className="pointer-events-none relative h-full w-full select-none">
       <div
         ref={cardRef}
-        className="pointer-events-auto absolute inset-0 overflow-hidden rounded-2xl border border-border bg-background shadow-sm"
+        className="pointer-events-auto absolute inset-0 flex flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-sm"
       >
-        {local ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
-            <ImageStackIcon className="size-8 text-muted-foreground" />
-            <p className="text-sm font-medium text-foreground">서버 보드에서만 사용할 수 있습니다.</p>
-            <p className="text-xs text-muted-foreground">
-              이 노드를 동기화된 보드로 옮긴 뒤 이미지를 생성하세요.
-            </p>
-          </div>
-        ) : (
-          <SyncedImageGeneratorCard
-            id={id}
-            data={data}
-            properties={properties}
-            canEdit={canEdit}
-            patchProperties={patchProperties}
+        <div className="flex shrink-0 items-center gap-2 px-3 pb-2 pt-10 text-sm font-semibold text-foreground">
+          <ImageStackIcon className="size-4 shrink-0" />
+          <NodeTitleCaption
+            nodeId={id}
+            label={label}
+            placeholder="Image Generator"
+            className="min-w-0 flex-1"
+            textClassName="truncate text-left text-sm font-semibold text-foreground"
+            maxLines={1}
           />
-        )}
+        </div>
+        <div className="min-h-0 flex-1">
+          {local ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+              <ImageStackIcon className="size-8 text-muted-foreground" />
+              <p className="text-sm font-medium text-foreground">서버 보드에서만 사용할 수 있습니다.</p>
+              <p className="text-xs text-muted-foreground">
+                이 노드를 동기화된 보드로 옮긴 뒤 이미지를 생성하세요.
+              </p>
+            </div>
+          ) : (
+            <SyncedImageGeneratorCard
+              id={id}
+              data={data}
+              properties={properties}
+              canEdit={canEdit}
+              patchProperties={patchProperties}
+            />
+          )}
+        </div>
       </div>
 
       <NodeTrafficLights
         onDelete={canEdit ? () => removeNodeSubtree(store, id) : undefined}
       />
-      <div className="pointer-events-auto absolute left-1/2 top-full z-20 mt-2 w-full -translate-x-1/2">
-        <NodeTitleCaption
-          nodeId={id}
-          label={label}
-          placeholder="Image generator"
-          textClassName="text-center text-sm font-handwriting text-foreground"
-        />
-      </div>
     </div>
   )
 }

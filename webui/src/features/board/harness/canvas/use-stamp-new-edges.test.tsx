@@ -191,6 +191,37 @@ describe("useStampNewEdges — paste preservation", () => {
   })
 
 
+  it("stamps a pointer-style reference in its initial edge.add batch", () => {
+    const store = createCanvasStore()
+    mountStamp(store)
+    addNode(store, "image-1", "image")
+    addNode(store, "generator-target", "image-generator")
+    const batches: Parameters<CanvasStore["applyBatch"]>[0][] = []
+    const unsubscribe = store.subscribe("change", (batch) => batches.push(batch))
+
+    let edgeId: EdgeId
+    act(() => {
+      edgeId = addAttachedEdge(store, "image-1", "generator-target")
+    })
+    unsubscribe()
+
+    expect(batches).toHaveLength(1)
+    expect(batches[0]?.ops).toEqual([
+      expect.objectContaining({
+        type: "edge.add",
+        edge: expect.objectContaining({
+          id: edgeId!,
+          data: expect.objectContaining({
+            imageReference: true,
+            imageReferenceOrdinal: 0,
+          }),
+        }),
+      }),
+    ])
+    expect(store.getInteractionState().mode).toBe("idle")
+  })
+
+
   it("marks immutable generated-image sources as ordinary ordered references", () => {
     const store = createCanvasStore()
     mountStamp(store)
@@ -227,6 +258,53 @@ describe("useStampNewEdges — paste preservation", () => {
     expect(references.map((reference) => String(reference.sourceNodeId)))
       .toEqual(["image-1", "image-2"])
     expect(store.getAllEdges()).toHaveLength(2)
+  })
+
+
+  it("allows one source node to reference different generators", () => {
+    const store = createCanvasStore()
+    mountStamp(store)
+    addNode(store, "image-1", "image")
+    addNode(store, "generator-target", "image-generator")
+    addNode(store, "generator-other", "image-generator")
+
+    act(() => {
+      addAttachedEdge(store, "image-1", "generator-target")
+      addAttachedEdge(store, "image-1", "generator-other")
+    })
+
+    expect(orderedImageReferences(store, asNodeId("generator-target"))).toHaveLength(1)
+    expect(orderedImageReferences(store, asNodeId("generator-other"))).toHaveLength(1)
+    expect(store.getAllEdges()).toHaveLength(2)
+  })
+
+
+  it("allows distinct source nodes that resolve to the same asset", () => {
+    const store = createCanvasStore()
+    mountStamp(store)
+    addNode(store, "image-1", "image")
+    addNode(store, "image-2", "image")
+    addNode(store, "generator-target", "image-generator")
+    for (const nodeId of ["image-1", "image-2"]) {
+      const node = store.getNode(asNodeId(nodeId))!
+      store.updateNode(node.id, {
+        data: {
+          ...(node.data ?? {}),
+          properties: {
+            imageAssetUid: { type: "keyword", value: "a".repeat(32) },
+          },
+        },
+      })
+    }
+
+    act(() => {
+      addAttachedEdge(store, "image-1", "generator-target")
+      addAttachedEdge(store, "image-2", "generator-target")
+    })
+
+    expect(orderedImageReferences(store, asNodeId("generator-target"))
+      .map((reference) => String(reference.sourceNodeId)))
+      .toEqual(["image-1", "image-2"])
   })
 
 
