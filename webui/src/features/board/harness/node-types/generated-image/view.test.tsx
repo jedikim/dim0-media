@@ -70,6 +70,9 @@ describe("GeneratedImageView", () => {
   afterEach(() => {
     act(() => root.unmount())
     container.remove()
+    vi.clearAllTimers()
+    vi.useRealTimers()
+    vi.restoreAllMocks()
     delete (URL as unknown as { createObjectURL?: unknown }).createObjectURL
     delete (URL as unknown as { revokeObjectURL?: unknown }).revokeObjectURL
   })
@@ -118,6 +121,7 @@ describe("GeneratedImageView", () => {
     ["image/jpeg", "jpg"],
     ["image/webp", "webp"],
   ])("downloads unchanged original %s bytes with a deterministic extension", async (mimeType, extension) => {
+    vi.useFakeTimers()
     const blob = new Blob(["original-bytes"], { type: mimeType })
     mocks.fetchImageAssetBlob.mockResolvedValue(blob)
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined)
@@ -139,10 +143,95 @@ describe("GeneratedImageView", () => {
     )
     expect(createObjectURL).toHaveBeenCalledWith(blob)
     expect(click).toHaveBeenCalledTimes(1)
-    expect((click.mock.instances[0] as HTMLAnchorElement | undefined)?.download)
-      .toBe(`generated-${"g".repeat(32)}.${extension}`)
+    const link = click.mock.instances[0] as HTMLAnchorElement | undefined
+    expect(link?.download).toBe(`generated-${"g".repeat(32)}.${extension}`)
+    expect(link?.isConnected).toBe(false)
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(revokeObjectURL).toHaveBeenCalledTimes(1)
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:download")
     expect(mocks.getImageGenerationDetails).not.toHaveBeenCalled()
+  })
+
+
+  it("times out a stuck download and permits a same-mount retry", async () => {
+    vi.useFakeTimers()
+    const signals: AbortSignal[] = []
+    mocks.fetchImageAssetBlob.mockImplementationOnce(
+      (_graphId: string, _assetUid: string, signal: AbortSignal) => {
+        signals.push(signal)
+        return new Promise(() => undefined)
+      },
+    ).mockResolvedValueOnce(new Blob(["recovered"], { type: "image/png" }))
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined)
+    render()
+
+    let download = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "원본 다운로드")!
+    await act(async () => {
+      download.click()
+      await Promise.resolve()
+    })
+    expect(container.textContent).toContain("다운로드 중…")
+    expect(signals[0]?.aborted).toBe(false)
+
+    await act(() => vi.advanceTimersByTimeAsync(29_999))
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    expect(container.textContent).toContain("다운로드 중…")
+
+    await act(() => vi.advanceTimersByTimeAsync(1))
+    expect(signals[0]?.aborted).toBe(true)
+    expect(mocks.toastError).toHaveBeenCalledTimes(1)
+    expect(mocks.toastError).toHaveBeenCalledWith("원본 이미지를 다운로드하지 못했습니다.")
+    expect(container.textContent).toContain("원본 다운로드")
+
+    download = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "원본 다운로드")!
+    await act(async () => {
+      download.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(mocks.fetchImageAssetBlob).toHaveBeenCalledTimes(2)
+    expect(click).toHaveBeenCalledTimes(1)
+    expect(mocks.toastError).toHaveBeenCalledTimes(1)
+
+    await act(() => vi.advanceTimersByTimeAsync(0))
+    expect(revokeObjectURL).toHaveBeenCalledTimes(1)
+    await act(() => vi.advanceTimersByTimeAsync(30_000))
+    expect(mocks.toastError).toHaveBeenCalledTimes(1)
+    expect(revokeObjectURL).toHaveBeenCalledTimes(1)
+  })
+
+
+  it("silently cancels a stuck download when the asset association changes", async () => {
+    vi.useFakeTimers()
+    const signals: AbortSignal[] = []
+    mocks.fetchImageAssetBlob.mockImplementation(
+      (_graphId: string, _assetUid: string, signal: AbortSignal) => {
+        signals.push(signal)
+        return new Promise(() => undefined)
+      },
+    )
+    render()
+    const download = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "원본 다운로드")!
+    await act(async () => {
+      download.click()
+      await Promise.resolve()
+    })
+
+    const properties = ((mocks.node?.data ?? {}) as {
+      properties: Record<string, { type: string; value: string }>
+    }).properties
+    properties.imageAssetUid = { type: "keyword", value: "b".repeat(32) }
+    render()
+
+    expect(signals[0]?.aborted).toBe(true)
+    expect(container.textContent).toContain("원본 다운로드")
+    expect(mocks.toastError).not.toHaveBeenCalled()
+    await act(() => vi.advanceTimersByTimeAsync(30_000))
+    expect(mocks.toastError).not.toHaveBeenCalled()
   })
 
 
@@ -212,6 +301,7 @@ describe("GeneratedImageView", () => {
 
 
   it("aborts an in-flight provenance request when the dialog closes", async () => {
+    vi.useFakeTimers()
     const signals: AbortSignal[] = []
     mocks.getImageGenerationDetails.mockImplementation(
       (_graphId: string, _generationUid: string, signal: AbortSignal) => {
@@ -235,6 +325,58 @@ describe("GeneratedImageView", () => {
     })
 
     expect(signals[0]?.aborted).toBe(true)
+    await act(() => vi.advanceTimersByTimeAsync(30_000))
+    expect(document.body.textContent).not.toContain("생성 정보를 불러오지 못했습니다.")
+  })
+
+
+  it("times out stuck provenance and reloads it after the dialog reopens", async () => {
+    vi.useFakeTimers()
+    const signals: AbortSignal[] = []
+    mocks.getImageGenerationDetails.mockImplementationOnce(
+      (_graphId: string, _generationUid: string, signal: AbortSignal) => {
+        signals.push(signal)
+        return new Promise(() => undefined)
+      },
+    ).mockResolvedValueOnce({
+      generation_uid: "g".repeat(32),
+      model_id: "model/recovered",
+      prompt: "recovered prompt",
+      parameters: { aspect_ratio: "1:1", resolution: "1K", quality: "low", output_count: 1 },
+      references: [],
+    })
+    render()
+    const details = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent === "생성 정보")!
+    expect(mocks.getImageGenerationDetails).not.toHaveBeenCalled()
+
+    await act(async () => {
+      details.click()
+      await Promise.resolve()
+    })
+    expect(document.body.textContent).toContain("생성 정보를 불러오는 중입니다.")
+    await act(() => vi.advanceTimersByTimeAsync(29_999))
+    expect(document.body.textContent).not.toContain("생성 정보를 불러오지 못했습니다.")
+
+    await act(() => vi.advanceTimersByTimeAsync(1))
+    expect(signals[0]?.aborted).toBe(true)
+    expect(document.body.textContent).not.toContain("생성 정보를 불러오는 중입니다.")
+    expect(document.body.textContent).toContain("생성 정보를 불러오지 못했습니다.")
+
+    const close = document.body.querySelector<HTMLButtonElement>('[data-slot="dialog-close"]')!
+    await act(async () => {
+      close.click()
+      await Promise.resolve()
+    })
+    await act(async () => {
+      details.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(mocks.getImageGenerationDetails).toHaveBeenCalledTimes(2)
+    expect(document.body.textContent).toContain("recovered prompt")
+    expect(document.body.textContent).not.toContain("생성 정보를 불러오지 못했습니다.")
   })
 
 

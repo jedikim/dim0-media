@@ -20,6 +20,10 @@ import { useAuthedImage } from "@/features/board/hooks/use-authed-image"
 import type { NoteNodeData } from "../../convert/note-to-node"
 import { useStopCanvasGesture } from "../../shared-views"
 import {
+  isGeneratedImageActionCancelled,
+  runGeneratedImageAction,
+} from "./action-deadline"
+import {
   GENERATED_IMAGE_UNAVAILABLE_MESSAGE,
   readGeneratedImageAssociation,
 } from "./node-state"
@@ -96,13 +100,16 @@ function GenerationDetailsDialog({
     const controller = new AbortController()
     let alive = true
     setLoading(true)
-    void getImageGenerationDetails(graphId, generationUid, controller.signal)
+    void runGeneratedImageAction(
+      controller.signal,
+      (requestSignal) => getImageGenerationDetails(graphId, generationUid, requestSignal),
+    )
       .then((next) => {
         if (!alive || next.generation_uid !== generationUid) return
         setDetails(next)
       })
       .catch((fetchError: unknown) => {
-        if (!alive || (fetchError instanceof Error && fetchError.name === "AbortError")) return
+        if (!alive || isGeneratedImageActionCancelled(fetchError)) return
         setError(DETAILS_ERROR_MESSAGE)
       })
       .finally(() => {
@@ -182,11 +189,14 @@ export function GeneratedImageView({ id }: { id: NodeId }) {
   useStopCanvasGesture(actionsRef)
 
   useEffect(() => {
-    downloadControllerRef.current?.abort()
+    const activeController = downloadControllerRef.current
     downloadControllerRef.current = null
+    activeController?.abort()
     setDownloading(false)
     return () => {
-      downloadControllerRef.current?.abort()
+      const cleanupController = downloadControllerRef.current
+      downloadControllerRef.current = null
+      cleanupController?.abort()
     }
   }, [association?.assetUid, association?.generationUid, graphId])
 
@@ -196,7 +206,10 @@ export function GeneratedImageView({ id }: { id: NodeId }) {
     downloadControllerRef.current = controller
     setDownloading(true)
     try {
-      const blob = await fetchImageAssetBlob(graphId, association.assetUid, controller.signal)
+      const blob = await runGeneratedImageAction(
+        controller.signal,
+        (requestSignal) => fetchImageAssetBlob(graphId, association.assetUid, requestSignal),
+      )
       if (controller.signal.aborted) return
       const extension = generatedImageExtension(blob.type)
       if (!extension) throw new Error("Unsupported generated image MIME")
@@ -209,16 +222,16 @@ export function GeneratedImageView({ id }: { id: NodeId }) {
         link.click()
         link.remove()
       } finally {
-        URL.revokeObjectURL(objectUrl)
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
       }
     } catch (error) {
-      if (!(error instanceof Error && error.name === "AbortError")) {
+      if (!isGeneratedImageActionCancelled(error)) {
         toast.error(DOWNLOAD_ERROR_MESSAGE)
       }
     } finally {
       if (downloadControllerRef.current === controller) {
         downloadControllerRef.current = null
-        if (!controller.signal.aborted) setDownloading(false)
+        setDownloading(false)
       }
     }
   }, [association, downloading, graphId])
