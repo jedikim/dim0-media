@@ -41,7 +41,8 @@ function isBrowserAsset(reqUrl: string) {
 }
 
 let logoutHandler: (() => void) | null = null
-export function registerLogoutHandler(cb: () => void) {
+/** Register or clear the SPA logout callback used after a genuine refresh failure. */
+export function registerLogoutHandler(cb: (() => void) | null) {
   logoutHandler = cb
 }
 
@@ -202,17 +203,6 @@ export async function apiFetch<TResponse = unknown, TBody = unknown>(
   if (res.status === 401 && !noAuth) {
     try {
       await refreshAccessToken()
-
-      const newHeaders = new Headers(h)
-      const newToken = getAccessToken()
-      if (newToken) newHeaders.set("Authorization", `Bearer ${newToken}`)
-
-      res = await trackedFetch(url.toString(), {
-        method,
-        headers: newHeaders,
-        body: payload,
-        signal,
-      })
     } catch {
       clearTokens()
       // If it's a favicon or we're on an auth page, do NOT bounce again
@@ -233,6 +223,17 @@ export async function apiFetch<TResponse = unknown, TBody = unknown>(
       }
       throw new Error("Unauthorized")
     }
+
+    const newHeaders = new Headers(h)
+    const newToken = getAccessToken()
+    if (newToken) newHeaders.set("Authorization", `Bearer ${newToken}`)
+
+    res = await trackedFetch(url.toString(), {
+      method,
+      headers: newHeaders,
+      body: payload,
+      signal,
+    })
   }
 
   if (!res.ok) {

@@ -11,13 +11,17 @@ describe("image history formatting", () => {
   })
 
 
-  it("formats server Decimal strings exactly and keeps unreported distinct", () => {
+  it("keeps unreported, zero, small positive, and malformed costs distinct", () => {
     expect(formatKnownCostUsd(null)).toBe("미보고")
     expect(formatKnownCostUsd("0")).toBe("$0.0000")
     expect(formatKnownCostUsd("0E-10")).toBe("$0.0000")
     expect(formatKnownCostUsd("0.0500000000")).toBe("$0.0500")
-    expect(formatKnownCostUsd("12.34565")).toBe("$12.3457")
+    expect(formatKnownCostUsd("0.00001")).toBe("$0.00001")
+    expect(formatKnownCostUsd("12.34565")).toBe("$12.34565")
     expect(formatKnownCostUsd("1.23456E+1")).toBe("$12.3456")
     expect(formatKnownCostUsd("1E-3")).toBe("$0.0010")
+    expect(formatKnownCostUsd("not-a-decimal")).toBe("비용 표시 오류")
+    expect(formatKnownCostUsd("1E+999")).toBe("비용 표시 오류")
+    expect(formatKnownCostUsd("1E-11")).toBe("비용 표시 오류")
   })
 })
