@@ -287,6 +287,10 @@ CREATE INDEX IF NOT EXISTS idx_image_generation_run_board_started_at
     ON image_generation_run(board_uid, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_image_generation_run_user_started_at
     ON image_generation_run(user_uid, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_image_generation_run_history_started_uid
+    ON image_generation_run(started_at DESC, uid DESC);
+CREATE INDEX IF NOT EXISTS idx_image_generation_run_history_user_started_uid
+    ON image_generation_run(user_uid, started_at DESC, uid DESC);
 CREATE INDEX IF NOT EXISTS idx_image_generation_run_started_pending
     ON image_generation_run(started_at) WHERE status = 'started';
 CREATE INDEX IF NOT EXISTS idx_image_generation_run_retryable
