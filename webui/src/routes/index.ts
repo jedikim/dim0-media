@@ -27,6 +27,7 @@ import { ResetPasswordPage } from "@/features/signin/screens/reset-password"
 import { InstallScreen } from "@/features/install/screens/install-screen"
 import { ShareLandingScreen } from "@/features/sharing/screens/share-landing"
 import { LocalBoardScreen } from "@/features/board/local/local-board-screen"
+import { ImageHistoryScreen } from "@/features/image-history/screens/image-history-screen"
 
 
 export const rootRoute = createRootRoute({
@@ -156,6 +157,15 @@ const dashboardRoute = createRoute({
   path: DashboardUrl,
   beforeLoad: requireVerifiedAuth,
   component: DashboardScreen,
+})
+
+// /image-history (protected global read-only image generation audit)
+export const ImageHistoryUrl = "/image-history"
+const imageHistoryRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: ImageHistoryUrl,
+  beforeLoad: requireVerifiedAuth,
+  component: ImageHistoryScreen,
 })
 
 // /boards/:id (protected). Surface routes (sheets/$noteId,
@@ -339,6 +349,7 @@ const routeTree = rootRoute.addChildren([
   chatsIndexRoute,
   chatRoute,
   dashboardRoute,
+  imageHistoryRoute,
   boardRoute.addChildren([sheetRoute, codeSandboxRoute, widgetRoute, miniAppRoute]),
   subscriptionsRoute,
   newsfeedsRoute,

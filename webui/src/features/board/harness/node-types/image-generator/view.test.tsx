@@ -283,6 +283,17 @@ describe("ImageGeneratorView", () => {
     expect(mocks.useImageGeneration).not.toHaveBeenCalled()
     expect(mocks.useAuthedImage).not.toHaveBeenCalled()
     expect(container.querySelector('[aria-label="Add reference images"]')).toBeNull()
+    expect(container.textContent).not.toContain("로그인한 모든 사용자에게 공개됩니다.")
+  })
+
+
+  it("shows the global disclosure on synced generators without starting a request", async () => {
+    await render()
+
+    expect(container.textContent).toContain(
+      "이 보드에서 생성한 프롬프트, 결과 및 참조 이미지는 로그인한 모든 사용자에게 공개됩니다.",
+    )
+    expect(mocks.generate).not.toHaveBeenCalled()
   })
 
 

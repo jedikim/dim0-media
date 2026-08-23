@@ -745,6 +745,10 @@ function SyncedImageGeneratorCard({
         )}
       </div>
 
+      <p className="text-[10px] leading-relaxed text-muted-foreground">
+        이 보드에서 생성한 프롬프트, 결과 및 참조 이미지는 로그인한 모든 사용자에게 공개됩니다.
+      </p>
+
       {(generation.phase === "succeeded" || outputNode.outputNodeUid) && (
         <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 px-2 py-1.5 text-xs text-muted-foreground">
           {outputNode.outputNodeUid ? (
