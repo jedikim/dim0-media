@@ -30,6 +30,10 @@ Upload a PDF, ask grounded questions. OCR'd online (Mistral via `/ai/parse`), th
 
 Bring your own key (OpenAI, or OpenRouter → Claude/Gemini/etc.) or use managed models on our keys with per-plan tiers and `auto` routing. Each capability (LLM/search/code/fetch/parse) resolves independently to BYOK, managed, or off. Entries: `webui/src/features/agent/engine/services/`, `backend/topix/api/router/ai.py`.
 
+## AI image generation history
+
+Synced boards can generate audited images through server-side providers. Every authenticated Dim0 user can open `AI 이미지 기록` to inspect all creators' prompts, private board labels, ordered reference originals, generated results, lifecycle state, and provider-reported cost/usage. The history is read-only and intentionally has no per-record opt-out or deletion control. Entries: `backend/topix/api/router/{image_generation,image_history}.py`, `webui/src/features/image-history/`.
+
 ## Built-in widgets, newsfeed, code sandbox
 
 Non-agent widgets (weather, stock/trading charts). A newsletter/subscription "newsfeed" feature (topic tracking) separate from boards. Daytona-backed code execution (`python`/`javascript`, network-blocked, ephemeral). Entries: `webui/src/features/widgets/`, `newsfeed/`, `backend/topix/agents/assistant/code.py`.

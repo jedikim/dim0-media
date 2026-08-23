@@ -95,12 +95,16 @@ async def test_schema_initialization_is_idempotent(image_pg_pool: asyncpg.Pool) 
             "idx_image_asset_board_sha256",
             "idx_image_generation_run_board_started_at",
             "idx_image_generation_run_user_started_at",
+            "idx_image_generation_run_history_started_uid",
+            "idx_image_generation_run_history_user_started_uid",
             "idx_image_generation_run_started_pending",
             "idx_image_generation_run_retryable",
             "idx_image_generation_run_expired_lease",
             "idx_image_generation_attempt_provider_request_id",
             "idx_image_generation_reference_asset_uid",
         } <= indexes
+        assert "idx_image_generation_attempt_generation_uid" not in indexes
+        assert "idx_image_generation_reference_generation_uid_ordinal" not in indexes
 
 
 @pytest.mark.asyncio

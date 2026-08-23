@@ -19,7 +19,7 @@ import { useLocalBoards } from '@/features/board/local/use-local-boards'
 import { useEnableSync } from '@/features/board/local/use-enable-sync'
 import { selectOnDeviceBoards } from '@/features/board/screens/partition-boards'
 import { ChatMenuItem, NewChatItem } from './chat'
-import { BoardItem, DashboardMenuItem, LocalBoardItem, NewLocalBoardItem } from './board'
+import { BoardItem, LocalBoardItem, NewLocalBoardItem } from './board'
 import { ChatsDialog } from './chats-dialog'
 import { useMemo, useState } from 'react'
 import { useRouterState } from '@tanstack/react-router'
@@ -34,9 +34,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ModeToggle } from '@/components/mode-toggle'
-import { HomeMenuItem } from './home'
 import { useNavigate } from '@tanstack/react-router'
 import { TierBadge } from '@/features/user-settings/components/tier-badge'
+import { WorkspaceMenu } from './workspace-menu'
 
 
 /**
@@ -213,10 +213,7 @@ export function AppSidebar({ onLogout }: AppSidebarProps) {
             <SidebarGroup>
               <SidebarGroupLabel><span>WORKSPACE</span></SidebarGroupLabel>
               <SidebarGroupContent>
-                <SidebarMenu>
-                  <HomeMenuItem />
-                  {signedIn && <DashboardMenuItem />}
-                </SidebarMenu>
+                <WorkspaceMenu signedIn={signedIn} />
               </SidebarGroupContent>
             </SidebarGroup>
 

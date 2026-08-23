@@ -22,6 +22,7 @@ from topix.api.router import (
     files,
     finance,
     image_generation,
+    image_history,
     mini_app_state,
     sharing,
     subscriptions,
@@ -45,6 +46,7 @@ from topix.store.collab_oplog import CollabOplogStore
 from topix.store.email_verification import EmailVerificationStore
 from topix.store.graph import GraphStore
 from topix.store.image_generation import ImageGenerationStore
+from topix.store.image_history import ImageHistoryStore
 from topix.store.mini_app_state import MiniAppStateStore
 from topix.store.password_reset import PasswordResetStore
 from topix.store.postgres.pool import create_pool
@@ -106,6 +108,8 @@ def create_app(stage: StageEnum):
         # so deployments without OpenRouter can still boot and use Dim0.
         app.image_generation_store = ImageGenerationStore()
         await app.image_generation_store.open(app.pg_pool)
+        app.image_history_store = ImageHistoryStore()
+        await app.image_history_store.open(app.pg_pool)
         app.image_generation_http_client = httpx.AsyncClient(
             base_url=f"{OPENROUTER_BASE_URL.rstrip('/')}/",
             follow_redirects=False,
@@ -157,6 +161,7 @@ def create_app(stage: StageEnum):
         await asyncio.gather(app.image_generation_reconciliation_task, return_exceptions=True)
         await app.image_generation_http_client.aclose()
         await app.image_generation_store.close()
+        await app.image_history_store.close()
         await app.graph_store.close()
         await app.user_store.close()
         await app.chat_store.close()
@@ -205,6 +210,7 @@ def create_app(stage: StageEnum):
     app.include_router(finance.router)
     app.include_router(files.router)
     app.include_router(documents.router)
+    app.include_router(image_history.router)
     app.include_router(image_generation.router)
 
     return app
