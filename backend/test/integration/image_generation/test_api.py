@@ -533,6 +533,9 @@ async def test_models_endpoint_exposes_allowlist_without_configuration_state(
             "x-ai/grok-imagine-image-2.0",
             "microsoft/mai-image-2.5-pro",
             "google/gemini-3-pro-image",
+            "qwen/qwen-image-3-pro",
+            "google/gemini-3.1-flash-image",
+            "bytedance-seed/seedream-5-0-pro",
         ]
         serialized = response.text.lower()
         assert "api_key" not in serialized
