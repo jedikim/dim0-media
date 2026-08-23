@@ -1,6 +1,6 @@
 import { useCallback } from "react"
 import { toast } from "sonner"
-import type { CanvasStore } from "@canvas-harness/core"
+import type { CanvasStore, NodeId } from "@canvas-harness/core"
 import { uploadImage } from "@/features/board/api/upload-image"
 import {
   imageGenerationStatusCode,
@@ -53,6 +53,8 @@ export type AddImageOptions = {
   position?: { x: number; y: number }
   /** Optional offset added on top of `position` (used to stagger multi-drops). */
   positionOffset?: { x: number; y: number }
+  /** Optional final top-left resolver evaluated after the image size is known. */
+  resolvePosition?: (size: { width: number; height: number }) => { x: number; y: number }
 }
 
 
@@ -77,11 +79,15 @@ export const useHarnessAddImage = (
   const { local } = useBoardRuntime()
   const canEdit = useBoardAppStore((state) => state.canEdit)
   return useCallback(
-    async (file: File, options: AddImageOptions = {}): Promise<boolean> => {
-      if (!boardId || !canEdit) return false
+    async (file: File, options: AddImageOptions = {}): Promise<NodeId | null> => {
+      if (!boardId || !canEdit) return null
       try {
         const { blob, width, height, mimeType } = await downscaleImage(file)
-        const ext = mimeType === "image/png" ? "png" : "jpg"
+        const ext = mimeType === "image/png"
+          ? "png"
+          : mimeType === "image/webp"
+          ? "webp"
+          : "jpg"
         const base = file.name?.replace(/\.[^.]+$/, "") || "image"
         const filename = `${base}.${ext}`
         const dataUrl = local
@@ -103,7 +109,7 @@ export const useHarnessAddImage = (
               y: options.position.y + (options.positionOffset?.y ?? 0),
             }
           : { x: 0, y: 0 }
-        const position = {
+        const position = options.resolvePosition?.(size) ?? {
           x: center.x - size.width / 2,
           y: center.y - size.height / 2,
         }
@@ -119,11 +125,11 @@ export const useHarnessAddImage = (
 
         const id = store.addNode(noteToNode(note))
         store.setSelection([id])
-        return true
+        return id
       } catch {
         console.error("[useHarnessAddImage] failed")
         toast.error(`Failed to add "${file.name}"`)
-        return false
+        return null
       }
     },
     [store, boardId, rootId, local, canEdit],

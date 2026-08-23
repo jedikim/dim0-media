@@ -62,6 +62,25 @@ export type GenerationOutputNode = {
 }
 
 
+export type GenerationReferenceDetails = {
+  ordinal: number
+  asset_uid: string
+  mime_type: string
+  width: number
+  height: number
+  content_url: string
+}
+
+
+export type GenerationDetails = {
+  generation_uid: string
+  model_id: string
+  prompt: string
+  parameters: GenerationParameters
+  references: GenerationReferenceDetails[]
+}
+
+
 export type ImageAssetUpload = {
   asset_uid: string
   mime_type: "image/png" | "image/jpeg" | "image/webp"
@@ -233,6 +252,19 @@ export function getImageGeneration(
 ): Promise<GenerationState> {
   return apiFetch<GenerationState>({
     path: `/boards/${encodeURIComponent(graphId)}/image-generations/${encodeURIComponent(generationUid)}`,
+    signal,
+  })
+}
+
+
+/** Lazily read immutable prompt, options, and ordered reference provenance. */
+export function getImageGenerationDetails(
+  graphId: string,
+  generationUid: string,
+  signal?: AbortSignal,
+): Promise<GenerationDetails> {
+  return apiFetch<GenerationDetails>({
+    path: `/boards/${encodeURIComponent(graphId)}/image-generations/${encodeURIComponent(generationUid)}/details`,
     signal,
   })
 }

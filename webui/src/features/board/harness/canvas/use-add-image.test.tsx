@@ -86,8 +86,11 @@ describe("useHarnessAddImage asset registration", () => {
   it("registers a synced upload and stores imageAssetUid.value", async () => {
     mount(false)
 
+    let addedNodeId: ReturnType<CanvasStore["addNode"]> | null | undefined
     await act(async () => {
-      await addImage?.(new File(["source"], "source.png", { type: "image/png" }))
+      addedNodeId = await addImage?.(
+        new File(["source"], "source.png", { type: "image/png" }),
+      )
     })
 
     expect(uploadImageAsset).toHaveBeenCalledTimes(1)
@@ -96,7 +99,49 @@ describe("useHarnessAddImage asset registration", () => {
     const data = node.data as {
       properties: { imageAssetUid: { value: string } }
     }
+    expect(addedNodeId).toBe(node.id)
     expect(data.properties.imageAssetUid.value).toBe(ASSET_UID)
+  })
+
+
+  it("resolves the final top-left after sizing and adds the node once", async () => {
+    mount(false)
+    const resolvePosition = vi.fn().mockReturnValue({ x: 12, y: 34 })
+    const operations: string[] = []
+    const unsubscribe = store.subscribe("change", (batch) => {
+      operations.push(...batch.ops.map((operation) => operation.type))
+    })
+
+    await act(async () => {
+      await addImage?.(
+        new File(["source"], "source.png", { type: "image/png" }),
+        { resolvePosition },
+      )
+    })
+    unsubscribe()
+
+    expect(resolvePosition).toHaveBeenCalledWith({ width: 420, height: 210 })
+    expect(store.getAllNodes()[0]).toEqual(expect.objectContaining({ x: 12, y: 34 }))
+    expect(operations.filter((operation) => operation === "node.add")).toHaveLength(1)
+    expect(operations.filter((operation) => operation === "node.update")).toHaveLength(0)
+  })
+
+
+  it("keeps the actual WebP MIME and filename during asset registration", async () => {
+    const blob = new Blob(["safe-webp"], { type: "image/webp" })
+    downscaleImage.mockResolvedValueOnce({
+      blob,
+      width: 40,
+      height: 20,
+      mimeType: "image/webp",
+    })
+    mount(false)
+
+    await act(async () => {
+      await addImage?.(new File(["source"], "cutout.webp", { type: "image/webp" }))
+    })
+
+    expect(uploadImageAsset).toHaveBeenCalledWith(BOARD_ID, blob, "cutout.webp")
   })
 
 
@@ -119,12 +164,12 @@ describe("useHarnessAddImage asset registration", () => {
     useBoardAppStore.setState({ canEdit: false })
     mount(false)
 
-    let added: boolean | undefined
+    let added: ReturnType<CanvasStore["addNode"]> | null | undefined
     await act(async () => {
       added = await addImage?.(new File(["source"], "source.png", { type: "image/png" }))
     })
 
-    expect(added).toBe(false)
+    expect(added).toBeNull()
     expect(downscaleImage).not.toHaveBeenCalled()
     expect(uploadImageAsset).not.toHaveBeenCalled()
     expect(uploadImage).not.toHaveBeenCalled()

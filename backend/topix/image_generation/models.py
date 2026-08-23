@@ -218,6 +218,27 @@ class ImageGenerationRecord(FrozenModel):
     completed_at: datetime | None = None
 
 
+class ImageGenerationReferenceDetails(FrozenModel):
+    """Safe immutable reference metadata for generation provenance."""
+
+    ordinal: int = Field(ge=0)
+    asset_uid: str = Field(min_length=1)
+    mime_type: RasterImageMimeType
+    width: int = Field(gt=0)
+    height: int = Field(gt=0)
+
+
+class ImageGenerationDetailsRecord(FrozenModel):
+    """Board-scoped prompt, options, and immutable reference provenance."""
+
+    generation_uid: str = Field(min_length=1)
+    board_uid: str = Field(min_length=1)
+    model_id: str = Field(min_length=1)
+    prompt: str = Field(min_length=1)
+    parameters: ImageGenerationParameters
+    references: tuple[ImageGenerationReferenceDetails, ...] = ()
+
+
 class ImageGenerationOutputRecord(FrozenModel):
     """Authoritative generation and asset metadata used for canvas output."""
 

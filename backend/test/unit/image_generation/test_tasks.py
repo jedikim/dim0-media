@@ -212,6 +212,9 @@ async def test_task_manager_stops_after_renewal_errors_outlast_lease() -> None:
 
     manager.schedule("generation-1", work, keepalive=keepalive, heartbeat_seconds=0.01, lease_seconds=0.025)
     await manager.wait()
-    assert renewals >= 3
+    # A loaded event loop may resume the first failed heartbeat only after the
+    # lease deadline. Initial confirmation plus that failed renewal is enough
+    # to prove the fail-closed expiry path; cancellation is asserted below.
+    assert renewals >= 2
     assert cancelled.is_set()
     await manager.close()

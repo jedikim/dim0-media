@@ -24,15 +24,18 @@ from topix.image_generation.models import (
         ("x-ai/grok-imagine-image-2.0", 3, ("1K", "2K"), 1),
         ("microsoft/mai-image-2.5-pro", 1, None, 1),
         ("google/gemini-3-pro-image", 14, ("1K", "2K", "4K"), 1),
+        ("qwen/qwen-image-3-pro", 4, ("1K", "2K"), 1),
+        ("google/gemini-3.1-flash-image", 14, ("512", "1K", "2K", "4K"), 1),
+        ("bytedance-seed/seedream-5-0-pro", 14, ("1K", "2K"), 1),
     ],
 )
-def test_default_capabilities_match_verified_provider_metadata(
+def test_default_capabilities_preserve_verified_inputs_and_product_output_limits(
     model_id: str,
     max_references: int,
     resolutions: tuple[str, ...] | None,
     max_outputs: int,
 ) -> None:
-    """Registry entries preserve the exact verified limits for initial models."""
+    """Registry entries preserve verified inputs and explicit Dim0 output caps."""
     capability = get_capability(model_id)
 
     assert capability.max_reference_images == max_references
@@ -40,7 +43,7 @@ def test_default_capabilities_match_verified_provider_metadata(
     assert capability.max_output_images == max_outputs
     assert capability.supports_text_to_image is True
     assert capability.supports_image_to_image is True
-    assert capability.verified_at.isoformat() == "2026-08-22"
+    assert capability.verified_at.isoformat() == "2026-08-23"
     assert capability.source_urls
 
 
@@ -69,6 +72,9 @@ def test_unknown_model_is_rejected() -> None:
         ("x-ai/grok-imagine-image-2.0", 3),
         ("microsoft/mai-image-2.5-pro", 1),
         ("google/gemini-3-pro-image", 14),
+        ("qwen/qwen-image-3-pro", 4),
+        ("google/gemini-3.1-flash-image", 14),
+        ("bytedance-seed/seedream-5-0-pro", 14),
     ],
 )
 def test_reference_overflow_is_rejected_without_truncation(model_id: str, maximum: int) -> None:
@@ -100,6 +106,78 @@ def test_supported_options_are_accepted() -> None:
 
     assert capability.model_id == "x-ai/grok-imagine-image-2.0"
     assert parameters.aspect_ratio == "16:9"
+
+
+@pytest.mark.parametrize(
+    ("model_id", "resolution", "aspect_ratio", "maximum"),
+    [
+        ("qwen/qwen-image-3-pro", "2K", "1:4", 4),
+        ("google/gemini-3.1-flash-image", "512", "8:1", 14),
+        ("bytedance-seed/seedream-5-0-pro", "1K", "9:21", 14),
+    ],
+)
+def test_new_models_accept_verified_boundaries(
+    model_id: str,
+    resolution: str,
+    aspect_ratio: str,
+    maximum: int,
+) -> None:
+    """New models accept their verified options and exact reference limit."""
+    parameters = ImageGenerationParameters(resolution=resolution, aspect_ratio=aspect_ratio)
+
+    capability = validate_generation_parameters(model_id, parameters, reference_count=maximum)
+
+    assert capability.model_id == model_id
+
+
+@pytest.mark.parametrize(
+    ("model_id", "parameters"),
+    [
+        ("qwen/qwen-image-3-pro", ImageGenerationParameters(resolution="4K")),
+        ("google/gemini-3.1-flash-image", ImageGenerationParameters(aspect_ratio="auto")),
+        ("bytedance-seed/seedream-5-0-pro", ImageGenerationParameters(resolution="512")),
+    ],
+)
+def test_new_models_reject_unadvertised_options(
+    model_id: str,
+    parameters: ImageGenerationParameters,
+) -> None:
+    """New model validation rejects options absent from the official registry."""
+    with pytest.raises(CapabilityValidationError) as exc_info:
+        validate_generation_parameters(model_id, parameters, reference_count=0)
+
+    assert exc_info.value.code == "unsupported_image_parameter"
+
+
+@pytest.mark.parametrize(
+    "model_id",
+    [
+        "google/gemini-3.1-flash-image",
+        "bytedance-seed/seedream-5-0-pro",
+    ],
+)
+def test_new_models_remain_single_output(model_id: str) -> None:
+    """The current Dim0 pipeline rejects multiple outputs for every new model."""
+    with pytest.raises(CapabilityValidationError) as exc_info:
+        validate_generation_parameters(
+            model_id,
+            ImageGenerationParameters(output_count=2),
+            reference_count=0,
+        )
+
+    assert exc_info.value.code == "output_limit_exceeded"
+
+
+def test_qwen_provider_multi_output_is_capped_by_dim0_pipeline() -> None:
+    """Qwen output_count=2 is rejected by the single-result product contract."""
+    with pytest.raises(CapabilityValidationError) as exc_info:
+        validate_generation_parameters(
+            "qwen/qwen-image-3-pro",
+            ImageGenerationParameters(output_count=2),
+            reference_count=0,
+        )
+
+    assert exc_info.value.code == "output_limit_exceeded"
 
 
 @pytest.mark.parametrize(

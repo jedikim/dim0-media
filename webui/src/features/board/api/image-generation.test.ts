@@ -9,6 +9,7 @@ import {
   fetchImageAssetBlob,
   ensureImageGenerationOutputNode,
   getImageGeneration,
+  getImageGenerationDetails,
   imageGenerationErrorDetail,
   imageGenerationErrorMessage,
   listImageModels,
@@ -68,6 +69,7 @@ describe("image generation API client", () => {
     apiFetch.mockResolvedValue({})
 
     await getImageGeneration("board/one", "gen/two")
+    await getImageGenerationDetails("board/one", "gen/two")
     await fetchImageAssetBlob("board/one", "asset/two")
 
     expect(apiFetch).toHaveBeenNthCalledWith(1, {
@@ -75,6 +77,10 @@ describe("image generation API client", () => {
       signal: undefined,
     })
     expect(apiFetch).toHaveBeenNthCalledWith(2, {
+      path: "/boards/board%2Fone/image-generations/gen%2Ftwo/details",
+      signal: undefined,
+    })
+    expect(apiFetch).toHaveBeenNthCalledWith(3, {
       path: "/boards/board%2Fone/image-assets/asset%2Ftwo/content",
       responseType: "blob",
       signal: undefined,
