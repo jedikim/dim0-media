@@ -262,12 +262,12 @@ describe("ordered image reference resolution", () => {
       store,
       graphId: BOARD_ID,
       sourceNodeUids: ["incomplete"],
-    })).rejects.toThrow("참조로 사용할 수 없습니다")
+    })).rejects.toThrow("cannot be used as a reference")
     await expect(resolveReferenceAssetUids({
       store,
       graphId: BOARD_ID,
       sourceNodeUids: ["foreign"],
-    })).rejects.toThrow("이 보드")
+    })).rejects.toThrow("this board")
     expect(getImageGeneration).not.toHaveBeenCalled()
     expect(startImageGeneration).not.toHaveBeenCalled()
   })
@@ -441,20 +441,20 @@ describe("ordered image reference resolution", () => {
       graphId: BOARD_ID,
       sourceNodeUids: ["image-1", "image-1"],
       upload,
-    })).rejects.toThrow("두 번")
+    })).rejects.toThrow("twice")
     await expect(resolveReferenceAssetUids({
       store,
       graphId: BOARD_ID,
       sourceNodeUids: ["image-1"],
       upload,
-    })).rejects.toThrow("등록할 수 없습니다")
+    })).rejects.toThrow("cannot be registered")
     getImageGeneration.mockResolvedValue({ status: "started", output_asset_uid: null })
     await expect(resolveReferenceAssetUids({
       store,
       graphId: BOARD_ID,
       sourceNodeUids: ["generator-1"],
       upload,
-    })).rejects.toThrow("완료된 이미지")
+    })).rejects.toThrow("no completed image")
     expect(upload).not.toHaveBeenCalled()
     expect(startImageGeneration).not.toHaveBeenCalled()
   })

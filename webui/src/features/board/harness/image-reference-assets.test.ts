@@ -193,13 +193,13 @@ describe("image reference assets", () => {
       graphId: "other-board",
       nodeId: NODE_ID,
       upload,
-    })).rejects.toThrow("이 보드")
+    })).rejects.toThrow("this board")
     await expect(materializeImageNodeAsset({
       store,
       graphId: BOARD_ID,
       nodeId: NODE_ID,
       upload,
-    })).rejects.toThrow("등록할 수 없습니다")
+    })).rejects.toThrow("cannot be registered")
     expect(upload).not.toHaveBeenCalled()
   })
 })

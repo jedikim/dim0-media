@@ -99,21 +99,21 @@ export type ImageGenerationErrorDetail = {
 
 
 const REFERENCE_ERROR_MESSAGES: Readonly<Record<string, string>> = {
-  image_reference_unavailable: "참조 이미지를 찾거나 이 보드에서 사용할 수 없습니다.",
-  unsupported_reference_format: "참조 이미지는 PNG, JPEG 또는 WebP 형식이어야 합니다.",
-  reference_too_large: "참조 이미지 한 장의 파일 크기가 제한을 초과했습니다.",
-  reference_pixel_limit_exceeded: "참조 이미지 한 장의 해상도가 제한을 초과했습니다.",
-  reference_request_too_large: "참조 이미지 전체 파일 크기가 제한을 초과했습니다.",
-  reference_encoded_size_exceeded: "참조 이미지 전체 요청 크기가 제한을 초과했습니다.",
-  reference_limit_exceeded: "선택한 모델의 참조 이미지 개수 제한을 초과했습니다.",
-  image_to_image_unsupported: "선택한 모델은 참조 이미지 생성을 지원하지 않습니다.",
-  generation_not_succeeded: "완료된 이미지 생성만 결과 노드로 추가할 수 있습니다.",
-  output_asset_unavailable: "생성된 이미지 자산을 사용할 수 없습니다.",
-  generator_unavailable: "원본 이미지 생성 노드를 찾을 수 없습니다.",
-  materialization_raced: "결과 노드 준비 작업이 겹쳤습니다. 잠시 후 다시 시도해 주세요.",
-  canonical_collision: "결과 노드 식별자가 기존 보드 데이터와 충돌합니다.",
-  canvas_write_incomplete: "결과 노드를 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
-  output_binding_conflict: "결과 노드를 생성 기록에 연결하지 못했습니다.",
+  image_reference_unavailable: "The reference image could not be found or is unavailable on this board.",
+  unsupported_reference_format: "Reference images must be PNG, JPEG, or WebP.",
+  reference_too_large: "A reference image exceeds the file-size limit.",
+  reference_pixel_limit_exceeded: "A reference image exceeds the pixel limit.",
+  reference_request_too_large: "The reference images exceed the total file-size limit.",
+  reference_encoded_size_exceeded: "The encoded reference request exceeds the size limit.",
+  reference_limit_exceeded: "The selected model's reference-image limit was exceeded.",
+  image_to_image_unsupported: "The selected model does not support image-to-image generation.",
+  generation_not_succeeded: "Only a completed generation can be added as a result node.",
+  output_asset_unavailable: "The generated image asset is unavailable.",
+  generator_unavailable: "The source image generator node could not be found.",
+  materialization_raced: "Result-node creation overlapped another request. Try again shortly.",
+  canonical_collision: "The result-node identifier conflicts with existing board data.",
+  canvas_write_incomplete: "The result node could not be saved. Try again shortly.",
+  output_binding_conflict: "The result node could not be linked to the generation record.",
 }
 
 
@@ -163,22 +163,22 @@ export function imageGenerationErrorMessage(error: unknown): string {
   switch (imageGenerationStatusCode(error)) {
     case 400:
     case 422:
-      return "선택한 모델이 이 요청을 지원하지 않습니다."
+      return "The selected model does not support this request."
     case 401:
     case 403:
-      return "이 보드에서 이미지를 생성할 권한이 없습니다."
+      return "You do not have permission to generate images on this board."
     case 404:
-      return "보드나 이미지 생성 기록을 찾을 수 없습니다."
+      return "The board or image-generation record could not be found."
     case 409:
-      return "요청 식별자가 다른 내용에 이미 사용되었습니다. 다시 생성해 주세요."
+      return "This request ID was already used for different content. Start a new generation."
     case 413:
-      return "참조 이미지가 허용된 크기 또는 해상도를 초과했습니다."
+      return "A reference image exceeds the allowed size or resolution."
     case 429:
-      return "요청이 너무 잦습니다. 잠시 후 다시 시도해 주세요."
+      return "Too many requests. Try again shortly."
     case 503:
-      return "이미지 생성 서비스가 일시적으로 중단되었습니다."
+      return "Image generation is temporarily unavailable."
     default:
-      return "이미지 생성 요청을 확인할 수 없습니다."
+      return "The image-generation request could not be verified."
   }
 }
 

@@ -69,7 +69,7 @@ vi.mock("../../canvas/use-add-image", () => ({
 vi.mock("@/features/board/api/image-generation", () => ({
   listImageModels: mocks.listImageModels,
   getImageGeneration: mocks.getImageGeneration,
-  imageGenerationErrorMessage: () => "모델 목록을 불러올 수 없습니다.",
+  imageGenerationErrorMessage: () => "The model list could not be loaded.",
   imageGenerationStatusCode: (error: unknown) => {
     const match = error instanceof Error ? /^(\d{3})\b/.exec(error.message) : null
     return match ? Number(match[1]) : null
@@ -292,12 +292,12 @@ describe("ImageGeneratorView", () => {
     mocks.local = true
     await render()
 
-    expect(container.textContent).toContain("서버 보드에서만 사용할 수 있습니다.")
+    expect(container.textContent).toContain("Available on synced boards only.")
     expect(mocks.listImageModels).not.toHaveBeenCalled()
     expect(mocks.useImageGeneration).not.toHaveBeenCalled()
     expect(mocks.useAuthedImage).not.toHaveBeenCalled()
     expect(container.querySelector('[aria-label="Add reference images"]')).toBeNull()
-    expect(container.textContent).not.toContain("로그인한 모든 사용자에게 공개됩니다.")
+    expect(container.textContent).not.toContain("visible to all signed-in users")
   })
 
 
@@ -305,7 +305,7 @@ describe("ImageGeneratorView", () => {
     await render()
 
     expect(container.textContent).toContain(
-      "이 보드에서 생성한 프롬프트, 결과 및 참조 이미지는 로그인한 모든 사용자에게 공개됩니다.",
+      "Prompts, results, and reference images generated on this board are visible to all signed-in users.",
     )
     expect(mocks.generate).not.toHaveBeenCalled()
   })
@@ -331,9 +331,9 @@ describe("ImageGeneratorView", () => {
     }])
     await render()
 
-    expect(container.querySelector('[aria-label="비율"]')).toBeNull()
-    expect(container.querySelector('[aria-label="해상도"]')).toBeNull()
-    expect(container.querySelector('[aria-label="품질"]')).toBeNull()
+    expect(container.querySelector('[aria-label="Aspect ratio"]')).toBeNull()
+    expect(container.querySelector('[aria-label="Resolution"]')).toBeNull()
+    expect(container.querySelector('[aria-label="Quality"]')).toBeNull()
   })
 
 
@@ -348,9 +348,9 @@ describe("ImageGeneratorView", () => {
       .find((candidate) => candidate.textContent === "Generate")
     act(() => button?.click())
 
-    expect((container.querySelector('[aria-label="비율"]') as HTMLSelectElement).value).toBe("1:1")
-    expect((container.querySelector('[aria-label="해상도"]') as HTMLSelectElement).value).toBe("1K")
-    expect((container.querySelector('[aria-label="품질"]') as HTMLSelectElement).value).toBe("low")
+    expect((container.querySelector('[aria-label="Aspect ratio"]') as HTMLSelectElement).value).toBe("1:1")
+    expect((container.querySelector('[aria-label="Resolution"]') as HTMLSelectElement).value).toBe("1K")
+    expect((container.querySelector('[aria-label="Quality"]') as HTMLSelectElement).value).toBe("low")
     expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", {
       aspect_ratio: "1:1",
       resolution: "1K",
@@ -367,13 +367,13 @@ describe("ImageGeneratorView", () => {
     const button = [...container.querySelectorAll("button")]
       .find((candidate) => candidate.textContent === "Generate")
     expect(button?.disabled).toBe(true)
-    expect(container.textContent).toContain("모델 목록을 불러올 수 없습니다.")
+    expect(container.textContent).toContain("The model list could not be loaded.")
     expect(container.textContent).not.toContain("provider secret")
   })
 
 
   it("renders the hook's safe reference materialization message", async () => {
-    const safeMessage = "이 이미지 노드는 참조 자산으로 등록할 수 없습니다."
+    const safeMessage = "This image node cannot be registered as a reference asset."
     mocks.useImageGeneration.mockReturnValue({
       phase: "failed",
       state: { output_asset_uid: "asset-existing" },
@@ -404,7 +404,7 @@ describe("ImageGeneratorView", () => {
     await render()
 
     expect(mocks.useAuthedImage).not.toHaveBeenCalled()
-    expect(container.textContent).not.toContain("생성된 이미지가 여기에 표시됩니다.")
+    expect(container.textContent).not.toContain("The generated image will appear here.")
     expect(mocks.generate).not.toHaveBeenCalled()
   })
 
@@ -438,9 +438,9 @@ describe("ImageGeneratorView", () => {
     await render()
 
     expect(mocks.useAuthedImage).not.toHaveBeenCalled()
-    expect(container.textContent).toContain("완료")
+    expect(container.textContent).toContain("Complete")
     const select = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent === "결과로 이동")
+      .find((button) => button.textContent === "Go to result")
     act(() => select?.click())
     expect(selectResult).toHaveBeenCalledTimes(1)
   })
@@ -459,14 +459,14 @@ describe("ImageGeneratorView", () => {
     await render()
 
     const recovery = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent === "결과 노드 다시 추가")
+      .find((button) => button.textContent === "Add result node again")
     act(() => recovery?.click())
     expect(recreate).toHaveBeenCalledTimes(1)
 
     useBoardAppStore.setState({ canEdit: false })
     await render()
     expect([...container.querySelectorAll("button")]
-      .some((button) => button.textContent === "결과 노드 다시 추가")).toBe(false)
+      .some((button) => button.textContent === "Add result node again")).toBe(false)
   })
 
 
@@ -488,12 +488,12 @@ describe("ImageGeneratorView", () => {
       selectResult: vi.fn(),
       recreate,
       recreating: false,
-      error: "결과 노드를 준비하지 못했습니다.",
+      error: "The result node could not be prepared.",
     })
     await render()
 
     const recovery = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent === "결과 노드 추가 다시 시도")
+      .find((button) => button.textContent === "Try adding the result node again")
     act(() => recovery?.click())
     expect(recreate).toHaveBeenCalledTimes(1)
     expect(mocks.generate).not.toHaveBeenCalled()
@@ -507,8 +507,8 @@ describe("ImageGeneratorView", () => {
       error: null,
     })
     await render()
-    expect(container.textContent).toContain("완료")
-    expect(container.textContent).not.toContain("결과 노드 추가 다시 시도")
+    expect(container.textContent).toContain("Complete")
+    expect(container.textContent).not.toContain("Try adding the result node again")
 
     useBoardAppStore.setState({ canEdit: false })
     mocks.useOutputNode.mockReturnValue({
@@ -517,10 +517,10 @@ describe("ImageGeneratorView", () => {
       selectResult: vi.fn(),
       recreate,
       recreating: false,
-      error: "결과 노드를 준비하지 못했습니다.",
+      error: "The result node could not be prepared.",
     })
     await render()
-    expect(container.textContent).not.toContain("결과 노드 추가 다시 시도")
+    expect(container.textContent).not.toContain("Try adding the result node again")
     expect(recreate).toHaveBeenCalledTimes(1)
   })
 
@@ -539,7 +539,7 @@ describe("ImageGeneratorView", () => {
     expect(container.querySelector<HTMLTextAreaElement>('[aria-label="Image prompt"]')?.disabled)
       .toBe(true)
     const generateButton = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent === "생성 중…")
+      .find((button) => button.textContent === "Generating…")
     expect(generateButton?.disabled).toBe(true)
   })
 
@@ -583,7 +583,7 @@ describe("ImageGeneratorView", () => {
     mocks.useImageGeneration.mockReturnValue({
       phase: "failed",
       state: null,
-      error: "확인 필요",
+      error: "Needs attention",
       generate: mocks.generate,
       resumePending: mocks.resumePending,
       checkStatusAgain: mocks.checkStatusAgain,
@@ -653,7 +653,7 @@ describe("ImageGeneratorView", () => {
     mocks.useImageGeneration.mockReturnValue({
       phase: "failed",
       state: null,
-      error: "확인 필요",
+      error: "Needs attention",
       generate: mocks.generate,
       resumePending: mocks.resumePending,
       checkStatusAgain: mocks.checkStatusAgain,
@@ -678,7 +678,7 @@ describe("ImageGeneratorView", () => {
     mocks.useImageGeneration.mockReturnValue({
       phase: "stalled",
       state: null,
-      error: "지연",
+      error: "Delayed",
       generate: mocks.generate,
       resumePending: mocks.resumePending,
       checkStatusAgain: mocks.checkStatusAgain,
@@ -688,7 +688,7 @@ describe("ImageGeneratorView", () => {
     await render()
 
     const button = [...container.querySelectorAll("button")]
-      .find((candidate) => candidate.textContent === "상태 다시 확인")!
+      .find((candidate) => candidate.textContent === "Check status again")!
     expect(button).toBeDefined()
     act(() => button.click())
     expect(mocks.checkStatusAgain).toHaveBeenCalledTimes(1)
@@ -703,7 +703,7 @@ describe("ImageGeneratorView", () => {
     mocks.useImageGeneration.mockReturnValue({
       phase: "stalled",
       state: null,
-      error: "지연",
+      error: "Delayed",
       generate: mocks.generate,
       resumePending: mocks.resumePending,
       checkStatusAgain: mocks.checkStatusAgain,
@@ -713,7 +713,7 @@ describe("ImageGeneratorView", () => {
     await render()
 
     const recheckButton = [...container.querySelectorAll("button")]
-      .find((candidate) => candidate.textContent === "상태 다시 확인")!
+      .find((candidate) => candidate.textContent === "Check status again")!
     const generateButton = [...container.querySelectorAll("button")]
       .find((candidate) => candidate.className.includes("bg-primary"))!
     expect(recheckButton.disabled).toBe(false)
@@ -739,7 +739,7 @@ describe("ImageGeneratorView", () => {
       .find((candidate) => candidate.textContent === "Generate")!
     expect(modelSelect.value).toBe("retired-model")
     expect(generateButton.disabled).toBe(true)
-    expect(container.textContent).toContain("저장된 모델을 사용할 수 없습니다")
+    expect(container.textContent).toContain("The saved model is unavailable")
     expect(mocks.generate).not.toHaveBeenCalled()
 
     act(() => selectOption(modelSelect, "model-1"))
@@ -787,9 +787,9 @@ describe("ImageGeneratorView", () => {
       placeholder: "Image Generator",
       maxLines: 1,
     }))
-    expect(container.textContent).toContain("참조 이미지 0 / 3")
+    expect(container.textContent).toContain("Reference images 0 / 3")
     const option = container.querySelector<HTMLOptionElement>('[aria-label="Image model"] option')
-    expect(option?.textContent).toBe("Model I2I · 참조 최대 3장")
+    expect(option?.textContent).toBe("Model I2I · up to 3 references")
     expect(container.querySelector('[aria-label="Image references"]')).not.toBeNull()
   })
 
@@ -881,7 +881,7 @@ describe("ImageGeneratorView", () => {
       mocks.addEdge(referenceEdge("edge-arrow", "image-arrow", 0))
     })
 
-    expect(container.querySelector<HTMLImageElement>('img[alt="참조 이미지"]')?.src)
+    expect(container.querySelector<HTMLImageElement>('img[alt="Reference image"]')?.src)
       .toBe("data:image/png;base64,YXJyb3c=")
     expect(container.querySelector('input:not([type="file"])')).toBeNull()
     expect(mocks.generate).not.toHaveBeenCalled()
@@ -1001,7 +1001,7 @@ describe("ImageGeneratorView", () => {
       output_asset_uid: "asset-a",
     })
     await render()
-    expect(container.querySelector<HTMLImageElement>('img[alt="참조 생성 이미지"]')?.src)
+    expect(container.querySelector<HTMLImageElement>('img[alt="Generated reference image"]')?.src)
       .toBe("blob:asset-a")
 
     sourceProperties.activeGenerationUid = { type: "keyword", value: "generation-b" }
@@ -1010,10 +1010,10 @@ describe("ImageGeneratorView", () => {
       .mockResolvedValueOnce({ status: "retryable", output_asset_uid: null })
       .mockResolvedValueOnce({ status: "succeeded", output_asset_uid: "asset-b" })
     await render()
-    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+    expect(container.querySelector('img[alt="Generated reference image"]')).toBeNull()
 
     await act(() => vi.advanceTimersByTimeAsync(3_000))
-    expect(container.querySelector<HTMLImageElement>('img[alt="참조 생성 이미지"]')?.src)
+    expect(container.querySelector<HTMLImageElement>('img[alt="Generated reference image"]')?.src)
       .toBe("blob:asset-b")
     expect(mocks.getImageGeneration.mock.calls.slice(-3).map((call) => call[1]))
       .toEqual(["generation-b", "generation-b", "generation-b"])
@@ -1044,11 +1044,11 @@ describe("ImageGeneratorView", () => {
       .mockResolvedValueOnce({ status: "succeeded", output_asset_uid: "asset-a" })
 
     await render()
-    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+    expect(container.querySelector('img[alt="Generated reference image"]')).toBeNull()
     await act(() => vi.advanceTimersByTimeAsync(1_000))
 
     expect(mocks.getImageGeneration).toHaveBeenCalledTimes(2)
-    expect(container.querySelector<HTMLImageElement>('img[alt="참조 생성 이미지"]')?.src)
+    expect(container.querySelector<HTMLImageElement>('img[alt="Generated reference image"]')?.src)
       .toBe("blob:asset-a")
   })
 
@@ -1074,7 +1074,7 @@ describe("ImageGeneratorView", () => {
     await act(() => vi.advanceTimersByTimeAsync(30_000))
 
     expect(mocks.getImageGeneration).toHaveBeenCalledTimes(1)
-    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+    expect(container.querySelector('img[alt="Generated reference image"]')).toBeNull()
   })
 
 
@@ -1140,13 +1140,13 @@ describe("ImageGeneratorView", () => {
     sourceProperties.activeGenerationUid = { type: "keyword", value: "generation-b" }
     mocks.getImageGeneration.mockResolvedValueOnce({ status: "failed", output_asset_uid: null })
     await render()
-    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+    expect(container.querySelector('img[alt="Generated reference image"]')).toBeNull()
 
     await act(async () => {
       resolveA?.({ status: "succeeded", output_asset_uid: "asset-a" })
       await Promise.resolve()
     })
-    expect(container.querySelector('img[alt="참조 생성 이미지"]')).toBeNull()
+    expect(container.querySelector('img[alt="Generated reference image"]')).toBeNull()
   })
 
 
@@ -1168,8 +1168,8 @@ describe("ImageGeneratorView", () => {
 
     await render()
 
-    expect(container.textContent).toContain("참조 이미지 2 / —")
-    expect(container.textContent).not.toContain("초과")
+    expect(container.textContent).toContain("Reference images 2 / —")
+    expect(container.textContent).not.toContain("over limit")
     expect(container.querySelector('[aria-label="Image references"]')?.innerHTML)
       .not.toContain("border-destructive")
   })
@@ -1190,9 +1190,9 @@ describe("ImageGeneratorView", () => {
 
     await render()
 
-    expect(container.textContent).toContain("참조 이미지 1 / —")
+    expect(container.textContent).toContain("Reference images 1 / —")
     expect(container.textContent).not.toContain("1 / 0")
-    expect(container.textContent).not.toContain("초과")
+    expect(container.textContent).not.toContain("over limit")
     expect(container.querySelector('[aria-label="Image references"]')?.innerHTML)
       .not.toContain("border-destructive")
   })
@@ -1218,10 +1218,10 @@ describe("ImageGeneratorView", () => {
     const generateButton = [...container.querySelectorAll("button")]
       .find((candidate) => candidate.textContent === "Generate")!
     expect(generateButton.disabled).toBe(true)
-    expect(container.textContent).toContain("참조 이미지 4 / 3 · 1장 초과")
-    expect(container.textContent).toContain("1장을 제거하거나 참조 한도가 더 큰 모델")
+    expect(container.textContent).toContain("Reference images 4 / 3 · 1 over limit")
+    expect(container.textContent).toContain("Remove 1 reference image or select a model with a higher reference limit")
     expect([...container.querySelectorAll('[aria-label="Image references"] span')]
-      .filter((badge) => badge.textContent === "초과")).toHaveLength(1)
+      .filter((badge) => badge.textContent === "Over limit")).toHaveLength(1)
     expect(container.querySelectorAll('[aria-label="Image references"] img')).toHaveLength(4)
     expect(mocks.generate).not.toHaveBeenCalled()
 
@@ -1232,8 +1232,8 @@ describe("ImageGeneratorView", () => {
     const restoredGenerate = [...container.querySelectorAll("button")]
       .find((candidate) => candidate.textContent === "Generate")!
     expect(restoredGenerate.disabled).toBe(false)
-    expect(container.textContent).toContain("참조 이미지 4 / 4")
-    expect(container.textContent).not.toContain("장 초과")
+    expect(container.textContent).toContain("Reference images 4 / 4")
+    expect(container.textContent).not.toContain("over limit")
   })
 
 
@@ -1268,7 +1268,7 @@ describe("ImageGeneratorView", () => {
       '[aria-label="Image prompt"]',
     )?.disabled).toBe(true)
     const generateButton = [...container.querySelectorAll("button")]
-      .find((candidate) => candidate.textContent === "생성 중…")
+      .find((candidate) => candidate.textContent === "Generating…")
     expect(generateButton?.disabled).toBe(true)
   })
 })

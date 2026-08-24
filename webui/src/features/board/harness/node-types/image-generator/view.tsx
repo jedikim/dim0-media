@@ -188,10 +188,10 @@ function CapabilitySelect({
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
       >
-        {selected === "" && <option value="" disabled>선택 필요</option>}
+        {selected === "" && <option value="" disabled>Select an option</option>}
         {choices.map((choice) => (
           <option key={choice} value={choice}>
-            {choice}{choice === defaultValue ? " (기본값)" : ""}
+            {choice}{choice === defaultValue ? " (default)" : ""}
           </option>
         ))}
       </select>
@@ -203,13 +203,13 @@ function CapabilitySelect({
 /** Convert hook phase into compact, non-authoritative UI copy. */
 function phaseLabel(phase: ReturnType<typeof useImageGeneration>["phase"]): string {
   switch (phase) {
-    case "resolving": return "참조 확인 중"
-    case "starting": return "요청 저장 중"
-    case "running": return "이미지 생성 중"
-    case "succeeded": return "완료"
-    case "failed": return "확인 필요"
-    case "stalled": return "상태 확인 지연"
-    default: return "준비됨"
+    case "resolving": return "Checking references"
+    case "starting": return "Saving request"
+    case "running": return "Generating image"
+    case "succeeded": return "Complete"
+    case "failed": return "Needs attention"
+    case "stalled": return "Status check delayed"
+    default: return "Ready"
   }
 }
 
@@ -316,7 +316,7 @@ function GeneratorReferenceThumbnail({
   const assetUid = resolved?.generationUid === generationUid ? resolved.assetUid : null
   const { url } = useAuthedImage(graphId, assetUid)
   return url
-    ? <img className="size-full object-cover" src={url} alt="참조 생성 이미지" />
+    ? <img className="size-full object-cover" src={url} alt="Generated reference image" />
     : <ImageStackIcon className="size-4 text-muted-foreground" />
 }
 
@@ -331,7 +331,7 @@ function ReferenceThumbnail({ graphId, sourceNodeId }: { graphId: string; source
   const { url: generatedUrl } = useAuthedImage(graphId, generatedAssociation?.assetUid ?? null)
   if (!source) return <ImageStackIcon className="size-4 text-muted-foreground" />
   if (source.type === "image" && typeof data.src === "string") {
-    return <img className="size-full object-cover" src={data.src} alt="참조 이미지" />
+    return <img className="size-full object-cover" src={data.src} alt="Reference image" />
   }
   if (source.type === "image-generator") {
     return (
@@ -342,7 +342,7 @@ function ReferenceThumbnail({ graphId, sourceNodeId }: { graphId: string; source
     )
   }
   if (source.type === "generated-image" && generatedUrl) {
-    return <img className="size-full object-cover" src={generatedUrl} alt="참조 생성 결과" />
+    return <img className="size-full object-cover" src={generatedUrl} alt="Generated result reference" />
   }
   return <ImageStackIcon className="size-4 text-muted-foreground" />
 }
@@ -553,12 +553,12 @@ function SyncedImageGeneratorCard({
     if (files.length === 0 || !canAddReferences) return
     const supportedMimeTypes = new Set(["image/png", "image/jpeg", "image/webp"])
     if (files.some((file) => !supportedMimeTypes.has(file.type))) {
-      toast.error("PNG, JPEG 또는 WebP 이미지만 참조로 추가할 수 있습니다.")
+      toast.error("Only PNG, JPEG, or WebP images can be added as references.")
       return
     }
     const available = globalReferenceLimit - orderedImageReferences(store, id).length
     if (files.length > available) {
-      toast.error(`참조 이미지는 최대 ${globalReferenceLimit}장까지 추가할 수 있습니다.`)
+      toast.error(`You can add up to ${globalReferenceLimit} reference images.`)
       return
     }
     const generator = store.getNode(id)
@@ -586,7 +586,7 @@ function SyncedImageGeneratorCard({
           parentId: data.parentId,
         })
         if (!edgeId) {
-          toast.error(`"${file.name}" 이미지는 추가했지만 참조로 연결하지 못했습니다.`)
+          toast.error(`"${file.name}" was added, but could not be connected as a reference.`)
         }
       }
     } finally {
@@ -611,16 +611,16 @@ function SyncedImageGeneratorCard({
         value={prompt.draft}
         disabled={inputsLocked}
         maxLength={32_000}
-        placeholder="만들고 싶은 이미지를 설명하세요"
+        placeholder="Describe the image you want to create"
         onChange={(event) => prompt.updateDraft(event.target.value)}
         onBlur={() => prompt.commitPrompt()}
       />
 
       <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
         <span>
-          참조 이미지 {references.length} / {referenceLimit ?? "—"}
+          Reference images {references.length} / {referenceLimit ?? "—"}
           {referenceOverflow > 0 && (
-            <span className="text-destructive"> · {referenceOverflow}장 초과</span>
+            <span className="text-destructive"> · {referenceOverflow} over limit</span>
           )}
         </span>
         <button
@@ -630,7 +630,7 @@ function SyncedImageGeneratorCard({
           onClick={() => fileInputRef.current?.click()}
         >
           <Plus className="size-3" />
-          참조 이미지
+          Reference images
         </button>
         <input
           ref={fileInputRef}
@@ -673,7 +673,7 @@ function SyncedImageGeneratorCard({
             </button>
             {referenceLimit !== null && index >= referenceLimit && (
               <span className="absolute bottom-0 right-0 rounded-tl bg-destructive px-1 text-[10px] font-semibold text-destructive-foreground">
-                초과
+                Over limit
               </span>
             )}
           </div>
@@ -681,7 +681,7 @@ function SyncedImageGeneratorCard({
       </div>
 
       <label className="flex flex-col gap-1 text-[11px] text-muted-foreground">
-        <span>모델</span>
+        <span>Model</span>
         <select
           aria-label="Image model"
           className={SELECT_CLASS}
@@ -690,14 +690,14 @@ function SyncedImageGeneratorCard({
           onChange={(event) => patchProperties({ imageModelId: keywordProperty(event.target.value) })}
         >
           {storedModelUnavailable && storedModelId && (
-            <option value={storedModelId}>사용할 수 없는 모델 ({storedModelId})</option>
+            <option value={storedModelId}>Unavailable model ({storedModelId})</option>
           )}
           {compatibleModels.length === 0 && (
-            <option value="">사용 가능한 모델 없음</option>
+            <option value="">No models available</option>
           )}
           {compatibleModels.map((candidate) => (
             <option key={candidate.model_id} value={candidate.model_id}>
-              {candidate.display_name} · 참조 최대 {candidate.max_reference_images}장
+              {candidate.display_name} · up to {candidate.max_reference_images} {candidate.max_reference_images === 1 ? "reference" : "references"}
             </option>
           ))}
         </select>
@@ -705,7 +705,7 @@ function SyncedImageGeneratorCard({
 
       <div className="flex gap-2">
         <CapabilitySelect
-          label="비율"
+          label="Aspect ratio"
           value={effectiveAspectRatio}
           choices={model?.supported_aspect_ratios ?? null}
           defaultValue={model?.default_parameters.aspect_ratio}
@@ -713,7 +713,7 @@ function SyncedImageGeneratorCard({
           onChange={(value) => patchProperties({ imageAspectRatio: keywordProperty(value) })}
         />
         <CapabilitySelect
-          label="해상도"
+          label="Resolution"
           value={effectiveResolution}
           choices={model?.supported_resolutions ?? null}
           defaultValue={model?.default_parameters.resolution}
@@ -721,7 +721,7 @@ function SyncedImageGeneratorCard({
           onChange={(value) => patchProperties({ imageResolution: keywordProperty(value) })}
         />
         <CapabilitySelect
-          label="품질"
+          label="Quality"
           value={effectiveQuality}
           choices={model?.supported_qualities ?? null}
           defaultValue={model?.default_parameters.quality}
@@ -750,7 +750,7 @@ function SyncedImageGeneratorCard({
             )
           }}
         >
-          {busy ? "생성 중…" : "Generate"}
+          {busy ? "Generating…" : "Generate"}
         </button>
         {generation.phase === "stalled" && (
           <button
@@ -759,7 +759,7 @@ function SyncedImageGeneratorCard({
             disabled={generation.hasPendingRequest}
             onClick={generation.checkStatusAgain}
           >
-            상태 다시 확인
+            Check status again
           </button>
         )}
         {generation.hasPendingRequest && (
@@ -769,13 +769,13 @@ function SyncedImageGeneratorCard({
             disabled={!canEdit || !generation.canResumePending || generation.phase === "starting"}
             onClick={() => void generation.resumePending()}
           >
-            {generation.canResumePending ? "요청 재개" : "다른 사용자의 요청 대기 중"}
+            {generation.canResumePending ? "Resume request" : "Waiting for another user's request"}
           </button>
         )}
       </div>
 
       <p className="text-[10px] leading-relaxed text-muted-foreground">
-        이 보드에서 생성한 프롬프트, 결과 및 참조 이미지는 로그인한 모든 사용자에게 공개됩니다.
+        Prompts, results, and reference images generated on this board are visible to all signed-in users.
       </p>
 
       {(generation.phase === "succeeded" || outputNode.outputNodeUid) && (
@@ -783,18 +783,18 @@ function SyncedImageGeneratorCard({
           {outputNode.outputNodeUid ? (
             outputNode.nodePresent ? (
               <>
-                <span>완료</span>
+                <span>Complete</span>
                 <button
                   type="button"
                   className="rounded-md border border-border px-2 py-1 text-foreground"
                   onClick={outputNode.selectResult}
                 >
-                  결과로 이동
+                  Go to result
                 </button>
               </>
             ) : (
               <>
-                <span>결과 노드가 없습니다.</span>
+                <span>The result node is missing.</span>
                 {canEdit && (
                   <button
                     type="button"
@@ -802,24 +802,24 @@ function SyncedImageGeneratorCard({
                     disabled={outputNode.recreating}
                     onClick={() => void outputNode.recreate()}
                   >
-                    {outputNode.recreating ? "추가 중…" : "결과 노드 다시 추가"}
+                    {outputNode.recreating ? "Adding…" : "Add result node again"}
                   </button>
                 )}
               </>
             )
           ) : outputNode.error && canEdit ? (
             <>
-              <span>결과 노드를 추가하지 못했습니다.</span>
+              <span>The result node could not be added.</span>
               <button
                 type="button"
                 className="rounded-md border border-border px-2 py-1 text-foreground disabled:opacity-50"
                 disabled={outputNode.recreating}
                 onClick={() => void outputNode.recreate()}
               >
-                {outputNode.recreating ? "추가 중…" : "결과 노드 추가 다시 시도"}
+                {outputNode.recreating ? "Adding…" : "Try adding the result node again"}
               </button>
             </>
-          ) : <span>완료 · 결과 노드 준비 중</span>}
+          ) : <span>Complete · preparing result node</span>}
         </div>
       )}
 
@@ -827,13 +827,13 @@ function SyncedImageGeneratorCard({
         <p role="alert" className="text-xs text-destructive">
           {modelsError
             ?? (storedModelUnavailable
-              ? "저장된 모델을 사용할 수 없습니다. 다른 모델을 선택해 주세요."
+              ? "The saved model is unavailable. Select another model."
               : generation.error ?? outputNode.error)}
         </p>
       )}
       {model && references.length > model.max_reference_images && (
         <p role="alert" className="text-xs text-destructive">
-          {referenceOverflow}장을 제거하거나 참조 한도가 더 큰 모델을 선택하세요.
+          Remove {referenceOverflow} reference {referenceOverflow === 1 ? "image" : "images"} or select a model with a higher reference limit.
         </p>
       )}
       <NodeFooter status={footerStatus}>
@@ -894,9 +894,9 @@ export function ImageGeneratorView({ id }: { id: NodeId }) {
           {local ? (
             <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
               <ImageStackIcon className="size-8 text-muted-foreground" />
-              <p className="text-sm font-medium text-foreground">서버 보드에서만 사용할 수 있습니다.</p>
+              <p className="text-sm font-medium text-foreground">Available on synced boards only.</p>
               <p className="text-xs text-muted-foreground">
-                이 노드를 동기화된 보드로 옮긴 뒤 이미지를 생성하세요.
+                Move this node to a synced board before generating an image.
               </p>
             </div>
           ) : (

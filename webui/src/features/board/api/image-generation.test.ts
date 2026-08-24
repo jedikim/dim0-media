@@ -141,10 +141,10 @@ describe("image generation API client", () => {
   it("exposes only fixed safe error messages", () => {
     const rawSecret = "provider-body-with-secret"
     expect(imageGenerationErrorMessage(new Error(`503 Service Unavailable - ${rawSecret}`)))
-      .toBe("이미지 생성 서비스가 일시적으로 중단되었습니다.")
+      .toBe("Image generation is temporarily unavailable.")
     expect(imageGenerationErrorMessage(new Error(rawSecret))).not.toContain(rawSecret)
     expect(imageGenerationErrorMessage(new Error(`409 Conflict - ${rawSecret}`)))
-      .toBe("요청 식별자가 다른 내용에 이미 사용되었습니다. 다시 생성해 주세요.")
+      .toBe("This request ID was already used for different content. Start a new generation.")
   })
 
 
@@ -172,12 +172,12 @@ describe("image generation API client", () => {
     })}`)
 
     expect(imageGenerationErrorMessage(known)).toBe(
-      "참조 이미지 한 장의 파일 크기가 제한을 초과했습니다.",
+      "A reference image exceeds the file-size limit.",
     )
     expect(imageGenerationErrorMessage(known)).not.toContain(secret)
     expect(imageGenerationErrorDetail(unknown)?.code).toBe("future_provider_code")
     expect(imageGenerationErrorMessage(unknown)).toBe(
-      "선택한 모델이 이 요청을 지원하지 않습니다.",
+      "The selected model does not support this request.",
     )
     expect(imageGenerationErrorMessage(unknown)).not.toContain(secret)
   })
@@ -190,7 +190,7 @@ describe("image generation API client", () => {
     })}`)
 
     expect(imageGenerationErrorMessage(error)).toBe(
-      "결과 노드 식별자가 기존 보드 데이터와 충돌합니다.",
+      "The result-node identifier conflicts with existing board data.",
     )
     expect(imageGenerationErrorMessage(error)).not.toContain(secret)
   })
@@ -203,7 +203,7 @@ describe("image generation API client", () => {
     })}`)
 
     expect(imageGenerationErrorMessage(error)).toBe(
-      "결과 노드 준비 작업이 겹쳤습니다. 잠시 후 다시 시도해 주세요.",
+      "Result-node creation overlapped another request. Try again shortly.",
     )
     expect(imageGenerationErrorMessage(error)).not.toContain(secret)
   })

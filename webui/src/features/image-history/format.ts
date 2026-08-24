@@ -10,13 +10,13 @@ export function imageHistoryUserLabel(user: ImageHistoryUser): string {
 
 /** Format a server-summed Decimal cost without binary floating-point conversion. */
 export function formatKnownCostUsd(value: string | null): string {
-  if (value === null) return "미보고"
-  if (value.length > 128) return "비용 표시 오류"
+  if (value === null) return "Not reported"
+  if (value.length > 128) return "Cost unavailable"
   const match = /^(\d+)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(value)
-  if (!match) return "비용 표시 오류"
+  if (!match) return "Cost unavailable"
   const fraction = match[2] ?? ""
   const exponent = BigInt(match[3] ?? "0")
-  if (exponent < -100n || exponent > 100n) return "비용 표시 오류"
+  if (exponent < -100n || exponent > 100n) return "Cost unavailable"
   let digits = `${match[1]}${fraction}`.replace(/^0+/, "")
   if (!digits) return "$0.0000"
 
@@ -26,7 +26,7 @@ export function formatKnownCostUsd(value: string | null): string {
     scale -= 1n
   }
   const integerDigits = BigInt(digits.length) - scale
-  if (scale > 10n || integerDigits > 10n) return "비용 표시 오류"
+  if (scale > 10n || integerDigits > 10n) return "Cost unavailable"
 
   const scaleNumber = Number(scale)
   let dollars: string

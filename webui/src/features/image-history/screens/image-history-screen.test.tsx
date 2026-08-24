@@ -200,25 +200,25 @@ describe("ImageHistoryScreen", () => {
   it("renders global policy, summaries, complete records, statuses, and ordered thumbnails", async () => {
     await render()
 
-    expect(container.textContent).toContain("AI 이미지 기록")
-    expect(container.textContent).toContain("모든 사용자의 이미지 생성 기록과 provider-reported 비용 및 사용량입니다.")
-    expect(container.textContent).toContain("private board의 이름·프롬프트·결과")
+    expect(container.textContent).toContain("AI image history")
+    expect(container.textContent).toContain("Image-generation records and provider-reported cost and usage for all users.")
+    expect(container.textContent).toContain("private board names, prompts, results")
     expect(container.textContent).toContain("opt-out")
     expect(container.textContent).toContain("Alice · @alice")
     expect(container.textContent).toContain("@bob")
-    expect(container.textContent).toContain("$0.0500 · 비용 미보고 1회")
+    expect(container.textContent).toContain("$0.0500 · cost unreported for 1 attempt")
     expect(container.textContent).toContain("Provider-reported usage")
     expect(container.textContent).toContain("generated images 1")
     expect(container.querySelectorAll("[data-generation-status]")).toHaveLength(4)
     expect(container.textContent).toContain("Private board")
-    expect(container.textContent).toContain("이름 없는 보드")
-    expect(container.textContent).toContain("삭제된 보드")
+    expect(container.textContent).toContain("Untitled board")
+    expect(container.textContent).toContain("Deleted board")
     expect(container.textContent).toContain("A complete private prompt that remains fully visible")
-    expect(container.textContent).toContain("전체 보기")
+    expect(container.textContent).toContain("Show full prompt")
     expect(container.textContent).toContain("x-ai/grok-imagine-image-2.0")
-    expect(container.textContent).toContain("비율 1:1 · 해상도 1K · 품질 low · 결과 1")
-    expect(container.querySelector('img[alt="생성 결과"]')).not.toBeNull()
-    expect(container.querySelectorAll('img[alt^="참조 이미지"]')).toHaveLength(2)
+    expect(container.textContent).toContain("Aspect ratio 1:1 · Resolution 1K · Quality low · Outputs 1")
+    expect(container.querySelector('img[alt="Generated result"]')).not.toBeNull()
+    expect(container.querySelectorAll('img[alt^="Reference image"]')).toHaveLength(2)
     expect(container.textContent).toContain("Stored safe failure")
     expect(mocks.useHistoryImage).toHaveBeenCalledWith("a".repeat(32), "duplicate-reference", true)
   })
@@ -228,13 +228,13 @@ describe("ImageHistoryScreen", () => {
     await render()
     expect(mocks.usePages).toHaveBeenLastCalledWith({ userUid: null, status: null })
 
-    select("사용자 필터", "alice-uid-long")
+    select("User filter", "alice-uid-long")
     expect(mocks.usePages).toHaveBeenLastCalledWith({ userUid: "alice-uid-long", status: null })
 
-    select("상태 필터", "failed")
+    select("Status filter", "failed")
     expect(mocks.usePages).toHaveBeenLastCalledWith({ userUid: "alice-uid-long", status: "failed" })
 
-    const more = [...container.querySelectorAll("button")].find((button) => button.textContent === "더 보기")
+    const more = [...container.querySelectorAll("button")].find((button) => button.textContent === "Load more")
     act(() => more?.click())
     expect(mocks.fetchNextPage).toHaveBeenCalledTimes(1)
   })
@@ -252,7 +252,7 @@ describe("ImageHistoryScreen", () => {
       refetch: mocks.refetchPages,
     })
     await render()
-    expect(container.textContent).toContain("기록을 불러오는 중…")
+    expect(container.textContent).toContain("Loading history…")
 
     mocks.useSummary.mockReturnValue({ data: summary, isError: false, refetch: mocks.refetchSummary })
     mocks.usePages.mockReturnValue({
@@ -265,8 +265,8 @@ describe("ImageHistoryScreen", () => {
       refetch: mocks.refetchPages,
     })
     await render()
-    expect(container.textContent).toContain("아직 이미지 생성 기록이 없습니다.")
-    expect([...container.querySelectorAll("button")].some((button) => button.textContent === "더 보기")).toBe(false)
+    expect(container.textContent).toContain("No image-generation records yet.")
+    expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Load more")).toBe(false)
 
     mocks.useHistoryImage.mockReturnValue({ url: null, failed: true })
     mocks.useSummary.mockReturnValue({ data: summary, isError: true, refetch: mocks.refetchSummary })
@@ -280,8 +280,8 @@ describe("ImageHistoryScreen", () => {
       refetch: mocks.refetchPages,
     })
     await render()
-    expect(container.textContent).toContain("이미지를 불러올 수 없음")
-    const retry = [...container.querySelectorAll("button")].find((button) => button.textContent === "다시 시도")
+    expect(container.textContent).toContain("Image unavailable")
+    const retry = [...container.querySelectorAll("button")].find((button) => button.textContent === "Try again")
     act(() => retry?.click())
     expect(mocks.refetchSummary).toHaveBeenCalledTimes(1)
     expect(mocks.refetchPages).toHaveBeenCalledTimes(1)
@@ -306,7 +306,7 @@ describe("ImageHistoryScreen", () => {
     await render()
 
     expect(container.textContent).toContain(
-      "비율 provider 기본값(미기록) · 해상도 provider 기본값(미기록) · 품질 provider 기본값(미기록) · 결과 1",
+      "Aspect ratio Provider default (not recorded) · Resolution Provider default (not recorded) · Quality Provider default (not recorded) · Outputs 1",
     )
   })
 })

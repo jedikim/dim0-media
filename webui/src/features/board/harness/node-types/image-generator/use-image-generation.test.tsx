@@ -392,7 +392,7 @@ describe("useImageGeneration", () => {
       output_asset_uid: "asset-old",
     })
     apiMocks.getImageGeneration.mockResolvedValue(oldState)
-    const safeMessage = "이 이미지 노드는 참조 자산으로 등록할 수 없습니다."
+    const safeMessage = "This image node cannot be registered as a reference asset."
     const resolveReferenceAssets = vi.fn()
       .mockRejectedValueOnce(new ImageReferenceResolutionError(safeMessage))
       .mockRejectedValueOnce(new Error("500 - private upstream response body"))
@@ -409,7 +409,7 @@ describe("useImageGeneration", () => {
     }))
 
     await act(async () => latest?.generate("model-1", "new bird", {}, ["image-1"]))
-    expect(latest?.error).toBe("이미지 생성 요청을 확인할 수 없습니다.")
+    expect(latest?.error).toBe("The image-generation request could not be verified.")
     expect(latest?.error).not.toContain("private upstream")
     expect(latest?.state?.output_asset_uid).toBe("asset-old")
     expect(uuidMocks.uuidv4).not.toHaveBeenCalled()
@@ -652,7 +652,7 @@ describe("useImageGeneration", () => {
     expect(latest?.state?.output_asset_uid).toBe("asset-old")
     expect(latest?.hasPendingRequest).toBe(false)
     expect(latest?.canResumePending).toBe(false)
-    expect(latest?.error).toBe("참조 이미지 한 장의 파일 크기가 제한을 초과했습니다.")
+    expect(latest?.error).toBe("A reference image exceeds the file-size limit.")
     expect(apiMocks.startImageGeneration).toHaveBeenCalledTimes(1)
     expect(persist).toHaveBeenCalledWith({ pendingRequest: null })
 
@@ -778,8 +778,8 @@ describe("useImageGeneration", () => {
 
 
   it.each([
-    ["409", new Error("409 Conflict - secret body"), "요청 식별자가 다른 내용에 이미 사용되었습니다"],
-    ["422", new Error("422 Unprocessable Entity - secret body"), "선택한 모델이 이 요청을 지원하지 않습니다"],
+    ["409", new Error("409 Conflict - secret body"), "This request ID was already used for different content"],
+    ["422", new Error("422 Unprocessable Entity - secret body"), "The selected model does not support this request"],
   ])(
     "restores the old preview without overwriting a mounted active plus pending %s error",
     async (_label, failure, expectedError) => {
@@ -888,7 +888,7 @@ describe("useImageGeneration", () => {
     await flush()
 
     expect(latest?.phase).toBe("idle")
-    expect(latest?.error).toContain("기존 이미지 생성 기록")
+    expect(latest?.error).toContain("previous image-generation record")
     expect(persist).not.toHaveBeenCalled()
     expect(apiMocks.startImageGeneration).not.toHaveBeenCalled()
   })

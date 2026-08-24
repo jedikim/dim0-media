@@ -87,7 +87,7 @@ describe("GeneratedImageView", () => {
     render()
 
     expect(mocks.useAuthedImage).toHaveBeenCalledWith("board-1", "a".repeat(32))
-    expect(container.textContent).toContain("생성 이미지를 불러오는 중입니다.")
+    expect(container.textContent).toContain("Loading the generated image.")
     expect(mocks.getImageGenerationDetails).not.toHaveBeenCalled()
     expect(mocks.fetchImageAssetBlob).not.toHaveBeenCalled()
   })
@@ -110,7 +110,7 @@ describe("GeneratedImageView", () => {
     render()
 
     expect(mocks.useAuthedImage).toHaveBeenCalledWith("board-1", null)
-    expect(container.textContent).toContain("이 생성 이미지는 이 보드에서 사용할 수 없습니다.")
+    expect(container.textContent).toContain("This generated image is unavailable on this board.")
     expect([...container.querySelectorAll("button")].every((button) => button.disabled)).toBe(true)
     expect(mocks.fetchImageAssetBlob).not.toHaveBeenCalled()
   })
@@ -129,7 +129,7 @@ describe("GeneratedImageView", () => {
     render()
 
     const download = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent === "원본 다운로드")!
+      .find((button) => button.textContent === "Download original")!
     await act(async () => {
       download.click()
       await Promise.resolve()
@@ -167,26 +167,26 @@ describe("GeneratedImageView", () => {
     render()
 
     let download = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent === "원본 다운로드")!
+      .find((button) => button.textContent === "Download original")!
     await act(async () => {
       download.click()
       await Promise.resolve()
     })
-    expect(container.textContent).toContain("다운로드 중…")
+    expect(container.textContent).toContain("Downloading…")
     expect(signals[0]?.aborted).toBe(false)
 
     await act(() => vi.advanceTimersByTimeAsync(29_999))
     expect(mocks.toastError).not.toHaveBeenCalled()
-    expect(container.textContent).toContain("다운로드 중…")
+    expect(container.textContent).toContain("Downloading…")
 
     await act(() => vi.advanceTimersByTimeAsync(1))
     expect(signals[0]?.aborted).toBe(true)
     expect(mocks.toastError).toHaveBeenCalledTimes(1)
-    expect(mocks.toastError).toHaveBeenCalledWith("원본 이미지를 다운로드하지 못했습니다.")
-    expect(container.textContent).toContain("원본 다운로드")
+    expect(mocks.toastError).toHaveBeenCalledWith("The original image could not be downloaded.")
+    expect(container.textContent).toContain("Download original")
 
     download = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent === "원본 다운로드")!
+      .find((button) => button.textContent === "Download original")!
     await act(async () => {
       download.click()
       await Promise.resolve()
@@ -215,7 +215,7 @@ describe("GeneratedImageView", () => {
     )
     render()
     const download = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent === "원본 다운로드")!
+      .find((button) => button.textContent === "Download original")!
     await act(async () => {
       download.click()
       await Promise.resolve()
@@ -228,7 +228,7 @@ describe("GeneratedImageView", () => {
     render()
 
     expect(signals[0]?.aborted).toBe(true)
-    expect(container.textContent).toContain("원본 다운로드")
+    expect(container.textContent).toContain("Download original")
     expect(mocks.toastError).not.toHaveBeenCalled()
     await act(() => vi.advanceTimersByTimeAsync(30_000))
     expect(mocks.toastError).not.toHaveBeenCalled()
@@ -240,14 +240,14 @@ describe("GeneratedImageView", () => {
     render()
 
     const download = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent === "원본 다운로드")!
+      .find((button) => button.textContent === "Download original")!
     await act(async () => {
       download.click()
       await Promise.resolve()
       await Promise.resolve()
     })
 
-    expect(mocks.toastError).toHaveBeenCalledWith("원본 이미지를 다운로드하지 못했습니다.")
+    expect(mocks.toastError).toHaveBeenCalledWith("The original image could not be downloaded.")
     expect(String(mocks.toastError.mock.calls[0])).not.toContain("provider body")
   })
 
@@ -275,7 +275,7 @@ describe("GeneratedImageView", () => {
     expect(mocks.getImageGenerationDetails).not.toHaveBeenCalled()
 
     const details = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent === "생성 정보")!
+      .find((button) => button.textContent === "Generation details")!
     await act(async () => {
       details.click()
       await Promise.resolve()
@@ -291,9 +291,9 @@ describe("GeneratedImageView", () => {
     expect(document.body.textContent).toContain("first line\nsecond line")
     expect(document.body.textContent).toContain("model/one")
     expect(document.body.textContent).toContain("2K")
-    expect(document.body.textContent).toContain("3장")
+    expect(document.body.textContent).toContain("References3")
     expect([...document.body.querySelectorAll<HTMLImageElement>('[aria-label="Generation references"] img')]
-      .map((image) => image.alt)).toEqual(["생성 참조 1", "생성 참조 2", "생성 참조 3"])
+      .map((image) => image.alt)).toEqual(["Generation reference 1", "Generation reference 2", "Generation reference 3"])
     expect(mocks.useAuthedImage.mock.calls.slice(-3).map((call) => call[1]))
       .toEqual(["asset-0", "asset-1", "asset-2"])
     expect(mocks.fetchImageAssetBlob).not.toHaveBeenCalled()
@@ -311,7 +311,7 @@ describe("GeneratedImageView", () => {
     )
     render()
     const details = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent === "생성 정보")!
+      .find((button) => button.textContent === "Generation details")!
     await act(async () => {
       details.click()
       await Promise.resolve()
@@ -326,7 +326,7 @@ describe("GeneratedImageView", () => {
 
     expect(signals[0]?.aborted).toBe(true)
     await act(() => vi.advanceTimersByTimeAsync(30_000))
-    expect(document.body.textContent).not.toContain("생성 정보를 불러오지 못했습니다.")
+    expect(document.body.textContent).not.toContain("Generation details could not be loaded.")
   })
 
 
@@ -347,21 +347,21 @@ describe("GeneratedImageView", () => {
     })
     render()
     const details = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent === "생성 정보")!
+      .find((button) => button.textContent === "Generation details")!
     expect(mocks.getImageGenerationDetails).not.toHaveBeenCalled()
 
     await act(async () => {
       details.click()
       await Promise.resolve()
     })
-    expect(document.body.textContent).toContain("생성 정보를 불러오는 중입니다.")
+    expect(document.body.textContent).toContain("Loading generation details.")
     await act(() => vi.advanceTimersByTimeAsync(29_999))
-    expect(document.body.textContent).not.toContain("생성 정보를 불러오지 못했습니다.")
+    expect(document.body.textContent).not.toContain("Generation details could not be loaded.")
 
     await act(() => vi.advanceTimersByTimeAsync(1))
     expect(signals[0]?.aborted).toBe(true)
-    expect(document.body.textContent).not.toContain("생성 정보를 불러오는 중입니다.")
-    expect(document.body.textContent).toContain("생성 정보를 불러오지 못했습니다.")
+    expect(document.body.textContent).not.toContain("Loading generation details.")
+    expect(document.body.textContent).toContain("Generation details could not be loaded.")
 
     const close = document.body.querySelector<HTMLButtonElement>('[data-slot="dialog-close"]')!
     await act(async () => {
@@ -376,7 +376,7 @@ describe("GeneratedImageView", () => {
 
     expect(mocks.getImageGenerationDetails).toHaveBeenCalledTimes(2)
     expect(document.body.textContent).toContain("recovered prompt")
-    expect(document.body.textContent).not.toContain("생성 정보를 불러오지 못했습니다.")
+    expect(document.body.textContent).not.toContain("Generation details could not be loaded.")
   })
 
 
@@ -393,7 +393,7 @@ describe("GeneratedImageView", () => {
     ).mockImplementationOnce(() => new Promise(() => undefined))
     render()
     const details = [...container.querySelectorAll("button")]
-      .find((button) => button.textContent === "생성 정보")!
+      .find((button) => button.textContent === "Generation details")!
     act(() => details.click())
     expect(signals[0]?.aborted).toBe(false)
 

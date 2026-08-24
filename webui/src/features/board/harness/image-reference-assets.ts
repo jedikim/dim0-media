@@ -11,10 +11,10 @@ const MAX_REFERENCE_BYTES = 10 * 1024 * 1024
 const MAX_REFERENCE_BASE64_LENGTH = Math.ceil(MAX_REFERENCE_BYTES / 3) * 4
 
 
-export const IMAGE_REFERENCE_CHANGED_MESSAGE = "참조 이미지가 변경되었습니다. 확인 후 다시 생성해 주세요."
-export const IMAGE_REFERENCE_BOARD_UNAVAILABLE_MESSAGE = "참조 노드를 이 보드에서 사용할 수 없습니다."
-export const IMAGE_REFERENCE_UNAVAILABLE_MESSAGE = "이 이미지 노드는 참조 자산으로 등록할 수 없습니다."
-export const IMAGE_REFERENCE_INVALID_RESPONSE_MESSAGE = "참조 자산 등록 응답을 확인할 수 없습니다."
+export const IMAGE_REFERENCE_CHANGED_MESSAGE = "The reference image changed. Review it and generate again."
+export const IMAGE_REFERENCE_BOARD_UNAVAILABLE_MESSAGE = "The reference node is unavailable on this board."
+export const IMAGE_REFERENCE_UNAVAILABLE_MESSAGE = "This image node cannot be registered as a reference asset."
+export const IMAGE_REFERENCE_INVALID_RESPONSE_MESSAGE = "The reference-asset response could not be verified."
 
 
 /** Signal that a canvas image no longer matches its captured local version. */
@@ -56,9 +56,9 @@ export function blobToDataUrl(blob: Blob): Promise<string> {
     const reader = new FileReader()
     reader.onload = () => {
       if (typeof reader.result === "string") resolve(reader.result)
-      else reject(new Error("이미지 미리보기를 만들 수 없습니다."))
+      else reject(new Error("The image preview could not be created."))
     }
-    reader.onerror = () => reject(new Error("이미지 미리보기를 만들 수 없습니다."))
+    reader.onerror = () => reject(new Error("The image preview could not be created."))
     reader.readAsDataURL(blob)
   })
 }
