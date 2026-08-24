@@ -255,7 +255,7 @@ export function useImageGenerationOutputNode(args: {
       .then((outcome) => {
         if (!alive) return
         if (!isExpectedOutput(outcome, generationUid, outputAssetUid)) {
-          setError("이미지 결과 노드 응답을 확인할 수 없습니다.")
+          setError("The image result-node response could not be verified.")
           return
         }
         setEnsuredOutputNodeUid(outcome.output_node_uid)

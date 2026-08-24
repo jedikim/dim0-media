@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 vi.mock("@/components/ui/sidebar", () => ({ SidebarMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div> }))
 vi.mock("./home", () => ({ HomeMenuItem: () => <span>Home</span> }))
 vi.mock("./board", () => ({ DashboardMenuItem: () => <span>Dashboard</span> }))
-vi.mock("./image-history", () => ({ ImageHistoryMenuItem: () => <span>AI 이미지 기록</span> }))
+vi.mock("./image-history", () => ({ ImageHistoryMenuItem: () => <span>AI image history</span> }))
 
 import { WorkspaceMenu } from "./workspace-menu"
 
@@ -37,6 +37,6 @@ describe("WorkspaceMenu", () => {
 
     act(() => root.render(<WorkspaceMenu signedIn />))
     expect(container.textContent).toContain("Dashboard")
-    expect(container.textContent).toContain("AI 이미지 기록")
+    expect(container.textContent).toContain("AI image history")
   })
 })

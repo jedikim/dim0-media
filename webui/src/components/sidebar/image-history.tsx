@@ -16,7 +16,7 @@ export function ImageHistoryMenuItem() {
         onClick={() => navigate({ to: "/image-history" })}
       >
         <ImageGenerationIcon className="size-4 shrink-0 text-sidebar-icon-1" weight={active ? "fill" : undefined} />
-        <span>AI 이미지 기록</span>
+        <span>AI image history</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   )

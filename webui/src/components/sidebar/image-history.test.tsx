@@ -48,7 +48,7 @@ describe("ImageHistoryMenuItem", () => {
   it("renders the signed-in workspace entry and navigates to the protected route", () => {
     act(() => root.render(<ImageHistoryMenuItem />))
     const button = container.querySelector("button")
-    expect(button?.textContent).toContain("AI 이미지 기록")
+    expect(button?.textContent).toContain("AI image history")
     expect(button?.dataset.active).toBe("true")
     act(() => button?.click())
     expect(mocks.navigate).toHaveBeenCalledWith({ to: "/image-history" })

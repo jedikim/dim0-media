@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@/features/board/api/image-generation", () => ({
   ensureImageGenerationOutputNode: mocks.ensure,
-  imageGenerationErrorMessage: () => "안전한 결과 노드 오류",
+  imageGenerationErrorMessage: () => "Safe result-node error",
   imageGenerationErrorDetail: (error: unknown) => {
     if (!(error instanceof Error)) return null
     const delimiter = error.message.indexOf(" - ")
@@ -276,7 +276,7 @@ describe("useImageGenerationOutputNode", () => {
     await act(() => vi.advanceTimersByTimeAsync(5_000))
 
     expect(mocks.ensure).toHaveBeenCalledTimes(1)
-    expect(latest?.error).toBe("안전한 결과 노드 오류")
+    expect(latest?.error).toBe("Safe result-node error")
   })
 
 
@@ -290,7 +290,7 @@ describe("useImageGenerationOutputNode", () => {
 
     expect(mocks.ensure).toHaveBeenCalledTimes(3)
     expect(latest?.outputNodeUid).toBeNull()
-    expect(latest?.error).toBe("안전한 결과 노드 오류")
+    expect(latest?.error).toBe("Safe result-node error")
   })
 
 
@@ -305,7 +305,7 @@ describe("useImageGenerationOutputNode", () => {
     await act(() => vi.advanceTimersByTimeAsync(250))
     await act(() => vi.advanceTimersByTimeAsync(500))
     expect(latest?.outputNodeUid).toBeNull()
-    expect(latest?.error).toBe("안전한 결과 노드 오류")
+    expect(latest?.error).toBe("Safe result-node error")
 
     await act(async () => {
       await latest?.recreate()
@@ -439,7 +439,7 @@ describe("useImageGenerationOutputNode", () => {
     await act(() => vi.advanceTimersByTimeAsync(5_000))
 
     expect(mocks.ensure).toHaveBeenCalledTimes(1)
-    expect(latest?.error).toBe("안전한 결과 노드 오류")
+    expect(latest?.error).toBe("Safe result-node error")
     expect(latest?.error).not.toContain("private server body")
   })
 
@@ -458,7 +458,7 @@ describe("useImageGenerationOutputNode", () => {
     await act(() => vi.advanceTimersByTimeAsync(AUTOMATIC_ENSURE_DEADLINE_MS))
 
     expect(signals[0]?.aborted).toBe(true)
-    expect(latest?.error).toBe("안전한 결과 노드 오류")
+    expect(latest?.error).toBe("Safe result-node error")
 
     act(() => root.unmount())
     root = createRoot(container)
@@ -473,7 +473,7 @@ describe("useImageGenerationOutputNode", () => {
     await render(generation("generation-response-check"))
 
     expect(latest?.outputNodeUid).toBeNull()
-    expect(latest?.error).toBe("이미지 결과 노드 응답을 확인할 수 없습니다.")
+    expect(latest?.error).toBe("The image result-node response could not be verified.")
     expect(mocks.refresh).not.toHaveBeenCalled()
   })
 
@@ -530,7 +530,7 @@ describe("useImageGenerationOutputNode", () => {
 
     expect(signals[0]?.aborted).toBe(true)
     expect(latest?.recreating).toBe(false)
-    expect(latest?.error).toBe("안전한 결과 노드 오류")
+    expect(latest?.error).toBe("Safe result-node error")
     expect(mocks.refresh).not.toHaveBeenCalled()
 
     await act(async () => {

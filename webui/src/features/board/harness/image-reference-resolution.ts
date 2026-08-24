@@ -50,7 +50,7 @@ function captureReferenceSourceDescriptors(args: {
 }): ImageReferenceSourceDescriptor[] {
   const { store, graphId, sourceNodeUids } = args
   if (new Set(sourceNodeUids).size !== sourceNodeUids.length) {
-    throw new ImageReferenceResolutionError("같은 참조 노드를 두 번 연결할 수 없습니다.")
+    throw new ImageReferenceResolutionError("The same reference node cannot be connected twice.")
   }
 
   return sourceNodeUids.map((sourceNodeUid) => {
@@ -62,7 +62,7 @@ function captureReferenceSourceDescriptors(args: {
     if (node.type === "image-generator") {
       const activeGenerationUid = readKeywordProperty(data.properties?.activeGenerationUid)
       if (!activeGenerationUid) {
-        throw new ImageReferenceResolutionError("참조 생성 노드에 완료된 이미지가 없습니다.")
+        throw new ImageReferenceResolutionError("The reference generator has no completed image.")
       }
       return {
         sourceNodeUid,
@@ -74,7 +74,7 @@ function captureReferenceSourceDescriptors(args: {
     if (node.type === "generated-image") {
       const association = readGeneratedImageAssociation(data.properties ?? {})
       if (!association) {
-        throw new ImageReferenceResolutionError("이 생성 이미지 결과를 참조로 사용할 수 없습니다.")
+        throw new ImageReferenceResolutionError("This generated image result cannot be used as a reference.")
       }
       return {
         sourceNodeUid,
@@ -86,13 +86,13 @@ function captureReferenceSourceDescriptors(args: {
       }
     }
     if (node.type !== "image") {
-      throw new ImageReferenceResolutionError("지원하지 않는 참조 노드입니다.")
+      throw new ImageReferenceResolutionError("This reference node type is not supported.")
     }
 
     const imageAssetUid = readImageAssetUid(data.properties?.imageAssetUid)
     const src = typeof data.src === "string" ? data.src : null
     if (!imageAssetUid && !src) {
-      throw new ImageReferenceResolutionError("이 이미지 노드는 참조 자산으로 등록할 수 없습니다.")
+      throw new ImageReferenceResolutionError("This image node cannot be registered as a reference asset.")
     }
     return {
       sourceNodeUid,
@@ -243,7 +243,7 @@ export async function resolveReferenceAssetUids(args: {
         throw new ImageReferenceResolutionError(IMAGE_REFERENCE_CHANGED_MESSAGE)
       }
       if (generation.status !== "succeeded" || !isImageAssetUid(generation.output_asset_uid)) {
-        throw new ImageReferenceResolutionError("참조 생성 노드에 완료된 이미지가 없습니다.")
+        throw new ImageReferenceResolutionError("The reference generator has no completed image.")
       }
       assetUids.push(generation.output_asset_uid)
     }

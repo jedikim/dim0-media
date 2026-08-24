@@ -29,8 +29,8 @@ import {
 } from "./node-state"
 
 
-const DOWNLOAD_ERROR_MESSAGE = "원본 이미지를 다운로드하지 못했습니다."
-const DETAILS_ERROR_MESSAGE = "생성 정보를 불러오지 못했습니다."
+const DOWNLOAD_ERROR_MESSAGE = "The original image could not be downloaded."
+const DETAILS_ERROR_MESSAGE = "Generation details could not be loaded."
 
 
 /** Map only supported raster Blob MIME types to deterministic extensions. */
@@ -59,11 +59,11 @@ function GeneratedReferenceThumbnail({
         <img
           className="size-full object-contain"
           src={url}
-          alt={`생성 참조 ${ordinal + 1}`}
+          alt={`Generation reference ${ordinal + 1}`}
         />
       ) : (
         <span className="grid size-full place-items-center px-2 text-center text-[10px] text-muted-foreground">
-          {failed ? "불러올 수 없음" : "불러오는 중"}
+          {failed ? "Unavailable" : "Loading"}
         </span>
       )}
       <span className="absolute bottom-0 left-0 rounded-tr bg-background/90 px-1 text-[10px] font-semibold">
@@ -125,30 +125,30 @@ function GenerationDetailsDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>생성 정보</DialogTitle>
-          <DialogDescription>저장된 생성 요청과 당시 참조 이미지입니다.</DialogDescription>
+          <DialogTitle>Generation details</DialogTitle>
+          <DialogDescription>The saved generation request and its reference images.</DialogDescription>
         </DialogHeader>
-        {loading && <p className="text-sm text-muted-foreground">생성 정보를 불러오는 중입니다.</p>}
+        {loading && <p className="text-sm text-muted-foreground">Loading generation details.</p>}
         {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
         {details && (
           <div className="flex min-h-0 flex-col gap-4 text-sm">
             <section className="space-y-1">
-              <h3 className="font-medium">프롬프트</h3>
+              <h3 className="font-medium">Prompt</h3>
               <p className="whitespace-pre-wrap break-words rounded-md bg-muted/40 p-3">
                 {details.prompt}
               </p>
             </section>
             <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
-              <dt className="text-muted-foreground">모델</dt>
+              <dt className="text-muted-foreground">Model</dt>
               <dd className="break-all">{details.model_id}</dd>
-              <dt className="text-muted-foreground">비율</dt>
+              <dt className="text-muted-foreground">Aspect ratio</dt>
               <dd>{details.parameters.aspect_ratio ?? "—"}</dd>
-              <dt className="text-muted-foreground">해상도</dt>
+              <dt className="text-muted-foreground">Resolution</dt>
               <dd>{details.parameters.resolution ?? "—"}</dd>
-              <dt className="text-muted-foreground">품질</dt>
+              <dt className="text-muted-foreground">Quality</dt>
               <dd>{details.parameters.quality ?? "—"}</dd>
-              <dt className="text-muted-foreground">참조</dt>
-              <dd>{details.references.length}장</dd>
+              <dt className="text-muted-foreground">References</dt>
+              <dd>{details.references.length}</dd>
             </dl>
             {details.references.length > 0 && (
               <div aria-label="Generation references" className="flex gap-2 overflow-x-auto pb-1">
@@ -240,12 +240,12 @@ export function GeneratedImageView({ id }: { id: NodeId }) {
   return (
     <div className="pointer-events-none relative h-full w-full overflow-hidden rounded-xl border border-border bg-muted/30 shadow-sm">
       {url ? (
-        <img className="size-full object-contain" src={url} alt="생성된 이미지 결과" />
+        <img className="size-full object-contain" src={url} alt="Generated image result" />
       ) : (
         <div className="flex size-full flex-col items-center justify-center gap-2 px-4 text-center text-muted-foreground">
           <ImageStackIcon className="size-6" />
           <span className="text-xs">
-            {!valid || failed ? GENERATED_IMAGE_UNAVAILABLE_MESSAGE : "생성 이미지를 불러오는 중입니다."}
+            {!valid || failed ? GENERATED_IMAGE_UNAVAILABLE_MESSAGE : "Loading the generated image."}
           </span>
         </div>
       )}
@@ -259,7 +259,7 @@ export function GeneratedImageView({ id }: { id: NodeId }) {
           disabled={!valid || downloading}
           onClick={() => void downloadOriginal()}
         >
-          {downloading ? "다운로드 중…" : "원본 다운로드"}
+          {downloading ? "Downloading…" : "Download original"}
         </button>
         <button
           type="button"
@@ -267,7 +267,7 @@ export function GeneratedImageView({ id }: { id: NodeId }) {
           disabled={!valid}
           onClick={() => setDetailsOpen(true)}
         >
-          생성 정보
+          Generation details
         </button>
       </div>
       {valid && association && graphId && (

@@ -151,21 +151,21 @@ test("authenticated global history shows two creators, thumbnails, filters, and 
   })
 
   await page.goto("/image-history")
-  await expect(page.getByRole("heading", { name: "AI 이미지 기록" })).toBeVisible()
+  await expect(page.getByRole("heading", { name: "AI image history" })).toBeVisible()
   await expect(page.getByText("Alice · @alice", { exact: true }).first()).toBeVisible()
   await expect(page.getByText("@bob", { exact: true }).first()).toBeVisible()
   await expect(page.getByText("Alice complete private prompt", { exact: true }).first()).toBeVisible()
 
-  await expect(page.getByRole("img", { name: "생성 결과" })).toBeVisible()
-  await expect(page.getByRole("img", { name: /참조 이미지/ })).toHaveCount(2)
+  await expect(page.getByRole("img", { name: "Generated result" })).toBeVisible()
+  await expect(page.getByRole("img", { name: /Reference image/ })).toHaveCount(2)
 
-  await page.getByRole("button", { name: "더 보기" }).click()
+  await page.getByRole("button", { name: "Load more" }).click()
   await expect(page.getByText("Bob complete private prompt", { exact: true }).first()).toBeVisible()
-  await expect(page.getByRole("button", { name: "더 보기" })).toHaveCount(0)
+  await expect(page.getByRole("button", { name: "Load more" })).toHaveCount(0)
 
-  await page.getByLabel("사용자 필터").selectOption(users.bob.uid)
+  await page.getByLabel("User filter").selectOption(users.bob.uid)
   await expect.poll(() => historyRequests.some((url) => url.searchParams.get("user_uid") === users.bob.uid)).toBe(true)
-  await page.getByLabel("상태 필터").selectOption("succeeded")
+  await page.getByLabel("Status filter").selectOption("succeeded")
   await expect.poll(() => historyRequests.some((url) => url.searchParams.get("status") === "succeeded")).toBe(true)
 
   expect(historyRequests[0].searchParams.get("limit")).toBe("25")

@@ -151,7 +151,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
       if (Date.now() >= deadline) {
         if (!pendingOwnsPhase()) {
           setPhase("stalled")
-          setError("이미지 생성 상태 확인이 오래 걸리고 있습니다. 상태를 다시 확인해 주세요.")
+          setError("Image-generation status is taking longer than expected. Check the status again.")
         }
         return
       }
@@ -191,7 +191,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
           setError(null)
         } else {
           setPhase("failed")
-          setError(next.error_message || "이미지 생성에 실패했습니다.")
+          setError(next.error_message || "Image generation failed.")
         }
       } catch (caught) {
         if (
@@ -204,7 +204,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
           setState(null)
           if (!pendingOwnsPhase()) {
             setPhase("idle")
-            setError("이 보드에서는 기존 이미지 생성 기록을 불러올 수 없습니다.")
+            setError("The previous image-generation record is unavailable on this board.")
           }
           return
         }
@@ -293,7 +293,7 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
         setHasPendingRequest(false)
         persistRef.current({ pendingRequest: null })
         setPhase("failed")
-        setError("요청 식별자가 다른 내용에 이미 사용되었습니다. 다시 생성해 주세요.")
+        setError("This request ID was already used for different content. Start a new generation.")
         void restoreActivePreview()
         return
       }
@@ -366,12 +366,12 @@ export function useImageGeneration(args: UseImageGenerationArgs) {
       setError(null)
       try {
         if (!resolveReferenceAssets) {
-          throw new ImageReferenceResolutionError("참조 이미지를 확인할 수 없습니다.")
+          throw new ImageReferenceResolutionError("The reference images could not be verified.")
         }
         referenceAssetUids = await resolveReferenceAssets(referenceSourceNodeUids, controller.signal)
         if (!mountedRef.current || controller.signal.aborted) return
         if (referenceAssetUids.length !== referenceSourceNodeUids.length) {
-          throw new ImageReferenceResolutionError("참조 이미지 순서를 확인할 수 없습니다.")
+          throw new ImageReferenceResolutionError("The reference-image order could not be verified.")
         }
         const currentSourceNodeUids = getCurrentReferenceSourceNodeUids?.()
         if (
