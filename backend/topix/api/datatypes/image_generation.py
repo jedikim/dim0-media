@@ -126,6 +126,7 @@ class ImageModelResponse(ImageGenerationAPIModel):
     supported_aspect_ratios: tuple[str, ...] | None
     supported_qualities: tuple[str, ...] | None
     max_output_images: int
+    default_parameters: ImageGenerationParameters
     verified_at: date
 
 

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   useSummary: vi.fn(),
   usePages: vi.fn(),
   useHistoryImage: vi.fn(),
+  listImageModels: vi.fn(),
   fetchNextPage: vi.fn(),
   refetchSummary: vi.fn(),
   refetchPages: vi.fn(),
@@ -22,6 +23,9 @@ vi.mock("../api/image-history", () => ({
   useImageHistoryPages: mocks.usePages,
 }))
 vi.mock("../hooks/use-history-image", () => ({ useHistoryImage: mocks.useHistoryImage }))
+vi.mock("@/features/board/api/image-generation", () => ({
+  listImageModels: mocks.listImageModels,
+}))
 vi.mock("@/hooks/use-check-ele-in-view", () => ({
   useCheckEleInView: () => ({ ref: vi.fn(), inView: true }),
 }))
@@ -43,6 +47,26 @@ const metrics = {
     total_units: 12,
     generated_images: 1,
   },
+}
+
+
+const imageModel = {
+  model_id: "x-ai/grok-imagine-image-2.0",
+  display_name: "Grok Imagine Image 2.0",
+  supports_text_to_image: true,
+  supports_image_to_image: true,
+  max_reference_images: 3,
+  supported_resolutions: ["1K", "2K"],
+  supported_aspect_ratios: ["1:1", "16:9"],
+  supported_qualities: ["low", "medium"],
+  max_output_images: 1,
+  default_parameters: {
+    aspect_ratio: "1:1",
+    resolution: "1K",
+    quality: "low",
+    output_count: 1,
+  },
+  verified_at: "2026-08-23",
 }
 
 
@@ -133,6 +157,7 @@ describe("ImageHistoryScreen", () => {
     mocks.refetchSummary.mockReset()
     mocks.refetchPages.mockReset()
     mocks.useHistoryImage.mockReset().mockReturnValue({ url: "blob:thumbnail", failed: false })
+    mocks.listImageModels.mockReset().mockResolvedValue([imageModel])
     mocks.useSummary.mockReset().mockReturnValue({
       data: summary,
       isError: false,
@@ -156,8 +181,11 @@ describe("ImageHistoryScreen", () => {
   })
 
 
-  const render = (): void => {
-    act(() => root.render(<ImageHistoryScreen />))
+  const render = async (): Promise<void> => {
+    await act(async () => {
+      root.render(<ImageHistoryScreen />)
+      await Promise.resolve()
+    })
   }
 
 
@@ -169,8 +197,8 @@ describe("ImageHistoryScreen", () => {
   }
 
 
-  it("renders global policy, summaries, complete records, statuses, and ordered thumbnails", () => {
-    render()
+  it("renders global policy, summaries, complete records, statuses, and ordered thumbnails", async () => {
+    await render()
 
     expect(container.textContent).toContain("AI 이미지 기록")
     expect(container.textContent).toContain("모든 사용자의 이미지 생성 기록과 provider-reported 비용 및 사용량입니다.")
@@ -196,8 +224,8 @@ describe("ImageHistoryScreen", () => {
   })
 
 
-  it("changes filter query identity, resets cursor pages, and loads more explicitly", () => {
-    render()
+  it("changes filter query identity, resets cursor pages, and loads more explicitly", async () => {
+    await render()
     expect(mocks.usePages).toHaveBeenLastCalledWith({ userUid: null, status: null })
 
     select("사용자 필터", "alice-uid-long")
@@ -212,7 +240,7 @@ describe("ImageHistoryScreen", () => {
   })
 
 
-  it("renders loading, empty, terminal-page, error retry, and thumbnail failure states", () => {
+  it("renders loading, empty, terminal-page, error retry, and thumbnail failure states", async () => {
     mocks.useSummary.mockReturnValue({ data: undefined, isError: false, refetch: mocks.refetchSummary })
     mocks.usePages.mockReturnValue({
       data: undefined,
@@ -223,7 +251,7 @@ describe("ImageHistoryScreen", () => {
       fetchNextPage: mocks.fetchNextPage,
       refetch: mocks.refetchPages,
     })
-    render()
+    await render()
     expect(container.textContent).toContain("기록을 불러오는 중…")
 
     mocks.useSummary.mockReturnValue({ data: summary, isError: false, refetch: mocks.refetchSummary })
@@ -236,7 +264,7 @@ describe("ImageHistoryScreen", () => {
       fetchNextPage: mocks.fetchNextPage,
       refetch: mocks.refetchPages,
     })
-    render()
+    await render()
     expect(container.textContent).toContain("아직 이미지 생성 기록이 없습니다.")
     expect([...container.querySelectorAll("button")].some((button) => button.textContent === "더 보기")).toBe(false)
 
@@ -251,11 +279,34 @@ describe("ImageHistoryScreen", () => {
       fetchNextPage: mocks.fetchNextPage,
       refetch: mocks.refetchPages,
     })
-    render()
+    await render()
     expect(container.textContent).toContain("이미지를 불러올 수 없음")
     const retry = [...container.querySelectorAll("button")].find((button) => button.textContent === "다시 시도")
     act(() => retry?.click())
     expect(mocks.refetchSummary).toHaveBeenCalledTimes(1)
     expect(mocks.refetchPages).toHaveBeenCalledTimes(1)
+  })
+
+
+  it("labels missing legacy options without inventing requested values", async () => {
+    const legacy = {
+      ...items[0],
+      parameters: { output_count: 1 },
+    }
+    mocks.usePages.mockReturnValue({
+      data: { pages: [{ items: [legacy], next_cursor: null }], pageParams: [null] },
+      isPending: false,
+      isError: false,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: mocks.fetchNextPage,
+      refetch: mocks.refetchPages,
+    })
+
+    await render()
+
+    expect(container.textContent).toContain(
+      "비율 provider 기본값(미기록) · 해상도 provider 기본값(미기록) · 품질 provider 기본값(미기록) · 결과 1",
+    )
   })
 })

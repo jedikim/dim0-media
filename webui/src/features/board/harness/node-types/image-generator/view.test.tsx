@@ -105,7 +105,21 @@ const MODEL = {
   supported_aspect_ratios: ["1:1"],
   supported_qualities: ["low"],
   max_output_images: 1,
+  default_parameters: {
+    aspect_ratio: "1:1",
+    resolution: "1K",
+    quality: "low",
+    output_count: 1,
+  },
   verified_at: "2026-08-21",
+}
+
+
+const DEFAULT_PARAMETERS = {
+  aspect_ratio: "1:1",
+  resolution: "1K",
+  quality: "low",
+  output_count: 1,
 }
 
 
@@ -323,7 +337,7 @@ describe("ImageGeneratorView", () => {
   })
 
 
-  it("excludes stale saved options from the POST parameters", async () => {
+  it("replaces stale saved options with the selected model defaults", async () => {
     const data = (mocks.node?.data ?? {}) as { properties: Record<string, unknown> }
     data.properties.imageAspectRatio = { type: "keyword", value: "4:3" }
     data.properties.imageResolution = { type: "keyword", value: "4K" }
@@ -334,7 +348,15 @@ describe("ImageGeneratorView", () => {
       .find((candidate) => candidate.textContent === "Generate")
     act(() => button?.click())
 
-    expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", {}, [])
+    expect((container.querySelector('[aria-label="비율"]') as HTMLSelectElement).value).toBe("1:1")
+    expect((container.querySelector('[aria-label="해상도"]') as HTMLSelectElement).value).toBe("1K")
+    expect((container.querySelector('[aria-label="품질"]') as HTMLSelectElement).value).toBe("low")
+    expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", {
+      aspect_ratio: "1:1",
+      resolution: "1K",
+      quality: "low",
+      output_count: 1,
+    }, [])
   })
 
 
@@ -593,7 +615,12 @@ describe("ImageGeneratorView", () => {
       .find((candidate) => candidate.textContent === "Generate")!
     act(() => generateButton.click())
 
-    expect(mocks.generate).toHaveBeenCalledWith("model-1", "generated prompt", {}, [])
+    expect(mocks.generate).toHaveBeenCalledWith(
+      "model-1",
+      "generated prompt",
+      DEFAULT_PARAMETERS,
+      [],
+    )
     expect(mocks.updateNode).toHaveBeenLastCalledWith("node-1", expect.objectContaining({
       data: expect.objectContaining({
         properties: expect.objectContaining({
@@ -721,7 +748,7 @@ describe("ImageGeneratorView", () => {
       .find((candidate) => candidate.textContent === "Generate")!
     expect(enabledGenerate.disabled).toBe(false)
     act(() => enabledGenerate.click())
-    expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", {}, [])
+    expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", DEFAULT_PARAMETERS, [])
   })
 
 
@@ -734,7 +761,7 @@ describe("ImageGeneratorView", () => {
       .find((candidate) => candidate.textContent === "Generate")!
     act(() => generateButton.click())
 
-    expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", {}, [])
+    expect(mocks.generate).toHaveBeenCalledWith("model-1", "a blue bird", DEFAULT_PARAMETERS, [])
     expect(mocks.updateNode).toHaveBeenCalledWith("node-1", expect.objectContaining({
       data: expect.objectContaining({
         properties: expect.objectContaining({
@@ -823,7 +850,7 @@ describe("ImageGeneratorView", () => {
     expect(mocks.generate).toHaveBeenCalledWith(
       "model-i2i",
       "a blue bird",
-      {},
+      DEFAULT_PARAMETERS,
       ["image-second", "image-third"],
     )
   })

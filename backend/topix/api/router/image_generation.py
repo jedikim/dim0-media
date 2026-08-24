@@ -131,6 +131,7 @@ async def list_image_models() -> ImageModelListResponse:
                 supported_aspect_ratios=capability.supported_aspect_ratios,
                 supported_qualities=capability.supported_qualities,
                 max_output_images=capability.max_output_images,
+                default_parameters=capability.default_parameters,
                 verified_at=capability.verified_at,
             )
             for capability in IMAGE_MODEL_CAPABILITIES.values()

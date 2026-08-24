@@ -4,6 +4,7 @@ from topix.image_generation.capabilities import (
     IMAGE_MODEL_CAPABILITIES,
     get_capability,
     get_resolution_provider_tag,
+    normalize_generation_parameters,
     validate_generation_parameters,
 )
 from topix.image_generation.models import (
@@ -71,5 +72,6 @@ __all__ = [
     "ProviderUsage",
     "get_capability",
     "get_resolution_provider_tag",
+    "normalize_generation_parameters",
     "validate_generation_parameters",
 ]

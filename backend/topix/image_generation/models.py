@@ -437,6 +437,7 @@ class ImageModelCapability(FrozenModel):
     supported_aspect_ratios: tuple[str, ...] | None
     supported_qualities: tuple[str, ...] | None
     max_output_images: int = Field(gt=0)
+    default_parameters: ImageGenerationParameters
     verified_at: date
     source_urls: tuple[str, ...]
 
