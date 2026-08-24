@@ -71,6 +71,18 @@ const isSupportedChoice = (value: string | null, choices: string[] | null): valu
   value !== null && choices !== null && choices.includes(value)
 
 
+/** Prefer a valid saved choice, otherwise use the selected model's advertised default. */
+const effectiveChoice = (
+  value: string | null,
+  choices: string[] | null,
+  defaultValue: string | undefined,
+): string | null => {
+  if (isSupportedChoice(value, choices)) return value
+  const candidate = defaultValue ?? null
+  return isSupportedChoice(candidate, choices) ? candidate : null
+}
+
+
 /** Keep prompt typing local and flush the latest whole value at safe boundaries. */
 function usePromptDraft(
   storedPrompt: string,
@@ -153,12 +165,14 @@ function CapabilitySelect({
   label,
   value,
   choices,
+  defaultValue,
   disabled,
   onChange,
 }: {
   label: string
   value: string | null
   choices: string[] | null
+  defaultValue: string | undefined
   disabled: boolean
   onChange: (value: string) => void
 }) {
@@ -174,9 +188,11 @@ function CapabilitySelect({
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
       >
-        <option value="">기본값</option>
+        {selected === "" && <option value="" disabled>선택 필요</option>}
         {choices.map((choice) => (
-          <option key={choice} value={choice}>{choice}</option>
+          <option key={choice} value={choice}>
+            {choice}{choice === defaultValue ? " (기본값)" : ""}
+          </option>
         ))}
       </select>
     </label>
@@ -496,18 +512,28 @@ function SyncedImageGeneratorCard({
   const aspectRatio = readKeywordProperty(properties.imageAspectRatio)
   const resolution = readKeywordProperty(properties.imageResolution)
   const quality = readKeywordProperty(properties.imageQuality)
+  const effectiveAspectRatio = effectiveChoice(
+    aspectRatio,
+    model?.supported_aspect_ratios ?? null,
+    model?.default_parameters.aspect_ratio,
+  )
+  const effectiveResolution = effectiveChoice(
+    resolution,
+    model?.supported_resolutions ?? null,
+    model?.default_parameters.resolution,
+  )
+  const effectiveQuality = effectiveChoice(
+    quality,
+    model?.supported_qualities ?? null,
+    model?.default_parameters.quality,
+  )
 
   const parameters = useMemo<GenerationParameters>(() => ({
-    ...(model && isSupportedChoice(aspectRatio, model.supported_aspect_ratios)
-      ? { aspect_ratio: aspectRatio }
-      : {}),
-    ...(model && isSupportedChoice(resolution, model.supported_resolutions)
-      ? { resolution }
-      : {}),
-    ...(model && isSupportedChoice(quality, model.supported_qualities)
-      ? { quality }
-      : {}),
-  }), [aspectRatio, model, quality, resolution])
+    ...(effectiveAspectRatio ? { aspect_ratio: effectiveAspectRatio } : {}),
+    ...(effectiveResolution ? { resolution: effectiveResolution } : {}),
+    ...(effectiveQuality ? { quality: effectiveQuality } : {}),
+    output_count: model?.default_parameters.output_count ?? 1,
+  }), [effectiveAspectRatio, effectiveQuality, effectiveResolution, model])
 
   const canGenerate = canEdit
     && !modelsLoading
@@ -680,22 +706,25 @@ function SyncedImageGeneratorCard({
       <div className="flex gap-2">
         <CapabilitySelect
           label="비율"
-          value={aspectRatio}
+          value={effectiveAspectRatio}
           choices={model?.supported_aspect_ratios ?? null}
+          defaultValue={model?.default_parameters.aspect_ratio}
           disabled={inputsLocked}
           onChange={(value) => patchProperties({ imageAspectRatio: keywordProperty(value) })}
         />
         <CapabilitySelect
           label="해상도"
-          value={resolution}
+          value={effectiveResolution}
           choices={model?.supported_resolutions ?? null}
+          defaultValue={model?.default_parameters.resolution}
           disabled={inputsLocked}
           onChange={(value) => patchProperties({ imageResolution: keywordProperty(value) })}
         />
         <CapabilitySelect
           label="품질"
-          value={quality}
+          value={effectiveQuality}
           choices={model?.supported_qualities ?? null}
+          defaultValue={model?.default_parameters.quality}
           disabled={inputsLocked}
           onChange={(value) => patchProperties({ imageQuality: keywordProperty(value) })}
         />

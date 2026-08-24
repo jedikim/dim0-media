@@ -371,6 +371,39 @@ async def test_asset_post_uses_graph_acl_and_registers_sniffed_rasters_without_p
 
 
 @pytest.mark.asyncio
+async def test_generation_post_persists_and_forwards_selected_model_defaults(
+    initialized_image_pg_pool: asyncpg.Pool,
+    tmp_path,
+) -> None:
+    """Omitted options become explicit model defaults before audit and provider work."""
+    async with _api_context(initialized_image_pg_pool, tmp_path) as context:
+        body = _request_body()
+        body.pop("parameters")
+        response = await context.client.post(
+            f"/boards/{context.board_uid}/image-generations",
+            headers={"X-Test-User": context.owner_uid},
+            json=body,
+        )
+        assert response.status_code == 202
+        generation_uid = response.json()["generation_uid"]
+        await context.tasks.wait()
+
+        details = await context.client.get(
+            f"/boards/{context.board_uid}/image-generations/{generation_uid}/details",
+            headers={"X-Test-User": context.owner_uid},
+        )
+        expected = {
+            "aspect_ratio": "1:1",
+            "resolution": "1K",
+            "quality": "low",
+            "output_count": 1,
+        }
+        assert details.status_code == 200
+        assert details.json()["parameters"] == expected
+        assert context.adapter.requests[0].parameters.model_dump() == expected
+
+
+@pytest.mark.asyncio
 async def test_asset_post_rejects_non_multipart_spoofed_and_unsafe_images_with_typed_details(
     initialized_image_pg_pool: asyncpg.Pool,
     tmp_path,
@@ -634,6 +667,18 @@ async def test_models_endpoint_exposes_allowlist_without_configuration_state(
             "google/gemini-3.1-flash-image",
             "bytedance-seed/seedream-5-0-pro",
         ]
+        assert payload["models"][0]["default_parameters"] == {
+            "aspect_ratio": "1:1",
+            "resolution": "1K",
+            "quality": "low",
+            "output_count": 1,
+        }
+        assert payload["models"][1]["default_parameters"] == {
+            "aspect_ratio": "1:1",
+            "resolution": None,
+            "quality": None,
+            "output_count": 1,
+        }
         serialized = response.text.lower()
         assert "api_key" not in serialized
         assert "configured" not in serialized

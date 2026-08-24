@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { listImageModels, type ImageModel } from "@/features/board/api/image-generation"
 import { useCheckEleInView } from "@/hooks/use-check-ele-in-view"
 import { cn } from "@/lib/utils"
 import {
@@ -47,6 +48,17 @@ function duration(startedAt: string, completedAt: string | null): string | null 
   if (!Number.isFinite(elapsed) || elapsed < 0) return null
   if (elapsed < 1_000) return `${elapsed}ms`
   return `${(elapsed / 1_000).toFixed(1)}s`
+}
+
+
+/** Distinguish legacy provider defaults from options a model never exposes. */
+function generationOption(
+  value: string | null | undefined,
+  supported: string[] | null | undefined,
+): string {
+  if (value !== null && value !== undefined) return value
+  if (supported === null) return "미지원"
+  return supported === undefined ? "미보고" : "provider 기본값(미기록)"
 }
 
 
@@ -131,7 +143,7 @@ function SummaryMetrics({ metrics }: { metrics: ImageHistorySummaryMetrics }) {
 
 
 /** Display one immutable read-only generation record. */
-function HistoryItemCard({ item }: { item: ImageHistoryItem }) {
+function HistoryItemCard({ item, model }: { item: ImageHistoryItem, model: ImageModel | undefined }) {
   const elapsed = duration(item.started_at, item.completed_at)
   const boardName = item.board.deleted ? "삭제된 보드" : item.board.name || "이름 없는 보드"
   return (
@@ -167,7 +179,7 @@ function HistoryItemCard({ item }: { item: ImageHistoryItem }) {
             <div className="break-all"><span className="text-muted-foreground">Model: </span>{item.model_id}</div>
             <div>
               <span className="text-muted-foreground">Options: </span>
-              비율 {item.parameters.aspect_ratio ?? "미보고"} · 해상도 {item.parameters.resolution ?? "미보고"} · 품질 {item.parameters.quality ?? "미보고"} · 결과 {item.parameters.output_count ?? 1}
+              비율 {generationOption(item.parameters.aspect_ratio, model?.supported_aspect_ratios)} · 해상도 {generationOption(item.parameters.resolution, model?.supported_resolutions)} · 품질 {generationOption(item.parameters.quality, model?.supported_qualities)} · 결과 {item.parameters.output_count ?? 1}
             </div>
             <div><span className="text-muted-foreground">Attempts: </span>{item.attempt_count}</div>
             <div><span className="text-muted-foreground">Provider-reported known cost: </span><CostLabel metrics={item} /></div>
@@ -221,10 +233,22 @@ function HistoryItemCard({ item }: { item: ImageHistoryItem }) {
 export function ImageHistoryScreen() {
   const [userUid, setUserUid] = useState<string | null>(null)
   const [status, setStatus] = useState<ImageHistoryStatus | null>(null)
+  const [models, setModels] = useState<Map<string, ImageModel>>(new Map())
   const summary = useImageHistorySummary()
   const history = useImageHistoryPages({ userUid, status })
   const items = useMemo(() => history.data?.pages.flatMap((page) => page.items) ?? [], [history.data])
   const failed = summary.isError || history.isError
+  useEffect(() => {
+    let active = true
+    void listImageModels().then((catalog) => {
+      if (active) setModels(new Map(catalog.map((model) => [model.model_id, model])))
+    }).catch(() => {
+      if (active) setModels(new Map())
+    })
+    return () => {
+      active = false
+    }
+  }, [])
 
   const retry = (): void => {
     void summary.refetch()
@@ -317,7 +341,13 @@ export function ImageHistoryScreen() {
         <div className="space-y-4">
           {history.isPending && <div className="py-10 text-center text-sm text-muted-foreground">기록을 불러오는 중…</div>}
           {!history.isPending && !failed && items.length === 0 && <div className="py-16 text-center text-sm text-muted-foreground">아직 이미지 생성 기록이 없습니다.</div>}
-          {items.map((item) => <HistoryItemCard key={item.generation_uid} item={item} />)}
+          {items.map((item) => (
+            <HistoryItemCard
+              key={item.generation_uid}
+              item={item}
+              model={models.get(item.model_id)}
+            />
+          ))}
         </div>
 
         {history.hasNextPage && (

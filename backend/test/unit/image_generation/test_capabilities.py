@@ -10,6 +10,7 @@ from topix.image_generation.capabilities import (
     IMAGE_MODEL_CAPABILITIES,
     get_capability,
     get_resolution_provider_tag,
+    normalize_generation_parameters,
     validate_generation_parameters,
 )
 from topix.image_generation.models import (
@@ -19,14 +20,50 @@ from topix.image_generation.models import (
 
 
 @pytest.mark.parametrize(
-    ("model_id", "max_references", "resolutions", "max_outputs"),
+    ("model_id", "max_references", "resolutions", "max_outputs", "defaults"),
     [
-        ("x-ai/grok-imagine-image-2.0", 3, ("1K", "2K"), 1),
-        ("microsoft/mai-image-2.5-pro", 1, None, 1),
-        ("google/gemini-3-pro-image", 14, ("1K", "2K", "4K"), 1),
-        ("qwen/qwen-image-3-pro", 4, ("1K", "2K"), 1),
-        ("google/gemini-3.1-flash-image", 14, ("512", "1K", "2K", "4K"), 1),
-        ("bytedance-seed/seedream-5-0-pro", 14, ("1K", "2K"), 1),
+        (
+            "x-ai/grok-imagine-image-2.0",
+            3,
+            ("1K", "2K"),
+            1,
+            ImageGenerationParameters(aspect_ratio="1:1", resolution="1K", quality="low"),
+        ),
+        (
+            "microsoft/mai-image-2.5-pro",
+            1,
+            None,
+            1,
+            ImageGenerationParameters(aspect_ratio="1:1"),
+        ),
+        (
+            "google/gemini-3-pro-image",
+            14,
+            ("1K", "2K", "4K"),
+            1,
+            ImageGenerationParameters(aspect_ratio="1:1", resolution="1K"),
+        ),
+        (
+            "qwen/qwen-image-3-pro",
+            4,
+            ("1K", "2K"),
+            1,
+            ImageGenerationParameters(aspect_ratio="1:1", resolution="1K"),
+        ),
+        (
+            "google/gemini-3.1-flash-image",
+            14,
+            ("512", "1K", "2K", "4K"),
+            1,
+            ImageGenerationParameters(aspect_ratio="1:1", resolution="1K"),
+        ),
+        (
+            "bytedance-seed/seedream-5-0-pro",
+            14,
+            ("1K", "2K"),
+            1,
+            ImageGenerationParameters(aspect_ratio="1:1", resolution="1K"),
+        ),
     ],
 )
 def test_default_capabilities_preserve_verified_inputs_and_product_output_limits(
@@ -34,6 +71,7 @@ def test_default_capabilities_preserve_verified_inputs_and_product_output_limits
     max_references: int,
     resolutions: tuple[str, ...] | None,
     max_outputs: int,
+    defaults: ImageGenerationParameters,
 ) -> None:
     """Registry entries preserve verified inputs and explicit Dim0 output caps."""
     capability = get_capability(model_id)
@@ -41,10 +79,43 @@ def test_default_capabilities_preserve_verified_inputs_and_product_output_limits
     assert capability.max_reference_images == max_references
     assert capability.supported_resolutions == resolutions
     assert capability.max_output_images == max_outputs
+    assert capability.default_parameters == defaults
     assert capability.supports_text_to_image is True
     assert capability.supports_image_to_image is True
     assert capability.verified_at.isoformat() == "2026-08-23"
     assert capability.source_urls
+
+
+def test_model_defaults_are_supported_and_fill_only_omitted_options() -> None:
+    """Every advertised default validates, while explicit caller choices win."""
+    for model_id, capability in IMAGE_MODEL_CAPABILITIES.items():
+        defaults = capability.default_parameters
+        normalized = normalize_generation_parameters(
+            model_id,
+            ImageGenerationParameters(aspect_ratio="16:9") if "16:9" in (capability.supported_aspect_ratios or ()) else ImageGenerationParameters(),
+        )
+
+        validate_generation_parameters(model_id, defaults, reference_count=0)
+        validate_generation_parameters(model_id, normalized, reference_count=0)
+        if "16:9" in (capability.supported_aspect_ratios or ()):
+            assert normalized.aspect_ratio == "16:9"
+        assert normalized.resolution == defaults.resolution
+        assert normalized.quality == defaults.quality
+        assert normalized.output_count == defaults.output_count
+
+
+def test_normalization_returns_a_new_model_without_mutating_input() -> None:
+    """Default resolution and quality are explicit without altering API input."""
+    parameters = ImageGenerationParameters(aspect_ratio="4:3")
+
+    normalized = normalize_generation_parameters("x-ai/grok-imagine-image-2.0", parameters)
+
+    assert normalized == ImageGenerationParameters(
+        aspect_ratio="4:3",
+        resolution="1K",
+        quality="low",
+    )
+    assert parameters == ImageGenerationParameters(aspect_ratio="4:3")
 
 
 def test_gemini_4k_requires_verified_ai_studio_endpoint() -> None:

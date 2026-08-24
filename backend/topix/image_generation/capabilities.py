@@ -53,6 +53,11 @@ IMAGE_MODEL_CAPABILITIES: Mapping[str, ImageModelCapability] = MappingProxyType(
             ),
             supported_qualities=("low", "medium"),
             max_output_images=1,
+            default_parameters=ImageGenerationParameters(
+                aspect_ratio="1:1",
+                resolution="1K",
+                quality="low",
+            ),
             verified_at=_VERIFIED_AT,
             source_urls=(
                 _OPENROUTER_MODELS_URL,
@@ -70,6 +75,7 @@ IMAGE_MODEL_CAPABILITIES: Mapping[str, ImageModelCapability] = MappingProxyType(
             supported_aspect_ratios=("1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "auto"),
             supported_qualities=None,
             max_output_images=1,
+            default_parameters=ImageGenerationParameters(aspect_ratio="1:1"),
             verified_at=_VERIFIED_AT,
             source_urls=(
                 _OPENROUTER_MODELS_URL,
@@ -87,6 +93,10 @@ IMAGE_MODEL_CAPABILITIES: Mapping[str, ImageModelCapability] = MappingProxyType(
             supported_aspect_ratios=("1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"),
             supported_qualities=None,
             max_output_images=1,
+            default_parameters=ImageGenerationParameters(
+                aspect_ratio="1:1",
+                resolution="1K",
+            ),
             verified_at=_VERIFIED_AT,
             source_urls=(
                 _OPENROUTER_MODELS_URL,
@@ -122,6 +132,10 @@ IMAGE_MODEL_CAPABILITIES: Mapping[str, ImageModelCapability] = MappingProxyType(
             # until its audit, asset, and canonical result-node pipeline supports
             # multiple outputs for one logical generation.
             max_output_images=1,
+            default_parameters=ImageGenerationParameters(
+                aspect_ratio="1:1",
+                resolution="1K",
+            ),
             verified_at=_VERIFIED_AT,
             source_urls=(_OPENROUTER_MODELS_URL,),
         ),
@@ -151,6 +165,10 @@ IMAGE_MODEL_CAPABILITIES: Mapping[str, ImageModelCapability] = MappingProxyType(
             ),
             supported_qualities=None,
             max_output_images=1,
+            default_parameters=ImageGenerationParameters(
+                aspect_ratio="1:1",
+                resolution="1K",
+            ),
             verified_at=_VERIFIED_AT,
             source_urls=(_OPENROUTER_MODELS_URL,),
         ),
@@ -184,6 +202,10 @@ IMAGE_MODEL_CAPABILITIES: Mapping[str, ImageModelCapability] = MappingProxyType(
             ),
             supported_qualities=None,
             max_output_images=1,
+            default_parameters=ImageGenerationParameters(
+                aspect_ratio="1:1",
+                resolution="1K",
+            ),
             verified_at=_VERIFIED_AT,
             source_urls=(_OPENROUTER_MODELS_URL,),
         ),
@@ -225,6 +247,20 @@ def _validate_choice(
             f"Unsupported {name} for {model_id}: {value}; allowed: {allowed}",
             code="unsupported_image_parameter",
         )
+
+
+def normalize_generation_parameters(
+    model_id: str,
+    parameters: ImageGenerationParameters,
+) -> ImageGenerationParameters:
+    """Fill omitted options from the selected model's explicit Dim0 defaults."""
+    defaults = get_capability(model_id).default_parameters
+    return ImageGenerationParameters(
+        aspect_ratio=parameters.aspect_ratio if parameters.aspect_ratio is not None else defaults.aspect_ratio,
+        resolution=parameters.resolution if parameters.resolution is not None else defaults.resolution,
+        quality=parameters.quality if parameters.quality is not None else defaults.quality,
+        output_count=parameters.output_count,
+    )
 
 
 def validate_generation_parameters(

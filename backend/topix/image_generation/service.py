@@ -6,7 +6,10 @@ import asyncio
 import logging
 import time
 
-from topix.image_generation.capabilities import validate_generation_parameters
+from topix.image_generation.capabilities import (
+    normalize_generation_parameters,
+    validate_generation_parameters,
+)
 from topix.image_generation.models import (
     MAX_GENERATED_IMAGE_PIXELS,
     MAX_PROVIDER_ENCODED_REQUEST_BYTES,
@@ -82,6 +85,7 @@ class ImageGenerationService:
         generator_node_uid: str | None,
     ) -> GenerationStartOutcome:
         """Durably start one idempotent request and schedule only its winner."""
+        parameters = normalize_generation_parameters(model_id, parameters)
         validate_generation_parameters(model_id, parameters, reference_count=len(reference_asset_uids))
         assets = await self._store.get_assets(board_uid=board_uid, asset_uids=reference_asset_uids)
         self._validate_reference_metadata(assets, model_id=model_id, prompt=prompt)

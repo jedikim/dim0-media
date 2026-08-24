@@ -28,6 +28,7 @@ const model = {
   supported_aspect_ratios: ["1:1"],
   supported_qualities: null,
   max_output_images: 1,
+  default_parameters: { aspect_ratio: "1:1", resolution: "1K", output_count: 1 },
   verified_at: "2026-08-21",
 }
 

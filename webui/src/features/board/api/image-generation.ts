@@ -21,6 +21,7 @@ export type ImageModel = {
   supported_aspect_ratios: string[] | null
   supported_qualities: string[] | null
   max_output_images: number
+  default_parameters: GenerationParameters
   verified_at: string
 }
 
